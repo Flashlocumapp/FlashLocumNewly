@@ -9,14 +9,18 @@ import {
   ActivityIndicator,
   useColorScheme,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Eye, EyeOff, Mail, Lock, CheckCircle } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 
+const ROLE_REQUESTER_COLOR = '#0066CC';
+const ROLE_DOCTOR_COLOR = '#7C3AED';
+
 export default function SignUpScreen() {
   const router = useRouter();
+  const { role } = useLocalSearchParams<{ role?: string }>();
   const { signUp } = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -90,6 +94,7 @@ export default function SignUpScreen() {
   };
 
   const handleSignUp = async () => {
+    console.log('[SignUp] Create account tapped, role:', role || 'none');
     const emailValid = validateEmail();
     const passwordValid = validatePassword();
     const confirmValid = validateConfirmPassword();
@@ -98,6 +103,7 @@ export default function SignUpScreen() {
     setLoading(true);
     setError('');
 
+    console.log('[SignUp] Submitting sign-up request for email:', email);
     const { error: signUpError } = await signUp(email, password);
 
     setLoading(false);
@@ -183,6 +189,10 @@ export default function SignUpScreen() {
     );
   }
 
+  const roleLabelText = role === 'requester' ? 'REQUEST COVERAGE' : role === 'doctor' ? 'COVER & EARN' : null;
+  const roleLabelColor = role === 'requester' ? ROLE_REQUESTER_COLOR : role === 'doctor' ? ROLE_DOCTOR_COLOR : COLORS.primary;
+  const roleBorderColor = role === 'requester' ? ROLE_REQUESTER_COLOR : role === 'doctor' ? ROLE_DOCTOR_COLOR : COLORS.primary;
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: bg }}
@@ -198,39 +208,48 @@ export default function SignUpScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={{ alignItems: 'center', marginBottom: SPACING.xxxl }}>
-          <View
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: RADIUS.lg,
-              backgroundColor: COLORS.primary,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: SPACING.lg,
-              boxShadow: '0 8px 24px rgba(0, 102, 204, 0.30)',
-            }}
-          >
-            <Text style={{ fontSize: 28, color: COLORS.textInverse, fontWeight: '700' }}>
-              FL
-            </Text>
+        {/* Role label */}
+        {roleLabelText ? (
+          <View style={{ alignItems: 'center', marginBottom: SPACING.base }}>
+            <View
+              style={{
+                borderTopWidth: 3,
+                borderTopColor: roleBorderColor,
+                paddingTop: SPACING.sm,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: '700',
+                  letterSpacing: 1.5,
+                  color: roleLabelColor,
+                  textAlign: 'center',
+                }}
+              >
+                {roleLabelText}
+              </Text>
+            </View>
           </View>
+        ) : null}
+
+        {/* Header */}
+        <View style={{ marginBottom: SPACING.xxxl }}>
           <Text
             style={[
               TYPOGRAPHY.h1,
-              { color: textColor, textAlign: 'center', marginBottom: SPACING.sm },
+              { color: textColor, marginBottom: SPACING.sm },
             ]}
           >
-            FlashLocum
+            Create your account
           </Text>
           <Text
             style={[
               TYPOGRAPHY.body,
-              { color: textSecondary, textAlign: 'center' },
+              { color: textSecondary },
             ]}
           >
-            Medical coverage, simplified.
+            Join the FlashLocum coverage network.
           </Text>
         </View>
 

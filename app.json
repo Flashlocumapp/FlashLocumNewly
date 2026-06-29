@@ -7,9 +7,9 @@
     "icon": "./assets/images/app-icon-ish.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/app-icon-ish.png",
+      "image": "./assets/images/82e737d6-6090-47bc-a534-8316a2911be7.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
+      "backgroundColor": "#111315"
     },
     "ios": {
       "supportsTablet": true,
@@ -21,7 +21,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/app-icon-ish.png",
-        "backgroundColor": "#FFFFFF"
+        "backgroundColor": "#111315"
       },
       "package": "com.placeholder.app"
     },
