@@ -29,12 +29,10 @@ export default function HomeScreen() {
   const displayName = userEmail.split('@')[0] ?? 'there';
 
   const handleBrowseShifts = () => {
-    console.log('[Home] Browse Shifts quick action pressed');
     router.push('/(app)/(shifts)');
   };
 
   const handleMyProfile = () => {
-    console.log('[Home] My Profile quick action pressed');
     router.push('/(app)/(profile)');
   };
 

@@ -13,7 +13,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('[Auth] Initial session loaded:', session ? `user=${session.user.email}` : 'none');
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -21,7 +20,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for auth state changes — this is the single source of truth
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('[Auth] Auth state changed:', _event, session ? `user=${session.user.email}` : 'none');
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -31,29 +29,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    console.log('[Auth] signIn attempt:', email);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      console.log('[Auth] signIn error:', error.message);
-    } else {
-      console.log('[Auth] signIn success:', email);
-    }
     return { error };
   };
 
   const signUp = async (email: string, password: string) => {
-    console.log('[Auth] signUp attempt:', email);
     const { error } = await supabase.auth.signUp({ email, password });
-    if (error) {
-      console.log('[Auth] signUp error:', error.message);
-    } else {
-      console.log('[Auth] signUp success:', email);
-    }
     return { error };
   };
 
   const signOut = async () => {
-    console.log('[Auth] signOut');
     await supabase.auth.signOut();
   };
 

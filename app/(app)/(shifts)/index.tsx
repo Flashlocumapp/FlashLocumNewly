@@ -4,10 +4,10 @@ import {
   Text,
   ScrollView,
   useColorScheme,
-  Pressable,
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { Calendar } from 'lucide-react-native';
+import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 
 const SEGMENTS = ['Upcoming', 'Past'] as const;
@@ -26,7 +26,6 @@ export default function ShiftsScreen() {
   const borderColor = isDark ? COLORS.dark.border : COLORS.border;
 
   const handleSegmentPress = (segment: Segment) => {
-    console.log('[Shifts] Segment changed to:', segment);
     setActiveSegment(segment);
   };
 
@@ -56,9 +55,10 @@ export default function ShiftsScreen() {
           {SEGMENTS.map((segment) => {
             const isActive = activeSegment === segment;
             return (
-              <Pressable
+              <AnimatedPressable
                 key={segment}
                 onPress={() => handleSegmentPress(segment)}
+                scaleValue={0.97}
                 style={{
                   flex: 1,
                   height: 36,
@@ -80,7 +80,7 @@ export default function ShiftsScreen() {
                 >
                   {segment}
                 </Text>
-              </Pressable>
+              </AnimatedPressable>
             );
           })}
         </View>

@@ -90,7 +90,6 @@ export default function SignUpScreen() {
   };
 
   const handleSignUp = async () => {
-    console.log('[SignUp] Create account button pressed');
     const emailValid = validateEmail();
     const passwordValid = validatePassword();
     const confirmValid = validateConfirmPassword();
@@ -98,32 +97,26 @@ export default function SignUpScreen() {
 
     setLoading(true);
     setError('');
-    console.log('[SignUp] Attempting sign up for:', email);
 
     const { error: signUpError } = await signUp(email, password);
 
     setLoading(false);
     if (signUpError) {
-      console.log('[SignUp] Sign up failed:', signUpError.message);
       setError(signUpError.message || 'Sign up failed. Please try again.');
     } else {
-      console.log('[SignUp] Sign up success — confirmation email sent');
       setSuccess(true);
     }
   };
 
   const handleGoToSignIn = () => {
-    console.log('[SignUp] Navigate to sign-in pressed');
     router.push('/(auth)/sign-in');
   };
 
   const handleTogglePassword = () => {
-    console.log('[SignUp] Toggle password visibility');
     setShowPassword(prev => !prev);
   };
 
   const handleToggleConfirmPassword = () => {
-    console.log('[SignUp] Toggle confirm password visibility');
     setShowConfirmPassword(prev => !prev);
   };
 

@@ -79,31 +79,20 @@ export default function ProfileScreen() {
   const displayName = userEmail.split('@')[0] ?? 'User';
 
   const handleSignOut = async () => {
-    console.log('[Profile] Sign out button pressed');
     setSigningOut(true);
     await signOut();
     setSigningOut(false);
   };
 
-  const handleAccountPress = () => {
-    console.log('[Profile] Account row pressed');
-  };
+  const handleAccountPress = () => {};
 
-  const handleVerificationPress = () => {
-    console.log('[Profile] Verification row pressed');
-  };
+  const handleVerificationPress = () => {};
 
-  const handleNotificationsPress = () => {
-    console.log('[Profile] Notifications row pressed');
-  };
+  const handleNotificationsPress = () => {};
 
-  const handleSecurityPress = () => {
-    console.log('[Profile] Security row pressed');
-  };
+  const handleSecurityPress = () => {};
 
-  const handleHelpPress = () => {
-    console.log('[Profile] Help row pressed');
-  };
+  const handleHelpPress = () => {};
 
   const iconColor = isDark ? COLORS.dark.textSecondary : COLORS.textSecondary;
 

@@ -64,32 +64,27 @@ export default function SignInScreen() {
   };
 
   const handleSignIn = async () => {
-    console.log('[SignIn] Sign in button pressed');
     const emailValid = validateEmail();
     const passwordValid = validatePassword();
     if (!emailValid || !passwordValid) return;
 
     setLoading(true);
     setError('');
-    console.log('[SignIn] Attempting sign in for:', email);
 
     const { error: signInError } = await signIn(email, password);
 
     setLoading(false);
     if (signInError) {
-      console.log('[SignIn] Sign in failed:', signInError.message);
       setError(signInError.message || 'Sign in failed. Please try again.');
     }
     // NavigationGuard handles redirect on success
   };
 
   const handleGoToSignUp = () => {
-    console.log('[SignIn] Navigate to sign-up pressed');
     router.push('/(auth)/sign-up');
   };
 
   const handleTogglePassword = () => {
-    console.log('[SignIn] Toggle password visibility');
     setShowPassword(prev => !prev);
   };
 
