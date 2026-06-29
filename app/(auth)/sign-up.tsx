@@ -317,24 +317,7 @@ export default function SignUpScreen() {
           </View>
         ) : null}
 
-        {/* Footer toggle */}
-        <View style={styles.footerRow}>
-          {isSignup ? (
-            <>
-              <Text style={styles.footerText}>Already have an account? </Text>
-              <AnimatedPressable onPress={() => switchMode('signin')} scaleValue={0.95}>
-                <Text style={styles.footerLink}>Sign in</Text>
-              </AnimatedPressable>
-            </>
-          ) : (
-            <>
-              <Text style={styles.footerText}>Don't have an account? </Text>
-              <AnimatedPressable onPress={() => switchMode('signup')} scaleValue={0.95}>
-                <Text style={styles.footerLink}>Create one</Text>
-              </AnimatedPressable>
-            </>
-          )}
-        </View>
+
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -480,19 +463,5 @@ const styles = StyleSheet.create({
   legalLink: {
     textDecorationLine: 'underline',
   },
-  footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  footerText: {
-    fontSize: 14,
-    color: '#8A8A8A',
-  },
-  footerLink: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0A0A0A',
-  },
+
 });

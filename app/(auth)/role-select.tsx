@@ -2,21 +2,11 @@ import React from 'react';
 import {
   View,
   Text,
-  Image,
   StyleSheet,
-  ImageSourcePropType,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
-
-function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
-  if (!source) return { uri: '' };
-  if (typeof source === 'string') return { uri: source };
-  return source as ImageSourcePropType;
-}
-
-const wordmark = require('@/assets/images/d5820e75-3b63-4adb-b820-37ad1d151041.png');
 
 export default function RoleSelectScreen() {
   const router = useRouter();
@@ -40,17 +30,12 @@ export default function RoleSelectScreen() {
     console.log('[RoleSelect] Privacy link pressed');
   };
 
-  const topPadding = insets.top + 32;
+  const topPadding = insets.top + 72;
 
   return (
     <View style={styles.container}>
       {/* Top area */}
       <View style={[styles.topArea, { paddingTop: topPadding }]}>
-        <Image
-          source={resolveImageSource(wordmark)}
-          style={styles.wordmark}
-          resizeMode="contain"
-        />
         <Text style={styles.heading}>{'How will you use\nFlashLocum?'}</Text>
         <Text style={styles.subtitle}>You can switch anytime from your profile.</Text>
       </View>
@@ -111,11 +96,6 @@ const styles = StyleSheet.create({
   },
   topArea: {
     paddingHorizontal: 28,
-  },
-  wordmark: {
-    width: 160,
-    height: 44,
-    alignSelf: 'flex-start',
   },
   heading: {
     fontSize: 32,
