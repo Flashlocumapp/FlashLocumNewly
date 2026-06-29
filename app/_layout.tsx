@@ -22,19 +22,15 @@ function NavigationGuard() {
   useEffect(() => {
     if (loading) return;
 
-    const inAuthGroup = segments[0] === '(auth)';
-    // Let index.tsx handle the initial splash/animation flow
-    // segments is empty or first segment is not a known group when on index
-    const inAppGroup = segments[0] === '(app)';
-    if (!inAuthGroup && !inAppGroup) return;
+    const inAuth = segments[0] === '(auth)';
+    const inApp = segments[0] === '(app)';
 
-    if (!session && !inAuthGroup) {
-      console.log('[Nav] No session — redirecting to role-select');
-      router.replace('/(auth)/role-select');
-    } else if (session && inAuthGroup) {
-      console.log('[Nav] Session found — redirecting to home');
+    if (session && inAuth) {
       router.replace('/(app)/(home)');
     }
+    // index.tsx owns the no-session routing decision
+    // Do not redirect unauthenticated users from here
+    void inApp;
   }, [session, loading, segments]);
 
   return null;

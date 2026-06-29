@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,519 +7,400 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  useColorScheme,
+  StyleSheet,
+  TouchableOpacity,
+  Image,
+  ImageSourcePropType,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Eye, EyeOff, Mail, Lock, CheckCircle } from 'lucide-react-native';
-import { useAuth } from '@/contexts/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '@/lib/supabase';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 
-const ROLE_REQUESTER_COLOR = '#0066CC';
-const ROLE_DOCTOR_COLOR = '#7C3AED';
+function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
+  if (!source) return { uri: '' };
+  if (typeof source === 'string') return { uri: source };
+  return source as ImageSourcePropType;
+}
+
+const wordmark = require('@/assets/images/d5820e75-3b63-4adb-b820-37ad1d151041.png');
+
+type Mode = 'signup' | 'signin';
+type Role = 'doctor' | 'requester';
 
 export default function SignUpScreen() {
   const router = useRouter();
-  const { role } = useLocalSearchParams<{ role?: string }>();
-  const { signUp } = useAuth();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ role?: string; mode?: string }>();
 
+  const initialMode: Mode = params.mode === 'signin' ? 'signin' : 'signup';
+  const initialRole: Role = params.role === 'doctor' ? 'doctor' : 'requester';
+
+  const [mode, setMode] = useState<Mode>(initialMode);
+  const [role] = useState<Role>(initialRole);
+
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-
-  const [emailError, setEmailError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
-  const [confirmFocused, setConfirmFocused] = useState(false);
+  const [nameFocused, setNameFocused] = useState(false);
 
+  const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
-  const confirmRef = useRef<TextInput>(null);
 
-  const surface = isDark ? COLORS.dark.surface : COLORS.surface;
-  const bg = isDark ? COLORS.dark.background : COLORS.background;
-  const textColor = isDark ? COLORS.dark.text : COLORS.text;
-  const textSecondary = isDark ? COLORS.dark.textSecondary : COLORS.textSecondary;
-  const borderColor = isDark ? COLORS.dark.border : COLORS.border;
-  const inputBg = isDark ? COLORS.dark.surfaceSecondary : COLORS.surfaceSecondary;
-  const iconColor = isDark ? COLORS.dark.textTertiary : COLORS.textTertiary;
-
-  const validateEmail = () => {
-    if (!email) {
-      setEmailError('Email is required');
-      return false;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setEmailError('Enter a valid email address');
-      return false;
-    }
-    setEmailError('');
-    return true;
-  };
-
-  const validatePassword = () => {
-    if (!password) {
-      setPasswordError('Password is required');
-      return false;
-    }
-    if (password.length < 8) {
-      setPasswordError('Password must be at least 8 characters');
-      return false;
-    }
-    setPasswordError('');
-    return true;
-  };
-
-  const validateConfirmPassword = () => {
-    if (!confirmPassword) {
-      setConfirmPasswordError('Please confirm your password');
-      return false;
-    }
-    if (password !== confirmPassword) {
-      setConfirmPasswordError('Passwords do not match');
-      return false;
-    }
-    setConfirmPasswordError('');
-    return true;
-  };
-
-  const handleSignUp = async () => {
-    console.log('[SignUp] Create account tapped, role:', role || 'none');
-    const emailValid = validateEmail();
-    const passwordValid = validatePassword();
-    const confirmValid = validateConfirmPassword();
-    if (!emailValid || !passwordValid || !confirmValid) return;
-
-    setLoading(true);
+  const clearForm = () => {
+    setFullName('');
+    setEmail('');
+    setPassword('');
+    setShowPassword(false);
     setError('');
-
-    console.log('[SignUp] Submitting sign-up request for email:', email);
-    const { error: signUpError } = await signUp(email, password);
-
-    setLoading(false);
-    if (signUpError) {
-      setError(signUpError.message || 'Sign up failed. Please try again.');
-    } else {
-      setSuccess(true);
-    }
   };
 
-  const handleGoToSignIn = () => {
-    router.push('/(auth)/sign-in');
+  const switchMode = (next: Mode) => {
+    console.log('[SignUp] Mode switched to:', next);
+    clearForm();
+    setMode(next);
+  };
+
+  const handleBack = () => {
+    console.log('[SignUp] Back button pressed');
+    router.back();
   };
 
   const handleTogglePassword = () => {
     setShowPassword(prev => !prev);
   };
 
-  const handleToggleConfirmPassword = () => {
-    setShowConfirmPassword(prev => !prev);
+  const handleSubmit = async () => {
+    if (loading) return;
+
+    if (!email.trim() || !password.trim()) {
+      setError('Please fill in all fields.');
+      return;
+    }
+    if (mode === 'signup' && !fullName.trim()) {
+      setError('Please enter your full name.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    if (mode === 'signup') {
+      console.log('[SignUp] Create account pressed — email:', email, 'role:', role);
+      const { error: signUpError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            full_name: fullName.trim(),
+            role,
+          },
+        },
+      });
+      setLoading(false);
+      if (signUpError) {
+        console.log('[SignUp] Sign up error:', signUpError.message);
+        setError(signUpError.message || 'Sign up failed. Please try again.');
+      } else {
+        console.log('[SignUp] Sign up success, navigating to home');
+        router.replace('/(app)/(home)');
+      }
+    } else {
+      console.log('[SignUp] Sign in pressed — email:', email);
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      setLoading(false);
+      if (signInError) {
+        console.log('[SignUp] Sign in error:', signInError.message);
+        setError(signInError.message || 'Sign in failed. Please try again.');
+      } else {
+        console.log('[SignUp] Sign in success, navigating to home');
+        router.replace('/(app)/(home)');
+      }
+    }
   };
 
-  if (success) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: bg,
-          alignItems: 'center',
-          justifyContent: 'center',
-          paddingHorizontal: SPACING.xl,
-        }}
-      >
-        <View
-          style={{
-            width: 72,
-            height: 72,
-            borderRadius: RADIUS.full,
-            backgroundColor: COLORS.successMuted,
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: SPACING.xl,
-          }}
-        >
-          <CheckCircle size={36} color={COLORS.success} />
-        </View>
-        <Text
-          style={[
-            TYPOGRAPHY.h2,
-            { color: textColor, textAlign: 'center', marginBottom: SPACING.base },
-          ]}
-        >
-          Check your email
-        </Text>
-        <Text
-          style={[
-            TYPOGRAPHY.body,
-            { color: textSecondary, textAlign: 'center', marginBottom: SPACING.xxxl },
-          ]}
-        >
-          We sent a confirmation link to{' '}
-          <Text style={{ color: COLORS.primary, fontWeight: '600' }}>{email}</Text>
-          {'. '}
-          Click the link to activate your account.
-        </Text>
-        <AnimatedPressable
-          onPress={handleGoToSignIn}
-          style={{
-            backgroundColor: COLORS.primary,
-            borderRadius: RADIUS.lg,
-            height: 52,
-            paddingHorizontal: SPACING.xxxl,
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(0, 102, 204, 0.30)',
-          }}
-        >
-          <Text style={[TYPOGRAPHY.bodySemibold, { color: COLORS.textInverse }]}>
-            Back to sign in
-          </Text>
-        </AnimatedPressable>
-      </View>
-    );
-  }
-
-  const roleLabelText = role === 'requester' ? 'REQUEST COVERAGE' : role === 'doctor' ? 'COVER & EARN' : null;
-  const roleLabelColor = role === 'requester' ? ROLE_REQUESTER_COLOR : role === 'doctor' ? ROLE_DOCTOR_COLOR : COLORS.primary;
-  const roleBorderColor = role === 'requester' ? ROLE_REQUESTER_COLOR : role === 'doctor' ? ROLE_DOCTOR_COLOR : COLORS.primary;
+  const namePlaceholder = role === 'doctor' ? 'Dr. Ada Okafor' : 'Ada Okafor';
+  const headingText = mode === 'signup' ? 'Create your account' : 'Welcome back';
+  const submitLabel = mode === 'signup' ? 'Create Account' : 'Sign In';
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: bg }}
+      style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingHorizontal: SPACING.xl,
-          paddingTop: SPACING.xxxl + SPACING.xl,
-          paddingBottom: SPACING.xxxl,
-        }}
+        style={styles.flex}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Role label */}
-        {roleLabelText ? (
-          <View style={{ alignItems: 'center', marginBottom: SPACING.base }}>
-            <View
-              style={{
-                borderTopWidth: 3,
-                borderTopColor: roleBorderColor,
-                paddingTop: SPACING.sm,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: '700',
-                  letterSpacing: 1.5,
-                  color: roleLabelColor,
-                  textAlign: 'center',
-                }}
-              >
-                {roleLabelText}
-              </Text>
-            </View>
-          </View>
-        ) : null}
+        {/* Back button */}
+        <TouchableOpacity onPress={handleBack} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Text style={styles.backChevron}>‹</Text>
+        </TouchableOpacity>
 
-        {/* Header */}
-        <View style={{ marginBottom: SPACING.xxxl }}>
-          <Text
-            style={[
-              TYPOGRAPHY.h1,
-              { color: textColor, marginBottom: SPACING.sm },
-            ]}
+        {/* Wordmark */}
+        <Image
+          source={resolveImageSource(wordmark)}
+          style={styles.wordmark}
+          resizeMode="contain"
+        />
+
+        {/* Mode toggle */}
+        <View style={styles.toggleContainer}>
+          <AnimatedPressable
+            onPress={() => switchMode('signup')}
+            scaleValue={0.97}
+            style={[styles.togglePill, mode === 'signup' && styles.togglePillActive]}
           >
-            Create your account
-          </Text>
-          <Text
-            style={[
-              TYPOGRAPHY.body,
-              { color: textSecondary },
-            ]}
+            <Text style={[styles.toggleText, mode === 'signup' && styles.toggleTextActive]}>
+              Create Account
+            </Text>
+          </AnimatedPressable>
+          <AnimatedPressable
+            onPress={() => switchMode('signin')}
+            scaleValue={0.97}
+            style={[styles.togglePill, mode === 'signin' && styles.togglePillActive]}
           >
-            Join the FlashLocum coverage network.
-          </Text>
+            <Text style={[styles.toggleText, mode === 'signin' && styles.toggleTextActive]}>
+              Sign In
+            </Text>
+          </AnimatedPressable>
         </View>
 
-        {/* Form card */}
-        <View
-          style={{
-            backgroundColor: surface,
-            borderRadius: RADIUS.xl,
-            padding: SPACING.xl,
-            borderWidth: 1,
-            borderColor,
-            boxShadow: '0 4px 16px rgba(0, 102, 204, 0.08)',
-            marginBottom: SPACING.xl,
-          }}
-        >
-          <Text
-            style={[
-              TYPOGRAPHY.h3,
-              { color: textColor, marginBottom: SPACING.xl },
-            ]}
-          >
-            Create account
-          </Text>
+        {/* Heading */}
+        <Text style={styles.heading}>{headingText}</Text>
 
-          {/* Email field */}
-          <View style={{ marginBottom: SPACING.base }}>
-            <Text
-              style={[
-                TYPOGRAPHY.captionMedium,
-                { color: textSecondary, marginBottom: SPACING.sm },
-              ]}
-            >
-              EMAIL ADDRESS
-            </Text>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: inputBg,
-                borderRadius: RADIUS.md,
-                borderWidth: 1.5,
-                borderColor: emailFocused ? COLORS.primary : emailError ? COLORS.danger : borderColor,
-                paddingHorizontal: SPACING.base,
-                height: 52,
-              }}
-            >
-              <Mail size={18} color={emailFocused ? COLORS.primary : iconColor} />
+        {/* Form */}
+        <View style={styles.form}>
+          {/* Full Name — signup only */}
+          {mode === 'signup' ? (
+            <View style={[styles.inputWrapper, nameFocused && styles.inputWrapperFocused]}>
               <TextInput
-                style={[
-                  TYPOGRAPHY.body,
-                  {
-                    flex: 1,
-                    color: textColor,
-                    marginLeft: SPACING.sm,
-                    paddingVertical: 0,
-                  },
-                ]}
-                placeholder="you@example.com"
-                placeholderTextColor={isDark ? COLORS.dark.textTertiary : COLORS.textTertiary}
-                value={email}
-                onChangeText={setEmail}
-                onFocus={() => setEmailFocused(true)}
-                onBlur={() => {
-                  setEmailFocused(false);
-                  validateEmail();
-                }}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
+                style={styles.input}
+                placeholder={namePlaceholder}
+                placeholderTextColor="#9CA3AF"
+                value={fullName}
+                onChangeText={setFullName}
+                onFocus={() => setNameFocused(true)}
+                onBlur={() => setNameFocused(false)}
+                autoCapitalize="words"
                 returnKeyType="next"
-                onSubmitEditing={() => passwordRef.current?.focus()}
+                onSubmitEditing={() => emailRef.current?.focus()}
               />
-            </View>
-            {emailError ? (
-              <Text
-                style={[
-                  TYPOGRAPHY.caption,
-                  { color: COLORS.danger, marginTop: SPACING.xs },
-                ]}
-              >
-                {emailError}
-              </Text>
-            ) : null}
-          </View>
-
-          {/* Password field */}
-          <View style={{ marginBottom: SPACING.base }}>
-            <Text
-              style={[
-                TYPOGRAPHY.captionMedium,
-                { color: textSecondary, marginBottom: SPACING.sm },
-              ]}
-            >
-              PASSWORD
-            </Text>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: inputBg,
-                borderRadius: RADIUS.md,
-                borderWidth: 1.5,
-                borderColor: passwordFocused ? COLORS.primary : passwordError ? COLORS.danger : borderColor,
-                paddingHorizontal: SPACING.base,
-                height: 52,
-              }}
-            >
-              <Lock size={18} color={passwordFocused ? COLORS.primary : iconColor} />
-              <TextInput
-                ref={passwordRef}
-                style={[
-                  TYPOGRAPHY.body,
-                  {
-                    flex: 1,
-                    color: textColor,
-                    marginLeft: SPACING.sm,
-                    paddingVertical: 0,
-                  },
-                ]}
-                placeholder="Minimum 8 characters"
-                placeholderTextColor={isDark ? COLORS.dark.textTertiary : COLORS.textTertiary}
-                value={password}
-                onChangeText={setPassword}
-                onFocus={() => setPasswordFocused(true)}
-                onBlur={() => {
-                  setPasswordFocused(false);
-                  validatePassword();
-                }}
-                secureTextEntry={!showPassword}
-                returnKeyType="next"
-                onSubmitEditing={() => confirmRef.current?.focus()}
-              />
-              <AnimatedPressable onPress={handleTogglePassword} scaleValue={0.9}>
-                {showPassword
-                  ? <EyeOff size={18} color={iconColor} />
-                  : <Eye size={18} color={iconColor} />
-                }
-              </AnimatedPressable>
-            </View>
-            {passwordError ? (
-              <Text
-                style={[
-                  TYPOGRAPHY.caption,
-                  { color: COLORS.danger, marginTop: SPACING.xs },
-                ]}
-              >
-                {passwordError}
-              </Text>
-            ) : null}
-          </View>
-
-          {/* Confirm password field */}
-          <View style={{ marginBottom: SPACING.xl }}>
-            <Text
-              style={[
-                TYPOGRAPHY.captionMedium,
-                { color: textSecondary, marginBottom: SPACING.sm },
-              ]}
-            >
-              CONFIRM PASSWORD
-            </Text>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: inputBg,
-                borderRadius: RADIUS.md,
-                borderWidth: 1.5,
-                borderColor: confirmFocused ? COLORS.primary : confirmPasswordError ? COLORS.danger : borderColor,
-                paddingHorizontal: SPACING.base,
-                height: 52,
-              }}
-            >
-              <Lock size={18} color={confirmFocused ? COLORS.primary : iconColor} />
-              <TextInput
-                ref={confirmRef}
-                style={[
-                  TYPOGRAPHY.body,
-                  {
-                    flex: 1,
-                    color: textColor,
-                    marginLeft: SPACING.sm,
-                    paddingVertical: 0,
-                  },
-                ]}
-                placeholder="Re-enter your password"
-                placeholderTextColor={isDark ? COLORS.dark.textTertiary : COLORS.textTertiary}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                onFocus={() => setConfirmFocused(true)}
-                onBlur={() => {
-                  setConfirmFocused(false);
-                  validateConfirmPassword();
-                }}
-                secureTextEntry={!showConfirmPassword}
-                returnKeyType="done"
-                onSubmitEditing={handleSignUp}
-              />
-              <AnimatedPressable onPress={handleToggleConfirmPassword} scaleValue={0.9}>
-                {showConfirmPassword
-                  ? <EyeOff size={18} color={iconColor} />
-                  : <Eye size={18} color={iconColor} />
-                }
-              </AnimatedPressable>
-            </View>
-            {confirmPasswordError ? (
-              <Text
-                style={[
-                  TYPOGRAPHY.caption,
-                  { color: COLORS.danger, marginTop: SPACING.xs },
-                ]}
-              >
-                {confirmPasswordError}
-              </Text>
-            ) : null}
-          </View>
-
-          {/* Error message */}
-          {error ? (
-            <View
-              style={{
-                backgroundColor: COLORS.dangerMuted,
-                borderRadius: RADIUS.md,
-                padding: SPACING.base,
-                marginBottom: SPACING.base,
-                borderWidth: 1,
-                borderColor: 'rgba(230, 57, 70, 0.20)',
-              }}
-            >
-              <Text style={[TYPOGRAPHY.captionMedium, { color: COLORS.danger }]}>
-                {error}
-              </Text>
             </View>
           ) : null}
 
-          {/* Create account button */}
-          <AnimatedPressable
-            onPress={handleSignUp}
-            disabled={loading}
-            style={{
-              backgroundColor: COLORS.primary,
-              borderRadius: RADIUS.lg,
-              height: 52,
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(0, 102, 204, 0.30)',
-            }}
-          >
-            {loading ? (
-              <ActivityIndicator color={COLORS.textInverse} />
-            ) : (
-              <Text style={[TYPOGRAPHY.bodySemibold, { color: COLORS.textInverse }]}>
-                Create account
-              </Text>
-            )}
-          </AnimatedPressable>
+          {/* Email */}
+          <View style={[styles.inputWrapper, emailFocused && styles.inputWrapperFocused]}>
+            <TextInput
+              ref={emailRef}
+              style={styles.input}
+              placeholder="ada@example.com"
+              placeholderTextColor="#9CA3AF"
+              value={email}
+              onChangeText={setEmail}
+              onFocus={() => setEmailFocused(true)}
+              onBlur={() => setEmailFocused(false)}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+            />
+          </View>
+
+          {/* Password */}
+          <View style={[styles.inputWrapper, passwordFocused && styles.inputWrapperFocused]}>
+            <TextInput
+              ref={passwordRef}
+              style={[styles.input, styles.inputFlex]}
+              placeholder="Password"
+              placeholderTextColor="#9CA3AF"
+              value={password}
+              onChangeText={setPassword}
+              onFocus={() => setPasswordFocused(true)}
+              onBlur={() => setPasswordFocused(false)}
+              secureTextEntry={!showPassword}
+              returnKeyType="done"
+              onSubmitEditing={handleSubmit}
+            />
+            <TouchableOpacity onPress={handleTogglePassword} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Sign in link */}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={[TYPOGRAPHY.body, { color: textSecondary }]}>
-            Already have an account?
-          </Text>
-          <AnimatedPressable onPress={handleGoToSignIn} scaleValue={0.95} style={{ marginLeft: SPACING.xs }}>
-            <Text style={[TYPOGRAPHY.bodySemibold, { color: COLORS.primary }]}>
-              Sign in
-            </Text>
-          </AnimatedPressable>
+        {/* Submit button */}
+        <AnimatedPressable
+          onPress={handleSubmit}
+          disabled={loading}
+          scaleValue={0.97}
+          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+        >
+          {loading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.submitLabel}>{submitLabel}</Text>
+          )}
+        </AnimatedPressable>
+
+        {/* Error */}
+        {error ? (
+          <Text style={styles.errorText}>{error}</Text>
+        ) : null}
+
+        {/* Footer toggle */}
+        <View style={styles.footerRow}>
+          {mode === 'signup' ? (
+            <>
+              <Text style={styles.footerText}>Already have an account? </Text>
+              <TouchableOpacity onPress={() => switchMode('signin')}>
+                <Text style={styles.footerLink}>Sign in</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={styles.footerText}>Don't have an account? </Text>
+              <TouchableOpacity onPress={() => switchMode('signup')}>
+                <Text style={styles.footerLink}>Create one</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
+  },
+  backButton: {
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+  },
+  backChevron: {
+    fontSize: 32,
+    color: '#111315',
+    lineHeight: 36,
+  },
+  wordmark: {
+    width: 140,
+    height: 40,
+    alignSelf: 'center',
+    marginTop: 24,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    marginTop: 32,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 4,
+  },
+  togglePill: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  togglePillActive: {
+    backgroundColor: '#111315',
+  },
+  toggleText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  toggleTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  heading: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111315',
+    marginTop: 24,
+  },
+  form: {
+    marginTop: 24,
+    gap: 16,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  inputWrapperFocused: {
+    borderColor: '#111315',
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: '#111315',
+    padding: 0,
+    margin: 0,
+  },
+  inputFlex: {
+    flex: 1,
+  },
+  eyeIcon: {
+    fontSize: 18,
+    marginLeft: 8,
+  },
+  submitButton: {
+    marginTop: 24,
+    backgroundColor: '#111315',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
+  },
+  submitLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  errorText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#EF4444',
+    textAlign: 'center',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  footerText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  footerLink: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111315',
+  },
+});
