@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,25 +8,57 @@ import {
   Platform,
   ActivityIndicator,
   StyleSheet,
-  TouchableOpacity,
-  Image,
-  ImageSourcePropType,
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 
-function resolveImageSource(source: string | number | ImageSourcePropType | undefined): ImageSourcePropType {
-  if (!source) return { uri: '' };
-  if (typeof source === 'string') return { uri: source };
-  return source as ImageSourcePropType;
-}
-
-const wordmark = require('@/assets/images/d5820e75-3b63-4adb-b820-37ad1d151041.png');
-
 type Mode = 'signup' | 'signin';
 type Role = 'doctor' | 'requester';
+
+function EyeOpen() {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
+        stroke="#ADADAD"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M12 15a3 3 0 100-6 3 3 0 000 6z"
+        stroke="#ADADAD"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function EyeClosed() {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"
+        stroke="#ADADAD"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M1 1l22 22"
+        stroke="#ADADAD"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -45,10 +77,6 @@ export default function SignUpScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const [emailFocused, setEmailFocused] = useState(false);
-  const [passwordFocused, setPasswordFocused] = useState(false);
-  const [nameFocused, setNameFocused] = useState(false);
 
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
@@ -73,6 +101,7 @@ export default function SignUpScreen() {
   };
 
   const handleTogglePassword = () => {
+    console.log('[SignUp] Password visibility toggled');
     setShowPassword(prev => !prev);
   };
 
@@ -130,113 +159,129 @@ export default function SignUpScreen() {
 
   const namePlaceholder = role === 'doctor' ? 'Dr. Ada Okafor' : 'Ada Okafor';
   const headingText = mode === 'signup' ? 'Create your account' : 'Welcome back';
-  const submitLabel = mode === 'signup' ? 'Create Account' : 'Sign In';
+  const subtitleText = mode === 'signup'
+    ? 'Join the FlashLocum coverage network.'
+    : 'Sign in to your FlashLocum account.';
+  const submitLabel = mode === 'signup' ? 'Create account' : 'Sign in';
+  const roleLabel = role === 'requester' ? 'REQUEST COVERAGE' : 'COVER & EARN';
+  const isSignup = mode === 'signup';
 
   return (
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      {/* Custom header bar */}
+      <View style={[styles.headerBar, { paddingTop: insets.top + 16 }]}>
+        <AnimatedPressable
+          onPress={handleBack}
+          scaleValue={0.9}
+          style={styles.backButton}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={styles.backChevron}>‹</Text>
+        </AnimatedPressable>
+        <Text style={styles.headerLabel}>{roleLabel}</Text>
+      </View>
+
       <ScrollView
         style={styles.flex}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Back button */}
-        <TouchableOpacity onPress={handleBack} style={styles.backButton} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Text style={styles.backChevron}>‹</Text>
-        </TouchableOpacity>
+        {/* Heading block */}
+        <View style={styles.headingBlock}>
+          <Text style={styles.heading}>{headingText}</Text>
+          <Text style={styles.subtitle}>{subtitleText}</Text>
+        </View>
 
-        {/* Wordmark */}
-        <Image
-          source={resolveImageSource(wordmark)}
-          style={styles.wordmark}
-          resizeMode="contain"
-        />
-
-        {/* Mode toggle */}
-        <View style={styles.toggleContainer}>
+        {/* Tab toggle */}
+        <View style={styles.toggleTrack}>
           <AnimatedPressable
             onPress={() => switchMode('signup')}
             scaleValue={0.97}
-            style={[styles.togglePill, mode === 'signup' && styles.togglePillActive]}
+            style={[styles.toggleTab, isSignup && styles.toggleTabActive]}
           >
-            <Text style={[styles.toggleText, mode === 'signup' && styles.toggleTextActive]}>
+            <Text style={[styles.toggleTabText, isSignup && styles.toggleTabTextActive]}>
               Create Account
             </Text>
           </AnimatedPressable>
           <AnimatedPressable
             onPress={() => switchMode('signin')}
             scaleValue={0.97}
-            style={[styles.togglePill, mode === 'signin' && styles.togglePillActive]}
+            style={[styles.toggleTab, !isSignup && styles.toggleTabActive]}
           >
-            <Text style={[styles.toggleText, mode === 'signin' && styles.toggleTextActive]}>
+            <Text style={[styles.toggleTabText, !isSignup && styles.toggleTabTextActive]}>
               Sign In
             </Text>
           </AnimatedPressable>
         </View>
 
-        {/* Heading */}
-        <Text style={styles.heading}>{headingText}</Text>
-
-        {/* Form */}
+        {/* Form fields */}
         <View style={styles.form}>
           {/* Full Name — signup only */}
-          {mode === 'signup' ? (
-            <View style={[styles.inputWrapper, nameFocused && styles.inputWrapperFocused]}>
-              <TextInput
-                style={styles.input}
-                placeholder={namePlaceholder}
-                placeholderTextColor="#9CA3AF"
-                value={fullName}
-                onChangeText={setFullName}
-                onFocus={() => setNameFocused(true)}
-                onBlur={() => setNameFocused(false)}
-                autoCapitalize="words"
-                returnKeyType="next"
-                onSubmitEditing={() => emailRef.current?.focus()}
-              />
+          {isSignup ? (
+            <View>
+              <Text style={styles.fieldLabel}>Full name</Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  placeholder={namePlaceholder}
+                  placeholderTextColor="#ADADAD"
+                  value={fullName}
+                  onChangeText={setFullName}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  onSubmitEditing={() => emailRef.current?.focus()}
+                />
+              </View>
             </View>
           ) : null}
 
           {/* Email */}
-          <View style={[styles.inputWrapper, emailFocused && styles.inputWrapperFocused]}>
-            <TextInput
-              ref={emailRef}
-              style={styles.input}
-              placeholder="ada@example.com"
-              placeholderTextColor="#9CA3AF"
-              value={email}
-              onChangeText={setEmail}
-              onFocus={() => setEmailFocused(true)}
-              onBlur={() => setEmailFocused(false)}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="next"
-              onSubmitEditing={() => passwordRef.current?.focus()}
-            />
+          <View>
+            <Text style={styles.fieldLabel}>Email</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                ref={emailRef}
+                style={styles.input}
+                placeholder="you@example.com"
+                placeholderTextColor="#ADADAD"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="next"
+                onSubmitEditing={() => passwordRef.current?.focus()}
+              />
+            </View>
           </View>
 
           {/* Password */}
-          <View style={[styles.inputWrapper, passwordFocused && styles.inputWrapperFocused]}>
-            <TextInput
-              ref={passwordRef}
-              style={[styles.input, styles.inputFlex]}
-              placeholder="Password"
-              placeholderTextColor="#9CA3AF"
-              value={password}
-              onChangeText={setPassword}
-              onFocus={() => setPasswordFocused(true)}
-              onBlur={() => setPasswordFocused(false)}
-              secureTextEntry={!showPassword}
-              returnKeyType="done"
-              onSubmitEditing={handleSubmit}
-            />
-            <TouchableOpacity onPress={handleTogglePassword} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁'}</Text>
-            </TouchableOpacity>
+          <View>
+            <Text style={styles.fieldLabel}>Password</Text>
+            <View style={[styles.inputContainer, styles.inputContainerRow]}>
+              <TextInput
+                ref={passwordRef}
+                style={[styles.input, styles.inputFlex]}
+                placeholder="••••••••"
+                placeholderTextColor="#ADADAD"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                returnKeyType="done"
+                onSubmitEditing={handleSubmit}
+              />
+              <AnimatedPressable
+                onPress={handleTogglePassword}
+                scaleValue={0.9}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                {showPassword ? <EyeClosed /> : <EyeOpen />}
+              </AnimatedPressable>
+            </View>
           </View>
         </View>
 
@@ -259,21 +304,34 @@ export default function SignUpScreen() {
           <Text style={styles.errorText}>{error}</Text>
         ) : null}
 
+        {/* Legal text — signup only */}
+        {isSignup ? (
+          <View style={styles.legalContainer}>
+            <Text style={styles.legalText}>
+              {'By creating an account, you agree to our '}
+              <Text style={styles.legalLink}>Terms of Service</Text>
+              {' and '}
+              <Text style={styles.legalLink}>Privacy Policy</Text>
+              {'.'}
+            </Text>
+          </View>
+        ) : null}
+
         {/* Footer toggle */}
         <View style={styles.footerRow}>
-          {mode === 'signup' ? (
+          {isSignup ? (
             <>
               <Text style={styles.footerText}>Already have an account? </Text>
-              <TouchableOpacity onPress={() => switchMode('signin')}>
+              <AnimatedPressable onPress={() => switchMode('signin')} scaleValue={0.95}>
                 <Text style={styles.footerLink}>Sign in</Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             </>
           ) : (
             <>
               <Text style={styles.footerText}>Don't have an account? </Text>
-              <TouchableOpacity onPress={() => switchMode('signup')}>
+              <AnimatedPressable onPress={() => switchMode('signup')} scaleValue={0.95}>
                 <Text style={styles.footerLink}>Create one</Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             </>
           )}
         </View>
@@ -285,122 +343,156 @@ export default function SignUpScreen() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F7F7F5',
   },
-  scrollContent: {
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 24,
+    paddingBottom: 16,
+    backgroundColor: '#F7F7F5',
   },
   backButton: {
-    alignSelf: 'flex-start',
-    marginBottom: 4,
+    position: 'absolute',
+    left: 24,
+    bottom: 16,
   },
   backChevron: {
-    fontSize: 32,
-    color: '#111315',
-    lineHeight: 36,
+    fontSize: 28,
+    color: '#0A0A0A',
+    lineHeight: 32,
   },
-  wordmark: {
-    width: 140,
-    height: 40,
-    alignSelf: 'center',
-    marginTop: 24,
-  },
-  toggleContainer: {
-    flexDirection: 'row',
-    marginTop: 32,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    padding: 4,
-  },
-  togglePill: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  togglePillActive: {
-    backgroundColor: '#111315',
-  },
-  toggleText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#6B7280',
-  },
-  toggleTextActive: {
-    color: '#FFFFFF',
+  headerLabel: {
+    fontSize: 12,
     fontWeight: '600',
+    color: '#8A8A8A',
+    letterSpacing: 1.5,
+  },
+  scrollContent: {
+    paddingHorizontal: 28,
+  },
+  headingBlock: {
+    marginTop: 8,
   },
   heading: {
-    fontSize: 22,
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#0A0A0A',
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: '#8A8A8A',
+    marginTop: 6,
+  },
+  toggleTrack: {
+    flexDirection: 'row',
+    marginTop: 28,
+    backgroundColor: '#EBEBEB',
+    borderRadius: 50,
+    padding: 4,
+  },
+  toggleTab: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 50,
+    alignItems: 'center',
+  },
+  toggleTabActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  toggleTabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#9A9A9A',
+  },
+  toggleTabTextActive: {
+    fontSize: 14,
     fontWeight: '700',
-    color: '#111315',
-    marginTop: 24,
+    color: '#0A0A0A',
   },
   form: {
-    marginTop: 24,
-    gap: 16,
+    marginTop: 28,
+    gap: 20,
   },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6A6A6A',
+    marginBottom: 8,
+  },
+  inputContainer: {
+    backgroundColor: '#EFEFEF',
+    borderRadius: 14,
+    paddingHorizontal: 18,
     paddingVertical: 16,
   },
-  inputWrapperFocused: {
-    borderColor: '#111315',
+  inputContainerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   input: {
-    flex: 1,
     fontSize: 16,
-    color: '#111315',
+    color: '#0A0A0A',
     padding: 0,
     margin: 0,
   },
   inputFlex: {
     flex: 1,
   },
-  eyeIcon: {
-    fontSize: 18,
-    marginLeft: 8,
-  },
   submitButton: {
-    marginTop: 24,
-    backgroundColor: '#111315',
-    borderRadius: 12,
-    paddingVertical: 16,
+    marginTop: 32,
+    backgroundColor: '#0A0A0A',
+    borderRadius: 50,
+    paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   submitButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.55,
   },
   submitLabel: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#FFFFFF',
   },
   errorText: {
-    marginTop: 12,
     fontSize: 14,
     color: '#EF4444',
     textAlign: 'center',
+    marginTop: 12,
+  },
+  legalContainer: {
+    marginTop: 16,
+  },
+  legalText: {
+    fontSize: 12,
+    color: '#ADADAD',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  legalLink: {
+    textDecorationLine: 'underline',
   },
   footerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: 20,
   },
   footerText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: '#8A8A8A',
   },
   footerLink: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#111315',
+    fontWeight: '700',
+    color: '#0A0A0A',
   },
 });

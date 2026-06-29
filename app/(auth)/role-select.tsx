@@ -32,51 +32,73 @@ export default function RoleSelectScreen() {
     router.push('/(auth)/sign-up?role=doctor');
   };
 
-  const handleSignIn = () => {
-    console.log('[RoleSelect] Sign in link pressed');
-    router.push('/(auth)/sign-up?mode=signin');
+  const handleTerms = () => {
+    console.log('[RoleSelect] Terms link pressed');
   };
 
-  return (
-    <View style={[styles.container, { paddingBottom: insets.bottom + 24 }]}>
-      {/* Wordmark */}
-      <Image
-        source={resolveImageSource(wordmark)}
-        style={styles.wordmark}
-        resizeMode="contain"
-      />
+  const handlePrivacy = () => {
+    console.log('[RoleSelect] Privacy link pressed');
+  };
 
-      {/* Heading */}
-      <Text style={styles.heading}>How will you use FlashLocum?</Text>
-      <Text style={styles.subtitle}>You can switch anytime from your profile.</Text>
+  const topPadding = insets.top + 32;
+
+  return (
+    <View style={styles.container}>
+      {/* Top area */}
+      <View style={[styles.topArea, { paddingTop: topPadding }]}>
+        <Image
+          source={resolveImageSource(wordmark)}
+          style={styles.wordmark}
+          resizeMode="contain"
+        />
+        <Text style={styles.heading}>{'How will you use\nFlashLocum?'}</Text>
+        <Text style={styles.subtitle}>You can switch anytime from your profile.</Text>
+      </View>
 
       {/* Cards */}
       <View style={styles.cardsContainer}>
         {/* Request Coverage */}
-        <AnimatedPressable onPress={handleRequestCoverage} scaleValue={0.97} style={styles.cardLight}>
-          <Text style={styles.cardTitleDark}>Request Coverage</Text>
-          <Text style={styles.cardDescDark}>
-            Request temporary medical coverage for facilities, patients, or teams.
-          </Text>
+        <AnimatedPressable onPress={handleRequestCoverage} scaleValue={0.97} style={styles.card}>
+          <View style={styles.cardInner}>
+            <View style={styles.cardLeft}>
+              <Text style={styles.cardTitle}>Request Coverage</Text>
+              <Text style={styles.cardDesc}>
+                Request temporary medical coverage for facilities, patients, or teams.
+              </Text>
+            </View>
+            <View style={styles.arrowButton}>
+              <Text style={styles.arrowText}>→</Text>
+            </View>
+          </View>
         </AnimatedPressable>
 
         {/* Cover & Earn */}
-        <AnimatedPressable onPress={handleCoverAndEarn} scaleValue={0.97} style={styles.cardDark}>
-          <Text style={styles.cardTitleLight}>Cover & Earn</Text>
-          <Text style={styles.cardDescLight}>
-            Accept temporary medical coverage requests and earn.
-          </Text>
+        <AnimatedPressable onPress={handleCoverAndEarn} scaleValue={0.97} style={styles.card}>
+          <View style={styles.cardInner}>
+            <View style={styles.cardLeft}>
+              <Text style={styles.cardTitle}>Cover & Earn</Text>
+              <Text style={styles.cardDesc}>
+                Accept temporary medical coverage requests and earn.
+              </Text>
+            </View>
+            <View style={styles.arrowButton}>
+              <Text style={styles.arrowText}>→</Text>
+            </View>
+          </View>
         </AnimatedPressable>
       </View>
 
       {/* Footer */}
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          {'Already have an account? '}
-        </Text>
-        <AnimatedPressable onPress={handleSignIn} scaleValue={0.95}>
-          <Text style={styles.footerLink}>Sign in</Text>
-        </AnimatedPressable>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
+        <Text style={styles.footerBrand}>FLASHLOCUM · REALTIME COVERAGE NETWORK</Text>
+        <View style={styles.footerLinks}>
+          <AnimatedPressable onPress={handleTerms} scaleValue={0.95}>
+            <Text style={styles.footerLink}>Terms</Text>
+          </AnimatedPressable>
+          <AnimatedPressable onPress={handlePrivacy} scaleValue={0.95}>
+            <Text style={styles.footerLink}>Privacy</Text>
+          </AnimatedPressable>
+        </View>
       </View>
     </View>
   );
@@ -85,83 +107,98 @@ export default function RoleSelectScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F7F7F5',
+  },
+  topArea: {
+    paddingHorizontal: 28,
   },
   wordmark: {
-    width: 180,
-    height: 48,
-    alignSelf: 'center',
-    marginTop: 48,
+    width: 160,
+    height: 44,
+    alignSelf: 'flex-start',
   },
   heading: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#111315',
-    marginTop: 48,
-    textAlign: 'center',
-    paddingHorizontal: 32,
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#0A0A0A',
+    letterSpacing: -0.8,
+    lineHeight: 38,
+    marginTop: 40,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
+    fontSize: 15,
+    color: '#8A8A8A',
+    fontWeight: '400',
     marginTop: 8,
-    textAlign: 'center',
-    paddingHorizontal: 32,
   },
   cardsContainer: {
-    marginTop: 40,
-    paddingHorizontal: 24,
+    marginTop: 32,
+    paddingHorizontal: 28,
     gap: 16,
   },
-  cardLight: {
-    borderWidth: 1.5,
-    borderColor: '#111315',
-    borderRadius: 16,
-    padding: 24,
+  card: {
     backgroundColor: '#FFFFFF',
-  },
-  cardDark: {
-    backgroundColor: '#111315',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  cardTitleDark: {
-    fontSize: 18,
+  cardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cardLeft: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  cardTitle: {
+    fontSize: 17,
     fontWeight: '700',
-    color: '#111315',
+    color: '#0A0A0A',
   },
-  cardDescDark: {
+  cardDesc: {
     fontSize: 14,
-    color: '#6B7280',
-    marginTop: 6,
+    color: '#8A8A8A',
+    marginTop: 4,
+    lineHeight: 20,
   },
-  cardTitleLight: {
+  arrowButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F2F2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrowText: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  cardDescLight: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.65)',
-    marginTop: 6,
+    color: '#0A0A0A',
   },
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 40,
+    gap: 8,
   },
-  footerText: {
-    fontSize: 14,
-    color: '#6B7280',
+  footerBrand: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#BBBBBB',
+    letterSpacing: 1.2,
+  },
+  footerLinks: {
+    flexDirection: 'row',
+    gap: 24,
   },
   footerLink: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111315',
+    fontSize: 13,
+    color: '#8A8A8A',
+    textDecorationLine: 'underline',
   },
 });
