@@ -85,7 +85,7 @@ function AvatarPlaceholderIcon() {
 export default function DoctorCredentials() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const [mdcnNumber, setMdcnNumber] = useState('');
   const [mdcnError, setMdcnError] = useState('');
@@ -103,7 +103,12 @@ export default function DoctorCredentials() {
   const [submitError, setSubmitError] = useState('');
 
   const handleBack = () => {
-    router.back();
+    console.log('[DoctorCredentials] Back button pressed, onboarding_complete:', profile?.onboarding_complete);
+    if (profile?.onboarding_complete) {
+      router.replace('/(app)/(home)');
+    } else {
+      router.replace('/(auth)/role-select');
+    }
   };
 
   const handleMdcnChange = (text: string) => {

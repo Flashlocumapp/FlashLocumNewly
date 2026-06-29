@@ -5,21 +5,21 @@ import {
   ScrollView,
   useColorScheme,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
-import { Calendar, ChevronRight, Briefcase, User } from 'lucide-react-native';
+import { Stack } from 'expo-router';
+import { Calendar, ChevronRight, Briefcase, User, Building2, Stethoscope } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePathwayGuard } from '@/hooks/usePathwayGuard';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 
 export default function HomeScreen() {
   const { user } = useAuth();
-  const router = useRouter();
+  const { canAccessDoctor, canAccessRequester, enterDoctor, enterRequester } = usePathwayGuard();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   const bg = isDark ? COLORS.dark.background : COLORS.background;
   const surface = isDark ? COLORS.dark.surface : COLORS.surface;
-  const surfaceSecondary = isDark ? COLORS.dark.surfaceSecondary : COLORS.surfaceSecondary;
   const textColor = isDark ? COLORS.dark.text : COLORS.text;
   const textSecondary = isDark ? COLORS.dark.textSecondary : COLORS.textSecondary;
   const textTertiary = isDark ? COLORS.dark.textTertiary : COLORS.textTertiary;
@@ -28,12 +28,29 @@ export default function HomeScreen() {
   const userEmail = user?.email ?? '';
   const displayName = userEmail.split('@')[0] ?? 'there';
 
+  const requesterBadgeText = canAccessRequester ? 'Active' : 'Set up';
+  const doctorBadgeText = canAccessDoctor ? 'Active' : 'Set up';
+  const requesterBadgeBg = canAccessRequester ? 'rgba(45, 198, 83, 0.12)' : 'rgba(138, 138, 138, 0.12)';
+  const doctorBadgeBg = canAccessDoctor ? 'rgba(45, 198, 83, 0.12)' : 'rgba(138, 138, 138, 0.12)';
+  const requesterBadgeColor = canAccessRequester ? '#1A9E45' : '#8A8A8A';
+  const doctorBadgeColor = canAccessDoctor ? '#1A9E45' : '#8A8A8A';
+
   const handleBrowseShifts = () => {
-    router.push('/(app)/(shifts)');
+    console.log('[HomeScreen] Browse Shifts pressed');
   };
 
   const handleMyProfile = () => {
-    router.push('/(app)/(profile)');
+    console.log('[HomeScreen] My Profile pressed');
+  };
+
+  const handleEnterRequester = () => {
+    console.log('[HomeScreen] Request Coverage card pressed');
+    enterRequester();
+  };
+
+  const handleEnterDoctor = () => {
+    console.log('[HomeScreen] Cover & Earn card pressed');
+    enterDoctor();
   };
 
   return (
@@ -89,6 +106,125 @@ export default function HomeScreen() {
             <Text style={[TYPOGRAPHY.captionMedium, { color: COLORS.textInverse }]}>
               Account active
             </Text>
+          </View>
+        </View>
+
+        {/* Pathway cards */}
+        <View>
+          <Text
+            style={[
+              TYPOGRAPHY.h4,
+              { color: textColor, marginBottom: SPACING.sm, marginTop: SPACING.xs },
+            ]}
+          >
+            Your pathways
+          </Text>
+          <View style={{ gap: SPACING.sm }}>
+            {/* Request Coverage */}
+            <AnimatedPressable
+              onPress={handleEnterRequester}
+              style={{
+                backgroundColor: surface,
+                borderRadius: RADIUS.xl,
+                borderWidth: 1,
+                borderColor,
+                overflow: 'hidden',
+                boxShadow: '0 2px 10px rgba(0, 102, 204, 0.07)',
+              }}
+            >
+              <View style={{ padding: SPACING.base }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.base }}>
+                  <View
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: RADIUS.lg,
+                      backgroundColor: 'rgba(0, 102, 204, 0.10)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Building2 size={24} color={COLORS.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: 4 }}>
+                      <Text style={[TYPOGRAPHY.bodySemibold, { color: textColor }]}>
+                        Request Coverage
+                      </Text>
+                      <View
+                        style={{
+                          backgroundColor: requesterBadgeBg,
+                          borderRadius: RADIUS.full,
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                        }}
+                      >
+                        <Text style={[TYPOGRAPHY.label, { color: requesterBadgeColor }]}>
+                          {requesterBadgeText}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={[TYPOGRAPHY.caption, { color: textSecondary, lineHeight: 18 }]}>
+                      Request temporary medical coverage for facilities, patients, or teams.
+                    </Text>
+                  </View>
+                  <ChevronRight size={18} color={textTertiary} style={{ marginTop: 2 }} />
+                </View>
+              </View>
+            </AnimatedPressable>
+
+            {/* Cover & Earn */}
+            <AnimatedPressable
+              onPress={handleEnterDoctor}
+              style={{
+                backgroundColor: surface,
+                borderRadius: RADIUS.xl,
+                borderWidth: 1,
+                borderColor,
+                overflow: 'hidden',
+                boxShadow: '0 2px 10px rgba(0, 168, 120, 0.07)',
+              }}
+            >
+              <View style={{ padding: SPACING.base }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.base }}>
+                  <View
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: RADIUS.lg,
+                      backgroundColor: 'rgba(0, 168, 120, 0.10)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Stethoscope size={24} color={COLORS.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: 4 }}>
+                      <Text style={[TYPOGRAPHY.bodySemibold, { color: textColor }]}>
+                        Cover &amp; Earn
+                      </Text>
+                      <View
+                        style={{
+                          backgroundColor: doctorBadgeBg,
+                          borderRadius: RADIUS.full,
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                        }}
+                      >
+                        <Text style={[TYPOGRAPHY.label, { color: doctorBadgeColor }]}>
+                          {doctorBadgeText}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={[TYPOGRAPHY.caption, { color: textSecondary, lineHeight: 18 }]}>
+                      Accept temporary medical coverage requests and earn.
+                    </Text>
+                  </View>
+                  <ChevronRight size={18} color={textTertiary} style={{ marginTop: 2 }} />
+                </View>
+              </View>
+            </AnimatedPressable>
           </View>
         </View>
 

@@ -6,6 +6,8 @@ export interface Profile {
   id: string;
   role: 'doctor' | 'requester' | null;
   onboarding_complete: boolean;
+  doctor_onboarding_complete: boolean;
+  requester_onboarding_complete: boolean;
   first_name: string | null;
   last_name: string | null;
   phone: string | null;

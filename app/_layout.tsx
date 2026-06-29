@@ -27,32 +27,31 @@ function NavigationGuard() {
     const inOnboarding = seg0 === '(onboarding)';
     const inIndex = seg0 === 'index' || seg0 === undefined;
 
-    // No session — index.tsx owns this routing
+    // No session — index.tsx owns unauthenticated routing
     if (!session) return;
 
-    // Has session + onboarding incomplete → onboarding
-    if (session && profile && !profile.onboarding_complete) {
-      if (!inOnboarding) {
-        const route = profile.role === 'doctor'
-          ? '/(onboarding)/doctor/basic-profile'
-          : '/(onboarding)/requester/basic-profile';
-        router.replace(route as any);
-      }
-      return;
-    }
+    if (session && profile) {
+      const eitherComplete =
+        profile.doctor_onboarding_complete === true ||
+        profile.requester_onboarding_complete === true;
 
-    // Has session + onboarding complete → app
-    if (session && profile?.onboarding_complete) {
-      if (inAuth || inOnboarding || inIndex) {
+      if (!eitherComplete) {
+        // Neither pathway complete → send to role-appropriate onboarding
+        if (!inOnboarding) {
+          const route =
+            profile.role === 'doctor'
+              ? '/(onboarding)/doctor/basic-profile'
+              : '/(onboarding)/requester/basic-profile';
+          console.log('[NavigationGuard] No pathway complete, routing to onboarding:', route);
+          router.replace(route as any);
+        }
+        return;
+      }
+
+      // At least one pathway complete → route to app if in auth/index
+      if (inAuth || inIndex) {
+        console.log('[NavigationGuard] Pathway complete, routing to home');
         router.replace('/(app)/(home)');
-      }
-      return;
-    }
-
-    // Has session but profile not yet loaded (new signup, profile row being created)
-    if (session && !profile && !profileLoading) {
-      if (inAuth) {
-        // Stay put — profile will load shortly via onAuthStateChange
       }
     }
   }, [session, loading, profile, profileLoading, segments]);

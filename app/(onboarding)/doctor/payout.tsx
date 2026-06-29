@@ -60,7 +60,7 @@ const ACCOUNT_MISMATCH_ERROR = "Account Name doesn't match name provided";
 export default function DoctorPayout() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
 
   const [banks, setBanks] = useState<Bank[]>(FALLBACK_BANKS);
   const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
@@ -154,11 +154,17 @@ export default function DoctorPayout() {
   }, [selectedBank, accountNumber, lookupAccountName]);
 
   const handleBack = () => {
-    router.back();
+    console.log('[DoctorPayout] Back button pressed, onboarding_complete:', profile?.onboarding_complete);
+    if (profile?.onboarding_complete) {
+      router.replace('/(app)/(home)');
+    } else {
+      router.replace('/(auth)/role-select');
+    }
   };
 
   const handleSubmit = async () => {
     if (loading) return;
+    console.log('[DoctorPayout] Submit pressed — bank:', selectedBank?.name, 'account:', accountNumber);
 
     let valid = true;
     setBankError('');
@@ -199,7 +205,7 @@ export default function DoctorPayout() {
 
       const { error: profileError } = await supabase
         .from('profiles')
-        .upsert({ id: userId, onboarding_complete: true });
+        .upsert({ id: userId, onboarding_complete: true, doctor_onboarding_complete: true });
       if (profileError) throw profileError;
 
       await refreshProfile();

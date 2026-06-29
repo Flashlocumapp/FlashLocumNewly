@@ -22,7 +22,7 @@ type Gender = 'male' | 'female' | null;
 export default function RequesterBasicProfile() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
 
   const [phone, setPhone] = useState('');
   const [gender, setGender] = useState<Gender>(null);
@@ -33,8 +33,12 @@ export default function RequesterBasicProfile() {
   const [submitError, setSubmitError] = useState('');
 
   const handleBack = () => {
-    console.log('[RequesterBasicProfile] Back button pressed');
-    router.back();
+    console.log('[RequesterBasicProfile] Back button pressed, onboarding_complete:', profile?.onboarding_complete);
+    if (profile?.onboarding_complete) {
+      router.replace('/(app)/(home)');
+    } else {
+      router.replace('/(auth)/role-select');
+    }
   };
 
   const handleGenderSelect = (value: 'male' | 'female') => {
@@ -61,7 +65,7 @@ export default function RequesterBasicProfile() {
 
     const cleanedPhone = phone.replace(/\s/g, '');
     if (!validatePhone(cleanedPhone)) {
-      setPhoneError('Please enter a valid 11-digit Nigerian phone number');
+      setPhoneError('Ensure you enter the correct Nigeria number');
       valid = false;
     }
     if (!gender) {
@@ -80,6 +84,7 @@ export default function RequesterBasicProfile() {
           phone: cleanedPhone,
           gender,
           onboarding_complete: true,
+          requester_onboarding_complete: true,
         });
 
       if (profileError) throw profileError;
