@@ -55,8 +55,7 @@ interface Bank {
 
 const ACCOUNT_VERIFY_ERROR =
   'Account could not be verified automatically. Please double-check your account details.';
-const ACCOUNT_MISMATCH_ERROR =
-  'Account name mismatch. Please provide a bank account that matches your registration profile name.';
+const ACCOUNT_MISMATCH_ERROR = "Account Name doesn't match name provided";
 
 export default function DoctorPayout() {
   const router = useRouter();

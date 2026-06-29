@@ -180,14 +180,23 @@ export default function DoctorCredentials() {
     const base64 = await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
-    const binaryString = atob(base64);
+
+    // Convert base64 to binary using a reliable method
+    const binaryString = globalThis.atob ? globalThis.atob(base64) : Buffer.from(base64, 'base64').toString('binary');
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
+
+    const contentType = mimeType ?? 'application/octet-stream';
+
     const { error } = await supabase.storage
       .from('doctor-documents')
-      .upload(path, bytes, { upsert: true, contentType: mimeType ?? 'application/octet-stream' });
+      .upload(path, bytes.buffer, {
+        upsert: true,
+        contentType,
+      });
+
     if (error) throw error;
     return path;
   };

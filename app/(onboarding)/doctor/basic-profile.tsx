@@ -24,13 +24,11 @@ export default function DoctorBasicProfile() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
-  const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [gender, setGender] = useState<Gender>(null);
   const [genderModalVisible, setGenderModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const [fullNameError, setFullNameError] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [genderError, setGenderError] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -53,19 +51,13 @@ export default function DoctorBasicProfile() {
     if (loading) return;
 
     let valid = true;
-    setFullNameError('');
     setPhoneError('');
     setGenderError('');
     setSubmitError('');
 
-    if (!fullName.trim()) {
-      setFullNameError('Please enter your full name');
-      valid = false;
-    }
-
     const cleanedPhone = phone.replace(/\s/g, '');
     if (!validatePhone(cleanedPhone)) {
-      setPhoneError('Enter a valid Nigerian number');
+      setPhoneError('Ensure you enter the correct Nigeria number');
       valid = false;
     }
 
@@ -83,7 +75,6 @@ export default function DoctorBasicProfile() {
         .from('profiles')
         .upsert({
           id: user!.id,
-          full_name: fullName.trim(),
           phone: cleanedPhone,
           gender,
         });
@@ -132,41 +123,6 @@ export default function DoctorBasicProfile() {
         <Text style={styles.heading}>Basic profile</Text>
         <Text style={styles.subtitle}>Tell us a little about you.</Text>
 
-        {/* Full Name */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Full name</Text>
-          <View style={[styles.inputContainer, fullNameError ? styles.inputError : null]}>
-            <TextInput
-              style={styles.input}
-              placeholder="Dr. Ada Okafor"
-              placeholderTextColor="#ADADAD"
-              value={fullName}
-              onChangeText={text => {
-                setFullName(text);
-                setFullNameError('');
-              }}
-              autoCapitalize="words"
-              autoCorrect={false}
-            />
-          </View>
-          {fullNameError ? <Text style={styles.inlineError}>{fullNameError}</Text> : null}
-        </View>
-
-        {/* Gender */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Gender</Text>
-          <AnimatedPressable
-            onPress={() => setGenderModalVisible(true)}
-            scaleValue={0.98}
-            style={[styles.dropdownContainer, genderError ? styles.inputError : null]}
-          >
-            <Text style={[styles.dropdownText, !gender && styles.dropdownPlaceholder]}>
-              {genderDisplayValue}
-            </Text>
-          </AnimatedPressable>
-          {genderError ? <Text style={styles.inlineError}>{genderError}</Text> : null}
-        </View>
-
         {/* Phone number */}
         <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Phone number</Text>
@@ -185,6 +141,21 @@ export default function DoctorBasicProfile() {
             />
           </View>
           {phoneError ? <Text style={styles.inlineError}>{phoneError}</Text> : null}
+        </View>
+
+        {/* Gender */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Gender</Text>
+          <AnimatedPressable
+            onPress={() => setGenderModalVisible(true)}
+            scaleValue={0.98}
+            style={[styles.dropdownContainer, genderError ? styles.inputError : null]}
+          >
+            <Text style={[styles.dropdownText, !gender && styles.dropdownPlaceholder]}>
+              {genderDisplayValue}
+            </Text>
+          </AnimatedPressable>
+          {genderError ? <Text style={styles.inlineError}>{genderError}</Text> : null}
         </View>
 
         {/* Submit error */}
