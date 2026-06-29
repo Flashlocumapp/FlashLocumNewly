@@ -4,10 +4,10 @@
     "slug": "flashlocum",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/app-icon-ish.png",
+    "icon": "./assets/images/APP ICON.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/82e737d6-6090-47bc-a534-8316a2911be7.png",
+      "image": "./assets/images/APP ICON.png",
       "resizeMode": "contain",
       "backgroundColor": "#111315"
     },
@@ -20,7 +20,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/app-icon-ish.png",
+        "foregroundImage": "./assets/images/APP ICON.png",
         "backgroundColor": "#111315"
       },
       "package": "com.placeholder.app"
