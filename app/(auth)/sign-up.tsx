@@ -137,8 +137,8 @@ export default function SignUpScreen() {
         console.log('[SignUp] Sign up error:', signUpError.message);
         setError(signUpError.message || 'Sign up failed. Please try again.');
       } else {
-        console.log('[SignUp] Sign up success, navigating to home');
-        router.replace('/(app)/(home)');
+        console.log('[SignUp] Sign up success, navigating to OTP verify — email:', email, 'role:', role);
+        router.push(`/(auth)/verify?email=${encodeURIComponent(email.trim())}&role=${role}`);
       }
     } else {
       console.log('[SignUp] Sign in pressed — email:', email);
@@ -316,8 +316,6 @@ export default function SignUpScreen() {
             </Text>
           </View>
         ) : null}
-
-
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -463,5 +461,4 @@ const styles = StyleSheet.create({
   legalLink: {
     textDecorationLine: 'underline',
   },
-
 });

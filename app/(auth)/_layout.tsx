@@ -7,6 +7,7 @@ export default function AuthLayout() {
       <Stack.Screen name="role-select" />
       <Stack.Screen name="sign-up" />
       <Stack.Screen name="sign-in" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="verify" />
     </Stack>
   );
 }

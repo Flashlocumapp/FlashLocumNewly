@@ -15,23 +15,47 @@ const DevErrorBoundary = __DEV__
   : ({ children }: { children: React.ReactNode }) => <>{children}</>;
 
 function NavigationGuard() {
-  const { session, loading } = useAuth();
+  const { session, loading, profile, profileLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || profileLoading) return;
 
-    const inAuth = segments[0] === '(auth)';
-    const inApp = segments[0] === '(app)';
+    const seg0 = segments[0] as string | undefined;
+    const inAuth = seg0 === '(auth)';
+    const inOnboarding = seg0 === '(onboarding)';
+    const inIndex = seg0 === 'index' || seg0 === undefined;
 
-    if (session && inAuth) {
-      router.replace('/(app)/(home)');
+    // No session — index.tsx owns this routing
+    if (!session) return;
+
+    // Has session + onboarding incomplete → onboarding
+    if (session && profile && !profile.onboarding_complete) {
+      if (!inOnboarding) {
+        const route = profile.role === 'doctor'
+          ? '/(onboarding)/doctor/basic-profile'
+          : '/(onboarding)/requester/basic-profile';
+        router.replace(route as any);
+      }
+      return;
     }
-    // index.tsx owns the no-session routing decision
-    // Do not redirect unauthenticated users from here
-    void inApp;
-  }, [session, loading, segments]);
+
+    // Has session + onboarding complete → app
+    if (session && profile?.onboarding_complete) {
+      if (inAuth || inOnboarding || inIndex) {
+        router.replace('/(app)/(home)');
+      }
+      return;
+    }
+
+    // Has session but profile not yet loaded (new signup, profile row being created)
+    if (session && !profile && !profileLoading) {
+      if (inAuth) {
+        // Stay put — profile will load shortly via onAuthStateChange
+      }
+    }
+  }, [session, loading, profile, profileLoading, segments]);
 
   return null;
 }
@@ -48,6 +72,7 @@ function RootLayoutInner() {
             <Stack.Screen name="index" options={{ headerShown: false }} />
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(app)" />
+            <Stack.Screen name="(onboarding)" />
           </Stack>
           <SystemBars style="auto" />
         </GestureHandlerRootView>
