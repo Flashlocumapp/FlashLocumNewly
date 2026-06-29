@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Svg, { Polygon } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 
 const OFF_WHITE = '#F5F5F0';
@@ -16,79 +17,80 @@ const BRAND_BLUE = '#0066CC';
 
 export default function RoleSelectScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const handleRequestCoverage = () => {
-    console.log('[RoleSelect] User tapped Request Coverage');
     router.push('/(auth)/sign-up?role=requester');
   };
 
   const handleCoverAndEarn = () => {
-    console.log('[RoleSelect] User tapped Cover & Earn');
     router.push('/(auth)/sign-up?role=doctor');
   };
 
   const handleSignIn = () => {
-    console.log('[RoleSelect] User tapped Sign in');
     router.push('/(auth)/sign-in');
   };
 
   const handleTerms = () => {
-    console.log('[RoleSelect] User tapped Terms');
+    // Terms pressed
   };
 
   const handlePrivacy = () => {
-    console.log('[RoleSelect] User tapped Privacy');
+    // Privacy pressed
   };
 
   return (
-    <View style={styles.container}>
-      {/* Wordmark */}
-      <View style={styles.wordmarkContainer}>
-        <Svg width={16} height={20} viewBox="0 0 40 52" style={{ marginRight: 4 }}>
-          <Polygon
-            points="22,0 8,28 18,28 10,52 34,20 22,20 32,0"
-            fill={DARK}
-          />
-        </Svg>
-        <Text style={styles.wordmarkBold}>Flash</Text>
-        <Text style={styles.wordmarkRegular}>Locum</Text>
-      </View>
+    <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
+      {/* Top content block */}
+      <View>
+        {/* Wordmark */}
+        <View style={styles.wordmarkContainer}>
+          <Svg width={16} height={20} viewBox="0 0 40 52" style={{ marginRight: 4 }}>
+            <Polygon
+              points="22,0 8,28 18,28 10,52 34,20 22,20 32,0"
+              fill={DARK}
+            />
+          </Svg>
+          <Text style={styles.wordmarkBold}>Flash</Text>
+          <Text style={styles.wordmarkRegular}>Locum</Text>
+        </View>
 
-      {/* Heading */}
-      <Text style={styles.heading}>How will you use FlashLocum?</Text>
-      <Text style={styles.subtitle}>You can switch anytime from your profile.</Text>
+        {/* Heading */}
+        <Text style={styles.heading}>How will you use FlashLocum?</Text>
+        <Text style={styles.subtitle}>You can switch anytime from your profile.</Text>
 
-      {/* Cards */}
-      <View style={styles.cardsContainer}>
-        {/* Request Coverage */}
-        <AnimatedPressable onPress={handleRequestCoverage} style={styles.card}>
-          <View style={styles.cardContent}>
-            <View style={styles.cardText}>
-              <Text style={styles.cardTitle}>Request Coverage</Text>
-              <Text style={styles.cardSubtitle}>
-                Request temporary medical coverage for facilities, patients, or teams.
-              </Text>
+        {/* Cards */}
+        <View style={styles.cardsContainer}>
+          {/* Request Coverage */}
+          <AnimatedPressable onPress={handleRequestCoverage} style={styles.card}>
+            <View style={styles.cardContent}>
+              <View style={styles.cardText}>
+                <Text style={styles.cardTitle}>Request Coverage</Text>
+                <Text style={styles.cardSubtitle}>
+                  Request temporary medical coverage for facilities, patients, or teams.
+                </Text>
+              </View>
+              <View style={styles.arrowCircle}>
+                <Text style={styles.arrowText}>→</Text>
+              </View>
             </View>
-            <View style={styles.arrowCircle}>
-              <Text style={styles.arrowText}>→</Text>
-            </View>
-          </View>
-        </AnimatedPressable>
+          </AnimatedPressable>
 
-        {/* Cover & Earn */}
-        <AnimatedPressable onPress={handleCoverAndEarn} style={styles.card}>
-          <View style={styles.cardContent}>
-            <View style={styles.cardText}>
-              <Text style={styles.cardTitle}>Cover & Earn</Text>
-              <Text style={styles.cardSubtitle}>
-                Accept temporary medical coverage requests and earn.
-              </Text>
+          {/* Cover & Earn */}
+          <AnimatedPressable onPress={handleCoverAndEarn} style={styles.card}>
+            <View style={styles.cardContent}>
+              <View style={styles.cardText}>
+                <Text style={styles.cardTitle}>Cover & Earn</Text>
+                <Text style={styles.cardSubtitle}>
+                  Accept temporary medical coverage requests and earn.
+                </Text>
+              </View>
+              <View style={styles.arrowCircle}>
+                <Text style={styles.arrowText}>→</Text>
+              </View>
             </View>
-            <View style={styles.arrowCircle}>
-              <Text style={styles.arrowText}>→</Text>
-            </View>
-          </View>
-        </AnimatedPressable>
+          </AnimatedPressable>
+        </View>
       </View>
 
       {/* Footer */}
@@ -119,13 +121,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: OFF_WHITE,
     paddingHorizontal: 24,
-    paddingTop: 64,
     paddingBottom: 32,
+    justifyContent: 'space-between',
   },
   wordmarkContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 36,
+    marginBottom: 20,
   },
   wordmarkBold: {
     fontSize: 18,
@@ -150,12 +152,11 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: MUTED,
-    marginBottom: 32,
+    marginBottom: 20,
     lineHeight: 20,
   },
   cardsContainer: {
     gap: 12,
-    flex: 1,
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -204,7 +205,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     alignItems: 'center',
-    paddingTop: 24,
+    paddingTop: 16,
   },
   footerBrand: {
     fontSize: 10,
