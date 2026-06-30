@@ -35,7 +35,7 @@ export default function RequesterBasicProfile() {
   const handleBack = () => {
     console.log('[RequesterBasicProfile] Back button pressed, onboarding_complete:', profile?.onboarding_complete);
     if (profile?.onboarding_complete) {
-      router.replace('/(app)/(home)');
+      router.replace('/(requester)/(home)' as any);
     } else {
       router.replace('/(auth)/role-select');
     }
@@ -97,7 +97,7 @@ export default function RequesterBasicProfile() {
 
       console.log('[RequesterBasicProfile] Profile saved, refreshing and navigating to home');
       await refreshProfile();
-      router.replace('/(app)/(home)');
+      router.replace('/(requester)/(home)' as any);
     } catch (err: any) {
       console.log('[RequesterBasicProfile] Submit error:', err?.message);
       setSubmitError(err?.message || 'Something went wrong. Please try again.');

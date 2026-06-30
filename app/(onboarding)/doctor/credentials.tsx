@@ -105,7 +105,7 @@ export default function DoctorCredentials() {
   const handleBack = () => {
     console.log('[DoctorCredentials] Back button pressed, onboarding_complete:', profile?.onboarding_complete);
     if (profile?.onboarding_complete) {
-      router.replace('/(app)/(home)');
+      router.replace('/(doctor)/(home)' as any);
     } else {
       router.replace('/(auth)/role-select');
     }

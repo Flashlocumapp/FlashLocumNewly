@@ -166,7 +166,7 @@ export default function DoctorPayout() {
   const handleBack = () => {
     console.log('[DoctorPayout] Back button pressed, onboarding_complete:', profile?.onboarding_complete);
     if (profile?.onboarding_complete) {
-      router.replace('/(app)/(home)');
+      router.replace('/(doctor)/(home)' as any);
     } else {
       router.replace('/(auth)/role-select');
     }
@@ -219,7 +219,7 @@ export default function DoctorPayout() {
       if (profileError) throw profileError;
 
       await refreshProfile();
-      router.replace('/(app)/(home)');
+      router.replace('/(doctor)/(home)' as any);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
       setSubmitError(message);

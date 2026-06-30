@@ -36,7 +36,7 @@ export default function DoctorBasicProfile() {
   const handleBack = () => {
     console.log('[DoctorBasicProfile] Back button pressed, onboarding_complete:', profile?.onboarding_complete);
     if (profile?.onboarding_complete) {
-      router.replace('/(app)/(home)');
+      router.replace('/(doctor)/(home)' as any);
     } else {
       router.replace('/(auth)/role-select');
     }

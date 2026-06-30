@@ -142,7 +142,7 @@ export default function SignUpScreen() {
       }
     } else {
       console.log('[SignUp] Sign in pressed — email:', email);
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
@@ -151,8 +151,28 @@ export default function SignUpScreen() {
         console.log('[SignUp] Sign in error:', signInError.message);
         setError(signInError.message || 'Sign in failed. Please try again.');
       } else {
-        console.log('[SignUp] Sign in success, navigating to home');
-        router.replace('/(app)/(home)');
+        console.log('[SignUp] Sign in success, fetching profile for role-aware routing');
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('role, doctor_onboarding_complete, requester_onboarding_complete')
+          .eq('id', data.user.id)
+          .single();
+
+        const doctorComplete = profileData?.doctor_onboarding_complete === true;
+        const requesterComplete = profileData?.requester_onboarding_complete === true;
+        const profileRole = profileData?.role;
+
+        console.log('[SignUp] Profile data — role:', profileRole, 'doctorComplete:', doctorComplete, 'requesterComplete:', requesterComplete);
+
+        if (doctorComplete && !requesterComplete) {
+          router.replace('/(doctor)/(home)' as any);
+        } else if (requesterComplete && !doctorComplete) {
+          router.replace('/(requester)/(home)' as any);
+        } else if (doctorComplete && requesterComplete) {
+          router.replace(profileRole === 'requester' ? '/(requester)/(home)' as any : '/(doctor)/(home)' as any);
+        } else {
+          router.replace(profileRole === 'requester' ? '/(onboarding)/requester/basic-profile' as any : '/(onboarding)/doctor/basic-profile' as any);
+        }
       }
     }
   };
