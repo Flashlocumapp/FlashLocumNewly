@@ -1,7 +1,7 @@
 import 'react-native-url-polyfill/auto';
 import 'react-native-reanimated';
 import React, { useEffect, useRef, useState } from 'react';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, DarkTheme } from '@react-navigation/native';
@@ -18,8 +18,9 @@ const DevErrorBoundary = __DEV__
   : ({ children }: { children: React.ReactNode }) => <>{children}</>;
 
 function NavigationGuard() {
-  const { session, profile, isReady } = useAuth();
+  const { session, user, profile, isReady } = useAuth();
   const router = useRouter();
+  const segments = useSegments();
   const [lastPathway, setLastPathway] = useState<'doctor' | 'requester' | null | undefined>(undefined);
   const hasRouted = useRef(false);
 
@@ -40,6 +41,12 @@ function NavigationGuard() {
     SplashScreen.hideAsync();
     console.log('[NavigationGuard] Routing — session:', !!session, 'profile:', !!profile, 'lastPathway:', lastPathway);
 
+    const alreadyInOnboarding = segments[0] === '(onboarding)';
+    if (alreadyInOnboarding) {
+      console.log('[NavigationGuard] Already in onboarding — skipping re-route');
+      return;
+    }
+
     // 1. No session
     if (!session) {
       console.log('[NavigationGuard] No session → /(auth)/intro');
@@ -49,8 +56,12 @@ function NavigationGuard() {
 
     // 2. Session but no profile
     if (!profile) {
-      console.log('[NavigationGuard] No profile → onboarding');
-      router.replace('/(onboarding)/doctor/basic-profile' as any);
+      const metaRole = user?.user_metadata?.role;
+      const route = metaRole === 'requester'
+        ? '/(onboarding)/requester/basic-profile'
+        : '/(onboarding)/doctor/basic-profile';
+      console.log('[NavigationGuard] No profile → onboarding via metadata role:', metaRole, '→', route);
+      router.replace(route as any);
       return;
     }
 
