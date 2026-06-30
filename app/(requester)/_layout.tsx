@@ -49,12 +49,12 @@ export default function RequesterLayout() {
               <MaterialIcons
                 name={tab.icon}
                 size={24}
-                color={isActive ? '#FFFFFF' : '#636366'}
+                color={isActive ? '#FFFFFF' : '#8E8E93'}
               />
               <Text style={{
                 fontSize: 10,
                 fontWeight: isActive ? '600' : '400',
-                color: isActive ? '#FFFFFF' : '#636366',
+                color: isActive ? '#FFFFFF' : '#8E8E93',
                 marginTop: 3,
               }}>
                 {tab.label}

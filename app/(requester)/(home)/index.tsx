@@ -14,7 +14,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
-import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { Search, MapPin, ArrowRight, X, CalendarDays, Clock } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -70,6 +70,9 @@ export default function RequesterHomeScreen() {
   const insets = useSafeAreaInsets();
   const TAB_BAR_CLEARANCE = Platform.OS === 'ios' ? 0 : (60 + insets.bottom);
   const mapRef = useRef<MapView>(null);
+  const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const locationSub = useRef<Location.LocationSubscription | null>(null);
 
   // Sheet state
   const [sheetState, setSheetState] = useState<SheetState>('idle');
@@ -104,24 +107,44 @@ export default function RequesterHomeScreen() {
   const matchProgressAnim = useRef(new Animated.Value(0.05)).current;
   const [submitting, setSubmitting] = useState(false);
 
-  // ─── Location on mount — animate map to user position ────────────────────────
+  // ─── Location on mount — animate map to user position + stream ───────────────
   useEffect(() => {
     (async () => {
       console.log('[RequesterHome] Requesting location permission');
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
         const loc = await Location.getCurrentPositionAsync({});
+        setUserCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
         mapRef.current?.animateToRegion({
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
+          latitudeDelta: 0.08,
+          longitudeDelta: 0.08,
         }, 800);
+        // Then stream continuously
+        locationSub.current = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.High, timeInterval: 4000, distanceInterval: 10 },
+          (l) => setUserCoords({ latitude: l.coords.latitude, longitude: l.coords.longitude })
+        );
       } else {
         console.log('[RequesterHome] Location permission denied, using Lagos fallback');
+        setUserCoords({ latitude: LAGOS_REGION.latitude, longitude: LAGOS_REGION.longitude });
       }
     })();
+    return () => { locationSub.current?.remove(); };
   }, []);
+
+  // ─── Pulse animation loop ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.6, duration: 1200, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.0, duration: 600, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulseAnim]);
 
   // ─── Sheet height animation ───────────────────────────────────────────────────
   const animateSheet = useCallback((state: SheetState) => {
@@ -286,28 +309,69 @@ export default function RequesterHomeScreen() {
             style={{ flex: 1 }}
             provider={PROVIDER_GOOGLE}
             initialRegion={LAGOS_REGION}
-            showsUserLocation={true}
-            showsMyLocationButton={false}
-          />
+          >
+            {userCoords && (
+              <Marker
+                coordinate={userCoords}
+                anchor={{ x: 0.5, y: 0.5 }}
+                tracksViewChanges={true}
+              >
+                <View style={{ width: 100, height: 100, alignItems: 'center', justifyContent: 'center' }}>
+                  {/* Outer pulsing disc */}
+                  <Animated.View style={{
+                    position: 'absolute',
+                    width: 100,
+                    height: 100,
+                    borderRadius: 50,
+                    backgroundColor: 'rgba(37,99,235,0.12)',
+                    transform: [{ scale: pulseAnim }],
+                    opacity: pulseAnim.interpolate({ inputRange: [1, 1.6], outputRange: [0.9, 0], extrapolate: 'clamp' }),
+                  }} />
+                  {/* Middle fixed disc */}
+                  <View style={{
+                    position: 'absolute',
+                    width: 60,
+                    height: 60,
+                    borderRadius: 30,
+                    backgroundColor: 'rgba(37,99,235,0.22)',
+                  }} />
+                  {/* Inner solid dot */}
+                  <View style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    backgroundColor: '#2563EB',
+                    borderWidth: 2.5,
+                    borderColor: '#FFFFFF',
+                    shadowColor: '#2563EB',
+                    shadowOpacity: 0.5,
+                    shadowRadius: 4,
+                    elevation: 4,
+                  }} />
+                </View>
+              </Marker>
+            )}
+          </MapView>
 
           {/* White search section — fixed height, sits below map */}
           <View
             style={{
               backgroundColor: '#FFFFFF',
-              paddingTop: 10,
-              paddingBottom: insets.bottom + 20,
+              paddingTop: 16,
+              paddingBottom: insets.bottom + 24,
               paddingHorizontal: 16,
+              minHeight: 130,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               shadowColor: '#000',
-              shadowOffset: { width: 0, height: -2 },
-              shadowOpacity: 0.06,
-              shadowRadius: 8,
-              elevation: 8,
+              shadowOffset: { width: 0, height: -3 },
+              shadowOpacity: 0.08,
+              shadowRadius: 10,
+              elevation: 10,
             }}
           >
             {/* Drag handle pill */}
-            <View style={{ alignItems: 'center', marginBottom: 12 }}>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
               <View style={{ width: 36, height: 4, borderRadius: 99, backgroundColor: '#DEDEDE' }} />
             </View>
 
@@ -325,7 +389,7 @@ export default function RequesterHomeScreen() {
                 gap: 10,
               }}
             >
-              <Search size={18} color="#8E8E93" />
+              <Search size={18} color="#3C3C3E" />
               <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>
                 Where is coverage needed?
               </Text>
@@ -350,9 +414,49 @@ export default function RequesterHomeScreen() {
                 style={{ flex: 1 }}
                 provider={PROVIDER_GOOGLE}
                 initialRegion={LAGOS_REGION}
-                showsUserLocation={true}
-                showsMyLocationButton={false}
-              />
+              >
+                {userCoords && (
+                  <Marker
+                    coordinate={userCoords}
+                    anchor={{ x: 0.5, y: 0.5 }}
+                    tracksViewChanges={true}
+                  >
+                    <View style={{ width: 100, height: 100, alignItems: 'center', justifyContent: 'center' }}>
+                      {/* Outer pulsing disc */}
+                      <Animated.View style={{
+                        position: 'absolute',
+                        width: 100,
+                        height: 100,
+                        borderRadius: 50,
+                        backgroundColor: 'rgba(37,99,235,0.12)',
+                        transform: [{ scale: pulseAnim }],
+                        opacity: pulseAnim.interpolate({ inputRange: [1, 1.6], outputRange: [0.9, 0], extrapolate: 'clamp' }),
+                      }} />
+                      {/* Middle fixed disc */}
+                      <View style={{
+                        position: 'absolute',
+                        width: 60,
+                        height: 60,
+                        borderRadius: 30,
+                        backgroundColor: 'rgba(37,99,235,0.22)',
+                      }} />
+                      {/* Inner solid dot */}
+                      <View style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: 9,
+                        backgroundColor: '#2563EB',
+                        borderWidth: 2.5,
+                        borderColor: '#FFFFFF',
+                        shadowColor: '#2563EB',
+                        shadowOpacity: 0.5,
+                        shadowRadius: 4,
+                        elevation: 4,
+                      }} />
+                    </View>
+                  </Marker>
+                )}
+              </MapView>
             </View>
           </TouchableWithoutFeedback>
 
