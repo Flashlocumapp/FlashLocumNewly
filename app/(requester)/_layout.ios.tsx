@@ -2,7 +2,11 @@ import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
 
 export default function RequesterLayoutIOS() {
   return (
-    <NativeTabs>
+    <NativeTabs
+      tabBarStyle={{ backgroundColor: '#1C1C1E' }}
+      tabBarActiveTintColor="#FFFFFF"
+      tabBarInactiveTintColor="#636366"
+    >
       <NativeTabs.Trigger name="(home)">
         <Icon sf="house.fill" />
         <Label>Home</Label>

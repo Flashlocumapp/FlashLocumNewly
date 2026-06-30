@@ -68,7 +68,7 @@ function DragHandle({ panHandlers }: { panHandlers?: object }) {
 
 export default function RequesterHomeScreen() {
   const insets = useSafeAreaInsets();
-  const TAB_BAR_CLEARANCE = Platform.OS === 'ios' ? 0 : (60 + 20 + insets.bottom);
+  const TAB_BAR_CLEARANCE = Platform.OS === 'ios' ? 0 : (60 + insets.bottom);
   const mapRef = useRef<MapView>(null);
 
   // Sheet state
@@ -305,44 +305,42 @@ export default function RequesterHomeScreen() {
             style={{ flex: 1 }}
             provider={PROVIDER_GOOGLE}
             initialRegion={LAGOS_REGION}
-            customMapStyle={DESATURATED_MAP_STYLE}
             showsUserLocation={false}
           >
             {userCoords && (
               <Marker coordinate={userMarkerCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={true}>
-                <View style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
-                  {/* Outer pulse ring — scales out and fades */}
-                  <Animated.View
-                    style={{
-                      position: 'absolute',
-                      width: 44,
-                      height: 44,
-                      borderRadius: 22,
-                      borderWidth: 2,
-                      borderColor: '#2563EB',
-                      transform: [{ scale: pulseAnim }],
-                      opacity: pulseAnim.interpolate({
-                        inputRange: [1.0, 2.5],
-                        outputRange: [0.6, 0],
-                        extrapolate: 'clamp',
-                      }),
-                    }}
-                  />
-                  {/* Inner solid dot — fixed, never scales */}
-                  <View
-                    style={{
-                      width: 18,
-                      height: 18,
-                      borderRadius: 9,
-                      backgroundColor: '#2563EB',
-                      borderWidth: 2.5,
-                      borderColor: '#FFFFFF',
-                      shadowColor: '#2563EB',
-                      shadowOpacity: 0.5,
-                      shadowRadius: 6,
-                      elevation: 4,
-                    }}
-                  />
+                <View style={{ width: 80, height: 80, alignItems: 'center', justifyContent: 'center' }}>
+                  {/* Outer pulsing filled disc */}
+                  <Animated.View style={{
+                    position: 'absolute',
+                    width: 80,
+                    height: 80,
+                    borderRadius: 40,
+                    backgroundColor: 'rgba(37,99,235,0.12)',
+                    transform: [{ scale: pulseAnim.interpolate({ inputRange: [1, 2.5], outputRange: [0.6, 1], extrapolate: 'clamp' }) }],
+                    opacity: pulseAnim.interpolate({ inputRange: [1, 2.5], outputRange: [0.8, 0], extrapolate: 'clamp' }),
+                  }} />
+                  {/* Middle fixed filled disc */}
+                  <View style={{
+                    position: 'absolute',
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: 'rgba(37,99,235,0.20)',
+                  }} />
+                  {/* Inner solid blue dot */}
+                  <View style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    backgroundColor: '#2563EB',
+                    borderWidth: 2.5,
+                    borderColor: '#FFFFFF',
+                    shadowColor: '#2563EB',
+                    shadowOpacity: 0.6,
+                    shadowRadius: 6,
+                    elevation: 6,
+                  }} />
                 </View>
               </Marker>
             )}
@@ -420,8 +418,8 @@ export default function RequesterHomeScreen() {
                 gap: 10,
               }}
             >
-              <Search size={18} color={'#6B6B6B'} />
-              <Text style={[TYPOGRAPHY.body, { color: '#6B6B6B', fontWeight: '600' }]}>
+              <Search size={18} color={'#3C3C3E'} />
+              <Text style={[TYPOGRAPHY.body, { color: '#1C1C1E', fontWeight: '700' }]}>
                 Where is coverage needed?
               </Text>
             </TouchableOpacity>
@@ -960,23 +958,3 @@ export default function RequesterHomeScreen() {
   );
 }
 
-const DESATURATED_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
-  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] },
-  { featureType: 'administrative.land_parcel', elementType: 'labels.text.fill', stylers: [{ color: '#bdbdbd' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#eeeeee' }] },
-  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#e5e5e5' }] },
-  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dadada' }] },
-  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
-  { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
-  { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#e5e5e5' }] },
-  { featureType: 'transit.station', elementType: 'geometry', stylers: [{ color: '#eeeeee' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#c9d8e8' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
-];
