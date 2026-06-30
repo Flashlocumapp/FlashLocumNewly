@@ -6,7 +6,7 @@ import {
   useColorScheme,
 } from 'react-native';
 import { Stack } from 'expo-router';
-import { Calendar, ChevronRight, Briefcase, User, Building2, Stethoscope } from 'lucide-react-native';
+import { ChevronRight, Building2, Stethoscope } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePathwayGuard } from '@/hooks/usePathwayGuard';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -34,14 +34,6 @@ export default function HomeScreen() {
   const doctorBadgeBg = canAccessDoctor ? 'rgba(45, 198, 83, 0.12)' : 'rgba(138, 138, 138, 0.12)';
   const requesterBadgeColor = canAccessRequester ? '#1A9E45' : '#8A8A8A';
   const doctorBadgeColor = canAccessDoctor ? '#1A9E45' : '#8A8A8A';
-
-  const handleBrowseShifts = () => {
-    console.log('[HomeScreen] Browse Shifts pressed');
-  };
-
-  const handleMyProfile = () => {
-    console.log('[HomeScreen] My Profile pressed');
-  };
 
   const handleEnterRequester = () => {
     console.log('[HomeScreen] Request Coverage card pressed');
@@ -223,156 +215,6 @@ export default function HomeScreen() {
                   </View>
                   <ChevronRight size={18} color={textTertiary} style={{ marginTop: 2 }} />
                 </View>
-              </View>
-            </AnimatedPressable>
-          </View>
-        </View>
-
-        {/* Upcoming shifts section */}
-        <View>
-          <Text
-            style={[
-              TYPOGRAPHY.h4,
-              { color: textColor, marginBottom: SPACING.sm, marginTop: SPACING.xs },
-            ]}
-          >
-            Upcoming shifts
-          </Text>
-          <View
-            style={{
-              backgroundColor: surface,
-              borderRadius: RADIUS.xl,
-              padding: SPACING.xxl,
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor,
-              boxShadow: '0 2px 8px rgba(0, 102, 204, 0.06)',
-            }}
-          >
-            <View
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: RADIUS.lg,
-                backgroundColor: COLORS.primaryMuted,
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: SPACING.base,
-              }}
-            >
-              <Calendar size={26} color={COLORS.primary} />
-            </View>
-            <Text
-              style={[
-                TYPOGRAPHY.h4,
-                { color: textColor, textAlign: 'center', marginBottom: SPACING.sm },
-              ]}
-            >
-              No upcoming shifts
-            </Text>
-            <Text
-              style={[
-                TYPOGRAPHY.caption,
-                { color: textSecondary, textAlign: 'center', lineHeight: 20 },
-              ]}
-            >
-              Browse the marketplace to find coverage opportunities
-            </Text>
-          </View>
-        </View>
-
-        {/* Quick actions */}
-        <View>
-          <Text
-            style={[
-              TYPOGRAPHY.h4,
-              { color: textColor, marginBottom: SPACING.sm },
-            ]}
-          >
-            Quick actions
-          </Text>
-          <View style={{ gap: SPACING.sm }}>
-            <AnimatedPressable
-              onPress={handleBrowseShifts}
-              style={{
-                backgroundColor: surface,
-                borderRadius: RADIUS.lg,
-                borderWidth: 1,
-                borderColor,
-                boxShadow: '0 2px 8px rgba(0, 102, 204, 0.06)',
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  padding: SPACING.base,
-                  gap: SPACING.base,
-                }}
-              >
-                <View
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: RADIUS.md,
-                    backgroundColor: COLORS.primaryMuted,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Briefcase size={22} color={COLORS.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[TYPOGRAPHY.bodyMedium, { color: textColor }]}>
-                    Browse Shifts
-                  </Text>
-                  <Text style={[TYPOGRAPHY.caption, { color: textSecondary }]}>
-                    Find available coverage opportunities
-                  </Text>
-                </View>
-                <ChevronRight size={18} color={textTertiary} />
-              </View>
-            </AnimatedPressable>
-
-            <AnimatedPressable
-              onPress={handleMyProfile}
-              style={{
-                backgroundColor: surface,
-                borderRadius: RADIUS.lg,
-                borderWidth: 1,
-                borderColor,
-                boxShadow: '0 2px 8px rgba(0, 102, 204, 0.06)',
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  padding: SPACING.base,
-                  gap: SPACING.base,
-                }}
-              >
-                <View
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: RADIUS.md,
-                    backgroundColor: COLORS.accentMuted,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <User size={22} color={COLORS.accent} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[TYPOGRAPHY.bodyMedium, { color: textColor }]}>
-                    My Profile
-                  </Text>
-                  <Text style={[TYPOGRAPHY.caption, { color: textSecondary }]}>
-                    Manage your account and credentials
-                  </Text>
-                </View>
-                <ChevronRight size={18} color={textTertiary} />
               </View>
             </AnimatedPressable>
           </View>

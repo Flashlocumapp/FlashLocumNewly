@@ -26,14 +26,17 @@ function NavigationGuard() {
     const inAuth = seg0 === '(auth)';
     const inOnboarding = seg0 === '(onboarding)';
     const inIndex = seg0 === 'index' || seg0 === undefined;
+    const inDoctor = seg0 === '(doctor)';
+    const inRequester = seg0 === '(requester)';
+    const inApp = seg0 === '(app)';
 
     // No session — index.tsx owns unauthenticated routing
     if (!session) return;
 
     if (session && profile) {
-      const eitherComplete =
-        profile.doctor_onboarding_complete === true ||
-        profile.requester_onboarding_complete === true;
+      const doctorComplete = profile.doctor_onboarding_complete === true;
+      const requesterComplete = profile.requester_onboarding_complete === true;
+      const eitherComplete = doctorComplete || requesterComplete;
 
       if (!eitherComplete) {
         // Neither pathway complete → send to role-appropriate onboarding
@@ -48,10 +51,37 @@ function NavigationGuard() {
         return;
       }
 
-      // At least one pathway complete → route to app if in auth/index
+      // Doctor only complete → route to doctor pathway
+      if (doctorComplete && !requesterComplete) {
+        if (!inDoctor) {
+          console.log('[NavigationGuard] Doctor only complete, routing to doctor home');
+          router.replace('/(doctor)/(home)' as any);
+        }
+        return;
+      }
+
+      // Requester only complete → route to requester pathway
+      if (requesterComplete && !doctorComplete) {
+        if (!inRequester) {
+          console.log('[NavigationGuard] Requester only complete, routing to requester home');
+          router.replace('/(requester)/(home)' as any);
+        }
+        return;
+      }
+
+      // Both complete → route to hub if in auth/index
+      if (doctorComplete && requesterComplete) {
+        if (inAuth || inIndex) {
+          console.log('[NavigationGuard] Both pathways complete, routing to hub');
+          router.replace('/(app)/(home)' as any);
+        }
+        return;
+      }
+
+      // Fallback: at least one complete, in auth/index → go to hub
       if (inAuth || inIndex) {
         console.log('[NavigationGuard] Pathway complete, routing to home');
-        router.replace('/(app)/(home)');
+        router.replace('/(app)/(home)' as any);
       }
     }
   }, [session, loading, profile, profileLoading, segments]);
@@ -72,6 +102,8 @@ function RootLayoutInner() {
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(app)" />
             <Stack.Screen name="(onboarding)" />
+            <Stack.Screen name="(doctor)" />
+            <Stack.Screen name="(requester)" />
           </Stack>
           <SystemBars style="auto" />
         </GestureHandlerRootView>

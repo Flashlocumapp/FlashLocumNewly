@@ -13,7 +13,7 @@ export function usePathwayGuard() {
     if (!canAccessDoctor) {
       router.push('/(onboarding)/doctor/basic-profile' as any);
     } else {
-      router.push('/(app)/(shifts)' as any);
+      router.push('/(doctor)/(home)' as any);
     }
   };
 
@@ -22,7 +22,7 @@ export function usePathwayGuard() {
     if (!canAccessRequester) {
       router.push('/(onboarding)/requester/basic-profile' as any);
     } else {
-      router.push('/(app)/(shifts)' as any);
+      router.push('/(requester)/(home)' as any);
     }
   };
 
