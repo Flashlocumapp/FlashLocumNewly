@@ -30,8 +30,8 @@ const MAPS_KEY = Platform.OS === 'ios' ? IOS_KEY : ANDROID_KEY;
 const LAGOS_REGION = {
   latitude: 6.5244,
   longitude: 3.3792,
-  latitudeDelta: 0.15,
-  longitudeDelta: 0.15,
+  latitudeDelta: 0.08,
+  longitudeDelta: 0.08,
 };
 
 const LAGOS_BOUNDS = {
@@ -295,8 +295,10 @@ export default function RequesterHomeScreen() {
             style={{
               backgroundColor: '#FFFFFF',
               paddingTop: 10,
-              paddingBottom: 16,
+              paddingBottom: insets.bottom + 20,
               paddingHorizontal: 16,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
               shadowColor: '#000',
               shadowOffset: { width: 0, height: -2 },
               shadowOpacity: 0.06,
@@ -324,7 +326,7 @@ export default function RequesterHomeScreen() {
               }}
             >
               <Search size={18} color="#8E8E93" />
-              <Text style={{ fontSize: 15, fontWeight: '500', color: '#3C3C3E' }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>
                 Where is coverage needed?
               </Text>
             </TouchableOpacity>
