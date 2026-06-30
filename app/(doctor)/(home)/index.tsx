@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 
 const LAGOS_REGION = {
@@ -14,6 +15,10 @@ const LAGOS_REGION = {
 export default function DoctorHomeScreen() {
   const insets = useSafeAreaInsets();
   const [isOnline, setIsOnline] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.setItem('flashlocum_last_pathway', 'doctor').catch(() => {});
+  }, []);
 
   const statusDotColor = isOnline ? COLORS.success : '#8E8E93';
   const statusText = isOnline ? 'Online' : 'Offline';
