@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
-import { TAB_BAR_HEIGHT } from '../_layout';
+import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 
 const TABS = ['Active', 'Upcoming', 'History'] as const;
 type TabType = typeof TABS[number];

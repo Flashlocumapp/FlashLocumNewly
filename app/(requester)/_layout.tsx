@@ -1,21 +1,15 @@
-import React, { createContext, useContext, useRef } from 'react';
+import React, { useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated, Platform } from 'react-native';
 import { Stack, useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-
-// ── Tab bar visibility context ────────────────────────────────────────────────
-type TabBarCtx = { setTabBarVisible: (v: boolean) => void };
-export const TabBarVisibilityContext = createContext<TabBarCtx>({ setTabBarVisible: () => {} });
-export const useTabBarVisibility = () => useContext(TabBarVisibilityContext);
+import { TabBarVisibilityContext, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 
 const REQUESTER_TABS = [
   { name: '(home)',     route: '/(requester)/(home)'     as const, icon: 'home'           as const, label: 'Home'     },
   { name: '(coverage)', route: '/(requester)/(coverage)' as const, icon: 'calendar-month' as const, label: 'Coverage' },
   { name: '(account)',  route: '/(requester)/(account)'  as const, icon: 'person'         as const, label: 'Account'  },
 ];
-
-export const TAB_BAR_HEIGHT = 60;
 
 export default function RequesterLayout() {
   const router = useRouter();

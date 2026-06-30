@@ -23,7 +23,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
 import { supabase } from '@/lib/supabase';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
-import { useTabBarVisibility, TAB_BAR_HEIGHT } from '../_layout';
+import { useTabBarVisibility, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 
 const ANDROID_KEY = 'AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU';
 const IOS_KEY = 'AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk';

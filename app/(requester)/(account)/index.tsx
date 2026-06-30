@@ -6,7 +6,7 @@ import { ChevronRight, LogOut, ArrowLeftRight } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
-import { TAB_BAR_HEIGHT } from '../_layout';
+import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 
 export default function RequesterAccountScreen() {
   const insets = useSafeAreaInsets();
