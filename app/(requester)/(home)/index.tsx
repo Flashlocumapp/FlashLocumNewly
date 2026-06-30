@@ -39,11 +39,11 @@ const LAGOS_BOUNDS = {
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const SHEET_HEIGHTS = {
-  idle: 140,
-  searching: SCREEN_HEIGHT * 0.55,
-  config: SCREEN_HEIGHT * 0.72,
-  summary: 240,
-  matching: 300,
+  idle: 140 + 80,
+  searching: SCREEN_HEIGHT * 0.62,
+  config: SCREEN_HEIGHT * 0.75,
+  summary: 240 + 80,
+  matching: 300 + 80,
 };
 
 type SheetState = 'idle' | 'searching' | 'config' | 'summary' | 'matching';
@@ -72,6 +72,7 @@ function DragHandle() {
 
 export default function RequesterHomeScreen() {
   const insets = useSafeAreaInsets();
+  const TAB_BAR_HEIGHT = 80; // FloatingTabBar height + bottom margin
   const mapRef = useRef<MapView>(null);
 
   // Sheet state
@@ -131,8 +132,8 @@ export default function RequesterHomeScreen() {
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.4, duration: 900, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.8, duration: 1200, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
       ])
     );
     loop.start();
@@ -289,27 +290,39 @@ export default function RequesterHomeScreen() {
       >
         {userCoords && (
           <Marker coordinate={userMarkerCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
-            <View style={{ alignItems: 'center', justifyContent: 'center', width: 32, height: 32 }}>
+            <View style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+              {/* Outer pulse ring — scales out and fades */}
               <Animated.View
                 style={{
                   position: 'absolute',
-                  width: 22,
-                  height: 22,
-                  borderRadius: 11,
-                  borderWidth: 3,
-                  borderColor: '#FFFFFF',
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  borderWidth: 2,
+                  borderColor: '#2563EB',
+                  transform: [{ scale: pulseAnim }],
+                  opacity: pulseAnim.interpolate({
+                    inputRange: [1, 1.8],
+                    outputRange: [0.5, 0],
+                    extrapolate: 'clamp',
+                  }),
+                }}
+              />
+              {/* Inner solid dot — fixed, never scales */}
+              <View
+                style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: 9,
                   backgroundColor: '#2563EB',
+                  borderWidth: 2.5,
+                  borderColor: '#FFFFFF',
                   shadowColor: '#2563EB',
-                  shadowOpacity: 0.4,
+                  shadowOpacity: 0.5,
                   shadowRadius: 6,
                   elevation: 4,
-                  transform: [{ scale: pulseAnim }],
-                  alignItems: 'center',
-                  justifyContent: 'center',
                 }}
-              >
-                <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: '#2563EB' }} />
-              </Animated.View>
+              />
             </View>
           </Marker>
         )}
@@ -361,7 +374,6 @@ export default function RequesterHomeScreen() {
           backgroundColor: '#FFFFFF',
           borderTopLeftRadius: 28,
           borderTopRightRadius: 28,
-          overflow: 'hidden',
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -4 },
           shadowOpacity: 0.10,
@@ -371,7 +383,7 @@ export default function RequesterHomeScreen() {
       >
         {/* ── IDLE ── */}
         {sheetState === 'idle' && (
-          <View style={{ padding: 20 }}>
+          <View style={{ padding: 20, paddingBottom: TAB_BAR_HEIGHT }}>
             <DragHandle />
             <TouchableOpacity
               onPress={handleSearchTap}
@@ -444,7 +456,7 @@ export default function RequesterHomeScreen() {
                   },
                   description: { fontSize: 14, color: COLORS.text },
                   poweredContainer: { display: 'none' },
-                  listView: { backgroundColor: '#FFFFFF' },
+                  listView: { backgroundColor: '#FFFFFF', maxHeight: 300 },
                 }}
                 renderLeftButton={() => (
                   <View style={{ position: 'absolute', left: 16, top: 16, zIndex: 1 }}>
@@ -786,7 +798,7 @@ export default function RequesterHomeScreen() {
 
         {/* ── SUMMARY ── */}
         {sheetState === 'summary' && (
-          <View style={{ padding: 24, paddingBottom: insets.bottom + 24 }}>
+          <View style={{ padding: 24, paddingBottom: insets.bottom + TAB_BAR_HEIGHT }}>
             <DragHandle />
             <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 8 }]}>
               COVERAGE
@@ -816,7 +828,7 @@ export default function RequesterHomeScreen() {
 
         {/* ── MATCHING ── */}
         {sheetState === 'matching' && (
-          <View style={{ padding: 24, paddingBottom: insets.bottom + 24 }}>
+          <View style={{ padding: 24, paddingBottom: insets.bottom + TAB_BAR_HEIGHT }}>
             <DragHandle />
             <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, letterSpacing: 1.2, marginBottom: 6 }]}>
               {selectedPlace ? selectedPlace.name.toUpperCase() : 'FACILITY'}
