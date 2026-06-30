@@ -111,11 +111,12 @@ export default function DoctorPayout() {
         },
         body: JSON.stringify({ accountNumber: accNum, bankCode: bank.code }),
       });
-      if (!response.ok) {
+      const result = await response.json();
+      if (!response.ok || result.error) {
+        // Log the real reason for debugging
+        console.warn('[Monnify] Verification failed:', result?.message || result);
         throw new Error(ACCOUNT_VERIFY_ERROR);
       }
-      const result = await response.json();
-      if (result.error) throw new Error(ACCOUNT_VERIFY_ERROR);
 
       const returnedName = String(result.accountName || '').toLowerCase();
       const rawRegistrationName = String(
@@ -137,7 +138,11 @@ export default function DoctorPayout() {
       } else {
         setAccountName(String(result.accountName || ''));
       }
-    } catch {
+    } catch (err: unknown) {
+      const isAlreadyFriendly = err instanceof Error && err.message === ACCOUNT_VERIFY_ERROR;
+      if (!isAlreadyFriendly) {
+        console.warn('[Monnify] Unexpected error:', err);
+      }
       setAccountNameError(ACCOUNT_VERIFY_ERROR);
     } finally {
       setAccountNameLoading(false);
