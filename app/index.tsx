@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 
 SplashScreen.preventAutoHideAsync();
 
-const appIcon = require('@/assets/images/b1d2e6b2-10a6-4a7c-81fe-d98e0f2dec61.png');
+const appIcon = require('@/assets/images/APP ICON.png');
 
 export default function IndexScreen() {
   const router = useRouter();
