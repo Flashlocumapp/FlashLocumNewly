@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
-import MapView from 'react-native-maps';
+import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 
 const LAGOS_REGION = {
@@ -11,10 +12,12 @@ const LAGOS_REGION = {
 };
 
 export default function DoctorHomeScreen() {
+  const insets = useSafeAreaInsets();
   const [isOnline, setIsOnline] = useState(false);
 
   const statusDotColor = isOnline ? COLORS.success : '#8E8E93';
   const statusText = isOnline ? 'Online' : 'Offline';
+  const pillTop = insets.top + 12;
 
   const handleToggleStatus = () => {
     const next = !isOnline;
@@ -26,7 +29,9 @@ export default function DoctorHomeScreen() {
     <View style={{ flex: 1 }}>
       <MapView
         style={{ flex: 1 }}
+        provider={PROVIDER_GOOGLE}
         initialRegion={LAGOS_REGION}
+        customMapStyle={DESATURATED_MAP_STYLE}
       />
 
       {/* Online/Offline pill */}
@@ -35,7 +40,7 @@ export default function DoctorHomeScreen() {
         activeOpacity={0.85}
         style={{
           position: 'absolute',
-          top: 60,
+          top: pillTop,
           alignSelf: 'center',
           zIndex: 10,
           backgroundColor: '#FFFFFF',
@@ -45,7 +50,11 @@ export default function DoctorHomeScreen() {
           flexDirection: 'row',
           alignItems: 'center',
           gap: 8,
-          boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.15,
+          shadowRadius: 12,
+          elevation: 4,
         }}
       >
         <View
@@ -71,7 +80,11 @@ export default function DoctorHomeScreen() {
           backgroundColor: '#FFFFFF',
           borderRadius: 24,
           padding: SPACING.base,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.12,
+          shadowRadius: 20,
+          elevation: 6,
         }}
       >
         <Text
@@ -98,7 +111,11 @@ export default function DoctorHomeScreen() {
               backgroundColor: '#FFFFFF',
               borderRadius: 20,
               padding: 16,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.08,
+              shadowRadius: 8,
+              elevation: 2,
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
@@ -120,7 +137,11 @@ export default function DoctorHomeScreen() {
               backgroundColor: '#FFFFFF',
               borderRadius: 20,
               padding: 16,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.08,
+              shadowRadius: 8,
+              elevation: 2,
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
@@ -136,3 +157,24 @@ export default function DoctorHomeScreen() {
     </View>
   );
 }
+
+const DESATURATED_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] },
+  { featureType: 'administrative.land_parcel', elementType: 'labels.text.fill', stylers: [{ color: '#bdbdbd' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#eeeeee' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#e5e5e5' }] },
+  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dadada' }] },
+  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+  { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
+  { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#e5e5e5' }] },
+  { featureType: 'transit.station', elementType: 'geometry', stylers: [{ color: '#eeeeee' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#c9d8e8' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
+];

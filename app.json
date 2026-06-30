@@ -16,6 +16,9 @@
       "bundleIdentifier": "com.placeholder.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "googleMapsApiKey": "AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk"
       }
     },
     "android": {
@@ -23,7 +26,12 @@
         "foregroundImage": "./assets/images/APP ICON.png",
         "backgroundColor": "#111315"
       },
-      "package": "com.placeholder.app"
+      "package": "com.placeholder.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/images/newly.png",
@@ -33,7 +41,8 @@
       "expo-font",
       "expo-router",
       "expo-web-browser",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-location"
     ],
     "scheme": "flashlocum",
     "experiments": {
