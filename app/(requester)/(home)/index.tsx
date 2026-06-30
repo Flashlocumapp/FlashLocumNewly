@@ -774,7 +774,7 @@ export default function RequesterHomeScreen() {
             borderTopRightRadius: 24,
             paddingTop: 16,
             paddingHorizontal: 16,
-            paddingBottom: TAB_BAR_TOTAL + 16,
+            paddingBottom: Platform.OS === 'ios' ? insets.bottom + 16 : TAB_BAR_TOTAL + 16,
             minHeight: 180,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: -3 },
@@ -797,36 +797,38 @@ export default function RequesterHomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Layer 2: Charcoal tab bar — sits on top of bottom of white card */}
-          <Animated.View style={{
-            position: 'absolute', bottom: 0, left: 0, right: 0,
-            backgroundColor: '#1C1C1E',
-            flexDirection: 'row',
-            paddingBottom: insets.bottom,
-            borderTopWidth: 0.5,
-            borderTopColor: 'rgba(255,255,255,0.08)',
-            transform: [{ translateY: tabBarAnim }],
-          }}>
-            {REQUESTER_TABS.map((tab) => {
-              const isActive = pathname.includes(tab.name);
-              return (
-                <TouchableOpacity
-                  key={tab.name}
-                  onPress={() => {
-                    console.log('[RequesterHome] Tab pressed:', tab.label);
-                    router.push(tab.route);
-                  }}
-                  activeOpacity={0.7}
-                  style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}
-                >
-                  <MaterialIcons name={tab.icon} size={24} color={isActive ? '#FFFFFF' : '#8E8E93'} />
-                  <Text style={{ fontSize: 10, fontWeight: isActive ? '600' : '400', color: isActive ? '#FFFFFF' : '#8E8E93', marginTop: 3 }}>
-                    {tab.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </Animated.View>
+          {/* Layer 2: Charcoal tab bar — Android only, sits on top of bottom of white card */}
+          {Platform.OS !== 'ios' && (
+            <Animated.View style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0,
+              backgroundColor: '#1C1C1E',
+              flexDirection: 'row',
+              paddingBottom: insets.bottom,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              transform: [{ translateY: tabBarAnim }],
+            }}>
+              {REQUESTER_TABS.map((tab) => {
+                const isActive = pathname.includes(tab.name);
+                return (
+                  <TouchableOpacity
+                    key={tab.name}
+                    onPress={() => {
+                      console.log('[RequesterHome] Tab pressed:', tab.label);
+                      router.push(tab.route);
+                    }}
+                    activeOpacity={0.7}
+                    style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}
+                  >
+                    <MaterialIcons name={tab.icon} size={24} color={isActive ? '#FFFFFF' : '#8E8E93'} />
+                    <Text style={{ fontSize: 10, fontWeight: isActive ? '600' : '400', color: isActive ? '#FFFFFF' : '#8E8E93', marginTop: 3 }}>
+                      {tab.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </Animated.View>
+          )}
         </View>
       )}
 

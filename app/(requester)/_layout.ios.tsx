@@ -5,7 +5,7 @@ export default function RequesterLayoutIOS() {
     <NativeTabs
       tabBarStyle={{ backgroundColor: '#1C1C1E' }}
       tabBarActiveTintColor="#FFFFFF"
-      tabBarInactiveTintColor="#636366"
+      tabBarInactiveTintColor="#8E8E93"
     >
       <NativeTabs.Trigger name="(home)">
         <Icon sf="house.fill" />
