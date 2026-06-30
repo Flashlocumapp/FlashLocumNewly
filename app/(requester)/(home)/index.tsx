@@ -395,11 +395,14 @@ export default function RequesterHomeScreen() {
                   onPress={handlePlaceSelect}
                   fetchDetails
                   autoFocus
+                  minLength={2}
+                  debounce={300}
                   query={{
-                    key: MAPS_KEY, language: 'en', components: 'country:ng',
+                    key: MAPS_KEY,
+                    language: 'en',
+                    components: 'country:ng',
                     location: `${LAGOS_REGION.latitude},${LAGOS_REGION.longitude}`,
-                    radius: 50000, strictbounds: true,
-                    locationbias: `rectangle:${LAGOS_BOUNDS.southwest.lat},${LAGOS_BOUNDS.southwest.lng}|${LAGOS_BOUNDS.northeast.lat},${LAGOS_BOUNDS.northeast.lng}`,
+                    radius: 50000,
                   }}
                   styles={{
                     container: { flex: 0, paddingHorizontal: 16 },
@@ -407,7 +410,8 @@ export default function RequesterHomeScreen() {
                     textInput: { backgroundColor: '#FFFFFF', borderRadius: 28, paddingHorizontal: 14, paddingLeft: 44, fontSize: 15, color: COLORS.text, height: 50, margin: 0 },
                     row: { paddingVertical: 12, paddingHorizontal: 0, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', backgroundColor: '#FFFFFF' },
                     description: { fontSize: 14, color: COLORS.text },
-                    poweredContainer: { display: 'none' },
+                    poweredContainer: { paddingVertical: 4, paddingHorizontal: 16 },
+                    powered: { fontSize: 10, color: '#AEAEB2' },
                     listView: { backgroundColor: '#FFFFFF', maxHeight: 280, zIndex: 999, elevation: 20, borderRadius: 12, marginTop: 4 },
                   }}
                   renderLeftButton={() => (
