@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Image, StyleSheet } from 'react-native';
+import { View, Image, StyleSheet, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { supabase } from '@/lib/supabase';
@@ -31,6 +31,8 @@ export default function IndexScreen() {
   );
 }
 
+const { width } = Dimensions.get('window');
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -39,7 +41,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   icon: {
-    width: 120,
-    height: 120,
+    width: width * 0.60,
+    height: width * 0.60,
   },
 });
