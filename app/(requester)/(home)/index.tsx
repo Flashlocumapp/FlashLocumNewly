@@ -226,9 +226,15 @@ export default function RequesterHomeScreen() {
       console.log('[RequesterHome] Place selected but no details returned');
       return;
     }
+    const address = details.formatted_address || data.description || '';
+    // Hard-block non-Lagos results
+    if (!address.toLowerCase().includes('lagos')) {
+      console.log('[RequesterHome] Rejected non-Lagos result:', address);
+      return;
+    }
     const place: SelectedPlace = {
       name: details.name || data.structured_formatting?.main_text || data.description,
-      address: details.formatted_address || data.description,
+      address,
       lat: details.geometry.location.lat,
       lng: details.geometry.location.lng,
     };
@@ -397,12 +403,17 @@ export default function RequesterHomeScreen() {
                   autoFocus
                   minLength={2}
                   debounce={300}
+                  keepResultsAfterBlur={true}
+                  keyboardShouldPersistTaps="handled"
+                  onFail={(error) => console.error('[GooglePlaces] API error:', JSON.stringify(error))}
+                  onNotFound={() => console.log('[GooglePlaces] No results found')}
                   query={{
                     key: MAPS_KEY,
                     language: 'en',
                     components: 'country:ng',
-                    location: `${LAGOS_REGION.latitude},${LAGOS_REGION.longitude}`,
-                    radius: 50000,
+                    location: '6.5244,3.3792',
+                    radius: 150000,
+                    strictbounds: true,
                   }}
                   styles={{
                     container: { flex: 0, paddingHorizontal: 16 },
