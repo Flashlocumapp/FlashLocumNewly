@@ -10,6 +10,9 @@ import {
   Dimensions,
   KeyboardAvoidingView,
   Alert,
+  PanResponder,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
@@ -55,24 +58,17 @@ type SelectedPlace = {
   lng: number;
 };
 
-function DragHandle() {
+function DragHandle({ panHandlers }: { panHandlers?: object }) {
   return (
-    <View
-      style={{
-        width: 36,
-        height: 4,
-        borderRadius: RADIUS.full,
-        backgroundColor: '#DEDEDE',
-        alignSelf: 'center',
-        marginBottom: 16,
-      }}
-    />
+    <View {...panHandlers} style={{ alignItems: 'center', paddingVertical: 8 }}>
+      <View style={{ width: 36, height: 4, borderRadius: 99, backgroundColor: '#DEDEDE' }} />
+    </View>
   );
 }
 
 export default function RequesterHomeScreen() {
   const insets = useSafeAreaInsets();
-  const TAB_BAR_HEIGHT = 80; // FloatingTabBar height + bottom margin
+  const TAB_BAR_CLEARANCE = Platform.OS === 'ios' ? 0 : (60 + 20 + insets.bottom);
   const mapRef = useRef<MapView>(null);
 
   // Sheet state
@@ -82,6 +78,7 @@ export default function RequesterHomeScreen() {
   // Location
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const locationSub = useRef<Location.LocationSubscription | null>(null);
 
   // Place
   const [selectedPlace, setSelectedPlace] = useState<SelectedPlace | null>(null);
@@ -112,28 +109,32 @@ export default function RequesterHomeScreen() {
   const matchProgressAnim = useRef(new Animated.Value(0.05)).current;
   const [submitting, setSubmitting] = useState(false);
 
-  // ─── Location on mount ───────────────────────────────────────────────────────
+  // ─── Location on mount (live GPS streaming) ──────────────────────────────────
   useEffect(() => {
     (async () => {
       console.log('[RequesterHome] Requesting location permission');
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
-        const loc = await Location.getCurrentPositionAsync({});
-        console.log('[RequesterHome] Got user location:', loc.coords.latitude, loc.coords.longitude);
-        setUserCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+        locationSub.current = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 5 },
+          (loc) => {
+            setUserCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+          }
+        );
       } else {
         console.log('[RequesterHome] Location permission denied, using Lagos fallback');
         setUserCoords({ latitude: LAGOS_REGION.latitude, longitude: LAGOS_REGION.longitude });
       }
     })();
+    return () => { locationSub.current?.remove(); };
   }, []);
 
   // ─── Pulse animation ─────────────────────────────────────────────────────────
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.8, duration: 1200, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 2.5, duration: 1400, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.0, duration: 0, useNativeDriver: true }),
       ])
     );
     loop.start();
@@ -166,6 +167,20 @@ export default function RequesterHomeScreen() {
       }).start();
     }
   }, [sheetState, matchProgressAnim]);
+
+  // ─── Drag handle PanResponder ─────────────────────────────────────────────────
+  const dragPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderMove: () => {},
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 40) {
+          Keyboard.dismiss();
+          transitionTo('idle');
+        }
+      },
+    })
+  ).current;
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
   const handleSearchTap = () => {
@@ -279,54 +294,61 @@ export default function RequesterHomeScreen() {
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1 }}>
-      {/* Full-screen map */}
-      <MapView
-        ref={mapRef}
-        style={{ flex: 1 }}
-        provider={PROVIDER_GOOGLE}
-        initialRegion={LAGOS_REGION}
-        customMapStyle={DESATURATED_MAP_STYLE}
-        showsUserLocation={false}
-      >
-        {userCoords && (
-          <Marker coordinate={userMarkerCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
-            <View style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
-              {/* Outer pulse ring — scales out and fades */}
-              <Animated.View
-                style={{
-                  position: 'absolute',
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  borderWidth: 2,
-                  borderColor: '#2563EB',
-                  transform: [{ scale: pulseAnim }],
-                  opacity: pulseAnim.interpolate({
-                    inputRange: [1, 1.8],
-                    outputRange: [0.5, 0],
-                    extrapolate: 'clamp',
-                  }),
-                }}
-              />
-              {/* Inner solid dot — fixed, never scales */}
-              <View
-                style={{
-                  width: 18,
-                  height: 18,
-                  borderRadius: 9,
-                  backgroundColor: '#2563EB',
-                  borderWidth: 2.5,
-                  borderColor: '#FFFFFF',
-                  shadowColor: '#2563EB',
-                  shadowOpacity: 0.5,
-                  shadowRadius: 6,
-                  elevation: 4,
-                }}
-              />
-            </View>
-          </Marker>
-        )}
-      </MapView>
+      {/* Full-screen map wrapped in TouchableWithoutFeedback for tap-to-dismiss */}
+      <TouchableWithoutFeedback onPress={() => {
+        Keyboard.dismiss();
+        if (sheetState === 'searching' || sheetState === 'config') transitionTo('idle');
+      }}>
+        <View style={{ flex: 1 }}>
+          <MapView
+            ref={mapRef}
+            style={{ flex: 1 }}
+            provider={PROVIDER_GOOGLE}
+            initialRegion={LAGOS_REGION}
+            customMapStyle={DESATURATED_MAP_STYLE}
+            showsUserLocation={false}
+          >
+            {userCoords && (
+              <Marker coordinate={userMarkerCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={true}>
+                <View style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+                  {/* Outer pulse ring — scales out and fades */}
+                  <Animated.View
+                    style={{
+                      position: 'absolute',
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      borderWidth: 2,
+                      borderColor: '#2563EB',
+                      transform: [{ scale: pulseAnim }],
+                      opacity: pulseAnim.interpolate({
+                        inputRange: [1.0, 2.5],
+                        outputRange: [0.6, 0],
+                        extrapolate: 'clamp',
+                      }),
+                    }}
+                  />
+                  {/* Inner solid dot — fixed, never scales */}
+                  <View
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: 9,
+                      backgroundColor: '#2563EB',
+                      borderWidth: 2.5,
+                      borderColor: '#FFFFFF',
+                      shadowColor: '#2563EB',
+                      shadowOpacity: 0.5,
+                      shadowRadius: 6,
+                      elevation: 4,
+                    }}
+                  />
+                </View>
+              </Marker>
+            )}
+          </MapView>
+        </View>
+      </TouchableWithoutFeedback>
 
       {/* Summary top pill — only in summary state */}
       {sheetState === 'summary' && (
@@ -367,7 +389,7 @@ export default function RequesterHomeScreen() {
       <Animated.View
         style={{
           position: 'absolute',
-          bottom: 0,
+          bottom: TAB_BAR_CLEARANCE,
           left: 0,
           right: 0,
           height: sheetAnim,
@@ -379,11 +401,12 @@ export default function RequesterHomeScreen() {
           shadowOpacity: 0.10,
           shadowRadius: 16,
           elevation: 12,
+          overflow: 'visible',
         }}
       >
         {/* ── IDLE ── */}
         {sheetState === 'idle' && (
-          <View style={{ padding: 20, paddingBottom: TAB_BAR_HEIGHT }}>
+          <View style={{ padding: 20, paddingBottom: 16 }}>
             <DragHandle />
             <TouchableOpacity
               onPress={handleSearchTap}
@@ -397,8 +420,8 @@ export default function RequesterHomeScreen() {
                 gap: 10,
               }}
             >
-              <Search size={18} color={COLORS.textTertiary} />
-              <Text style={[TYPOGRAPHY.body, { color: COLORS.textTertiary }]}>
+              <Search size={18} color={'#6B6B6B'} />
+              <Text style={[TYPOGRAPHY.body, { color: '#6B6B6B', fontWeight: '600' }]}>
                 Where is coverage needed?
               </Text>
             </TouchableOpacity>
@@ -412,7 +435,7 @@ export default function RequesterHomeScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           >
             <View style={{ flex: 1, paddingTop: 20 }}>
-              <DragHandle />
+              <DragHandle panHandlers={dragPanResponder.panHandlers} />
               <GooglePlacesAutocomplete
                 placeholder="Where is coverage needed?"
                 onPress={handlePlaceSelect}
@@ -435,7 +458,6 @@ export default function RequesterHomeScreen() {
                     borderWidth: 1.5,
                     borderColor: '#0066CC',
                     marginBottom: 8,
-                    overflow: 'hidden',
                   },
                   textInput: {
                     backgroundColor: '#FFFFFF',
@@ -456,7 +478,7 @@ export default function RequesterHomeScreen() {
                   },
                   description: { fontSize: 14, color: COLORS.text },
                   poweredContainer: { display: 'none' },
-                  listView: { backgroundColor: '#FFFFFF', maxHeight: 300 },
+                  listView: { backgroundColor: '#FFFFFF', maxHeight: 300, zIndex: 999, elevation: 20 },
                 }}
                 renderLeftButton={() => (
                   <View style={{ position: 'absolute', left: 16, top: 16, zIndex: 1 }}>
@@ -503,7 +525,7 @@ export default function RequesterHomeScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <DragHandle />
+            <DragHandle panHandlers={dragPanResponder.panHandlers} />
 
             {/* Search row — tappable back to searching */}
             <TouchableOpacity
@@ -798,7 +820,7 @@ export default function RequesterHomeScreen() {
 
         {/* ── SUMMARY ── */}
         {sheetState === 'summary' && (
-          <View style={{ padding: 24, paddingBottom: insets.bottom + TAB_BAR_HEIGHT }}>
+          <View style={{ padding: 24, paddingBottom: insets.bottom + 16 }}>
             <DragHandle />
             <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 8 }]}>
               COVERAGE
@@ -828,7 +850,7 @@ export default function RequesterHomeScreen() {
 
         {/* ── MATCHING ── */}
         {sheetState === 'matching' && (
-          <View style={{ padding: 24, paddingBottom: insets.bottom + TAB_BAR_HEIGHT }}>
+          <View style={{ padding: 24, paddingBottom: insets.bottom + 16 }}>
             <DragHandle />
             <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, letterSpacing: 1.2, marginBottom: 6 }]}>
               {selectedPlace ? selectedPlace.name.toUpperCase() : 'FACILITY'}
