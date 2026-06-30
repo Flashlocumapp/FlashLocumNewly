@@ -22,6 +22,7 @@ export interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   profileLoading: boolean;
+  isReady: boolean;
   signIn: (email: string, password: string) => Promise<{ error: import('@supabase/supabase-js').AuthError | null }>;
   signUp: (email: string, password: string, metadata?: Record<string, string>) => Promise<{ error: import('@supabase/supabase-js').AuthError | null }>;
   signOut: () => Promise<void>;

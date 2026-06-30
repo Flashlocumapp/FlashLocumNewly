@@ -1,11 +1,12 @@
 import 'react-native-url-polyfill/auto';
 import 'react-native-reanimated';
-import React, { useEffect, useState } from 'react';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import { Stack, useRouter } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, DarkTheme } from '@react-navigation/native';
 import { SystemBars } from 'react-native-edge-to-edge';
+import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -17,10 +18,10 @@ const DevErrorBoundary = __DEV__
   : ({ children }: { children: React.ReactNode }) => <>{children}</>;
 
 function NavigationGuard() {
-  const { session, loading, profile, profileLoading } = useAuth();
-  const segments = useSegments();
+  const { session, profile, isReady } = useAuth();
   const router = useRouter();
   const [lastPathway, setLastPathway] = useState<'doctor' | 'requester' | null | undefined>(undefined);
+  const hasRouted = useRef(false);
 
   // Load last pathway from AsyncStorage once on mount
   useEffect(() => {
@@ -30,72 +31,70 @@ function NavigationGuard() {
     }).catch(() => setLastPathway(null));
   }, []);
 
+  // Main routing effect — fires once when everything is ready
   useEffect(() => {
-    // Wait for all loading to finish AND lastPathway to be read
-    if (loading || profileLoading || lastPathway === undefined) return;
-    if (!session) return;
+    if (!isReady || lastPathway === undefined) return;
+    if (hasRouted.current) return;
 
-    const seg0 = segments[0] as string | undefined;
-    const inAuth = seg0 === '(auth)';
-    const inOnboarding = seg0 === '(onboarding)';
-    const inIndex = seg0 === 'index' || seg0 === undefined;
-    const inDoctor = seg0 === '(doctor)';
-    const inRequester = seg0 === '(requester)';
+    hasRouted.current = true;
+    SplashScreen.hideAsync();
+    console.log('[NavigationGuard] Routing — session:', !!session, 'profile:', !!profile, 'lastPathway:', lastPathway);
 
-    // Session exists but profile not yet created — send to onboarding
+    // 1. No session
+    if (!session) {
+      console.log('[NavigationGuard] No session → /(auth)/intro');
+      router.replace('/(auth)/intro' as any);
+      return;
+    }
+
+    // 2. Session but no profile
     if (!profile) {
-      if (!inOnboarding) {
-        console.log('[NavigationGuard] Session but no profile, routing to onboarding');
-        router.replace('/(onboarding)/doctor/basic-profile' as any);
-      }
+      console.log('[NavigationGuard] No profile → onboarding');
+      router.replace('/(onboarding)/doctor/basic-profile' as any);
       return;
     }
 
     const doctorComplete = profile.doctor_onboarding_complete === true;
     const requesterComplete = profile.requester_onboarding_complete === true;
-    const eitherComplete = doctorComplete || requesterComplete;
 
-    if (!eitherComplete) {
-      if (!inOnboarding) {
-        const route = profile.role === 'doctor'
-          ? '/(onboarding)/doctor/basic-profile'
-          : '/(onboarding)/requester/basic-profile';
-        console.log('[NavigationGuard] No pathway complete, routing to onboarding:', route);
-        router.replace(route as any);
-      }
+    // 3. Neither onboarding complete
+    if (!doctorComplete && !requesterComplete) {
+      const route = profile.role === 'doctor'
+        ? '/(onboarding)/doctor/basic-profile'
+        : '/(onboarding)/requester/basic-profile';
+      console.log('[NavigationGuard] Neither complete → onboarding:', route);
+      router.replace(route as any);
       return;
     }
 
-    // Doctor only complete
+    // 4. Doctor only complete
     if (doctorComplete && !requesterComplete) {
-      if (!inDoctor) {
-        console.log('[NavigationGuard] Doctor only, routing to doctor home');
-        router.replace('/(doctor)/(home)' as any);
-      }
+      console.log('[NavigationGuard] Doctor only → /(doctor)/(home)');
+      router.replace('/(doctor)/(home)' as any);
       return;
     }
 
-    // Requester only complete
+    // 5. Requester only complete
     if (requesterComplete && !doctorComplete) {
-      if (!inRequester) {
-        console.log('[NavigationGuard] Requester only, routing to requester home');
-        router.replace('/(requester)/(home)' as any);
-      }
+      console.log('[NavigationGuard] Requester only → /(requester)/(home)');
+      router.replace('/(requester)/(home)' as any);
       return;
     }
 
-    // Both complete — use last pathway, default to doctor
-    if (doctorComplete && requesterComplete) {
-      if (inAuth || inIndex) {
-        const dest = lastPathway === 'requester'
-          ? '/(requester)/(home)'
-          : '/(doctor)/(home)';
-        console.log('[NavigationGuard] Both complete, routing to last pathway:', dest);
-        router.replace(dest as any);
-      }
-      return;
+    // 6. Both complete — use last pathway
+    const dest = lastPathway === 'requester' ? '/(requester)/(home)' : '/(doctor)/(home)';
+    console.log('[NavigationGuard] Both complete → last pathway:', dest);
+    router.replace(dest as any);
+  }, [isReady, lastPathway, session, profile]);
+
+  // Sign-out watcher — reset hasRouted so next sign-in re-routes
+  useEffect(() => {
+    if (!session && hasRouted.current) {
+      console.log('[NavigationGuard] Session lost after routing — resetting and going to intro');
+      hasRouted.current = false;
+      router.replace('/(auth)/intro' as any);
     }
-  }, [session, loading, profile, profileLoading, segments, lastPathway]);
+  }, [session]);
 
   return null;
 }

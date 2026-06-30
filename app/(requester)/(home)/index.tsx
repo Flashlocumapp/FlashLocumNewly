@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, Modal, ScrollView,
   TextInput, Platform, KeyboardAvoidingView, Alert,
@@ -7,7 +7,6 @@ import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { Search, X, ChevronDown, Clock, MapPin } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 
@@ -160,9 +159,6 @@ export default function RequesterHomeScreen() {
   const mapRef = useRef<MapView>(null);
   const [selectedPlace, setSelectedPlace] = useState<SelectedPlace | null>(null);
 
-  useEffect(() => {
-    AsyncStorage.setItem('flashlocum_last_pathway', 'requester').catch(() => {});
-  }, []);
   const [showRequestSheet, setShowRequestSheet] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);

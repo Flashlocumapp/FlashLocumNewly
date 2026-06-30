@@ -11,6 +11,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   const fetchProfile = useCallback(async (userId: string) => {
     setProfileLoading(true);
@@ -36,9 +37,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id).finally(() => setLoading(false));
+        fetchProfile(session.user.id).finally(() => {
+          setLoading(false);
+          setIsReady(true);
+        });
       } else {
         setLoading(false);
+        setIsReady(true);
       }
     });
 
@@ -57,22 +62,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
+    console.log('[AuthContext] signIn called for:', email);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
+    console.log('[AuthContext] signIn result — error:', error?.message ?? 'none');
     return { error };
   };
 
   const signUp = async (email: string, password: string, metadata?: Record<string, string>) => {
+    console.log('[AuthContext] signUp called for:', email);
     const { error } = await supabase.auth.signUp({ email, password, options: { data: metadata } });
+    console.log('[AuthContext] signUp result — error:', error?.message ?? 'none');
     return { error };
   };
 
   const signOut = async () => {
+    console.log('[AuthContext] signOut called');
     await supabase.auth.signOut();
     setProfile(null);
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, profileLoading, signIn, signUp, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, profileLoading, isReady, signIn, signUp, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
