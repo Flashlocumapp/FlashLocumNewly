@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
+import { TAB_BAR_HEIGHT } from '../_layout';
 
 const TABS = ['Active', 'Upcoming', 'History'] as const;
 type TabType = typeof TABS[number];
@@ -22,7 +23,7 @@ export default function RequesterCoverageScreen() {
       contentContainerStyle={{
         paddingTop: insets.top + 24,
         paddingHorizontal: SPACING.base,
-        paddingBottom: 120,
+        paddingBottom: TAB_BAR_HEIGHT + insets.bottom + 16,
       }}
       showsVerticalScrollIndicator={false}
     >

@@ -6,6 +6,7 @@ import { ChevronRight, LogOut, ArrowLeftRight } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
+import { TAB_BAR_HEIGHT } from '../_layout';
 
 export default function RequesterAccountScreen() {
   const insets = useSafeAreaInsets();
@@ -41,7 +42,7 @@ export default function RequesterAccountScreen() {
       contentContainerStyle={{
         paddingTop: insets.top + 24,
         paddingHorizontal: SPACING.base,
-        paddingBottom: 120,
+        paddingBottom: TAB_BAR_HEIGHT + insets.bottom + 16,
       }}
       showsVerticalScrollIndicator={false}
     >

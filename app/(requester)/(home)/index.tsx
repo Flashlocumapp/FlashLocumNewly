@@ -21,10 +21,9 @@ import { Search, MapPin, ArrowRight, X, CalendarDays, Clock } from 'lucide-react
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
-import { useRouter, usePathname } from 'expo-router';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { supabase } from '@/lib/supabase';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
+import { useTabBarVisibility, TAB_BAR_HEIGHT } from '../_layout';
 
 const ANDROID_KEY = 'AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU';
 const IOS_KEY = 'AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk';
@@ -61,6 +60,25 @@ type SelectedPlace = {
   lng: number;
 };
 
+const MINIMALIST_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] },
+  { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
+  { featureType: 'administrative.neighborhood', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#e5e5e5' }] },
+  { featureType: 'poi.park', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dadada' }] },
+  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+  { featureType: 'road.local', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#c9d8e8' }] },
+  { featureType: 'water', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
+];
+
 function DragHandle({ panHandlers }: { panHandlers?: object }) {
   return (
     <View {...panHandlers} style={{ alignItems: 'center', paddingVertical: 8 }}>
@@ -69,19 +87,9 @@ function DragHandle({ panHandlers }: { panHandlers?: object }) {
   );
 }
 
-const REQUESTER_TABS = [
-  { name: '(home)',     route: '/(requester)/(home)'     as const, icon: 'home'           as const, label: 'Home'     },
-  { name: '(coverage)', route: '/(requester)/(coverage)' as const, icon: 'calendar-month' as const, label: 'Coverage' },
-  { name: '(account)',  route: '/(requester)/(account)'  as const, icon: 'person'         as const, label: 'Account'  },
-];
-
 export default function RequesterHomeScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
-  const pathname = usePathname();
-  const TAB_BAR_HEIGHT = 60;
-  const TAB_BAR_TOTAL = TAB_BAR_HEIGHT + insets.bottom;
-  const tabBarAnim = useRef(new Animated.Value(0)).current; // 0 = visible, TAB_BAR_TOTAL = hidden
+  const { setTabBarVisible } = useTabBarVisibility();
 
   const mapRef = useRef<MapView>(null);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -187,14 +195,11 @@ export default function RequesterHomeScreen() {
     }
   }, [sheetState, matchProgressAnim]);
 
-  // ─── Slide tab bar out when non-idle, back in when idle ──────────────────────
+  // ─── Sync layout tab bar visibility with sheet state ─────────────────────────
   useEffect(() => {
-    Animated.timing(tabBarAnim, {
-      toValue: sheetState === 'idle' ? 0 : TAB_BAR_TOTAL,
-      duration: 260,
-      useNativeDriver: true,
-    }).start();
-  }, [sheetState, TAB_BAR_TOTAL, tabBarAnim]);
+    // Hide layout tab bar only when searching (keyboard active), show it in all other states
+    setTabBarVisible(sheetState === 'idle' || sheetState === 'config' || sheetState === 'summary' || sheetState === 'matching');
+  }, [sheetState]);
 
   // ─── Drag handle PanResponder ─────────────────────────────────────────────────
   const dragPanResponder = useRef(
@@ -230,7 +235,7 @@ export default function RequesterHomeScreen() {
     console.log('[RequesterHome] Place selected:', place.name, { lat: place.lat, lng: place.lng });
     setSelectedPlace(place);
     mapRef.current?.animateToRegion(
-      { latitude: place.lat, longitude: place.lng, latitudeDelta: 0.02, longitudeDelta: 0.02 },
+      { latitude: place.lat, longitude: place.lng, latitudeDelta: 0.08, longitudeDelta: 0.08 },
       600
     );
     transitionTo('config');
@@ -317,6 +322,8 @@ export default function RequesterHomeScreen() {
     ? 'Standard working conditions.'
     : 'High patient volume expected.';
 
+  const whiteCardPaddingBottom = Platform.OS === 'ios' ? insets.bottom + 16 : TAB_BAR_HEIGHT + insets.bottom + 16;
+
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
@@ -327,6 +334,8 @@ export default function RequesterHomeScreen() {
         style={StyleSheet.absoluteFillObject}
         provider={PROVIDER_GOOGLE}
         initialRegion={LAGOS_REGION}
+        customMapStyle={MINIMALIST_MAP_STYLE}
+        maxZoomLevel={14}
       >
         {userCoords && (
           <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={true}>
@@ -393,13 +402,13 @@ export default function RequesterHomeScreen() {
                     locationbias: `rectangle:${LAGOS_BOUNDS.southwest.lat},${LAGOS_BOUNDS.southwest.lng}|${LAGOS_BOUNDS.northeast.lat},${LAGOS_BOUNDS.northeast.lng}`,
                   }}
                   styles={{
-                    container: { flex: 1, paddingHorizontal: 16 },
+                    container: { flex: 0, paddingHorizontal: 16 },
                     textInputContainer: { backgroundColor: '#FFFFFF', borderRadius: 28, borderWidth: 1.5, borderColor: '#0066CC', marginBottom: 8 },
                     textInput: { backgroundColor: '#FFFFFF', borderRadius: 28, paddingHorizontal: 14, paddingLeft: 44, fontSize: 15, color: COLORS.text, height: 50, margin: 0 },
                     row: { paddingVertical: 12, paddingHorizontal: 0, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', backgroundColor: '#FFFFFF' },
                     description: { fontSize: 14, color: COLORS.text },
                     poweredContainer: { display: 'none' },
-                    listView: { backgroundColor: '#FFFFFF', maxHeight: 300, zIndex: 999, elevation: 20 },
+                    listView: { backgroundColor: '#FFFFFF', maxHeight: 280, zIndex: 999, elevation: 20, borderRadius: 12, marginTop: 4 },
                   }}
                   renderLeftButton={() => (
                     <View style={{ position: 'absolute', left: 16, top: 16, zIndex: 1 }}>
@@ -764,17 +773,17 @@ export default function RequesterHomeScreen() {
         </Animated.View>
       )}
 
-      {/* ── IDLE BOTTOM CONTAINER (white card + tab bar) ── */}
+      {/* ── IDLE BOTTOM CONTAINER (white card only — tab bar is in layout) ── */}
       {sheetState === 'idle' && (
         <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
-          {/* Layer 1: White search card */}
+          {/* White search card */}
           <View style={{
             backgroundColor: '#FFFFFF',
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             paddingTop: 16,
             paddingHorizontal: 16,
-            paddingBottom: Platform.OS === 'ios' ? insets.bottom + 16 : TAB_BAR_TOTAL + 16,
+            paddingBottom: whiteCardPaddingBottom,
             minHeight: 180,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: -3 },
@@ -796,39 +805,6 @@ export default function RequesterHomeScreen() {
               <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Where is coverage needed?</Text>
             </TouchableOpacity>
           </View>
-
-          {/* Layer 2: Charcoal tab bar — Android only, sits on top of bottom of white card */}
-          {Platform.OS !== 'ios' && (
-            <Animated.View style={{
-              position: 'absolute', bottom: 0, left: 0, right: 0,
-              backgroundColor: '#1C1C1E',
-              flexDirection: 'row',
-              paddingBottom: insets.bottom,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              transform: [{ translateY: tabBarAnim }],
-            }}>
-              {REQUESTER_TABS.map((tab) => {
-                const isActive = pathname.includes(tab.name);
-                return (
-                  <TouchableOpacity
-                    key={tab.name}
-                    onPress={() => {
-                      console.log('[RequesterHome] Tab pressed:', tab.label);
-                      router.push(tab.route);
-                    }}
-                    activeOpacity={0.7}
-                    style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}
-                  >
-                    <MaterialIcons name={tab.icon} size={24} color={isActive ? '#FFFFFF' : '#8E8E93'} />
-                    <Text style={{ fontSize: 10, fontWeight: isActive ? '600' : '400', color: isActive ? '#FFFFFF' : '#8E8E93', marginTop: 3 }}>
-                      {tab.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </Animated.View>
-          )}
         </View>
       )}
 
