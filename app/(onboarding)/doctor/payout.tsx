@@ -119,9 +119,11 @@ export default function DoctorPayout() {
       }
 
       const returnedName = String(result.accountName || '').toLowerCase();
+      // Use profile.full_name first (set during Create Your Account), fall back to user metadata, then email
       const rawRegistrationName = String(
-        user?.user_metadata?.full_name || user?.email || ''
+        profile?.full_name || user?.user_metadata?.full_name || user?.email || ''
       ).toLowerCase();
+      console.log('[DoctorPayout] Name match — registration:', rawRegistrationName, 'returned:', returnedName);
 
       const stripTitles = (s: string) =>
         s.replace(/\b(dr|mr|mrs|ms|prof|sir)\b\.?\s*/gi, '').trim();
@@ -130,9 +132,12 @@ export default function DoctorPayout() {
       const cleanRegistration = stripTitles(rawRegistrationName);
 
       const regTokens = cleanRegistration.split(/\s+/).filter((t: string) => t.length > 1);
-      const matchCount = regTokens.filter((token: string) => cleanReturned.includes(token)).length;
+      // Take only first 2 meaningful tokens (first name, last name)
+      const coreTokens = regTokens.slice(0, 2);
+      const matchCount = coreTokens.filter((token: string) => cleanReturned.includes(token)).length;
+      console.log('[DoctorPayout] coreTokens:', coreTokens, 'matchCount:', matchCount);
 
-      if (regTokens.length > 0 && matchCount === 0) {
+      if (coreTokens.length > 0 && matchCount === 0) {
         setAccountNameError(ACCOUNT_MISMATCH_ERROR);
         setAccountName('');
       } else {
@@ -147,7 +152,7 @@ export default function DoctorPayout() {
     } finally {
       setAccountNameLoading(false);
     }
-  }, [user]);
+  }, [user, profile]);
 
   useEffect(() => {
     if (selectedBank && accountNumber.length === 10) {
