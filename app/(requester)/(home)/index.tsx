@@ -14,9 +14,9 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import { Search, MapPin, ArrowRight, X, CalendarDays, Clock } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -103,6 +103,16 @@ export default function RequesterHomeScreen() {
   // Place
   const [selectedPlace, setSelectedPlace] = useState<SelectedPlace | null>(null);
 
+  // Search (Places API New)
+  const [searchText, setSearchText] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{
+    placeId: string;
+    mainText: string;
+    secondaryText: string;
+  }>>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Config form
   const [coverageType, setCoverageType] = useState<'Standard' | 'Home Care'>('Standard');
   const [shiftDate, setShiftDate] = useState<Date>(new Date());
@@ -183,6 +193,111 @@ export default function RequesterHomeScreen() {
     animateSheet(state);
   }, [sheetState, animateSheet]);
 
+  // ─── Clean up search state when leaving searching ─────────────────────────────
+  useEffect(() => {
+    if (sheetState !== 'searching') {
+      setSearchText('');
+      setSearchResults([]);
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    }
+  }, [sheetState]);
+
+  // ─── Places API (New) search ──────────────────────────────────────────────────
+  const searchPlaces = useCallback(async (input: string) => {
+    if (input.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearchLoading(true);
+    try {
+      console.log('[PlacesNew] Searching for:', input);
+      const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': MAPS_KEY,
+        },
+        body: JSON.stringify({
+          input,
+          locationRestriction: {
+            rectangle: {
+              low: { latitude: 6.35, longitude: 2.68 },
+              high: { latitude: 6.70, longitude: 3.75 },
+            },
+          },
+          includedRegionCodes: ['ng'],
+        }),
+      });
+      const data = await response.json();
+      console.log('[PlacesNew] autocomplete response status:', response.status);
+      if (data.suggestions) {
+        setSearchResults(
+          data.suggestions
+            .filter((s: any) => s.placePrediction)
+            .map((s: any) => ({
+              placeId: s.placePrediction.placeId,
+              mainText: s.placePrediction.structuredFormat?.mainText?.text ?? s.placePrediction.text?.text ?? '',
+              secondaryText: s.placePrediction.structuredFormat?.secondaryText?.text ?? '',
+            }))
+        );
+      } else {
+        console.log('[PlacesNew] No suggestions:', JSON.stringify(data));
+        setSearchResults([]);
+      }
+    } catch (e: any) {
+      console.error('[PlacesNew] fetch error:', e.message);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  const handleSearchTextChange = useCallback((text: string) => {
+    setSearchText(text);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => searchPlaces(text), 300);
+  }, [searchPlaces]);
+
+  const handlePlaceResultSelect = useCallback(async (placeId: string, mainText: string) => {
+    console.log('[PlacesNew] Place result tapped:', mainText, placeId);
+    Keyboard.dismiss();
+    setSearchLoading(true);
+    try {
+      const response = await fetch(
+        `https://places.googleapis.com/v1/places/${placeId}?fields=id,displayName,formattedAddress,location&key=${MAPS_KEY}`
+      );
+      const data = await response.json();
+      console.log('[PlacesNew] place details:', JSON.stringify(data));
+      if (!data.location) throw new Error('No location in place details');
+      const address = data.formattedAddress || mainText;
+      // Client-side Lagos safety check
+      if (!address.toLowerCase().includes('lagos')) {
+        console.log('[PlacesNew] Rejected non-Lagos result:', address);
+        return;
+      }
+      const place: SelectedPlace = {
+        name: data.displayName?.text || mainText,
+        address,
+        lat: data.location.latitude,
+        lng: data.location.longitude,
+      };
+      console.log('[PlacesNew] Place selected:', place.name, { lat: place.lat, lng: place.lng });
+      setSelectedPlace(place);
+      setSearchText('');
+      setSearchResults([]);
+      mapRef.current?.animateToRegion(
+        { latitude: place.lat, longitude: place.lng, latitudeDelta: 0.08, longitudeDelta: 0.08 },
+        600
+      );
+      transitionTo('config');
+    } catch (e: any) {
+      console.error('[PlacesNew] place details error:', e.message);
+      Alert.alert('Error', 'Could not load place details. Please try again.');
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [transitionTo]);
+
   // ─── Matching progress animation ─────────────────────────────────────────────
   useEffect(() => {
     if (sheetState === 'matching') {
@@ -219,32 +334,6 @@ export default function RequesterHomeScreen() {
   const handleSearchTap = () => {
     console.log('[RequesterHome] Search input tapped');
     transitionTo('searching');
-  };
-
-  const handlePlaceSelect = (data: any, details: any) => {
-    if (!details) {
-      console.log('[RequesterHome] Place selected but no details returned');
-      return;
-    }
-    const address = details.formatted_address || data.description || '';
-    // Hard-block non-Lagos results
-    if (!address.toLowerCase().includes('lagos')) {
-      console.log('[RequesterHome] Rejected non-Lagos result:', address);
-      return;
-    }
-    const place: SelectedPlace = {
-      name: details.name || data.structured_formatting?.main_text || data.description,
-      address,
-      lat: details.geometry.location.lat,
-      lng: details.geometry.location.lng,
-    };
-    console.log('[RequesterHome] Place selected:', place.name, { lat: place.lat, lng: place.lng });
-    setSelectedPlace(place);
-    mapRef.current?.animateToRegion(
-      { latitude: place.lat, longitude: place.lng, latitudeDelta: 0.08, longitudeDelta: 0.08 },
-      600
-    );
-    transitionTo('config');
   };
 
   const handleGoToSummary = () => {
@@ -396,56 +485,102 @@ export default function RequesterHomeScreen() {
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
               <View style={{ flex: 1, paddingTop: 20 }}>
                 <DragHandle panHandlers={dragPanResponder.panHandlers} />
-                <GooglePlacesAutocomplete
-                  placeholder="Where is coverage needed?"
-                  onPress={handlePlaceSelect}
-                  fetchDetails
-                  autoFocus
-                  minLength={2}
-                  debounce={300}
-                  keepResultsAfterBlur={true}
-                  keyboardShouldPersistTaps="handled"
-                  onFail={(error) => console.error('[GooglePlaces] API error:', JSON.stringify(error))}
-                  onNotFound={() => console.log('[GooglePlaces] No results found')}
-                  query={{
-                    key: MAPS_KEY,
-                    language: 'en',
-                    components: 'country:ng',
-                    location: '6.5244,3.3792',
-                    radius: 150000,
-                    strictbounds: true,
-                  }}
-                  styles={{
-                    container: { flex: 0, paddingHorizontal: 16 },
-                    textInputContainer: { backgroundColor: '#FFFFFF', borderRadius: 28, borderWidth: 1.5, borderColor: '#0066CC', marginBottom: 8 },
-                    textInput: { backgroundColor: '#FFFFFF', borderRadius: 28, paddingHorizontal: 14, paddingLeft: 44, fontSize: 15, color: COLORS.text, height: 50, margin: 0 },
-                    row: { paddingVertical: 12, paddingHorizontal: 0, borderBottomWidth: 1, borderBottomColor: '#F5F5F5', backgroundColor: '#FFFFFF' },
-                    description: { fontSize: 14, color: COLORS.text },
-                    poweredContainer: { paddingVertical: 4, paddingHorizontal: 16 },
-                    powered: { fontSize: 10, color: '#AEAEB2' },
-                    listView: { backgroundColor: '#FFFFFF', maxHeight: 280, zIndex: 999, elevation: 20, borderRadius: 12, marginTop: 4 },
-                  }}
-                  renderLeftButton={() => (
-                    <View style={{ position: 'absolute', left: 16, top: 16, zIndex: 1 }}>
-                      <Search size={18} color={COLORS.textTertiary} />
-                    </View>
+
+                {/* Search input */}
+                <View style={{
+                  marginHorizontal: 16,
+                  marginTop: 8,
+                  marginBottom: 8,
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 28,
+                  borderWidth: 1.5,
+                  borderColor: '#0066CC',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 14,
+                  height: 50,
+                }}>
+                  <Search size={18} color={COLORS.textTertiary} style={{ marginRight: 10 }} />
+                  <TextInput
+                    autoFocus
+                    value={searchText}
+                    onChangeText={handleSearchTextChange}
+                    placeholder="Where is coverage needed?"
+                    placeholderTextColor={COLORS.textTertiary}
+                    style={{
+                      flex: 1,
+                      fontSize: 15,
+                      color: COLORS.text,
+                      height: 50,
+                    }}
+                    returnKeyType="search"
+                    clearButtonMode="while-editing"
+                  />
+                  {searchLoading && (
+                    <ActivityIndicator size="small" color={COLORS.textTertiary} />
                   )}
-                  renderRow={(rowData) => {
-                    const mainText = rowData.structured_formatting?.main_text ?? rowData.description;
-                    const secondaryText = rowData.structured_formatting?.secondary_text ?? '';
-                    return (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 4 }}>
-                        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#F2F2F2', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+                </View>
+
+                {/* Results list */}
+                {searchResults.length > 0 && (
+                  <ScrollView
+                    keyboardShouldPersistTaps="handled"
+                    style={{
+                      marginHorizontal: 16,
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 12,
+                      maxHeight: 300,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.08,
+                      shadowRadius: 8,
+                      elevation: 8,
+                    }}
+                    showsVerticalScrollIndicator={false}
+                  >
+                    {searchResults.map((result, index) => (
+                      <TouchableOpacity
+                        key={result.placeId}
+                        onPress={() => handlePlaceResultSelect(result.placeId, result.mainText)}
+                        activeOpacity={0.7}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingHorizontal: 14,
+                          paddingVertical: 12,
+                          borderBottomWidth: index < searchResults.length - 1 ? 1 : 0,
+                          borderBottomColor: '#F5F5F5',
+                          gap: 12,
+                        }}
+                      >
+                        <View style={{
+                          width: 36, height: 36, borderRadius: 18,
+                          backgroundColor: '#F2F2F2',
+                          justifyContent: 'center', alignItems: 'center', flexShrink: 0,
+                        }}>
                           <MapPin size={16} color={COLORS.textTertiary} />
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={[TYPOGRAPHY.bodyMedium, { color: COLORS.text }]} numberOfLines={1}>{mainText}</Text>
-                          <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]} numberOfLines={1}>{secondaryText}</Text>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }} numberOfLines={1}>
+                            {result.mainText}
+                          </Text>
+                          {result.secondaryText ? (
+                            <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }} numberOfLines={1}>
+                              {result.secondaryText}
+                            </Text>
+                          ) : null}
                         </View>
-                      </View>
-                    );
-                  }}
-                />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+
+                {/* Empty state — only show after typing with no results */}
+                {!searchLoading && searchText.length >= 2 && searchResults.length === 0 && (
+                  <View style={{ alignItems: 'center', paddingTop: 32 }}>
+                    <Text style={{ fontSize: 14, color: COLORS.textSecondary }}>No places found in Lagos</Text>
+                  </View>
+                )}
               </View>
             </KeyboardAvoidingView>
           )}
