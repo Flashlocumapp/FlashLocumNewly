@@ -20,6 +20,7 @@ function NavigationGuard() {
 
   useEffect(() => {
     if (loading || profileLoading) return;
+    if (!session) return;
 
     const seg0 = segments[0] as string | undefined;
     const inAuth = seg0 === '(auth)';
@@ -27,61 +28,56 @@ function NavigationGuard() {
     const inIndex = seg0 === 'index' || seg0 === undefined;
     const inDoctor = seg0 === '(doctor)';
     const inRequester = seg0 === '(requester)';
-    const inApp = seg0 === '(app)';
 
-    // No session — index.tsx owns unauthenticated routing
-    if (!session) return;
-
-    if (session && profile) {
-      const doctorComplete = profile.doctor_onboarding_complete === true;
-      const requesterComplete = profile.requester_onboarding_complete === true;
-      const eitherComplete = doctorComplete || requesterComplete;
-
-      if (!eitherComplete) {
-        // Neither pathway complete → send to role-appropriate onboarding
-        if (!inOnboarding) {
-          const route =
-            profile.role === 'doctor'
-              ? '/(onboarding)/doctor/basic-profile'
-              : '/(onboarding)/requester/basic-profile';
-          console.log('[NavigationGuard] No pathway complete, routing to onboarding:', route);
-          router.replace(route as any);
-        }
-        return;
+    // Session exists but profile not yet created/loaded — send to onboarding
+    if (!profile) {
+      if (!inOnboarding) {
+        console.log('[NavigationGuard] Session but no profile, routing to onboarding');
+        router.replace('/(onboarding)/doctor/basic-profile' as any);
       }
+      return;
+    }
 
-      // Doctor only complete → route to doctor pathway
-      if (doctorComplete && !requesterComplete) {
-        if (!inDoctor) {
-          console.log('[NavigationGuard] Doctor only complete, routing to doctor home');
-          router.replace('/(doctor)/(home)' as any);
-        }
-        return;
+    const doctorComplete = profile.doctor_onboarding_complete === true;
+    const requesterComplete = profile.requester_onboarding_complete === true;
+    const eitherComplete = doctorComplete || requesterComplete;
+
+    if (!eitherComplete) {
+      if (!inOnboarding) {
+        const route = profile.role === 'doctor'
+          ? '/(onboarding)/doctor/basic-profile'
+          : '/(onboarding)/requester/basic-profile';
+        console.log('[NavigationGuard] No pathway complete, routing to onboarding:', route);
+        router.replace(route as any);
       }
+      return;
+    }
 
-      // Requester only complete → route to requester pathway
-      if (requesterComplete && !doctorComplete) {
-        if (!inRequester) {
-          console.log('[NavigationGuard] Requester only complete, routing to requester home');
-          router.replace('/(requester)/(home)' as any);
-        }
-        return;
+    // Doctor only complete
+    if (doctorComplete && !requesterComplete) {
+      if (!inDoctor) {
+        console.log('[NavigationGuard] Doctor only complete, routing to doctor home');
+        router.replace('/(doctor)/(home)' as any);
       }
+      return;
+    }
 
-      // Both complete → route to hub if in auth/index
-      if (doctorComplete && requesterComplete) {
-        if (inAuth || inIndex) {
-          console.log('[NavigationGuard] Both pathways complete, routing to hub');
-          router.replace('/(app)/(home)' as any);
-        }
-        return;
+    // Requester only complete
+    if (requesterComplete && !doctorComplete) {
+      if (!inRequester) {
+        console.log('[NavigationGuard] Requester only complete, routing to requester home');
+        router.replace('/(requester)/(home)' as any);
       }
+      return;
+    }
 
-      // Fallback: at least one complete, in auth/index → go to hub
+    // Both complete — hub is valid, but only redirect if in auth/index
+    if (doctorComplete && requesterComplete) {
       if (inAuth || inIndex) {
-        console.log('[NavigationGuard] Pathway complete, routing to home');
+        console.log('[NavigationGuard] Both pathways complete, routing to hub');
         router.replace('/(app)/(home)' as any);
       }
+      return;
     }
   }, [session, loading, profile, profileLoading, segments]);
 

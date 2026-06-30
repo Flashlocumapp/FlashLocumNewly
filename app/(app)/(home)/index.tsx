@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   useColorScheme,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { ChevronRight, Building2, Stethoscope } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePathwayGuard } from '@/hooks/usePathwayGuard';
@@ -13,8 +13,35 @@ import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 
 export default function HomeScreen() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const router = useRouter();
   const { canAccessDoctor, canAccessRequester, enterDoctor, enterRequester } = usePathwayGuard();
+
+  useEffect(() => {
+    if (!profile) return;
+    const doctorComplete = profile.doctor_onboarding_complete === true;
+    const requesterComplete = profile.requester_onboarding_complete === true;
+
+    // Only one pathway complete — redirect to that pathway's map
+    if (doctorComplete && !requesterComplete) {
+      console.log('[HomeScreen] Guard: doctor only complete, redirecting to doctor home');
+      router.replace('/(doctor)/(home)' as any);
+      return;
+    }
+    if (requesterComplete && !doctorComplete) {
+      console.log('[HomeScreen] Guard: requester only complete, redirecting to requester home');
+      router.replace('/(requester)/(home)' as any);
+      return;
+    }
+    // Neither complete — redirect to onboarding
+    if (!doctorComplete && !requesterComplete) {
+      const route = profile.role === 'doctor'
+        ? '/(onboarding)/doctor/basic-profile'
+        : '/(onboarding)/requester/basic-profile';
+      console.log('[HomeScreen] Guard: no pathway complete, redirecting to onboarding:', route);
+      router.replace(route as any);
+    }
+  }, [profile]);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
