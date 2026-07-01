@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
-import { View, Text, TouchableOpacity, Animated } from 'react-native';
-import { Stack, useRouter, usePathname } from 'expo-router';
+import { View, Text, Pressable, Animated } from 'react-native';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { TabBarVisibilityContext, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
@@ -13,7 +13,7 @@ const REQUESTER_TABS = [
 
 export default function RequesterLayoutIOS() {
   const router = useRouter();
-  const pathname = usePathname();
+  const segments = useSegments();
   const insets = useSafeAreaInsets();
   const tabBarAnim = useRef(new Animated.Value(0)).current;
   const TAB_BAR_TOTAL = TAB_BAR_HEIGHT + insets.bottom;
@@ -35,7 +35,6 @@ export default function RequesterLayoutIOS() {
           <Stack.Screen name="(account)" />
         </Stack>
 
-        {/* Persistent custom charcoal tab bar — iOS custom (no NativeTabs) */}
         <Animated.View style={{
           position: 'absolute',
           bottom: 0, left: 0, right: 0,
@@ -47,22 +46,21 @@ export default function RequesterLayoutIOS() {
           transform: [{ translateY: tabBarAnim }],
         }}>
           {REQUESTER_TABS.map((tab) => {
-            const isActive = pathname.includes(tab.name);
+            const isActive = (segments as string[]).includes(tab.name);
             return (
-              <TouchableOpacity
+              <Pressable
                 key={tab.name}
                 onPress={() => {
                   console.log('[RequesterLayoutIOS] Tab pressed:', tab.label);
-                  router.push(tab.route);
+                  router.replace(tab.route);
                 }}
-                activeOpacity={0.7}
                 style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}
               >
                 <MaterialIcons name={tab.icon} size={24} color={isActive ? '#FFFFFF' : '#8E8E93'} />
                 <Text style={{ fontSize: 10, fontWeight: isActive ? '600' : '400', color: isActive ? '#FFFFFF' : '#8E8E93', marginTop: 3 }}>
                   {tab.label}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             );
           })}
         </Animated.View>

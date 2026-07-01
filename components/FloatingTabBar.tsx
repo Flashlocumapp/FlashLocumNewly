@@ -2,7 +2,7 @@ import React from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Platform,
   Dimensions,
@@ -95,7 +95,7 @@ export default function FloatingTabBar({
   }, [activeTabIndex, animatedValue]);
 
   const handleTabPress = (route: Href) => {
-    router.push(route);
+    router.replace(route);
   };
 
   // Remove unnecessary tabBarStyle animation to prevent flickering
@@ -175,13 +175,11 @@ export default function FloatingTabBar({
 
               return (
                 <React.Fragment key={index}>
-                <TouchableOpacity
-                  key={index} // Use index as key
+                <Pressable
                   style={styles.tab}
                   onPress={() => handleTabPress(tab.route)}
-                  activeOpacity={0.7}
                 >
-                  <View key={index} style={styles.tabContent}>
+                  <View style={styles.tabContent}>
                     <IconSymbol
                       android_material_icon_name={tab.icon}
                       ios_icon_name={tab.icon}
@@ -198,7 +196,7 @@ export default function FloatingTabBar({
                       {tab.label}
                     </Text>
                   </View>
-                </TouchableOpacity>
+                </Pressable>
                 </React.Fragment>
               );
             })}

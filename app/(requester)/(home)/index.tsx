@@ -12,6 +12,7 @@ import {
   Alert,
   PanResponder,
   TouchableWithoutFeedback,
+  Pressable,
   Keyboard,
   StyleSheet,
   ActivityIndicator,
@@ -461,6 +462,7 @@ export default function RequesterHomeScreen() {
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const locationSub = useRef<Location.LocationSubscription | null>(null);
+  const hasInitialFix = useRef(false);
 
   // Sheet state
   const [sheetState, setSheetState] = useState<SheetState>('idle');
@@ -532,18 +534,20 @@ export default function RequesterHomeScreen() {
       console.log('[RequesterHome] Requesting location permission');
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
-        const loc = await Location.getCurrentPositionAsync({});
-        setUserCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-        mapRef.current?.animateToRegion({
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-          latitudeDelta: 0.08,
-          longitudeDelta: 0.08,
-        }, 800);
-        // Then stream continuously
         locationSub.current = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 2000, distanceInterval: 5 },
-          (l) => setUserCoords({ latitude: l.coords.latitude, longitude: l.coords.longitude })
+          { accuracy: Location.Accuracy.Highest, timeInterval: 2000, distanceInterval: 5, mayShowUserSettingsDialog: true },
+          (loc) => {
+            if (!hasInitialFix.current) {
+              hasInitialFix.current = true;
+              mapRef.current?.animateToRegion({
+                latitude: loc.coords.latitude,
+                longitude: loc.coords.longitude,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+              }, 800);
+            }
+            setUserCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+          }
         );
       } else {
         console.log('[RequesterHome] Location permission denied, using Lagos fallback');
@@ -902,7 +906,7 @@ export default function RequesterHomeScreen() {
       {/* ── SUMMARY BACK BUTTON ── */}
       {sheetState === 'summary' && (
         <TouchableOpacity
-          onPress={handleReset}
+          onPress={() => transitionTo('config')}
           activeOpacity={0.85}
           style={{
             position: 'absolute',
@@ -1492,9 +1496,10 @@ export default function RequesterHomeScreen() {
             height: Animated.subtract(new Animated.Value(SCREEN_HEIGHT), sheetAnim),
           }}
         >
-          <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); handleReset(); }}>
-            <View style={{ flex: 1 }} />
-          </TouchableWithoutFeedback>
+          <Pressable
+            onPress={() => { Keyboard.dismiss(); handleReset(); }}
+            style={{ flex: 1 }}
+          />
         </Animated.View>
       )}
 

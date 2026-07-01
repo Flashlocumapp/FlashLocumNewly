@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
-import { View, Text, TouchableOpacity, Animated, Platform } from 'react-native';
-import { Stack, useRouter, usePathname } from 'expo-router';
+import { View, Text, Pressable, Animated, Platform } from 'react-native';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { TabBarVisibilityContext, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
@@ -13,7 +13,7 @@ const REQUESTER_TABS = [
 
 export default function RequesterLayout() {
   const router = useRouter();
-  const pathname = usePathname();
+  const segments = useSegments();
   const insets = useSafeAreaInsets();
   const tabBarAnim = useRef(new Animated.Value(0)).current;
   const TAB_BAR_TOTAL = TAB_BAR_HEIGHT + insets.bottom;
@@ -36,7 +36,6 @@ export default function RequesterLayout() {
           <Stack.Screen name="(account)" />
         </Stack>
 
-        {/* Persistent charcoal tab bar — Android only (iOS uses NativeTabs) */}
         {Platform.OS !== 'ios' && (
           <Animated.View style={{
             position: 'absolute',
@@ -49,22 +48,21 @@ export default function RequesterLayout() {
             transform: [{ translateY: tabBarAnim }],
           }}>
             {REQUESTER_TABS.map((tab) => {
-              const isActive = pathname.includes(tab.name);
+              const isActive = (segments as string[]).includes(tab.name);
               return (
-                <TouchableOpacity
+                <Pressable
                   key={tab.name}
                   onPress={() => {
                     console.log('[RequesterLayout] Tab pressed:', tab.label);
-                    router.push(tab.route);
+                    router.replace(tab.route);
                   }}
-                  activeOpacity={0.7}
                   style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}
                 >
                   <MaterialIcons name={tab.icon} size={24} color={isActive ? '#FFFFFF' : '#8E8E93'} />
                   <Text style={{ fontSize: 10, fontWeight: isActive ? '600' : '400', color: isActive ? '#FFFFFF' : '#8E8E93', marginTop: 3 }}>
                     {tab.label}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               );
             })}
           </Animated.View>
