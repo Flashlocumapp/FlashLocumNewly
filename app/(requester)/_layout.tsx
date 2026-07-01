@@ -40,7 +40,7 @@ export default function RequesterLayout() {
           <Animated.View style={{
             position: 'absolute',
             bottom: 0, left: 0, right: 0,
-            backgroundColor: '#1C1C1E',
+            backgroundColor: '#F9F9F6',
             flexDirection: 'row',
             paddingBottom: insets.bottom,
             borderTopLeftRadius: 24,
@@ -58,8 +58,8 @@ export default function RequesterLayout() {
                   }}
                   style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}
                 >
-                  <MaterialIcons name={tab.icon} size={24} color={isActive ? '#FFFFFF' : '#8E8E93'} />
-                  <Text style={{ fontSize: 10, fontWeight: isActive ? '600' : '400', color: isActive ? '#FFFFFF' : '#8E8E93', marginTop: 3 }}>
+                  <MaterialIcons name={tab.icon} size={24} color={isActive ? '#1C1C1E' : '#8E8E93'} />
+                  <Text style={{ fontSize: 10, fontWeight: isActive ? '600' : '400', color: isActive ? '#1C1C1E' : '#8E8E93', marginTop: 3 }}>
                     {tab.label}
                   </Text>
                 </Pressable>

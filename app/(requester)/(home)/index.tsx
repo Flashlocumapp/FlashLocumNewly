@@ -934,7 +934,7 @@ export default function RequesterHomeScreen() {
         <Animated.View style={{
           position: 'absolute', bottom: 0, left: 0, right: 0,
           height: sheetAnim,
-          backgroundColor: '#FFFFFF',
+          backgroundColor: '#1C1C1E',
           borderTopLeftRadius: 28, borderTopRightRadius: 28,
           shadowColor: '#000', shadowOffset: { width: -4, height: 0 }, shadowOpacity: 0.10, shadowRadius: 16, elevation: 12,
           overflow: 'visible',
@@ -950,16 +950,16 @@ export default function RequesterHomeScreen() {
                   marginHorizontal: 16,
                   marginTop: 8,
                   marginBottom: 8,
-                  backgroundColor: '#FFFFFF',
+                  backgroundColor: '#2C2C2E',
                   borderRadius: 28,
                   borderWidth: 2,
-                  borderColor: '#1C1C1E',
+                  borderColor: '#3A3A3C',
                   flexDirection: 'row',
                   alignItems: 'center',
                   paddingHorizontal: 14,
                   height: 50,
                 }}>
-                  <Search size={20} color="#1C1C1E" strokeWidth={2.5} style={{ marginRight: 10 }} />
+                  <Search size={20} color="#8E8E93" strokeWidth={2.5} style={{ marginRight: 10 }} />
                   <TextInput
                     autoFocus
                     value={searchText}
@@ -969,7 +969,7 @@ export default function RequesterHomeScreen() {
                     style={{
                       flex: 1,
                       fontSize: 15,
-                      color: COLORS.text,
+                      color: '#FFFFFF',
                       height: 50,
                     }}
                     returnKeyType="search"
@@ -997,28 +997,23 @@ export default function RequesterHomeScreen() {
                         alignItems: 'center',
                         paddingHorizontal: 14,
                         paddingVertical: 12,
-                        backgroundColor: '#FFFFFF',
+                        backgroundColor: '#2C2C2E',
                         borderRadius: 12,
                         gap: 12,
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.06,
-                        shadowRadius: 6,
-                        elevation: 4,
                       }}
                     >
                       <View style={{
                         width: 36, height: 36, borderRadius: 18,
-                        backgroundColor: '#F2F2F2',
+                        backgroundColor: '#3A3A3C',
                         justifyContent: 'center', alignItems: 'center', flexShrink: 0,
                       }}>
                         <MapPin size={16} color={COLORS.textTertiary} />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }} numberOfLines={1}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#FFFFFF' }} numberOfLines={1}>
                           {recentPlace.name}
                         </Text>
-                        <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }} numberOfLines={1}>
+                        <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }} numberOfLines={1}>
                           {recentPlace.address}
                         </Text>
                       </View>
@@ -1032,14 +1027,9 @@ export default function RequesterHomeScreen() {
                     keyboardShouldPersistTaps="handled"
                     style={{
                       marginHorizontal: 16,
-                      backgroundColor: '#FFFFFF',
+                      backgroundColor: '#2C2C2E',
                       borderRadius: 12,
                       maxHeight: 300,
-                      shadowColor: '#000',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.08,
-                      shadowRadius: 8,
-                      elevation: 8,
                     }}
                     showsVerticalScrollIndicator={false}
                   >
@@ -1054,23 +1044,23 @@ export default function RequesterHomeScreen() {
                           paddingHorizontal: 14,
                           paddingVertical: 12,
                           borderBottomWidth: index < searchResults.length - 1 ? 1 : 0,
-                          borderBottomColor: '#F5F5F5',
+                          borderBottomColor: '#3A3A3C',
                           gap: 12,
                         }}
                       >
                         <View style={{
                           width: 36, height: 36, borderRadius: 18,
-                          backgroundColor: '#F2F2F2',
+                          backgroundColor: '#3A3A3C',
                           justifyContent: 'center', alignItems: 'center', flexShrink: 0,
                         }}>
                           <MapPin size={16} color={COLORS.textTertiary} />
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }} numberOfLines={1}>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: '#FFFFFF' }} numberOfLines={1}>
                             {result.mainText}
                           </Text>
                           {result.secondaryText ? (
-                            <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }} numberOfLines={1}>
+                            <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }} numberOfLines={1}>
                               {result.secondaryText}
                             </Text>
                           ) : null}
@@ -1083,7 +1073,7 @@ export default function RequesterHomeScreen() {
                 {/* Empty state — only show after typing with no results */}
                 {!searchLoading && searchText.length >= 2 && searchResults.length === 0 && (
                   <View style={{ alignItems: 'center', paddingTop: 32 }}>
-                    <Text style={{ fontSize: 14, color: COLORS.textSecondary }}>No places found in Lagos</Text>
+                    <Text style={{ fontSize: 14, color: '#8E8E93' }}>No places found in Lagos</Text>
                   </View>
                 )}
               </View>
@@ -1110,7 +1100,7 @@ export default function RequesterHomeScreen() {
                 onPress={handleSearchTap}
                 activeOpacity={0.8}
                 style={{
-                  backgroundColor: '#F9F9F6',
+                  backgroundColor: '#2C2C2E',
                   borderRadius: 28,
                   padding: 14,
                   flexDirection: 'row',
@@ -1119,8 +1109,8 @@ export default function RequesterHomeScreen() {
                   marginBottom: 12,
                 }}
               >
-                <Search size={18} color={COLORS.textTertiary} />
-                <Text style={[TYPOGRAPHY.body, { color: COLORS.textTertiary }]}>
+                <Search size={18} color="#8E8E93" />
+                <Text style={[TYPOGRAPHY.body, { color: '#8E8E93' }]}>
                   Where is coverage needed?
                 </Text>
               </TouchableOpacity>
@@ -1128,7 +1118,7 @@ export default function RequesterHomeScreen() {
               {/* Selected location capsule — ITEM 1 */}
               {selectedPlace && (
                 <View style={{
-                  backgroundColor: '#F9F9F6',
+                  backgroundColor: '#2C2C2E',
                   borderRadius: 28,
                   padding: 14,
                   flexDirection: 'row',
@@ -1138,10 +1128,10 @@ export default function RequesterHomeScreen() {
                 }}>
                   <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#2DC653', flexShrink: 0 }} />
                   <View style={{ flex: 1 }}>
-                    <Text style={[TYPOGRAPHY.bodyMedium, { color: COLORS.text }]} numberOfLines={1} ellipsizeMode="tail">
+                    <Text style={[TYPOGRAPHY.bodyMedium, { color: '#FFFFFF' }]} numberOfLines={1} ellipsizeMode="tail">
                       {selectedPlace.name}
                     </Text>
-                    <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">
+                    <Text style={[TYPOGRAPHY.caption, { color: '#8E8E93' }]} numberOfLines={1} ellipsizeMode="tail">
                       {selectedPlace.address}
                     </Text>
                   </View>
@@ -1152,7 +1142,7 @@ export default function RequesterHomeScreen() {
               <View style={{ marginBottom: 8 }}>
                 <View style={{
                   flexDirection: 'row',
-                  backgroundColor: '#F9F9F6',
+                  backgroundColor: '#2C2C2E',
                   borderRadius: RADIUS.full,
                   padding: 4,
                   alignSelf: 'flex-start',
@@ -1190,7 +1180,7 @@ export default function RequesterHomeScreen() {
                     </Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={[TYPOGRAPHY.caption, { color: '#3C3C3E', marginTop: 8, marginBottom: 16 }]}>
+                <Text style={[TYPOGRAPHY.caption, { color: '#8E8E93', marginTop: 8, marginBottom: 16 }]}>
                   {coverageTypeDesc}
                 </Text>
               </View>
@@ -1203,12 +1193,12 @@ export default function RequesterHomeScreen() {
                     setWatNow(new Date(Date.now() + 60 * 60 * 1000));
                     setShowDatePicker(true);
                   }}
-                  style={{ flex: 1, backgroundColor: '#F9F9F6', borderRadius: 22, padding: 14 }}
+                  style={{ flex: 1, backgroundColor: '#2C2C2E', borderRadius: 22, padding: 14 }}
                 >
-                  <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
+                  <Text style={[TYPOGRAPHY.label, { color: '#8E8E93', marginBottom: 6 }]}>
                     START DATE
                   </Text>
-                  <Text style={[TYPOGRAPHY.body, { color: COLORS.text }]}>
+                  <Text style={[TYPOGRAPHY.body, { color: '#FFFFFF' }]}>
                     {formattedDate}
                   </Text>
                 </TouchableOpacity>
@@ -1219,12 +1209,12 @@ export default function RequesterHomeScreen() {
                     setWatNow(new Date(Date.now() + 60 * 60 * 1000));
                     setShowStartTimePicker(true);
                   }}
-                  style={{ flex: 1, backgroundColor: '#F9F9F6', borderRadius: 22, padding: 14 }}
+                  style={{ flex: 1, backgroundColor: '#2C2C2E', borderRadius: 22, padding: 14 }}
                 >
-                  <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
+                  <Text style={[TYPOGRAPHY.label, { color: '#8E8E93', marginBottom: 6 }]}>
                     START TIME
                   </Text>
-                  <Text style={[TYPOGRAPHY.body, { color: COLORS.text }]}>
+                  <Text style={[TYPOGRAPHY.body, { color: '#FFFFFF' }]}>
                     {formattedStartTime}
                   </Text>
                 </TouchableOpacity>
@@ -1238,19 +1228,19 @@ export default function RequesterHomeScreen() {
                     setWatNow(new Date(Date.now() + 60 * 60 * 1000));
                     setShowEndTimePicker(true);
                   }}
-                  style={{ flex: 1, backgroundColor: '#F9F9F6', borderRadius: 22, padding: 14 }}
+                  style={{ flex: 1, backgroundColor: '#2C2C2E', borderRadius: 22, padding: 14 }}
                 >
-                  <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
+                  <Text style={[TYPOGRAPHY.label, { color: '#8E8E93', marginBottom: 6 }]}>
                     END TIME
                   </Text>
-                  <Text style={[TYPOGRAPHY.body, { color: COLORS.text }]}>
+                  <Text style={[TYPOGRAPHY.body, { color: '#FFFFFF' }]}>
                     {formattedEndTime}
                   </Text>
                 </TouchableOpacity>
 
                 {/* Coverage Length — ITEM 1 borderRadius 20, ITEM 5.1 cap at 15 */}
-                <View style={{ flex: 1, backgroundColor: '#F9F9F6', borderRadius: 22, padding: 14 }}>
-                  <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
+                <View style={{ flex: 1, backgroundColor: '#2C2C2E', borderRadius: 22, padding: 14 }}>
+                  <Text style={[TYPOGRAPHY.label, { color: '#8E8E93', marginBottom: 6 }]}>
                     COVERAGE LENGTH
                   </Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1264,14 +1254,14 @@ export default function RequesterHomeScreen() {
                         width: 32,
                         height: 32,
                         borderRadius: RADIUS.full,
-                        backgroundColor: '#FFFFFF',
+                        backgroundColor: '#3A3A3C',
                         justifyContent: 'center',
                         alignItems: 'center',
                       }}
                     >
-                      <Text style={{ fontSize: 18, color: COLORS.text, lineHeight: 22 }}>−</Text>
+                      <Text style={{ fontSize: 18, color: '#FFFFFF', lineHeight: 22 }}>−</Text>
                     </TouchableOpacity>
-                    <Text style={[TYPOGRAPHY.body, { color: COLORS.text, minWidth: 50, textAlign: 'center' }]}>
+                    <Text style={[TYPOGRAPHY.body, { color: '#FFFFFF', minWidth: 50, textAlign: 'center' }]}>
                       {coverageLengthLabel}
                     </Text>
                     <TouchableOpacity
@@ -1285,14 +1275,14 @@ export default function RequesterHomeScreen() {
                         width: 32,
                         height: 32,
                         borderRadius: RADIUS.full,
-                        backgroundColor: '#FFFFFF',
+                        backgroundColor: '#3A3A3C',
                         justifyContent: 'center',
                         alignItems: 'center',
                         opacity: isPlusDisabled ? 0.35 : 1,
                       }}
                       pointerEvents={isPlusDisabled ? 'none' : 'auto'}
                     >
-                      <Text style={{ fontSize: 18, color: COLORS.text, lineHeight: 22 }}>+</Text>
+                      <Text style={{ fontSize: 18, color: '#FFFFFF', lineHeight: 22 }}>+</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1301,16 +1291,16 @@ export default function RequesterHomeScreen() {
               {/* Environment — ITEM 2: wrapped in structured card, hidden for Home Care */}
               {coverageType === 'Standard' && (
               <View style={{
-                backgroundColor: '#F9F9F6',
+                backgroundColor: '#2C2C2E',
                 borderRadius: 22,
                 padding: 16,
                 marginBottom: 16,
               }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary }]}>ENVIRONMENT</Text>
+                  <Text style={[TYPOGRAPHY.label, { color: '#8E8E93' }]}>ENVIRONMENT</Text>
                   <View style={{
                     flexDirection: 'row',
-                    backgroundColor: '#FFFFFF',
+                    backgroundColor: '#3A3A3C',
                     borderRadius: RADIUS.full,
                     padding: 4,
                   }}>
@@ -1348,7 +1338,7 @@ export default function RequesterHomeScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
-                <Text style={[TYPOGRAPHY.caption, { color: '#3C3C3E' }]}>
+                <Text style={[TYPOGRAPHY.caption, { color: '#8E8E93' }]}>
                   {environmentDesc}
                 </Text>
               </View>
@@ -1356,12 +1346,12 @@ export default function RequesterHomeScreen() {
 
               {/* Note — ITEM 3: unified container */}
               <View style={{
-                backgroundColor: '#F9F9F6',
+                backgroundColor: '#2C2C2E',
                 borderRadius: 22,
                 padding: 16,
                 marginBottom: 28,
               }}>
-                <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 8 }]}>
+                <Text style={[TYPOGRAPHY.label, { color: '#8E8E93', marginBottom: 8 }]}>
                   NOTE (OPTIONAL)
                 </Text>
                 <TextInput
@@ -1379,7 +1369,7 @@ export default function RequesterHomeScreen() {
                       minHeight: 80,
                       backgroundColor: 'transparent',
                       textAlignVertical: 'top',
-                      color: COLORS.text,
+                      color: '#FFFFFF',
                     },
                   ]}
                 />
@@ -1422,7 +1412,7 @@ export default function RequesterHomeScreen() {
               <Text style={{
                 fontSize: 52,
                 fontWeight: '800',
-                color: COLORS.text,
+                color: '#FFFFFF',
                 lineHeight: 60,
                 letterSpacing: -1,
                 marginBottom: 6,
@@ -1432,7 +1422,7 @@ export default function RequesterHomeScreen() {
               <Text style={{
                 fontSize: 15,
                 fontWeight: '400',
-                color: COLORS.textSecondary,
+                color: '#8E8E93',
                 marginBottom: 32,
               }}>
                 {coverageSubtitle}
@@ -1442,7 +1432,7 @@ export default function RequesterHomeScreen() {
                 disabled={submitting}
                 activeOpacity={0.85}
                 style={{
-                  backgroundColor: submitting ? '#555' : '#0A0A0A',
+                  backgroundColor: submitting ? '#555' : '#FFFFFF',
                   borderRadius: 28,
                   paddingVertical: 18,
                   alignItems: 'center',
@@ -1452,7 +1442,7 @@ export default function RequesterHomeScreen() {
                 <Text style={{
                   fontSize: 16,
                   fontWeight: '700',
-                  color: '#FFFFFF',
+                  color: '#1C1C1E',
                   letterSpacing: 0.2,
                 }}>
                   {submitting ? 'Submitting...' : 'Request Coverage'}
@@ -1465,19 +1455,19 @@ export default function RequesterHomeScreen() {
           {sheetState === 'matching' && (
             <View style={{ padding: 24, paddingBottom: insets.bottom + 16 }}>
               <DragHandle />
-              <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, letterSpacing: 1.2, marginBottom: 6 }]}>{selectedPlace ? selectedPlace.name.toUpperCase() : 'FACILITY'}</Text>
-              <Text style={[TYPOGRAPHY.h2, { color: COLORS.text, marginBottom: 4 }]}>Medical Officer Found</Text>
-              <Text style={[TYPOGRAPHY.body, { color: COLORS.textSecondary, marginBottom: 24 }]}>Connecting to available doctors nearby</Text>
-              <View style={{ height: 4, borderRadius: 2, backgroundColor: '#F9F9F6', width: '100%', overflow: 'hidden' }}>
-                <Animated.View style={{ height: 4, borderRadius: 2, backgroundColor: '#0A0A0A', width: matchProgressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }} />
+              <Text style={[TYPOGRAPHY.label, { color: '#8E8E93', letterSpacing: 1.2, marginBottom: 6 }]}>{selectedPlace ? selectedPlace.name.toUpperCase() : 'FACILITY'}</Text>
+              <Text style={[TYPOGRAPHY.h2, { color: '#FFFFFF', marginBottom: 4 }]}>Medical Officer Found</Text>
+              <Text style={[TYPOGRAPHY.body, { color: '#8E8E93', marginBottom: 24 }]}>Connecting to available doctors nearby</Text>
+              <View style={{ height: 4, borderRadius: 2, backgroundColor: '#2C2C2E', width: '100%', overflow: 'hidden' }}>
+                <Animated.View style={{ height: 4, borderRadius: 2, backgroundColor: '#FFFFFF', width: matchProgressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }} />
               </View>
-              <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, textAlign: 'center', marginTop: 12, marginBottom: 24 }]}>Checking nearby availability...</Text>
+              <Text style={[TYPOGRAPHY.caption, { color: '#8E8E93', textAlign: 'center', marginTop: 12, marginBottom: 24 }]}>Checking nearby availability...</Text>
               <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TouchableOpacity onPress={handleEditRequest} style={{ flex: 1, backgroundColor: '#F9F9F6', borderRadius: RADIUS.full, paddingVertical: 14, alignItems: 'center' }}>
-                  <Text style={[TYPOGRAPHY.bodyMedium, { color: COLORS.text }]}>Edit Request</Text>
+                <TouchableOpacity onPress={handleEditRequest} style={{ flex: 1, backgroundColor: '#2C2C2E', borderRadius: RADIUS.full, paddingVertical: 14, alignItems: 'center' }}>
+                  <Text style={[TYPOGRAPHY.bodyMedium, { color: '#FFFFFF' }]}>Edit Request</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleCancelRequest} style={{ flex: 1, backgroundColor: '#F9F9F6', borderRadius: RADIUS.full, paddingVertical: 14, alignItems: 'center' }}>
-                  <Text style={[TYPOGRAPHY.bodyMedium, { color: COLORS.text }]}>Cancel Request</Text>
+                <TouchableOpacity onPress={handleCancelRequest} style={{ flex: 1, backgroundColor: '#2C2C2E', borderRadius: RADIUS.full, paddingVertical: 14, alignItems: 'center' }}>
+                  <Text style={[TYPOGRAPHY.bodyMedium, { color: '#FFFFFF' }]}>Cancel Request</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1508,7 +1498,7 @@ export default function RequesterHomeScreen() {
         <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
           {/* White search card */}
           <View style={{
-            backgroundColor: '#FFFFFF',
+            backgroundColor: '#1C1C1E',
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             paddingTop: 16,
@@ -1523,16 +1513,16 @@ export default function RequesterHomeScreen() {
           }}>
             {/* Drag handle */}
             <View style={{ alignItems: 'center', marginBottom: 16 }}>
-              <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#DEDEDE' }} />
+              <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
             </View>
             {/* Search capsule */}
             <TouchableOpacity
               onPress={handleSearchTap}
               activeOpacity={0.8}
-              style={{ backgroundColor: '#F9F9F6', borderRadius: 28, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+              style={{ backgroundColor: '#2C2C2E', borderRadius: 28, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}
             >
-              <Search size={18} color="#3C3C3E" />
-              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Where is coverage needed?</Text>
+              <Search size={18} color="#8E8E93" />
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFFFFF' }}>Where is coverage needed?</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1548,13 +1538,13 @@ export default function RequesterHomeScreen() {
         <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
           <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
             <TouchableWithoutFeedback>
-              <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
+              <View style={{ backgroundColor: '#1C1C1E', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 }}>
                   <TouchableOpacity onPress={() => {
                     console.log('[RequesterHome] Date picker Done pressed');
                     setShowDatePicker(false);
                   }}>
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#1C1C1E' }}>Done</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#FFFFFF' }}>Done</Text>
                   </TouchableOpacity>
                 </View>
                 <DateTimePicker
@@ -1563,8 +1553,8 @@ export default function RequesterHomeScreen() {
                   display="spinner"
                   minimumDate={new Date()}
                   maximumDate={maxDate}
-                  style={{ backgroundColor: '#FFFFFF' }}
-                  textColor="#1C1C1E"
+                  style={{ backgroundColor: '#1C1C1E' }}
+                  textColor="#FFFFFF"
                   onChange={(event, date) => {
                     console.log('[RequesterHome] Date picker changed:', event.type, date);
                     if (date) {

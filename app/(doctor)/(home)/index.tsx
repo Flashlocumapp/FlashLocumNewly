@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   Animated,
-  PanResponder,
   Dimensions,
   StyleSheet,
 } from 'react-native';
@@ -12,6 +11,7 @@ import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import Feather from '@expo/vector-icons/Feather';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
   useFonts,
   Inter_400Regular,
@@ -21,7 +21,6 @@ import {
 
 const { height: screenHeight } = Dimensions.get('window');
 const SHEET_HEIGHT = screenHeight * 0.45;
-const OPEN_TRANSLATE_Y = 0;
 
 const LAGOS_REGION = {
   latitude: 6.5244,
@@ -45,9 +44,7 @@ export default function DoctorHomeScreen() {
   const radarScale = useRef(new Animated.Value(1)).current;
   const radarOpacity = useRef(new Animated.Value(0.6)).current;
 
-  // Bottom sheet animation
-  const translateY = useRef(new Animated.Value(OPEN_TRANSLATE_Y)).current;
-  const lastTranslateY = useRef(OPEN_TRANSLATE_Y);
+
 
   // GPS setup
   useEffect(() => {
@@ -114,35 +111,7 @@ export default function DoctorHomeScreen() {
     return () => loop.stop();
   }, [isOnline, radarScale, radarOpacity]);
 
-  // PanResponder for bottom sheet
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 5,
-      onPanResponderMove: (_, gs) => {
-        const next = lastTranslateY.current + gs.dy;
-        const clamped = Math.max(OPEN_TRANSLATE_Y, Math.min(SHEET_HEIGHT - 60, next));
-        translateY.setValue(clamped);
-      },
-      onPanResponderRelease: (_, gs) => {
-        const current = lastTranslateY.current;
-        let target: number;
-        if (gs.dy > 60) {
-          target = SHEET_HEIGHT - 60;
-        } else if (gs.dy < -40) {
-          target = OPEN_TRANSLATE_Y;
-        } else {
-          target = current;
-        }
-        lastTranslateY.current = target;
-        Animated.spring(translateY, {
-          toValue: target,
-          useNativeDriver: true,
-          tension: 60,
-          friction: 10,
-        }).start();
-      },
-    }),
-  ).current;
+
 
   const handleToggleStatus = () => {
     const next = !isOnline;
@@ -185,7 +154,7 @@ export default function DoctorHomeScreen() {
                   { transform: [{ scale: radarScale }], opacity: radarOpacity },
                 ]}
               />
-              <Feather name="activity" size={28} color="#1C1C1E" />
+              <MaterialCommunityIcons name="stethoscope" size={32} color="#1C1C1E" />
             </View>
           </Marker>
         )}
@@ -201,16 +170,8 @@ export default function DoctorHomeScreen() {
         <Text style={styles.pillText}>{statusText}</Text>
       </TouchableOpacity>
 
-      {/* Draggable bottom sheet */}
-      <Animated.View
-        style={[
-          styles.sheet,
-          { paddingBottom: sheetPaddingBottom, transform: [{ translateY }] },
-        ]}
-        {...panResponder.panHandlers}
-      >
-        {/* Drag handle */}
-        <View style={styles.dragHandle} />
+      {/* Bottom sheet */}
+      <View style={[styles.sheet, { paddingBottom: sheetPaddingBottom }]}>
 
         {/* Coverage sub-card */}
         <View style={styles.subCard}>
@@ -244,7 +205,7 @@ export default function DoctorHomeScreen() {
             <Text style={styles.statValue}>100%</Text>
           </View>
         </View>
-      </Animated.View>
+      </View>
     </View>
   );
 }
@@ -305,15 +266,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#1C1C1E',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-  },
-  dragHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#3A3A3C',
-    marginTop: 12,
-    marginBottom: 16,
-    alignSelf: 'center',
   },
   // Coverage sub-card
   subCard: {
