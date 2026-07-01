@@ -106,9 +106,10 @@ const SHEET_HEIGHTS = {
   config: SCREEN_HEIGHT * 0.75,
   summary: 240 + 80,
   matching: 300 + 80,
+  matched: SCREEN_HEIGHT * 0.55,
 };
 
-type SheetState = 'idle' | 'searching' | 'config' | 'summary' | 'matching';
+type SheetState = 'idle' | 'searching' | 'config' | 'summary' | 'matching' | 'matched';
 
 type SelectedPlace = {
   name: string;
@@ -513,6 +514,20 @@ export default function RequesterHomeScreen() {
   const matchProgressAnim = useRef(new Animated.Value(0.05)).current;
   const [submitting, setSubmitting] = useState(false);
 
+  // Matched doctor state
+  const [matchedDoctor, setMatchedDoctor] = useState<{
+    name: string;
+    mdcn: string;
+    rating: number;
+    reliability: number;
+    shift_summary: string;
+  } | null>(null);
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+
+  // Realtime refs for matching
+  const matchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realtimeChannelRef = useRef<any>(null);
+
   // ─── Load recent place on mount ───────────────────────────────────────────────
   useEffect(() => {
     AsyncStorage.getItem(RECENT_PLACE_KEY).then((raw) => {
@@ -711,6 +726,56 @@ export default function RequesterHomeScreen() {
     }
   }, [sheetState, matchProgressAnim]);
 
+  // ─── Realtime matching subscription + 180s timeout ───────────────────────────
+  useEffect(() => {
+    if (sheetState === 'matching' && activeRequestId) {
+      console.log('[RequesterHome] Starting match timer and subscribing to requester channel:', activeRequestId);
+
+      matchTimerRef.current = setTimeout(() => {
+        console.log('[RequesterHome] Match timeout — no doctor accepted in 180s');
+        Alert.alert(
+          'No Match Found',
+          'No doctor accepted your request at this time. Please try again or adjust your request parameters.',
+          [{ text: 'OK', onPress: () => transitionTo('summary') }]
+        );
+      }, 180000);
+
+      const channelName = `requester:${activeRequestId}`;
+      realtimeChannelRef.current = supabase.channel(channelName)
+        .on('broadcast', { event: 'MATCH_CONFIRMED' }, (payload) => {
+          console.log('[RequesterHome] MATCH_CONFIRMED received:', JSON.stringify(payload));
+          if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+          const doctor = payload.payload?.doctor;
+          setMatchedDoctor({
+            name: doctor?.name || 'Dr. Unknown',
+            mdcn: doctor?.mdcn || 'MDCN/R/00000',
+            rating: doctor?.rating || 5.0,
+            reliability: doctor?.reliability || 100,
+            shift_summary: `${coverageType} · ${formattedDateShort} · ${formattedStartTime} – ${formattedEndTime}`,
+          });
+          transitionTo('matched');
+        })
+        .on('broadcast', { event: 'REQUEST_EXPIRED' }, () => {
+          console.log('[RequesterHome] REQUEST_EXPIRED received');
+          if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+          Alert.alert('Request Expired', 'Your request expired. Please try again.');
+          transitionTo('summary');
+        })
+        .subscribe((status) => {
+          console.log('[RequesterHome] Realtime channel status:', channelName, status);
+        });
+
+      return () => {
+        if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+        if (realtimeChannelRef.current) {
+          console.log('[RequesterHome] Removing realtime channel:', channelName);
+          supabase.removeChannel(realtimeChannelRef.current);
+          realtimeChannelRef.current = null;
+        }
+      };
+    }
+  }, [sheetState, activeRequestId]);
+
   // ─── Show tab bar only when idle ─────────────────────────────────────────────
   useEffect(() => {
     setTabBarVisible(sheetState === 'idle');
@@ -754,29 +819,41 @@ export default function RequesterHomeScreen() {
 
   const handleRequestCoverage = async () => {
     if (!selectedPlace) return;
-    console.log('[RequesterHome] Request Coverage tapped — submitting to Supabase');
+    console.log('[RequesterHome] Request Coverage tapped — submitting to submit-request Edge Function');
     setSubmitting(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-      console.log('[RequesterHome] Inserting shift_request for user:', user.id);
-      const { error } = await supabase.from('shift_requests').insert({
-        requester_id: user.id,
-        place_name: selectedPlace.name,
-        address: selectedPlace.address,
-        latitude: selectedPlace.lat,
-        longitude: selectedPlace.lng,
-        coverage_type: coverageType,
-        shift_date: shiftDate.toISOString().split('T')[0],
-        start_time: startTime.toTimeString().slice(0, 5),
-        end_time: endTime.toTimeString().slice(0, 5),
-        coverage_length: coverageLength,
-        environment,
-        note,
-        status: 'searching',
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      console.log('[RequesterHome] Calling submit-request for place:', selectedPlace.name);
+      const res = await fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/submit-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          place_name: selectedPlace.name,
+          address: selectedPlace.address,
+          latitude: selectedPlace.lat,
+          longitude: selectedPlace.lng,
+          coverage_type: coverageType,
+          shift_date: shiftDate.toISOString().split('T')[0],
+          start_time: startTime.toTimeString().slice(0, 5),
+          end_time: endTime.toTimeString().slice(0, 5),
+          coverage_length: coverageLength,
+          environment,
+          note: note || null,
+          total_price: coveragePrice,
+        }),
       });
-      if (error) throw error;
-      console.log('[RequesterHome] shift_request inserted successfully');
+      console.log('[RequesterHome] submit-request response status:', res.status);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error || 'Could not submit request');
+      }
+      const data = await res.json();
+      console.log('[RequesterHome] submit-request success, request_id:', data.request_id || data.id);
+      setActiveRequestId(data.request_id || data.id || null);
       transitionTo('matching');
     } catch (e: any) {
       console.log('[RequesterHome] Submit error:', e.message);
@@ -798,6 +875,8 @@ export default function RequesterHomeScreen() {
     setCoverageLength(1);
     setEnvironment('Normal');
     setNote('');
+    setActiveRequestId(null);
+    setMatchedDoctor(null);
     transitionTo('idle');
   }, [transitionTo]);
 
@@ -1455,19 +1534,179 @@ export default function RequesterHomeScreen() {
           {sheetState === 'matching' && (
             <View style={{ padding: 24, paddingBottom: insets.bottom + 16 }}>
               <DragHandle />
-              <Text style={[TYPOGRAPHY.label, { color: '#8E8E93', letterSpacing: 1.2, marginBottom: 6 }]}>{selectedPlace ? selectedPlace.name.toUpperCase() : 'FACILITY'}</Text>
+              <Text style={[TYPOGRAPHY.label, { color: '#8E8E93', letterSpacing: 1.2, marginBottom: 6 }]}>
+                {selectedPlace ? selectedPlace.name.toUpperCase() : 'FACILITY'}
+              </Text>
               <Text style={[TYPOGRAPHY.h2, { color: '#FFFFFF', marginBottom: 4 }]}>Medical Officer Found</Text>
               <Text style={[TYPOGRAPHY.body, { color: '#8E8E93', marginBottom: 24 }]}>Connecting to available doctors nearby</Text>
-              <View style={{ height: 4, borderRadius: 2, backgroundColor: '#2C2C2E', width: '100%', overflow: 'hidden' }}>
-                <Animated.View style={{ height: 4, borderRadius: 2, backgroundColor: '#FFFFFF', width: matchProgressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }} />
+
+              {/* Progress bar with A/B labels */}
+              <View style={{ width: '100%' }}>
+                <View style={{ height: 4, borderRadius: 2, backgroundColor: '#2C2C2E', width: '100%', overflow: 'hidden' }}>
+                  <Animated.View style={{
+                    height: 4,
+                    borderRadius: 2,
+                    backgroundColor: '#2563EB',
+                    width: matchProgressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+                  }} />
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+                  <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>A</Text>
+                  <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>B</Text>
+                </View>
               </View>
-              <Text style={[TYPOGRAPHY.caption, { color: '#8E8E93', textAlign: 'center', marginTop: 12, marginBottom: 24 }]}>Checking nearby availability...</Text>
+
+              <Text style={[TYPOGRAPHY.caption, { color: '#8E8E93', textAlign: 'center', marginTop: 8, marginBottom: 24 }]}>
+                Checking nearby availability...
+              </Text>
+
               <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TouchableOpacity onPress={handleEditRequest} style={{ flex: 1, backgroundColor: '#2C2C2E', borderRadius: RADIUS.full, paddingVertical: 14, alignItems: 'center' }}>
+                <TouchableOpacity
+                  onPress={handleEditRequest}
+                  style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: RADIUS.full, paddingVertical: 14, alignItems: 'center' }}
+                >
                   <Text style={[TYPOGRAPHY.bodyMedium, { color: '#FFFFFF' }]}>Edit Request</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleCancelRequest} style={{ flex: 1, backgroundColor: '#2C2C2E', borderRadius: RADIUS.full, paddingVertical: 14, alignItems: 'center' }}>
-                  <Text style={[TYPOGRAPHY.bodyMedium, { color: '#FFFFFF' }]}>Cancel Request</Text>
+                <TouchableOpacity
+                  onPress={handleCancelRequest}
+                  style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: RADIUS.full, paddingVertical: 14, alignItems: 'center' }}
+                >
+                  <Text style={[TYPOGRAPHY.bodyMedium, { color: '#1C1C1E' }]}>Cancel Request</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* MATCHED — Doctor Accepted */}
+          {sheetState === 'matched' && (
+            <View style={{ padding: 20, paddingBottom: insets.bottom + 16 }}>
+              <DragHandle />
+
+              {/* Header label */}
+              <Text style={{
+                fontSize: 11,
+                fontFamily: 'Inter_600SemiBold',
+                letterSpacing: 1.4,
+                color: '#8E8E93',
+                marginTop: 8,
+                marginBottom: 12,
+              }}>
+                DOCTOR ACCEPTED
+              </Text>
+
+              {/* Doctor profile card */}
+              <View style={{
+                backgroundColor: '#2C2C2E',
+                borderRadius: 16,
+                padding: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                marginBottom: 16,
+              }}>
+                {/* Avatar placeholder */}
+                <View style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
+                  backgroundColor: '#3A3A3C',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  flexShrink: 0,
+                }}>
+                  <Text style={{ fontSize: 20 }}>👨‍⚕️</Text>
+                </View>
+
+                {/* Doctor info */}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>
+                    {matchedDoctor?.name || 'Dr. Unknown'}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                    <Text style={{ fontSize: 12, color: '#8E8E93' }}>
+                      {matchedDoctor?.mdcn || 'MDCN/R/00000'}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#F4A261' }}>
+                      ★ {Number(matchedDoctor?.rating || 5.0).toFixed(1)}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                      <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759' }} />
+                      <Text style={{ fontSize: 12, color: '#FFFFFF' }}>
+                        {matchedDoctor?.reliability || 100}%
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 3 }} numberOfLines={1}>
+                    {matchedDoctor?.shift_summary || ''}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Reminder text */}
+              <Text style={{
+                fontSize: 14,
+                color: '#8E8E93',
+                fontFamily: 'Inter_400Regular',
+                lineHeight: 20,
+                marginBottom: 20,
+              }}>
+                Remember to start shift under Upcoming Coverage once the doctor arrives.
+              </Text>
+
+              {/* Action buttons */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log('[RequesterHome] Edit Shift pressed from matched state');
+                    transitionTo('config');
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#2C2C2E',
+                    borderRadius: 999,
+                    paddingVertical: 14,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>
+                    Edit Shift
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log('[RequesterHome] Cancel Shift pressed from matched state');
+                    handleReset();
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#2C2C2E',
+                    borderRadius: 999,
+                    paddingVertical: 14,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>
+                    Cancel Shift
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log('[RequesterHome] Call button pressed from matched state');
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 999,
+                    paddingVertical: 14,
+                    alignItems: 'center',
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>
+                    Call
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>

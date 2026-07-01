@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,9 @@ import {
   Animated,
   Dimensions,
   StyleSheet,
+  Alert,
+  ActivityIndicator,
+  AppState,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,9 +21,13 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 const { height: screenHeight } = Dimensions.get('window');
 const SHEET_HEIGHT = screenHeight * 0.45;
+
+const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
 const LAGOS_REGION = {
   latitude: 6.5244,
@@ -29,24 +36,121 @@ const LAGOS_REGION = {
   longitudeDelta: 0.15,
 };
 
+type DoctorScreenState = 'idle' | 'incoming' | 'confirmed';
+
+type DispatchRequest = {
+  id: string;
+  requester_id: string;
+  place_name: string;
+  address: string;
+  coverage_type: 'Standard' | 'Home Care';
+  shift_date: string;
+  start_time: string;
+  end_time: string;
+  coverage_length: number;
+  environment: 'Normal' | 'Busy';
+  note?: string | null;
+  total_price: number;
+  total_hours?: number;
+};
+
+function formatShiftSummary(req: DispatchRequest): string {
+  const startFormatted = req.start_time;
+  const endFormatted = req.end_time;
+  const [sh, sm] = startFormatted.split(':').map(Number);
+  const [eh, em] = endFormatted.split(':').map(Number);
+  const dailyHours = (eh * 60 + em - sh * 60 - sm) / 60;
+  const totalHours = dailyHours * req.coverage_length;
+  const hoursLabel = totalHours % 1 === 0 ? `${totalHours}hr.` : `${totalHours.toFixed(1)}hr.`;
+  return `${req.coverage_type} • ${req.shift_date} • ${startFormatted} – ${endFormatted} • ${hoursLabel}`;
+}
+
+function DragHandle() {
+  return (
+    <View style={{ alignItems: 'center', paddingVertical: 10 }}>
+      <View style={{ width: 36, height: 4, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
+    </View>
+  );
+}
+
+function FeeRow({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12 }}>
+      <Text style={{ fontSize: 14, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{label}</Text>
+      <Text style={{ fontSize: 14, color: valueColor || '#FFFFFF', fontFamily: 'Inter_700Bold' }}>{value}</Text>
+    </View>
+  );
+}
+
 export default function DoctorHomeScreen() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
 
   const [isOnline, setIsOnline] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [doctorScreenState, setDoctorScreenState] = useState<DoctorScreenState>('idle');
+  const [requestQueue, setRequestQueue] = useState<DispatchRequest[]>([]);
+  const [confirmedRequest, setConfirmedRequest] = useState<DispatchRequest | null>(null);
+  const [accepting, setAccepting] = useState(false);
 
   const mapRef = useRef<MapView>(null);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const hasAnimatedToUser = useRef(false);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Radar pulse animation
   const radarScale = useRef(new Animated.Value(1)).current;
   const radarOpacity = useRef(new Animated.Value(0.6)).current;
 
+  // ─── Helpers ────────────────────────────────────────────────────────────────
+  const getToken = useCallback(async (): Promise<string | null> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token ?? null;
+  }, []);
 
+  const callEdge = useCallback(async (fn: string, body?: object) => {
+    const token = await getToken();
+    if (!token) return null;
+    console.log(`[DoctorHome] Calling edge function: ${fn}`, body ?? '');
+    const res = await fetch(`${EDGE_BASE}/${fn}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    console.log(`[DoctorHome] ${fn} response status:`, res.status);
+    return res;
+  }, [getToken]);
 
-  // GPS setup
+  const removeCurrentRequest = useCallback(() => {
+    setRequestQueue((prev) => {
+      const next = prev.slice(1);
+      console.log('[DoctorHome] Removed current request, queue length now:', next.length);
+      return next;
+    });
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const forceSync = useCallback(async () => {
+    if (!user) return;
+    console.log('[DoctorHome] Force-syncing...');
+    try {
+      const res = await callEdge('force-sync');
+      if (!res || !res.ok) return;
+      const data = await res.json();
+      console.log('[DoctorHome] Force-sync result — requests:', data.requests?.length ?? 0);
+      if (data.requests?.length > 0) {
+        setRequestQueue(data.requests);
+        setDoctorScreenState('incoming');
+      }
+    } catch (e: any) {
+      console.log('[DoctorHome] Force-sync error:', e.message);
+    }
+  }, [user, callEdge]);
+
+  // ─── GPS setup ──────────────────────────────────────────────────────────────
   useEffect(() => {
     let active = true;
 
@@ -92,7 +196,7 @@ export default function DoctorHomeScreen() {
     };
   }, []);
 
-  // Radar pulse loop
+  // ─── Radar pulse loop ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isOnline) return;
     const loop = Animated.loop(
@@ -111,8 +215,142 @@ export default function DoctorHomeScreen() {
     return () => loop.stop();
   }, [isOnline, radarScale, radarOpacity]);
 
+  // ─── Go-online / Go-offline ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    const toggle = async () => {
+      const fn = isOnline ? 'go-online' : 'go-offline';
+      console.log('[DoctorHome] Toggling status:', fn);
+      await callEdge(fn);
+      if (!isOnline) {
+        console.log('[DoctorHome] Went offline — clearing queue');
+        setRequestQueue([]);
+        setDoctorScreenState('idle');
+      }
+    };
+    toggle();
+  }, [isOnline, user, callEdge]);
 
+  // ─── Heartbeat every 60s while online ───────────────────────────────────────
+  useEffect(() => {
+    if (!isOnline || !user) return;
+    const sendHeartbeat = async () => {
+      console.log('[DoctorHome] Sending heartbeat');
+      await callEdge('heartbeat');
+    };
+    sendHeartbeat();
+    const interval = setInterval(sendHeartbeat, 60000);
+    return () => clearInterval(interval);
+  }, [isOnline, user, callEdge]);
 
+  // ─── Realtime subscription to dispatch:lagos ────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+
+    console.log('[DoctorHome] Subscribing to dispatch:lagos channel');
+    const channel = supabase.channel('dispatch:lagos')
+      .on('broadcast', { event: 'NEW_REQUEST' }, (payload) => {
+        const req: DispatchRequest = payload.payload;
+        console.log('[DoctorHome] NEW_REQUEST received:', req.id, req.place_name);
+        setRequestQueue((prev) => {
+          if (prev.find((r) => r.id === req.id)) return prev;
+          const next = [...prev, req];
+          return next;
+        });
+      })
+      .on('broadcast', { event: 'EVICT_REQUEST' }, (payload) => {
+        const evictedId: string = payload.payload?.request_id;
+        console.log('[DoctorHome] EVICT_REQUEST received:', evictedId);
+        setRequestQueue((prev) => {
+          const next = prev.filter((r) => r.id !== evictedId);
+          return next;
+        });
+      })
+      .subscribe((status) => {
+        console.log('[DoctorHome] dispatch:lagos subscription status:', status);
+      });
+
+    channelRef.current = channel;
+
+    return () => {
+      console.log('[DoctorHome] Unsubscribing from dispatch:lagos');
+      supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
+  }, [user]);
+
+  // ─── Queue → screen state sync ───────────────────────────────────────────────
+  useEffect(() => {
+    if (requestQueue.length > 0 && doctorScreenState === 'idle' && isOnline) {
+      console.log('[DoctorHome] Queue has items, transitioning to incoming');
+      setDoctorScreenState('incoming');
+    } else if (requestQueue.length === 0 && doctorScreenState === 'incoming') {
+      console.log('[DoctorHome] Queue empty, transitioning to idle');
+      setDoctorScreenState('idle');
+    }
+  }, [requestQueue, isOnline, doctorScreenState]);
+
+  // ─── AppState force-sync on foreground ──────────────────────────────────────
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', async (state) => {
+      if (state === 'active' && isOnline && user) {
+        console.log('[DoctorHome] App foregrounded — force-syncing');
+        await forceSync();
+      }
+    });
+    return () => sub.remove();
+  }, [isOnline, user, forceSync]);
+
+  // ─── Accept handler ──────────────────────────────────────────────────────────
+  const handleAccept = async () => {
+    const currentRequest = requestQueue[0];
+    if (!currentRequest || !user) return;
+    console.log('[DoctorHome] Accept button pressed for request:', currentRequest.id);
+    setAccepting(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error('Not authenticated');
+      const res = await fetch(`${EDGE_BASE}/accept-request`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ request_id: currentRequest.id }),
+      });
+      console.log('[DoctorHome] accept-request response status:', res.status);
+      if (res.status === 409) {
+        console.log('[DoctorHome] Race condition — request already taken');
+        Alert.alert('Request Taken', 'Request no longer available.');
+        removeCurrentRequest();
+        await forceSync();
+        return;
+      }
+      if (!res.ok) throw new Error('Accept failed');
+      console.log('[DoctorHome] Request accepted successfully — transitioning to confirmed');
+      setConfirmedRequest(currentRequest);
+      setDoctorScreenState('confirmed');
+      setRequestQueue([]);
+    } catch (e: any) {
+      console.log('[DoctorHome] Accept error:', e.message);
+      Alert.alert('Error', e.message);
+    } finally {
+      setAccepting(false);
+    }
+  };
+
+  // ─── Decline handler ─────────────────────────────────────────────────────────
+  const handleDecline = async () => {
+    const currentRequest = requestQueue[0];
+    if (!currentRequest || !user) return;
+    console.log('[DoctorHome] Decline button pressed for request:', currentRequest.id);
+    try {
+      await callEdge('decline-request', { request_id: currentRequest.id });
+    } catch {}
+    removeCurrentRequest();
+  };
+
+  // ─── Toggle online/offline ───────────────────────────────────────────────────
   const handleToggleStatus = () => {
     const next = !isOnline;
     console.log('[DoctorHome] Status toggled:', next ? 'Online' : 'Offline');
@@ -128,6 +366,18 @@ export default function DoctorHomeScreen() {
   const sheetPaddingBottom = insets.bottom + 80;
 
   const showMarker = isOnline && userLocation !== null;
+  const currentRequest = requestQueue[0] ?? null;
+
+  // Fee breakdown
+  const feeAmount = currentRequest ? currentRequest.total_price : 0;
+  const feeCut = currentRequest ? Math.round(feeAmount * 0.15) : 0;
+  const feeYouReceive = feeAmount - feeCut;
+  const feeAmountDisplay = `₦${feeAmount.toLocaleString()}`;
+  const feeCutDisplay = `-₦${feeCut.toLocaleString()}`;
+  const feeYouReceiveDisplay = `₦${feeYouReceive.toLocaleString()}`;
+
+  const confirmedShiftSummary = confirmedRequest ? formatShiftSummary(confirmedRequest) : '';
+  const confirmedPriceDisplay = confirmedRequest ? `₦${confirmedRequest.total_price.toLocaleString()}` : '';
 
   return (
     <View style={styles.container}>
@@ -173,38 +423,251 @@ export default function DoctorHomeScreen() {
       {/* Bottom sheet */}
       <View style={[styles.sheet, { paddingBottom: sheetPaddingBottom }]}>
 
-        {/* Coverage sub-card */}
-        <View style={styles.subCard}>
-          <Text style={styles.subCardLabel}>COVERAGE</Text>
-          <Text style={styles.subCardHeading}>No coverage yet</Text>
-          <Text style={styles.subCardBody}>
-            Stay online to start receiving dispatch requests.
-          </Text>
-        </View>
-
-        {/* Stats row */}
-        <View style={styles.statsRow}>
-          {/* Ratings */}
-          <View style={styles.statCard}>
-            <View style={styles.statLabelRow}>
-              <Text style={styles.statLabel}>RATINGS</Text>
-              <Feather name="info" size={12} color="#8E8E93" />
+        {/* ── IDLE STATE ── */}
+        {doctorScreenState === 'idle' && (
+          <>
+            {/* Coverage sub-card */}
+            <View style={styles.subCard}>
+              <Text style={styles.subCardLabel}>COVERAGE</Text>
+              <Text style={styles.subCardHeading}>No coverage yet</Text>
+              <Text style={styles.subCardBody}>
+                Stay online to start receiving dispatch requests.
+              </Text>
             </View>
-            <View style={styles.ratingValueRow}>
-              <Text style={styles.statValue}>4.7</Text>
-              <Text style={styles.starIcon}>★</Text>
+
+            {/* Stats row */}
+            <View style={styles.statsRow}>
+              {/* Ratings */}
+              <View style={styles.statCard}>
+                <View style={styles.statLabelRow}>
+                  <Text style={styles.statLabel}>RATINGS</Text>
+                  <Feather name="info" size={12} color="#8E8E93" />
+                </View>
+                <View style={styles.ratingValueRow}>
+                  <Text style={styles.statValue}>4.7</Text>
+                  <Text style={styles.starIcon}>★</Text>
+                </View>
+              </View>
+
+              {/* Reliability */}
+              <View style={styles.statCard}>
+                <View style={styles.statLabelRow}>
+                  <Text style={styles.statLabel}>RELIABILITY</Text>
+                  <Feather name="info" size={12} color="#8E8E93" />
+                </View>
+                <Text style={styles.statValue}>100%</Text>
+              </View>
+            </View>
+          </>
+        )}
+
+        {/* ── INCOMING STATE ── */}
+        {doctorScreenState === 'incoming' && currentRequest && (
+          <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: insets.bottom + 16 }}>
+            <DragHandle />
+
+            {/* Row 1: badges */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+              {/* New Request pill */}
+              <View style={{
+                backgroundColor: '#1A3A2A',
+                borderColor: '#34C759',
+                borderWidth: 1,
+                borderRadius: 999,
+                paddingHorizontal: 12,
+                paddingVertical: 5,
+              }}>
+                <Text style={{ fontSize: 13, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>
+                  New Request
+                </Text>
+              </View>
+
+              {/* Right badges */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>
+                  <Text style={{ color: '#F4A261' }}>★</Text>
+                  {' '}5.0
+                </Text>
+                <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>
+                  <Text style={{ color: '#34C759' }}>●</Text>
+                  {' '}100%
+                </Text>
+                <View style={{
+                  backgroundColor: '#2C2C2E',
+                  borderRadius: 999,
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                }}>
+                  <Text style={{ fontSize: 12, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>
+                    {currentRequest.environment}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Row 2: Hospital name */}
+            <Text style={{ fontSize: 26, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginTop: 12 }}>
+              {currentRequest.place_name}
+            </Text>
+
+            {/* Row 3: Address */}
+            <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 4 }}>
+              {currentRequest.address}
+            </Text>
+
+            {/* Row 4: Shift summary */}
+            <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 8 }}>
+              {formatShiftSummary(currentRequest)}
+            </Text>
+
+            {/* Note (optional) */}
+            {!!currentRequest.note && (
+              <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 6, fontStyle: 'italic' }}>
+                {currentRequest.note}
+              </Text>
+            )}
+
+            {/* Fee breakdown sub-card */}
+            <View style={{
+              backgroundColor: '#2C2C2E',
+              borderRadius: 16,
+              padding: 16,
+              marginTop: 16,
+            }}>
+              <FeeRow label="Amount" value={feeAmountDisplay} />
+              <View style={{ height: 1, backgroundColor: '#3A3A3C' }} />
+              <FeeRow label="FlashLocum fee - 15%" value={feeCutDisplay} valueColor="#FF453A" />
+              <View style={{ height: 1, backgroundColor: '#3A3A3C' }} />
+              <FeeRow label="You receive" value={feeYouReceiveDisplay} valueColor="#34C759" />
+            </View>
+
+            {/* Buttons */}
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
+              <TouchableOpacity
+                onPress={handleDecline}
+                activeOpacity={0.85}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#2C2C2E',
+                  borderRadius: 999,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>
+                  Decline
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleAccept}
+                disabled={accepting}
+                activeOpacity={0.85}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 999,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {accepting ? (
+                  <ActivityIndicator size="small" color="#1C1C1E" />
+                ) : (
+                  <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>
+                    Accept
+                  </Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
+        )}
 
-          {/* Reliability */}
-          <View style={styles.statCard}>
-            <View style={styles.statLabelRow}>
-              <Text style={styles.statLabel}>RELIABILITY</Text>
-              <Feather name="info" size={12} color="#8E8E93" />
+        {/* ── CONFIRMED STATE ── */}
+        {doctorScreenState === 'confirmed' && confirmedRequest && (
+          <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: insets.bottom + 16 }}>
+            <DragHandle />
+
+            <Text style={{
+              fontSize: 11,
+              letterSpacing: 1.4,
+              color: '#8E8E93',
+              fontFamily: 'Inter_600SemiBold',
+              marginTop: 8,
+            }}>
+              NEXT COVERAGE
+            </Text>
+
+            <Text style={{
+              fontSize: 15,
+              color: '#34C759',
+              fontFamily: 'Inter_600SemiBold',
+              marginTop: 4,
+            }}>
+              COVERAGE CONFIRMED
+            </Text>
+
+            <Text style={{ fontSize: 26, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginTop: 8 }}>
+              {confirmedRequest.place_name}
+            </Text>
+
+            <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 4 }}>
+              {confirmedRequest.address}
+            </Text>
+
+            <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 8 }}>
+              {confirmedShiftSummary}
+            </Text>
+
+            <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginTop: 8 }}>
+              {confirmedPriceDisplay}
+            </Text>
+
+            {/* Buttons */}
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[DoctorHome] Cancel Shift pressed');
+                  setDoctorScreenState('idle');
+                  setConfirmedRequest(null);
+                }}
+                activeOpacity={0.85}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#2C2C2E',
+                  borderRadius: 999,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>
+                  Cancel Shift
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[DoctorHome] Call button pressed');
+                }}
+                activeOpacity={0.85}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 999,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <Feather name="phone" size={16} color="#1C1C1E" />
+                <Text style={{ fontSize: 15, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>
+                  Call
+                </Text>
+              </TouchableOpacity>
             </View>
-            <Text style={styles.statValue}>100%</Text>
           </View>
-        </View>
+        )}
       </View>
     </View>
   );
@@ -274,6 +737,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginHorizontal: 16,
     marginBottom: 12,
+    marginTop: 16,
   },
   subCardLabel: {
     fontSize: 11,
