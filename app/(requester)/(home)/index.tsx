@@ -16,12 +16,14 @@ import {
   StyleSheet,
   ActivityIndicator,
   Modal,
+  FlatList,
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
-import { Search, MapPin, ArrowRight, X, CalendarDays, Clock } from 'lucide-react-native';
+import { Search, MapPin, ArrowRight, X, CalendarDays, Clock, History } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { useTabBarVisibility, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
@@ -29,6 +31,8 @@ import { useTabBarVisibility, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibility
 const ANDROID_KEY = 'AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU';
 const IOS_KEY = 'AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk';
 const MAPS_KEY = Platform.OS === 'ios' ? IOS_KEY : ANDROID_KEY;
+
+const RECENT_PLACE_KEY = 'flashlocum_recent_place';
 
 const LAGOS_REGION = {
   latitude: 6.5244,
@@ -80,6 +84,191 @@ const MINIMALIST_MAP_STYLE = [
   { featureType: 'water', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
 ];
 
+// ─── Custom Time Picker ───────────────────────────────────────────────────────
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const MINUTES = [0, 15, 30, 45];
+const ITEM_HEIGHT = 48;
+
+function CustomTimePicker({
+  visible,
+  initialTime,
+  onDone,
+  onCancel,
+  isForDate,
+  shiftDate,
+  watNow,
+}: {
+  visible: boolean;
+  initialTime: Date;
+  onDone: (date: Date) => void;
+  onCancel: () => void;
+  isForDate: Date;
+  shiftDate: Date;
+  watNow: Date;
+}) {
+  const [selectedHour, setSelectedHour] = useState(initialTime.getHours());
+  const [selectedMinute, setSelectedMinute] = useState(() => {
+    const m = initialTime.getMinutes();
+    // snap to nearest 15
+    return MINUTES.reduce((prev, curr) => Math.abs(curr - m) < Math.abs(prev - m) ? curr : prev, 0);
+  });
+
+  const hourListRef = useRef<FlatList<number>>(null);
+  const minuteListRef = useRef<FlatList<number>>(null);
+
+  useEffect(() => {
+    if (visible) {
+      const h = initialTime.getHours();
+      const rawM = initialTime.getMinutes();
+      const snappedM = MINUTES.reduce((prev, curr) => Math.abs(curr - rawM) < Math.abs(prev - rawM) ? curr : prev, 0);
+      setSelectedHour(h);
+      setSelectedMinute(snappedM);
+      setTimeout(() => {
+        hourListRef.current?.scrollToIndex({ index: h, animated: false });
+        const mIdx = MINUTES.indexOf(snappedM);
+        minuteListRef.current?.scrollToIndex({ index: mIdx >= 0 ? mIdx : 0, animated: false });
+      }, 100);
+    }
+  }, [visible]);
+
+  const handleDone = () => {
+    console.log('[CustomTimePicker] Done pressed — hour:', selectedHour, 'minute:', selectedMinute);
+    // WAT validation: if shift date is today (WAT), ensure selected time is in the future
+    const shiftDateStr = shiftDate.toISOString().split('T')[0];
+    const watTodayStr = watNow.toISOString().split('T')[0];
+    if (shiftDateStr === watTodayStr) {
+      const watHour = watNow.getUTCHours();
+      const watMinute = watNow.getUTCMinutes();
+      if (selectedHour < watHour || (selectedHour === watHour && selectedMinute <= watMinute)) {
+        Alert.alert('Invalid Time', 'Please select a future time.');
+        return;
+      }
+    }
+    const result = new Date(isForDate);
+    result.setHours(selectedHour, selectedMinute, 0, 0);
+    onDone(result);
+  };
+
+  const insets = useSafeAreaInsets();
+
+  const renderHourItem = ({ item }: { item: number }) => {
+    const isSelected = item === selectedHour;
+    const label = item.toString().padStart(2, '0');
+    return (
+      <TouchableOpacity
+        onPress={() => {
+          console.log('[CustomTimePicker] Hour selected:', item);
+          setSelectedHour(item);
+        }}
+        style={{
+          height: ITEM_HEIGHT,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: isSelected ? '#0A0A0A' : 'transparent',
+          borderRadius: 12,
+          marginHorizontal: 4,
+        }}
+      >
+        <Text style={{ fontSize: 22, fontWeight: isSelected ? '700' : '400', color: isSelected ? '#FFFFFF' : COLORS.text }}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderMinuteItem = ({ item }: { item: number }) => {
+    const isSelected = item === selectedMinute;
+    const label = item.toString().padStart(2, '0');
+    return (
+      <TouchableOpacity
+        onPress={() => {
+          console.log('[CustomTimePicker] Minute selected:', item);
+          setSelectedMinute(item);
+        }}
+        style={{
+          height: ITEM_HEIGHT,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: isSelected ? '#0A0A0A' : 'transparent',
+          borderRadius: 12,
+          marginHorizontal: 4,
+        }}
+      >
+        <Text style={{ fontSize: 22, fontWeight: isSelected ? '700' : '400', color: isSelected ? '#FFFFFF' : COLORS.text }}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
+      <TouchableWithoutFeedback onPress={onCancel}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+          <TouchableWithoutFeedback>
+            <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+                <TouchableOpacity onPress={onCancel}>
+                  <Text style={{ fontSize: 16, color: COLORS.textSecondary }}>Cancel</Text>
+                </TouchableOpacity>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.text }}>Select Time</Text>
+                <TouchableOpacity onPress={handleDone}>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: '#007AFF' }}>Done</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 12, gap: 12 }}>
+                {/* Hour column */}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, textAlign: 'center', marginBottom: 8, letterSpacing: 0.8 }}>
+                    HOUR
+                  </Text>
+                  <FlatList
+                    ref={hourListRef}
+                    data={HOURS}
+                    keyExtractor={(item) => String(item)}
+                    renderItem={renderHourItem}
+                    snapToInterval={ITEM_HEIGHT}
+                    decelerationRate="fast"
+                    showsVerticalScrollIndicator={false}
+                    style={{ height: ITEM_HEIGHT * 5 }}
+                    getItemLayout={(_, index) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index })}
+                    onScrollToIndexFailed={() => {}}
+                  />
+                </View>
+
+                {/* Separator */}
+                <View style={{ justifyContent: 'center', paddingBottom: 8 }}>
+                  <Text style={{ fontSize: 28, fontWeight: '700', color: COLORS.text }}>:</Text>
+                </View>
+
+                {/* Minute column */}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, textAlign: 'center', marginBottom: 8, letterSpacing: 0.8 }}>
+                    MIN
+                  </Text>
+                  <FlatList
+                    ref={minuteListRef}
+                    data={MINUTES}
+                    keyExtractor={(item) => String(item)}
+                    renderItem={renderMinuteItem}
+                    snapToInterval={ITEM_HEIGHT}
+                    decelerationRate="fast"
+                    showsVerticalScrollIndicator={false}
+                    style={{ height: ITEM_HEIGHT * 4 }}
+                    getItemLayout={(_, index) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index })}
+                    onScrollToIndexFailed={() => {}}
+                  />
+                </View>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+}
+
 function DragHandle({ panHandlers }: { panHandlers?: object }) {
   return (
     <View {...panHandlers} style={{ alignItems: 'center', paddingVertical: 8 }}>
@@ -103,6 +292,9 @@ export default function RequesterHomeScreen() {
 
   // Place
   const [selectedPlace, setSelectedPlace] = useState<SelectedPlace | null>(null);
+
+  // Recent place
+  const [recentPlace, setRecentPlace] = useState<SelectedPlace | null>(null);
 
   // Search (Places API New)
   const [searchText, setSearchText] = useState('');
@@ -131,6 +323,9 @@ export default function RequesterHomeScreen() {
   const [environment, setEnvironment] = useState<'Normal' | 'Busy'>('Normal');
   const [note, setNote] = useState('');
 
+  // WAT now state
+  const [watNow, setWatNow] = useState<Date>(() => new Date(Date.now() + 60 * 60 * 1000));
+
   // Date/time pickers
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showStartTimePicker, setShowStartTimePicker] = useState(false);
@@ -139,6 +334,21 @@ export default function RequesterHomeScreen() {
   // Matching progress
   const matchProgressAnim = useRef(new Animated.Value(0.05)).current;
   const [submitting, setSubmitting] = useState(false);
+
+  // ─── Load recent place on mount ───────────────────────────────────────────────
+  useEffect(() => {
+    AsyncStorage.getItem(RECENT_PLACE_KEY).then((raw) => {
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as SelectedPlace;
+          console.log('[RequesterHome] Loaded recent place:', parsed.name);
+          setRecentPlace(parsed);
+        } catch {
+          console.log('[RequesterHome] Failed to parse recent place');
+        }
+      }
+    });
+  }, []);
 
   // ─── Location on mount — animate map to user position + stream ───────────────
   useEffect(() => {
@@ -156,7 +366,7 @@ export default function RequesterHomeScreen() {
         }, 800);
         // Then stream continuously
         locationSub.current = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.High, timeInterval: 4000, distanceInterval: 10 },
+          { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 2000, distanceInterval: 5 },
           (l) => setUserCoords({ latitude: l.coords.latitude, longitude: l.coords.longitude })
         );
       } else {
@@ -286,6 +496,11 @@ export default function RequesterHomeScreen() {
       setSelectedPlace(place);
       setSearchText('');
       setSearchResults([]);
+      // Save to recent
+      AsyncStorage.setItem(RECENT_PLACE_KEY, JSON.stringify(place)).then(() => {
+        console.log('[RequesterHome] Saved recent place:', place.name);
+        setRecentPlace(place);
+      });
       transitionTo('config');
     } catch (e: any) {
       console.error('[PlacesNew] place details error:', e.message);
@@ -294,6 +509,15 @@ export default function RequesterHomeScreen() {
       setSearchLoading(false);
     }
   }, [transitionTo]);
+
+  // ─── Recent place tap ─────────────────────────────────────────────────────────
+  const handleRecentPlaceTap = useCallback(() => {
+    if (!recentPlace) return;
+    console.log('[RequesterHome] Recent place tapped:', recentPlace.name);
+    setSelectedPlace(recentPlace);
+    AsyncStorage.setItem(RECENT_PLACE_KEY, JSON.stringify(recentPlace));
+    transitionTo('config');
+  }, [recentPlace, transitionTo]);
 
   // ─── Matching progress animation ─────────────────────────────────────────────
   useEffect(() => {
@@ -307,21 +531,23 @@ export default function RequesterHomeScreen() {
     }
   }, [sheetState, matchProgressAnim]);
 
-  // ─── Sync layout tab bar visibility with sheet state ─────────────────────────
+  // ─── Always hide the tab bar on this screen ───────────────────────────────────
   useEffect(() => {
-    // Hide layout tab bar only when searching (keyboard active), show it in all other states
-    setTabBarVisible(sheetState === 'idle' || sheetState === 'config' || sheetState === 'summary' || sheetState === 'matching');
+    setTabBarVisible(false);
   }, [sheetState]);
 
   // ─── Drag handle PanResponder ─────────────────────────────────────────────────
+  const handleResetRef = useRef<() => void>(() => {});
+
   const dragPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderMove: () => {},
       onPanResponderRelease: (_, gestureState) => {
         if (gestureState.dy > 40) {
+          console.log('[RequesterHome] Drag handle released — resetting');
           Keyboard.dismiss();
-          transitionTo('idle');
+          handleResetRef.current();
         }
       },
     })
@@ -372,7 +598,7 @@ export default function RequesterHomeScreen() {
     }
   };
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     console.log('[RequesterHome] Resetting to idle');
     setSelectedPlace(null);
     setCoverageType('Standard');
@@ -385,7 +611,12 @@ export default function RequesterHomeScreen() {
     setEnvironment('Normal');
     setNote('');
     transitionTo('idle');
-  };
+  }, [transitionTo]);
+
+  // Keep ref in sync so PanResponder can call it
+  useEffect(() => {
+    handleResetRef.current = handleReset;
+  }, [handleReset]);
 
   const handleEditRequest = () => {
     console.log('[RequesterHome] Edit Request tapped');
@@ -416,6 +647,11 @@ export default function RequesterHomeScreen() {
 
   const whiteCardPaddingBottom = Platform.OS === 'ios' ? insets.bottom + 16 : TAB_BAR_HEIGHT + insets.bottom + 16;
 
+  // Max date = today + 15 days
+  const maxDate = new Date(new Date().getTime() + 15 * 24 * 60 * 60 * 1000);
+
+  const isPlusDisabled = coverageLength >= 15;
+
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: '#000' }}>
@@ -445,9 +681,9 @@ export default function RequesterHomeScreen() {
         )}
       </MapView>
 
-      {/* ── MAP TAP DISMISSAL (only active in searching/config) ── */}
-      {(sheetState === 'searching' || sheetState === 'config') && (
-        <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); transitionTo('idle'); }}>
+      {/* ── MAP TAP DISMISSAL (active in searching, config, summary, matching) ── */}
+      {(sheetState === 'searching' || sheetState === 'config' || sheetState === 'summary' || sheetState === 'matching') && (
+        <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); handleReset(); }}>
           <View style={StyleSheet.absoluteFillObject} />
         </TouchableWithoutFeedback>
       )}
@@ -506,7 +742,7 @@ export default function RequesterHomeScreen() {
           height: sheetAnim,
           backgroundColor: '#FFFFFF',
           borderTopLeftRadius: 28, borderTopRightRadius: 28,
-          shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.10, shadowRadius: 16, elevation: 12,
+          shadowColor: '#000', shadowOffset: { width: -4, height: 0 }, shadowOpacity: 0.10, shadowRadius: 16, elevation: 12,
           overflow: 'visible',
         }}>
           {/* SEARCHING */}
@@ -549,6 +785,52 @@ export default function RequesterHomeScreen() {
                     <ActivityIndicator size="small" color={COLORS.textTertiary} />
                   )}
                 </View>
+
+                {/* Recent place — shown only when search is empty */}
+                {searchText.length === 0 && recentPlace !== null && (
+                  <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, marginTop: 4 }}>
+                      <History size={13} color={COLORS.textTertiary} />
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: COLORS.textTertiary, letterSpacing: 0.8 }}>
+                        RECENT
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={handleRecentPlaceTap}
+                      activeOpacity={0.7}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingHorizontal: 14,
+                        paddingVertical: 12,
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 12,
+                        gap: 12,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.06,
+                        shadowRadius: 6,
+                        elevation: 4,
+                      }}
+                    >
+                      <View style={{
+                        width: 36, height: 36, borderRadius: 18,
+                        backgroundColor: '#F2F2F2',
+                        justifyContent: 'center', alignItems: 'center', flexShrink: 0,
+                      }}>
+                        <MapPin size={16} color={COLORS.textTertiary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: COLORS.text }} numberOfLines={1}>
+                          {recentPlace.name}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }} numberOfLines={1}>
+                          {recentPlace.address}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                )}
 
                 {/* Results list */}
                 {searchResults.length > 0 && (
@@ -644,11 +926,11 @@ export default function RequesterHomeScreen() {
                 </Text>
               </TouchableOpacity>
 
-              {/* Selected location capsule */}
+              {/* Selected location capsule — ITEM 1 */}
               {selectedPlace && (
                 <View style={{
                   backgroundColor: '#F8F8F8',
-                  borderRadius: 16,
+                  borderRadius: 20,
                   padding: 14,
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -657,10 +939,10 @@ export default function RequesterHomeScreen() {
                 }}>
                   <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#2DC653', flexShrink: 0 }} />
                   <View style={{ flex: 1 }}>
-                    <Text style={[TYPOGRAPHY.bodyMedium, { color: COLORS.text }]} numberOfLines={1}>
+                    <Text style={[TYPOGRAPHY.bodyMedium, { color: COLORS.text }]} numberOfLines={1} ellipsizeMode="tail">
                       {selectedPlace.name}
                     </Text>
-                    <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]} numberOfLines={2}>
+                    <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]} numberOfLines={1} ellipsizeMode="tail">
                       {selectedPlace.address}
                     </Text>
                   </View>
@@ -714,14 +996,15 @@ export default function RequesterHomeScreen() {
                 </Text>
               </View>
 
-              {/* Start Date + Start Time */}
+              {/* Start Date + Start Time — ITEM 1 borderRadius 20 */}
               <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
                 <TouchableOpacity
                   onPress={() => {
                     console.log('[RequesterHome] Start date picker opened');
+                    setWatNow(new Date(Date.now() + 60 * 60 * 1000));
                     setShowDatePicker(true);
                   }}
-                  style={{ flex: 1, backgroundColor: '#F2F2F2', borderRadius: 16, padding: 14 }}
+                  style={{ flex: 1, backgroundColor: '#F2F2F2', borderRadius: 20, padding: 14 }}
                 >
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
                     START DATE
@@ -737,9 +1020,10 @@ export default function RequesterHomeScreen() {
                 <TouchableOpacity
                   onPress={() => {
                     console.log('[RequesterHome] Start time picker opened');
+                    setWatNow(new Date(Date.now() + 60 * 60 * 1000));
                     setShowStartTimePicker(true);
                   }}
-                  style={{ flex: 1, backgroundColor: '#F2F2F2', borderRadius: 16, padding: 14 }}
+                  style={{ flex: 1, backgroundColor: '#F2F2F2', borderRadius: 20, padding: 14 }}
                 >
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
                     START TIME
@@ -753,14 +1037,15 @@ export default function RequesterHomeScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* End Time + Coverage Length */}
+              {/* End Time + Coverage Length — ITEM 1 borderRadius 20 */}
               <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
                 <TouchableOpacity
                   onPress={() => {
                     console.log('[RequesterHome] End time picker opened');
+                    setWatNow(new Date(Date.now() + 60 * 60 * 1000));
                     setShowEndTimePicker(true);
                   }}
-                  style={{ flex: 1, backgroundColor: '#F2F2F2', borderRadius: 16, padding: 14 }}
+                  style={{ flex: 1, backgroundColor: '#F2F2F2', borderRadius: 20, padding: 14 }}
                 >
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
                     END TIME
@@ -773,7 +1058,8 @@ export default function RequesterHomeScreen() {
                   </View>
                 </TouchableOpacity>
 
-                <View style={{ flex: 1, backgroundColor: '#F2F2F2', borderRadius: 16, padding: 14 }}>
+                {/* Coverage Length — ITEM 1 borderRadius 20, ITEM 5.1 cap at 15 */}
+                <View style={{ flex: 1, backgroundColor: '#F2F2F2', borderRadius: 20, padding: 14 }}>
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
                     COVERAGE LENGTH
                   </Text>
@@ -800,7 +1086,8 @@ export default function RequesterHomeScreen() {
                     </Text>
                     <TouchableOpacity
                       onPress={() => {
-                        const next = Math.min(30, coverageLength + 1);
+                        if (isPlusDisabled) return;
+                        const next = Math.min(15, coverageLength + 1);
                         console.log('[RequesterHome] Coverage length incremented to:', next);
                         setCoverageLength(next);
                       }}
@@ -811,7 +1098,9 @@ export default function RequesterHomeScreen() {
                         backgroundColor: '#E8E8E8',
                         justifyContent: 'center',
                         alignItems: 'center',
+                        opacity: isPlusDisabled ? 0.35 : 1,
                       }}
+                      pointerEvents={isPlusDisabled ? 'none' : 'auto'}
                     >
                       <Text style={{ fontSize: 18, color: COLORS.text, lineHeight: 22 }}>+</Text>
                     </TouchableOpacity>
@@ -819,13 +1108,18 @@ export default function RequesterHomeScreen() {
                 </View>
               </View>
 
-              {/* Environment */}
-              <View style={{ marginBottom: 20 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              {/* Environment — ITEM 2: wrapped in structured card */}
+              <View style={{
+                backgroundColor: '#F2F2F2',
+                borderRadius: 20,
+                padding: 16,
+                marginBottom: 16,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary }]}>ENVIRONMENT</Text>
                   <View style={{
                     flexDirection: 'row',
-                    backgroundColor: '#F2F2F2',
+                    backgroundColor: '#E4E4E4',
                     borderRadius: RADIUS.full,
                     padding: 4,
                   }}>
@@ -868,8 +1162,13 @@ export default function RequesterHomeScreen() {
                 </Text>
               </View>
 
-              {/* Note */}
-              <View style={{ marginBottom: 28 }}>
+              {/* Note — ITEM 3: unified container */}
+              <View style={{
+                backgroundColor: '#F2F2F2',
+                borderRadius: 20,
+                padding: 16,
+                marginBottom: 28,
+              }}>
                 <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 8 }]}>
                   NOTE (OPTIONAL)
                 </Text>
@@ -886,9 +1185,7 @@ export default function RequesterHomeScreen() {
                     TYPOGRAPHY.body,
                     {
                       minHeight: 80,
-                      backgroundColor: '#F2F2F2',
-                      borderRadius: 16,
-                      padding: 14,
+                      backgroundColor: 'transparent',
                       textAlignVertical: 'top',
                       color: COLORS.text,
                     },
@@ -987,7 +1284,7 @@ export default function RequesterHomeScreen() {
         </View>
       )}
 
-      {/* Date picker modal */}
+      {/* Date picker modal — ITEM 5.2 maximumDate */}
       <Modal
         visible={showDatePicker}
         transparent
@@ -1011,9 +1308,21 @@ export default function RequesterHomeScreen() {
                   mode="date"
                   display="spinner"
                   minimumDate={new Date()}
+                  maximumDate={maxDate}
                   onChange={(event, date) => {
                     console.log('[RequesterHome] Date picker changed:', event.type, date);
-                    if (date) setShiftDate(date);
+                    if (date) {
+                      // WAT validation: snap back to today if before WAT today
+                      const watTodayStr = watNow.toISOString().split('T')[0];
+                      const selectedStr = date.toISOString().split('T')[0];
+                      if (selectedStr < watTodayStr) {
+                        const todayWAT = new Date(watNow);
+                        todayWAT.setUTCHours(0, 0, 0, 0);
+                        setShiftDate(todayWAT);
+                      } else {
+                        setShiftDate(date);
+                      }
+                    }
                   }}
                 />
               </View>
@@ -1022,73 +1331,41 @@ export default function RequesterHomeScreen() {
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Start time picker modal */}
-      <Modal
+      {/* Start time picker modal — ITEM 4: custom picker */}
+      <CustomTimePicker
         visible={showStartTimePicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowStartTimePicker(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setShowStartTimePicker(false)}>
-          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
-            <TouchableWithoutFeedback>
-              <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 }}>
-                  <TouchableOpacity onPress={() => {
-                    console.log('[RequesterHome] Start time picker Done pressed');
-                    setShowStartTimePicker(false);
-                  }}>
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#007AFF' }}>Done</Text>
-                  </TouchableOpacity>
-                </View>
-                <DateTimePicker
-                  value={startTime}
-                  mode="time"
-                  display="spinner"
-                  onChange={(event, date) => {
-                    console.log('[RequesterHome] Start time picker changed:', event.type, date);
-                    if (date) setStartTime(date);
-                  }}
-                />
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+        initialTime={startTime}
+        isForDate={shiftDate}
+        shiftDate={shiftDate}
+        watNow={watNow}
+        onDone={(date) => {
+          console.log('[RequesterHome] Start time committed:', date.toTimeString().slice(0, 5));
+          setStartTime(date);
+          setShowStartTimePicker(false);
+        }}
+        onCancel={() => {
+          console.log('[RequesterHome] Start time picker cancelled');
+          setShowStartTimePicker(false);
+        }}
+      />
 
-      {/* End time picker modal */}
-      <Modal
+      {/* End time picker modal — ITEM 4: custom picker */}
+      <CustomTimePicker
         visible={showEndTimePicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowEndTimePicker(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setShowEndTimePicker(false)}>
-          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
-            <TouchableWithoutFeedback>
-              <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 }}>
-                  <TouchableOpacity onPress={() => {
-                    console.log('[RequesterHome] End time picker Done pressed');
-                    setShowEndTimePicker(false);
-                  }}>
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#007AFF' }}>Done</Text>
-                  </TouchableOpacity>
-                </View>
-                <DateTimePicker
-                  value={endTime}
-                  mode="time"
-                  display="spinner"
-                  onChange={(event, date) => {
-                    console.log('[RequesterHome] End time picker changed:', event.type, date);
-                    if (date) setEndTime(date);
-                  }}
-                />
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+        initialTime={endTime}
+        isForDate={shiftDate}
+        shiftDate={shiftDate}
+        watNow={watNow}
+        onDone={(date) => {
+          console.log('[RequesterHome] End time committed:', date.toTimeString().slice(0, 5));
+          setEndTime(date);
+          setShowEndTimePicker(false);
+        }}
+        onCancel={() => {
+          console.log('[RequesterHome] End time picker cancelled');
+          setShowEndTimePicker(false);
+        }}
+      />
     </View>
   );
 }
