@@ -213,7 +213,7 @@ function CustomTimePicker({
                 </TouchableOpacity>
                 <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.text }}>Select Time</Text>
                 <TouchableOpacity onPress={handleDone}>
-                  <Text style={{ fontSize: 16, fontWeight: '600', color: '#007AFF' }}>Done</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: '#1C1C1E' }}>Done</Text>
                 </TouchableOpacity>
               </View>
 
@@ -531,9 +531,9 @@ export default function RequesterHomeScreen() {
     }
   }, [sheetState, matchProgressAnim]);
 
-  // ─── Always hide the tab bar on this screen ───────────────────────────────────
+  // ─── Show tab bar only when idle ─────────────────────────────────────────────
   useEffect(() => {
-    setTabBarVisible(false);
+    setTabBarVisible(sheetState === 'idle');
   }, [sheetState]);
 
   // ─── Drag handle PanResponder ─────────────────────────────────────────────────
@@ -544,7 +544,7 @@ export default function RequesterHomeScreen() {
       onStartShouldSetPanResponder: () => true,
       onPanResponderMove: () => {},
       onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 40) {
+        if (gestureState.dy > 20) {
           console.log('[RequesterHome] Drag handle released — resetting');
           Keyboard.dismiss();
           handleResetRef.current();
@@ -680,13 +680,6 @@ export default function RequesterHomeScreen() {
           </Marker>
         )}
       </MapView>
-
-      {/* ── MAP TAP DISMISSAL (active in searching, config, summary, matching) ── */}
-      {(sheetState === 'searching' || sheetState === 'config' || sheetState === 'summary' || sheetState === 'matching') && (
-        <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); handleReset(); }}>
-          <View style={StyleSheet.absoluteFillObject} />
-        </TouchableWithoutFeedback>
-      )}
 
       {/* ── RE-CENTRE FAB ── */}
       {userCoords && (
@@ -929,8 +922,8 @@ export default function RequesterHomeScreen() {
               {/* Selected location capsule — ITEM 1 */}
               {selectedPlace && (
                 <View style={{
-                  backgroundColor: '#F8F8F8',
-                  borderRadius: 20,
+                  backgroundColor: '#F5F5FA',
+                  borderRadius: 24,
                   padding: 14,
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -991,7 +984,7 @@ export default function RequesterHomeScreen() {
                     </Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, marginTop: 8, marginBottom: 16 }]}>
+                <Text style={[TYPOGRAPHY.caption, { color: '#3C3C3E', marginTop: 8, marginBottom: 16 }]}>
                   {coverageTypeDesc}
                 </Text>
               </View>
@@ -1004,7 +997,7 @@ export default function RequesterHomeScreen() {
                     setWatNow(new Date(Date.now() + 60 * 60 * 1000));
                     setShowDatePicker(true);
                   }}
-                  style={{ flex: 1, backgroundColor: '#F2F2F2', borderRadius: 20, padding: 14 }}
+                  style={{ flex: 1, backgroundColor: '#F5F5FA', borderRadius: 22, padding: 14 }}
                 >
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
                     START DATE
@@ -1023,7 +1016,7 @@ export default function RequesterHomeScreen() {
                     setWatNow(new Date(Date.now() + 60 * 60 * 1000));
                     setShowStartTimePicker(true);
                   }}
-                  style={{ flex: 1, backgroundColor: '#F2F2F2', borderRadius: 20, padding: 14 }}
+                  style={{ flex: 1, backgroundColor: '#F5F5FA', borderRadius: 22, padding: 14 }}
                 >
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
                     START TIME
@@ -1045,7 +1038,7 @@ export default function RequesterHomeScreen() {
                     setWatNow(new Date(Date.now() + 60 * 60 * 1000));
                     setShowEndTimePicker(true);
                   }}
-                  style={{ flex: 1, backgroundColor: '#F2F2F2', borderRadius: 20, padding: 14 }}
+                  style={{ flex: 1, backgroundColor: '#F5F5FA', borderRadius: 22, padding: 14 }}
                 >
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
                     END TIME
@@ -1059,7 +1052,7 @@ export default function RequesterHomeScreen() {
                 </TouchableOpacity>
 
                 {/* Coverage Length — ITEM 1 borderRadius 20, ITEM 5.1 cap at 15 */}
-                <View style={{ flex: 1, backgroundColor: '#F2F2F2', borderRadius: 20, padding: 14 }}>
+                <View style={{ flex: 1, backgroundColor: '#F5F5FA', borderRadius: 22, padding: 14 }}>
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
                     COVERAGE LENGTH
                   </Text>
@@ -1074,7 +1067,7 @@ export default function RequesterHomeScreen() {
                         width: 32,
                         height: 32,
                         borderRadius: RADIUS.full,
-                        backgroundColor: '#E8E8E8',
+                        backgroundColor: '#FFFFFF',
                         justifyContent: 'center',
                         alignItems: 'center',
                       }}
@@ -1095,7 +1088,7 @@ export default function RequesterHomeScreen() {
                         width: 32,
                         height: 32,
                         borderRadius: RADIUS.full,
-                        backgroundColor: '#E8E8E8',
+                        backgroundColor: '#FFFFFF',
                         justifyContent: 'center',
                         alignItems: 'center',
                         opacity: isPlusDisabled ? 0.35 : 1,
@@ -1108,10 +1101,11 @@ export default function RequesterHomeScreen() {
                 </View>
               </View>
 
-              {/* Environment — ITEM 2: wrapped in structured card */}
+              {/* Environment — ITEM 2: wrapped in structured card, hidden for Home Care */}
+              {coverageType === 'Standard' && (
               <View style={{
-                backgroundColor: '#F2F2F2',
-                borderRadius: 20,
+                backgroundColor: '#F5F5FA',
+                borderRadius: 22,
                 padding: 16,
                 marginBottom: 16,
               }}>
@@ -1119,7 +1113,7 @@ export default function RequesterHomeScreen() {
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary }]}>ENVIRONMENT</Text>
                   <View style={{
                     flexDirection: 'row',
-                    backgroundColor: '#E4E4E4',
+                    backgroundColor: '#FFFFFF',
                     borderRadius: RADIUS.full,
                     padding: 4,
                   }}>
@@ -1157,15 +1151,16 @@ export default function RequesterHomeScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
-                <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]}>
+                <Text style={[TYPOGRAPHY.caption, { color: '#3C3C3E' }]}>
                   {environmentDesc}
                 </Text>
               </View>
+              )}
 
               {/* Note — ITEM 3: unified container */}
               <View style={{
-                backgroundColor: '#F2F2F2',
-                borderRadius: 20,
+                backgroundColor: '#F5F5FA',
+                borderRadius: 22,
                 padding: 16,
                 marginBottom: 28,
               }}>
@@ -1249,6 +1244,24 @@ export default function RequesterHomeScreen() {
         </Animated.View>
       )}
 
+      {/* ── MAP BACKDROP — above the sheet, covers only the map area above it ── */}
+      {(sheetState === 'searching' || sheetState === 'config' || sheetState === 'summary' || sheetState === 'matching') && (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: Animated.subtract(new Animated.Value(SCREEN_HEIGHT), sheetAnim),
+          }}
+          pointerEvents="box-none"
+        >
+          <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); handleReset(); }}>
+            <View style={{ flex: 1 }} />
+          </TouchableWithoutFeedback>
+        </Animated.View>
+      )}
+
       {/* ── IDLE BOTTOM CONTAINER (white card only — tab bar is in layout) ── */}
       {sheetState === 'idle' && (
         <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
@@ -1300,7 +1313,7 @@ export default function RequesterHomeScreen() {
                     console.log('[RequesterHome] Date picker Done pressed');
                     setShowDatePicker(false);
                   }}>
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#007AFF' }}>Done</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#1C1C1E' }}>Done</Text>
                   </TouchableOpacity>
                 </View>
                 <DateTimePicker
@@ -1309,6 +1322,8 @@ export default function RequesterHomeScreen() {
                   display="spinner"
                   minimumDate={new Date()}
                   maximumDate={maxDate}
+                  style={{ backgroundColor: '#FFFFFF' }}
+                  textColor="#1C1C1E"
                   onChange={(event, date) => {
                     console.log('[RequesterHome] Date picker changed:', event.type, date);
                     if (date) {
