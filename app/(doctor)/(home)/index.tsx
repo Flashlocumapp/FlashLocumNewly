@@ -1,8 +1,27 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
-import MapView, { PROVIDER_GOOGLE } from 'react-native-maps';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Animated,
+  PanResponder,
+  Dimensions,
+  StyleSheet,
+} from 'react-native';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
+import * as Location from 'expo-location';
+import Feather from '@expo/vector-icons/Feather';
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
+
+const { height: screenHeight } = Dimensions.get('window');
+const SHEET_HEIGHT = screenHeight * 0.45;
+const OPEN_TRANSLATE_Y = 0;
 
 const LAGOS_REGION = {
   latitude: 6.5244,
@@ -13,11 +32,117 @@ const LAGOS_REGION = {
 
 export default function DoctorHomeScreen() {
   const insets = useSafeAreaInsets();
-  const [isOnline, setIsOnline] = useState(false);
+  const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
 
-  const statusDotColor = isOnline ? COLORS.success : '#8E8E93';
-  const statusText = isOnline ? 'Online' : 'Offline';
-  const pillTop = insets.top + 12;
+  const [isOnline, setIsOnline] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  const mapRef = useRef<MapView>(null);
+  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
+  const hasAnimatedToUser = useRef(false);
+
+  // Radar pulse animation
+  const radarScale = useRef(new Animated.Value(1)).current;
+  const radarOpacity = useRef(new Animated.Value(0.6)).current;
+
+  // Bottom sheet animation
+  const translateY = useRef(new Animated.Value(OPEN_TRANSLATE_Y)).current;
+  const lastTranslateY = useRef(OPEN_TRANSLATE_Y);
+
+  // GPS setup
+  useEffect(() => {
+    let active = true;
+
+    async function startWatching() {
+      console.log('[DoctorHome] Requesting location permission');
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('[DoctorHome] Location permission denied');
+        return;
+      }
+      console.log('[DoctorHome] Location permission granted, starting watch');
+      locationSubscription.current = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Highest,
+          timeInterval: 2000,
+          distanceInterval: 5,
+        },
+        (loc) => {
+          if (!active) return;
+          const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+          console.log('[DoctorHome] Location update:', coords);
+          setUserLocation(coords);
+          if (!hasAnimatedToUser.current && mapRef.current) {
+            hasAnimatedToUser.current = true;
+            console.log('[DoctorHome] Animating map to user location');
+            mapRef.current.animateToRegion(
+              { ...coords, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+              800,
+            );
+          }
+        },
+      );
+    }
+
+    startWatching();
+
+    return () => {
+      active = false;
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+        locationSubscription.current = null;
+      }
+    };
+  }, []);
+
+  // Radar pulse loop
+  useEffect(() => {
+    if (!isOnline) return;
+    const loop = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(radarScale, { toValue: 1.8, duration: 1800, useNativeDriver: true }),
+          Animated.timing(radarScale, { toValue: 1, duration: 0, useNativeDriver: true }),
+        ]),
+        Animated.sequence([
+          Animated.timing(radarOpacity, { toValue: 0, duration: 1800, useNativeDriver: true }),
+          Animated.timing(radarOpacity, { toValue: 0.6, duration: 0, useNativeDriver: true }),
+        ]),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [isOnline, radarScale, radarOpacity]);
+
+  // PanResponder for bottom sheet
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 5,
+      onPanResponderMove: (_, gs) => {
+        const next = lastTranslateY.current + gs.dy;
+        const clamped = Math.max(OPEN_TRANSLATE_Y, Math.min(SHEET_HEIGHT - 60, next));
+        translateY.setValue(clamped);
+      },
+      onPanResponderRelease: (_, gs) => {
+        const current = lastTranslateY.current;
+        let target: number;
+        if (gs.dy > 60) {
+          target = SHEET_HEIGHT - 60;
+        } else if (gs.dy < -40) {
+          target = OPEN_TRANSLATE_Y;
+        } else {
+          target = current;
+        }
+        lastTranslateY.current = target;
+        Animated.spring(translateY, {
+          toValue: target,
+          useNativeDriver: true,
+          tension: 60,
+          friction: 10,
+        }).start();
+      },
+    }),
+  ).current;
 
   const handleToggleStatus = () => {
     const next = !isOnline;
@@ -25,138 +150,237 @@ export default function DoctorHomeScreen() {
     setIsOnline(next);
   };
 
+  if (!fontsLoaded) return null;
+
+  const pillBg = isOnline ? '#34C759' : '#3A3A3C';
+  const dotBg = isOnline ? '#FFFFFF' : '#8E8E93';
+  const statusText = isOnline ? 'Online' : 'Offline';
+  const pillTop = insets.top + 12;
+  const sheetPaddingBottom = insets.bottom + 80;
+
+  const showMarker = isOnline && userLocation !== null;
+
   return (
-    <View style={{ flex: 1 }}>
+    <View style={styles.container}>
+      {/* Full-screen map */}
       <MapView
-        style={{ flex: 1 }}
+        ref={mapRef}
+        style={StyleSheet.absoluteFillObject}
         provider={PROVIDER_GOOGLE}
         initialRegion={LAGOS_REGION}
+        showsUserLocation={true}
+        showsMyLocationButton={false}
         customMapStyle={DESATURATED_MAP_STYLE}
-      />
+      >
+        {showMarker && userLocation && (
+          <Marker
+            coordinate={userLocation}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={false}
+          >
+            <View style={styles.markerContainer}>
+              <Animated.View
+                style={[
+                  styles.radarRing,
+                  { transform: [{ scale: radarScale }], opacity: radarOpacity },
+                ]}
+              />
+              <Feather name="activity" size={28} color="#1C1C1E" />
+            </View>
+          </Marker>
+        )}
+      </MapView>
 
       {/* Online/Offline pill */}
       <TouchableOpacity
         onPress={handleToggleStatus}
         activeOpacity={0.85}
-        style={{
-          position: 'absolute',
-          top: pillTop,
-          alignSelf: 'center',
-          zIndex: 10,
-          backgroundColor: '#FFFFFF',
-          borderRadius: RADIUS.full,
-          paddingHorizontal: 20,
-          paddingVertical: 10,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.15,
-          shadowRadius: 12,
-          elevation: 4,
-        }}
+        style={[styles.pill, { top: pillTop, backgroundColor: pillBg }]}
       >
-        <View
-          style={{
-            width: 10,
-            height: 10,
-            borderRadius: RADIUS.full,
-            backgroundColor: statusDotColor,
-          }}
-        />
-        <Text style={[TYPOGRAPHY.bodyMedium, { color: COLORS.text }]}>
-          {statusText}
-        </Text>
+        <View style={[styles.pillDot, { backgroundColor: dotBg }]} />
+        <Text style={styles.pillText}>{statusText}</Text>
       </TouchableOpacity>
 
-      {/* Bottom sheet card */}
-      <View
-        style={{
-          position: 'absolute',
-          bottom: 100,
-          left: 16,
-          right: 16,
-          backgroundColor: '#FFFFFF',
-          borderRadius: 24,
-          padding: SPACING.base,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.12,
-          shadowRadius: 20,
-          elevation: 6,
-        }}
+      {/* Draggable bottom sheet */}
+      <Animated.View
+        style={[
+          styles.sheet,
+          { paddingBottom: sheetPaddingBottom, transform: [{ translateY }] },
+        ]}
+        {...panResponder.panHandlers}
       >
-        <Text
-          style={[
-            TYPOGRAPHY.label,
-            { color: COLORS.textTertiary, marginBottom: 4, letterSpacing: 1 },
-          ]}
-        >
-          COVERAGE
-        </Text>
-        <Text style={[TYPOGRAPHY.h3, { color: COLORS.text, marginBottom: 4 }]}>
-          No coverage yet
-        </Text>
-        <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, marginBottom: SPACING.base }]}>
-          Stay online to start receiving dispatch requests.
-        </Text>
+        {/* Drag handle */}
+        <View style={styles.dragHandle} />
 
-        {/* Metric cards row */}
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          {/* Ratings card */}
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: '#FFFFFF',
-              borderRadius: 20,
-              padding: 16,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.08,
-              shadowRadius: 8,
-              elevation: 2,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-              <Text style={[TYPOGRAPHY.label, { color: COLORS.textTertiary, letterSpacing: 1 }]}>
-                RATINGS
-              </Text>
-              <Text style={{ fontSize: 12, color: COLORS.textTertiary }}>ℹ</Text>
+        {/* Coverage sub-card */}
+        <View style={styles.subCard}>
+          <Text style={styles.subCardLabel}>COVERAGE</Text>
+          <Text style={styles.subCardHeading}>No coverage yet</Text>
+          <Text style={styles.subCardBody}>
+            Stay online to start receiving dispatch requests.
+          </Text>
+        </View>
+
+        {/* Stats row */}
+        <View style={styles.statsRow}>
+          {/* Ratings */}
+          <View style={styles.statCard}>
+            <View style={styles.statLabelRow}>
+              <Text style={styles.statLabel}>RATINGS</Text>
+              <Feather name="info" size={12} color="#8E8E93" />
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={[TYPOGRAPHY.h2, { color: COLORS.text }]}>4.7</Text>
-              <Text style={{ fontSize: 18, color: '#F4A261' }}>★</Text>
+            <View style={styles.ratingValueRow}>
+              <Text style={styles.statValue}>4.7</Text>
+              <Text style={styles.starIcon}>★</Text>
             </View>
           </View>
 
-          {/* Reliability card */}
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: '#FFFFFF',
-              borderRadius: 20,
-              padding: 16,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.08,
-              shadowRadius: 8,
-              elevation: 2,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-              <Text style={[TYPOGRAPHY.label, { color: COLORS.textTertiary, letterSpacing: 1 }]}>
-                RELIABILITY
-              </Text>
-              <Text style={{ fontSize: 12, color: COLORS.textTertiary }}>ℹ</Text>
+          {/* Reliability */}
+          <View style={styles.statCard}>
+            <View style={styles.statLabelRow}>
+              <Text style={styles.statLabel}>RELIABILITY</Text>
+              <Feather name="info" size={12} color="#8E8E93" />
             </View>
-            <Text style={[TYPOGRAPHY.h2, { color: COLORS.text }]}>100%</Text>
+            <Text style={styles.statValue}>100%</Text>
           </View>
         </View>
-      </View>
+      </Animated.View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  // Marker
+  markerContainer: {
+    width: 64,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radarRing: {
+    position: 'absolute',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(52,199,89,0.25)',
+  },
+  // Pill
+  pill: {
+    position: 'absolute',
+    alignSelf: 'center',
+    zIndex: 10,
+    borderRadius: 999,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  pillDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  pillText: {
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#FFFFFF',
+  },
+  // Sheet
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: SHEET_HEIGHT,
+    backgroundColor: '#1C1C1E',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#3A3A3C',
+    marginTop: 12,
+    marginBottom: 16,
+    alignSelf: 'center',
+  },
+  // Coverage sub-card
+  subCard: {
+    backgroundColor: '#2C2C2E',
+    borderRadius: 20,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  subCardLabel: {
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: '#8E8E93',
+    fontFamily: 'Inter_600SemiBold',
+    marginBottom: 8,
+  },
+  subCardHeading: {
+    fontSize: 22,
+    fontFamily: 'Inter_700Bold',
+    color: '#FFFFFF',
+    marginBottom: 6,
+  },
+  subCardBody: {
+    fontSize: 14,
+    color: '#8E8E93',
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 20,
+  },
+  // Stats
+  statsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginHorizontal: 16,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#2C2C2E',
+    borderRadius: 20,
+    padding: 16,
+  },
+  statLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 8,
+  },
+  statLabel: {
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: '#8E8E93',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  ratingValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statValue: {
+    fontSize: 28,
+    fontFamily: 'Inter_700Bold',
+    color: '#FFFFFF',
+  },
+  starIcon: {
+    fontSize: 20,
+    color: '#F4A261',
+  },
+});
 
 const DESATURATED_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },

@@ -1,24 +1,25 @@
-import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
+import React from 'react';
+import { View } from 'react-native';
+import { Stack, Href } from 'expo-router';
+import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
+
+const TABS: DoctorTabItem[] = [
+  { name: '(home)', route: '/(doctor)/(home)' as Href, icon: 'home', label: 'Home' },
+  { name: '(coverage)', route: '/(doctor)/(coverage)' as Href, icon: 'access-time', label: 'Coverage' },
+  { name: '(earnings)', route: '/(doctor)/(earnings)' as Href, icon: 'trending-up', label: 'Earnings' },
+  { name: '(account)', route: '/(doctor)/(account)' as Href, icon: 'person', label: 'Account' },
+];
 
 export default function DoctorLayoutIOS() {
   return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="(home)">
-        <Icon sf="house.fill" />
-        <Label>Home</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="(coverage)">
-        <Icon sf="clock" />
-        <Label>Coverage</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="(earnings)">
-        <Icon sf="chart.line.uptrend.xyaxis" />
-        <Label>Earnings</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="(account)">
-        <Icon sf="person.fill" />
-        <Label>Account</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(home)" />
+        <Stack.Screen name="(coverage)" />
+        <Stack.Screen name="(earnings)" />
+        <Stack.Screen name="(account)" />
+      </Stack>
+      <DoctorTabBar tabs={TABS} />
+    </View>
   );
 }
