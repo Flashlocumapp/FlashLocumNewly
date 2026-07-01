@@ -15,6 +15,7 @@ import {
   Keyboard,
   StyleSheet,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
 import { Search, MapPin, ArrowRight, X, CalendarDays, Clock } from 'lucide-react-native';
@@ -285,10 +286,6 @@ export default function RequesterHomeScreen() {
       setSelectedPlace(place);
       setSearchText('');
       setSearchResults([]);
-      mapRef.current?.animateToRegion(
-        { latitude: place.lat, longitude: place.lng, latitudeDelta: 0.08, longitudeDelta: 0.08 },
-        600
-      );
       transitionTo('config');
     } catch (e: any) {
       console.error('[PlacesNew] place details error:', e.message);
@@ -455,6 +452,38 @@ export default function RequesterHomeScreen() {
         </TouchableWithoutFeedback>
       )}
 
+      {/* ── RE-CENTRE FAB ── */}
+      {userCoords && (
+        <TouchableOpacity
+          onPress={() => {
+            console.log('[RequesterHome] Re-centre FAB pressed');
+            mapRef.current?.animateToRegion(
+              { latitude: userCoords.latitude, longitude: userCoords.longitude, latitudeDelta: 0.08, longitudeDelta: 0.08 },
+              500
+            );
+          }}
+          activeOpacity={0.85}
+          style={{
+            position: 'absolute',
+            top: insets.top + 16,
+            right: 16,
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: '#FFFFFF',
+            justifyContent: 'center',
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.15,
+            shadowRadius: 6,
+            elevation: 6,
+          }}
+        >
+          <MapPin size={20} color="#1C1C1E" />
+        </TouchableOpacity>
+      )}
+
       {/* ── SUMMARY TOP PILL ── */}
       {sheetState === 'summary' && (
         <View style={{
@@ -589,7 +618,7 @@ export default function RequesterHomeScreen() {
           {sheetState === 'config' && (
             <ScrollView
               style={{ flex: 1 }}
-              contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}
+              contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 48 }}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
@@ -686,7 +715,7 @@ export default function RequesterHomeScreen() {
               </View>
 
               {/* Start Date + Start Time */}
-              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
                 <TouchableOpacity
                   onPress={() => {
                     console.log('[RequesterHome] Start date picker opened');
@@ -791,7 +820,7 @@ export default function RequesterHomeScreen() {
               </View>
 
               {/* Environment */}
-              <View style={{ marginBottom: 16 }}>
+              <View style={{ marginBottom: 20 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary }]}>ENVIRONMENT</Text>
                   <View style={{
@@ -840,7 +869,7 @@ export default function RequesterHomeScreen() {
               </View>
 
               {/* Note */}
-              <View style={{ marginBottom: 20 }}>
+              <View style={{ marginBottom: 28 }}>
                 <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 8 }]}>
                   NOTE (OPTIONAL)
                 </Text>
@@ -868,7 +897,7 @@ export default function RequesterHomeScreen() {
               </View>
 
               {/* Next button */}
-              <View style={{ alignItems: 'flex-end' }}>
+              <View style={{ alignItems: 'flex-end', marginTop: 8, marginBottom: 16 }}>
                 <TouchableOpacity
                   onPress={handleGoToSummary}
                   style={{
@@ -958,51 +987,108 @@ export default function RequesterHomeScreen() {
         </View>
       )}
 
-      {/* Date picker */}
-      {showDatePicker && (
-        <DateTimePicker
-          value={shiftDate}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          minimumDate={new Date()}
-          onChange={(event, date) => {
-            console.log('[RequesterHome] Date picker changed:', event.type, date);
-            setShowDatePicker(Platform.OS === 'ios');
-            if (event.type === 'set' && date) setShiftDate(date);
-            if (Platform.OS !== 'ios') setShowDatePicker(false);
-          }}
-        />
-      )}
+      {/* Date picker modal */}
+      <Modal
+        visible={showDatePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
+          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+            <TouchableWithoutFeedback>
+              <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 }}>
+                  <TouchableOpacity onPress={() => {
+                    console.log('[RequesterHome] Date picker Done pressed');
+                    setShowDatePicker(false);
+                  }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#007AFF' }}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+                <DateTimePicker
+                  value={shiftDate}
+                  mode="date"
+                  display="spinner"
+                  minimumDate={new Date()}
+                  onChange={(event, date) => {
+                    console.log('[RequesterHome] Date picker changed:', event.type, date);
+                    if (date) setShiftDate(date);
+                  }}
+                />
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
-      {/* Start time picker */}
-      {showStartTimePicker && (
-        <DateTimePicker
-          value={startTime}
-          mode="time"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={(event, date) => {
-            console.log('[RequesterHome] Start time picker changed:', event.type, date);
-            setShowStartTimePicker(Platform.OS === 'ios');
-            if (event.type === 'set' && date) setStartTime(date);
-            if (Platform.OS !== 'ios') setShowStartTimePicker(false);
-          }}
-        />
-      )}
+      {/* Start time picker modal */}
+      <Modal
+        visible={showStartTimePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowStartTimePicker(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowStartTimePicker(false)}>
+          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+            <TouchableWithoutFeedback>
+              <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 }}>
+                  <TouchableOpacity onPress={() => {
+                    console.log('[RequesterHome] Start time picker Done pressed');
+                    setShowStartTimePicker(false);
+                  }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#007AFF' }}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+                <DateTimePicker
+                  value={startTime}
+                  mode="time"
+                  display="spinner"
+                  onChange={(event, date) => {
+                    console.log('[RequesterHome] Start time picker changed:', event.type, date);
+                    if (date) setStartTime(date);
+                  }}
+                />
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
-      {/* End time picker */}
-      {showEndTimePicker && (
-        <DateTimePicker
-          value={endTime}
-          mode="time"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={(event, date) => {
-            console.log('[RequesterHome] End time picker changed:', event.type, date);
-            setShowEndTimePicker(Platform.OS === 'ios');
-            if (event.type === 'set' && date) setEndTime(date);
-            if (Platform.OS !== 'ios') setShowEndTimePicker(false);
-          }}
-        />
-      )}
+      {/* End time picker modal */}
+      <Modal
+        visible={showEndTimePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEndTimePicker(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowEndTimePicker(false)}>
+          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+            <TouchableWithoutFeedback>
+              <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 }}>
+                  <TouchableOpacity onPress={() => {
+                    console.log('[RequesterHome] End time picker Done pressed');
+                    setShowEndTimePicker(false);
+                  }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#007AFF' }}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+                <DateTimePicker
+                  value={endTime}
+                  mode="time"
+                  display="spinner"
+                  onChange={(event, date) => {
+                    console.log('[RequesterHome] End time picker changed:', event.type, date);
+                    if (date) setEndTime(date);
+                  }}
+                />
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
