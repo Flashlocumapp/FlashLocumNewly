@@ -49,21 +49,21 @@ export const COLORS = {
 
 export const TYPOGRAPHY = {
   // Display
-  display: { fontSize: 32, fontWeight: '700' as const, letterSpacing: -0.5, lineHeight: 38 },
+  display: { fontSize: 32, fontFamily: 'Inter_700Bold', letterSpacing: -0.5, lineHeight: 38 },
   // Headings
-  h1: { fontSize: 28, fontWeight: '700' as const, letterSpacing: -0.4, lineHeight: 34 },
-  h2: { fontSize: 22, fontWeight: '700' as const, letterSpacing: -0.3, lineHeight: 28 },
-  h3: { fontSize: 18, fontWeight: '600' as const, letterSpacing: -0.2, lineHeight: 24 },
-  h4: { fontSize: 16, fontWeight: '600' as const, letterSpacing: -0.1, lineHeight: 22 },
+  h1: { fontSize: 28, fontFamily: 'Inter_700Bold', letterSpacing: -0.4, lineHeight: 34 },
+  h2: { fontSize: 22, fontFamily: 'Inter_700Bold', letterSpacing: -0.3, lineHeight: 28 },
+  h3: { fontSize: 18, fontFamily: 'Inter_600SemiBold', letterSpacing: -0.2, lineHeight: 24 },
+  h4: { fontSize: 16, fontFamily: 'Inter_600SemiBold', letterSpacing: -0.1, lineHeight: 22 },
   // Body
-  body: { fontSize: 15, fontWeight: '400' as const, lineHeight: 22 },
-  bodyMedium: { fontSize: 15, fontWeight: '500' as const, lineHeight: 22 },
-  bodySemibold: { fontSize: 15, fontWeight: '600' as const, lineHeight: 22 },
+  body: { fontSize: 15, fontFamily: 'Inter_400Regular', lineHeight: 22 },
+  bodyMedium: { fontSize: 15, fontFamily: 'Inter_500Medium', lineHeight: 22 },
+  bodySemibold: { fontSize: 15, fontFamily: 'Inter_600SemiBold', lineHeight: 22 },
   // Small
-  caption: { fontSize: 13, fontWeight: '400' as const, lineHeight: 18 },
-  captionMedium: { fontSize: 13, fontWeight: '500' as const, lineHeight: 18 },
+  caption: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  captionMedium: { fontSize: 13, fontFamily: 'Inter_500Medium', lineHeight: 18 },
   // Label
-  label: { fontSize: 11, fontWeight: '600' as const, letterSpacing: 0.5, lineHeight: 16 },
+  label: { fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5, lineHeight: 16 },
 };
 
 export const SPACING = {

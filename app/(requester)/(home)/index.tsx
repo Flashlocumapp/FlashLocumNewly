@@ -891,9 +891,14 @@ export default function RequesterHomeScreen() {
 
           {/* CONFIG */}
           {sheetState === 'config' && (
+            <KeyboardAvoidingView
+              style={{ flex: 1 }}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={0}
+            >
             <ScrollView
               style={{ flex: 1 }}
-              contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 48 }}
+              contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 80 }}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
@@ -904,7 +909,7 @@ export default function RequesterHomeScreen() {
                 onPress={handleSearchTap}
                 activeOpacity={0.8}
                 style={{
-                  backgroundColor: '#F2F2F2',
+                  backgroundColor: '#F9F9F6',
                   borderRadius: 28,
                   padding: 14,
                   flexDirection: 'row',
@@ -922,8 +927,8 @@ export default function RequesterHomeScreen() {
               {/* Selected location capsule — ITEM 1 */}
               {selectedPlace && (
                 <View style={{
-                  backgroundColor: '#F5F5FA',
-                  borderRadius: 24,
+                  backgroundColor: '#F9F9F6',
+                  borderRadius: 28,
                   padding: 14,
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -946,7 +951,7 @@ export default function RequesterHomeScreen() {
               <View style={{ marginBottom: 8 }}>
                 <View style={{
                   flexDirection: 'row',
-                  backgroundColor: '#F2F2F2',
+                  backgroundColor: '#F9F9F6',
                   borderRadius: RADIUS.full,
                   padding: 4,
                   alignSelf: 'flex-start',
@@ -997,7 +1002,7 @@ export default function RequesterHomeScreen() {
                     setWatNow(new Date(Date.now() + 60 * 60 * 1000));
                     setShowDatePicker(true);
                   }}
-                  style={{ flex: 1, backgroundColor: '#F5F5FA', borderRadius: 22, padding: 14 }}
+                  style={{ flex: 1, backgroundColor: '#F9F9F6', borderRadius: 22, padding: 14 }}
                 >
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
                     START DATE
@@ -1016,7 +1021,7 @@ export default function RequesterHomeScreen() {
                     setWatNow(new Date(Date.now() + 60 * 60 * 1000));
                     setShowStartTimePicker(true);
                   }}
-                  style={{ flex: 1, backgroundColor: '#F5F5FA', borderRadius: 22, padding: 14 }}
+                  style={{ flex: 1, backgroundColor: '#F9F9F6', borderRadius: 22, padding: 14 }}
                 >
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
                     START TIME
@@ -1038,7 +1043,7 @@ export default function RequesterHomeScreen() {
                     setWatNow(new Date(Date.now() + 60 * 60 * 1000));
                     setShowEndTimePicker(true);
                   }}
-                  style={{ flex: 1, backgroundColor: '#F5F5FA', borderRadius: 22, padding: 14 }}
+                  style={{ flex: 1, backgroundColor: '#F9F9F6', borderRadius: 22, padding: 14 }}
                 >
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
                     END TIME
@@ -1052,7 +1057,7 @@ export default function RequesterHomeScreen() {
                 </TouchableOpacity>
 
                 {/* Coverage Length — ITEM 1 borderRadius 20, ITEM 5.1 cap at 15 */}
-                <View style={{ flex: 1, backgroundColor: '#F5F5FA', borderRadius: 22, padding: 14 }}>
+                <View style={{ flex: 1, backgroundColor: '#F9F9F6', borderRadius: 22, padding: 14 }}>
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
                     COVERAGE LENGTH
                   </Text>
@@ -1104,7 +1109,7 @@ export default function RequesterHomeScreen() {
               {/* Environment — ITEM 2: wrapped in structured card, hidden for Home Care */}
               {coverageType === 'Standard' && (
               <View style={{
-                backgroundColor: '#F5F5FA',
+                backgroundColor: '#F9F9F6',
                 borderRadius: 22,
                 padding: 16,
                 marginBottom: 16,
@@ -1159,7 +1164,7 @@ export default function RequesterHomeScreen() {
 
               {/* Note — ITEM 3: unified container */}
               <View style={{
-                backgroundColor: '#F5F5FA',
+                backgroundColor: '#F9F9F6',
                 borderRadius: 22,
                 padding: 16,
                 marginBottom: 28,
@@ -1205,6 +1210,7 @@ export default function RequesterHomeScreen() {
                 </TouchableOpacity>
               </View>
             </ScrollView>
+            </KeyboardAvoidingView>
           )}
 
           {/* SUMMARY */}
@@ -1227,15 +1233,15 @@ export default function RequesterHomeScreen() {
               <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, letterSpacing: 1.2, marginBottom: 6 }]}>{selectedPlace ? selectedPlace.name.toUpperCase() : 'FACILITY'}</Text>
               <Text style={[TYPOGRAPHY.h2, { color: COLORS.text, marginBottom: 4 }]}>Medical Officer Found</Text>
               <Text style={[TYPOGRAPHY.body, { color: COLORS.textSecondary, marginBottom: 24 }]}>Connecting to available doctors nearby</Text>
-              <View style={{ height: 4, borderRadius: 2, backgroundColor: '#F2F2F2', width: '100%', overflow: 'hidden' }}>
+              <View style={{ height: 4, borderRadius: 2, backgroundColor: '#F9F9F6', width: '100%', overflow: 'hidden' }}>
                 <Animated.View style={{ height: 4, borderRadius: 2, backgroundColor: '#0A0A0A', width: matchProgressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }} />
               </View>
               <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, textAlign: 'center', marginTop: 12, marginBottom: 24 }]}>Checking nearby availability...</Text>
               <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TouchableOpacity onPress={handleEditRequest} style={{ flex: 1, backgroundColor: '#F2F2F2', borderRadius: RADIUS.full, paddingVertical: 14, alignItems: 'center' }}>
+                <TouchableOpacity onPress={handleEditRequest} style={{ flex: 1, backgroundColor: '#F9F9F6', borderRadius: RADIUS.full, paddingVertical: 14, alignItems: 'center' }}>
                   <Text style={[TYPOGRAPHY.bodyMedium, { color: COLORS.text }]}>Edit Request</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleCancelRequest} style={{ flex: 1, backgroundColor: '#F2F2F2', borderRadius: RADIUS.full, paddingVertical: 14, alignItems: 'center' }}>
+                <TouchableOpacity onPress={handleCancelRequest} style={{ flex: 1, backgroundColor: '#F9F9F6', borderRadius: RADIUS.full, paddingVertical: 14, alignItems: 'center' }}>
                   <Text style={[TYPOGRAPHY.bodyMedium, { color: COLORS.text }]}>Cancel Request</Text>
                 </TouchableOpacity>
               </View>
@@ -1254,7 +1260,6 @@ export default function RequesterHomeScreen() {
             right: 0,
             height: Animated.subtract(new Animated.Value(SCREEN_HEIGHT), sheetAnim),
           }}
-          pointerEvents="box-none"
         >
           <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); handleReset(); }}>
             <View style={{ flex: 1 }} />
@@ -1288,7 +1293,7 @@ export default function RequesterHomeScreen() {
             <TouchableOpacity
               onPress={handleSearchTap}
               activeOpacity={0.8}
-              style={{ backgroundColor: '#F2F2F2', borderRadius: 28, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+              style={{ backgroundColor: '#F9F9F6', borderRadius: 28, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}
             >
               <Search size={18} color="#3C3C3E" />
               <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Where is coverage needed?</Text>
