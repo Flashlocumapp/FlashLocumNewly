@@ -269,6 +269,129 @@ function CustomTimePicker({
   );
 }
 
+// ─── Pricing Engine ───────────────────────────────────────────────────────────
+
+/**
+ * Calculates total coverage price in Naira.
+ * Rules:
+ * - Home Care: flat ₦15,000/hr regardless of time/environment
+ * - Standard:
+ *   - Total continuous hours = (endTime - startTime in hours) × coverageLength
+ *   - Full 24-hr blocks → ₦36,000 flat each
+ *   - Remainder hours split into day (06:00–22:00) and night (22:00–06:00) windows
+ *     using the actual start time to determine which window the remainder falls in
+ *   - Day rate tiers (for non-remainder hours):
+ *       < 4 hrs/day  → ₦3,000/hr
+ *       4–6 hrs/day  → ₦2,500/hr
+ *       > 6 hrs/day  → ₦2,000/hr
+ *   - Remainder after 24-hr blocks always billed at ₦2,000/hr (long-duration rate)
+ *   - Night rate: ₦1,500/hr
+ *   - Busy surcharge: 30% on everything
+ */
+function calculateCoveragePrice(
+  startTime: Date,
+  endTime: Date,
+  coverageLength: number,
+  coverageType: 'Standard' | 'Home Care',
+  environment: 'Normal' | 'Busy'
+): { totalNaira: number; totalHours: number } {
+  // Duration of one shift in hours (fractional, 15-min precision)
+  const shiftMs = endTime.getTime() - startTime.getTime();
+  const shiftHours = Math.max(0, Math.round((shiftMs / (1000 * 60 * 60)) * 4) / 4); // round to nearest 0.25
+  const totalHours = shiftHours * coverageLength;
+
+  if (coverageType === 'Home Care') {
+    const base = totalHours * 15000;
+    return { totalNaira: base, totalHours };
+  }
+
+  // Standard pricing
+  const busyMultiplier = environment === 'Busy' ? 1.3 : 1.0;
+
+  // Check if this is a straight continuous booking (coverageLength days back-to-back)
+  // A straight booking means the end of one day's shift is the start of the next,
+  // i.e. the shift spans the full 24 hours per day block.
+  // We treat it as straight if totalHours >= 24 and coverageLength > 1
+  // and the shift duration per day equals 24 hours (i.e. endTime - startTime = 24h exactly or more).
+  const isStraight = totalHours >= 24 && shiftHours >= 24;
+
+  if (isStraight) {
+    const fullBlocks = Math.floor(totalHours / 24);
+    const remainderHours = Math.round((totalHours - fullBlocks * 24) * 4) / 4;
+
+    const flatFee = fullBlocks * 36000 * busyMultiplier;
+    // Remainder billed at long-duration day rate (₦2,000/hr), scaled by busy
+    const remainderFee = remainderHours * 2000 * busyMultiplier;
+
+    return { totalNaira: Math.round(flatFee + remainderFee), totalHours };
+  }
+
+  // Non-straight: evaluate each day's shift independently
+  // Determine how many hours of the shift fall in day window (06:00–22:00) vs night (22:00–06:00)
+  const startHour = startTime.getHours() + startTime.getMinutes() / 60;
+  const endHour = startHour + shiftHours;
+
+  // Day window: 6 to 22 (16 hours)
+  // Night window: 22 to 30 (i.e. 22:00 to 06:00 next day, represented as 22–30)
+  const DAY_START = 6;
+  const DAY_END = 22;
+
+  // Overlap with day window [6, 22]
+  const dayOverlapStart = Math.max(startHour, DAY_START);
+  const dayOverlapEnd = Math.min(endHour, DAY_END);
+  const dayHours = Math.max(0, Math.round((dayOverlapEnd - dayOverlapStart) * 4) / 4);
+
+  // Night hours = total - day hours
+  const nightHours = Math.max(0, Math.round((shiftHours - dayHours) * 4) / 4);
+
+  // Day rate tier based on total shift duration (not just day portion)
+  let dayRate: number;
+  if (shiftHours < 4) {
+    dayRate = 3000;
+  } else if (shiftHours <= 6) {
+    dayRate = 2500;
+  } else {
+    dayRate = 2000;
+  }
+
+  const nightRate = 1500;
+
+  const dailyCost = (dayHours * dayRate + nightHours * nightRate) * busyMultiplier;
+  const totalNaira = Math.round(dailyCost * coverageLength);
+
+  return { totalNaira, totalHours };
+}
+
+/**
+ * Returns the dynamic coverage label shown under the price on the summary screen.
+ */
+function getCoverageLabel(
+  totalHours: number,
+  coverageLength: number,
+  coverageType: 'Standard' | 'Home Care'
+): string {
+  // Format hours: show as integer if whole, otherwise with decimal
+  const hoursDisplay = totalHours % 1 === 0 ? String(totalHours) : totalHours.toFixed(1);
+
+  if (coverageType === 'Home Care') {
+    return `${hoursDisplay}-hour Home Care Coverage`;
+  }
+
+  // Single-day: booking fits within one calendar day
+  if (coverageLength === 1) {
+    return `${hoursDisplay}-hour Single-Day Coverage`;
+  }
+
+  // Straight multi-day: total hours divisible by 24 with no remainder
+  const isStraight = totalHours >= 24 && totalHours % 24 === 0;
+  if (isStraight) {
+    return `${hoursDisplay}-hour Straight Multi-day Coverage`;
+  }
+
+  // Mixed multi-day
+  return `${hoursDisplay}-hr Multi-day Coverage`;
+}
+
 function DragHandle({ panHandlers }: { panHandlers?: object }) {
   return (
     <View {...panHandlers} style={{ alignItems: 'center', paddingVertical: 8 }}>
@@ -633,9 +756,11 @@ export default function RequesterHomeScreen() {
   const formattedDateShort = shiftDate.toLocaleDateString('en-US', { weekday: 'short' });
   const formattedStartTime = startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   const formattedEndTime = endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-  const coveragePrice = coverageLength * 20000;
+  const { totalNaira: coveragePrice, totalHours: coverageTotalHours } = calculateCoveragePrice(
+    startTime, endTime, coverageLength, coverageType, environment
+  );
   const coveragePriceDisplay = `₦${coveragePrice.toLocaleString()}`;
-  const coverageSubtitle = coverageLength === 1 ? '10-hour Single-Day Coverage' : `${coverageLength}-Day Coverage`;
+  const coverageSubtitle = getCoverageLabel(coverageTotalHours, coverageLength, coverageType);
   const summaryPillText = `${coverageType} · ${formattedDateShort} · ${formattedStartTime}`;
   const coverageLengthLabel = coverageLength === 1 ? '1 day' : `${coverageLength} days`;
   const coverageTypeDesc = coverageType === 'Standard'
@@ -1215,13 +1340,56 @@ export default function RequesterHomeScreen() {
 
           {/* SUMMARY */}
           {sheetState === 'summary' && (
-            <View style={{ padding: 24, paddingBottom: insets.bottom + 16 }}>
-              <DragHandle />
-              <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 8 }]}>COVERAGE</Text>
-              <Text style={{ fontSize: 48, fontWeight: '800', color: COLORS.text, lineHeight: 56 }}>{coveragePriceDisplay}</Text>
-              <Text style={[TYPOGRAPHY.body, { color: COLORS.textSecondary, marginBottom: 24 }]}>{coverageSubtitle}</Text>
-              <TouchableOpacity onPress={handleRequestCoverage} disabled={submitting} style={{ backgroundColor: submitting ? '#888' : '#0A0A0A', borderRadius: 16, paddingVertical: 18, alignItems: 'center' }}>
-                <Text style={[TYPOGRAPHY.bodyMedium, { color: '#FFF', fontWeight: '700' }]}>{submitting ? 'Submitting...' : 'Request Coverage'}</Text>
+            <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 24, paddingTop: 8 }}>
+              <DragHandle panHandlers={dragPanResponder.panHandlers} />
+              <Text style={{
+                fontSize: 11,
+                fontWeight: '600',
+                letterSpacing: 1.4,
+                color: COLORS.textSecondary,
+                marginBottom: 10,
+                marginTop: 8,
+              }}>
+                COVERAGE
+              </Text>
+              <Text style={{
+                fontSize: 52,
+                fontWeight: '800',
+                color: COLORS.text,
+                lineHeight: 60,
+                letterSpacing: -1,
+                marginBottom: 6,
+              }}>
+                {coveragePriceDisplay}
+              </Text>
+              <Text style={{
+                fontSize: 15,
+                fontWeight: '400',
+                color: COLORS.textSecondary,
+                marginBottom: 32,
+              }}>
+                {coverageSubtitle}
+              </Text>
+              <TouchableOpacity
+                onPress={handleRequestCoverage}
+                disabled={submitting}
+                activeOpacity={0.85}
+                style={{
+                  backgroundColor: submitting ? '#555' : '#0A0A0A',
+                  borderRadius: 16,
+                  paddingVertical: 18,
+                  alignItems: 'center',
+                  width: '100%',
+                }}
+              >
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '700',
+                  color: '#FFFFFF',
+                  letterSpacing: 0.2,
+                }}>
+                  {submitting ? 'Submitting...' : 'Request Coverage'}
+                </Text>
               </TouchableOpacity>
             </View>
           )}
