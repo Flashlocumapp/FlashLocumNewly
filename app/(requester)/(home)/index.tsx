@@ -19,7 +19,7 @@ import {
   FlatList,
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
-import { Search, MapPin, ArrowRight, X, CalendarDays, Clock, History } from 'lucide-react-native';
+import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
@@ -27,6 +27,57 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { useTabBarVisibility, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
+
+// ─── Pricing config ───────────────────────────────────────────────────────────
+type PricingConfig = {
+  home_care_rate: number;
+  day_rate_short: number;
+  day_rate_medium: number;
+  day_rate_long: number;
+  night_rate: number;
+  flat_24h_fee: number;
+  busy_multiplier: number;
+};
+
+const DEFAULT_PRICING: PricingConfig = {
+  home_care_rate: 15000,
+  day_rate_short: 3000,
+  day_rate_medium: 2500,
+  day_rate_long: 2000,
+  night_rate: 1500,
+  flat_24h_fee: 36000,
+  busy_multiplier: 1.3,
+};
+
+function usePricingConfig(): PricingConfig {
+  const [config, setConfig] = useState<PricingConfig>(DEFAULT_PRICING);
+  useEffect(() => {
+    supabase
+      .from('pricing_config')
+      .select('*')
+      .limit(1)
+      .single()
+      .then(({ data, error }) => {
+        if (error) {
+          console.log('[PricingConfig] fetch error:', error.message, '— using defaults');
+          return;
+        }
+        if (data) {
+          console.log('[PricingConfig] loaded from Supabase:', data);
+          setConfig({
+            home_care_rate: data.home_care_rate ?? DEFAULT_PRICING.home_care_rate,
+            day_rate_short: data.day_rate_short ?? DEFAULT_PRICING.day_rate_short,
+            day_rate_medium: data.day_rate_medium ?? DEFAULT_PRICING.day_rate_medium,
+            day_rate_long: data.day_rate_long ?? DEFAULT_PRICING.day_rate_long,
+            night_rate: data.night_rate ?? DEFAULT_PRICING.night_rate,
+            flat_24h_fee: data.flat_24h_fee ?? DEFAULT_PRICING.flat_24h_fee,
+            busy_multiplier: data.busy_multiplier ?? DEFAULT_PRICING.busy_multiplier,
+          });
+        }
+      });
+  }, []);
+  return config;
+}
 
 const ANDROID_KEY = 'AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU';
 const IOS_KEY = 'AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk';
@@ -293,7 +344,8 @@ function calculateCoveragePrice(
   endTime: Date,
   coverageLength: number,
   coverageType: 'Standard' | 'Home Care',
-  environment: 'Normal' | 'Busy'
+  environment: 'Normal' | 'Busy',
+  pricing: PricingConfig
 ): { totalNaira: number; totalHours: number } {
   // Duration of one shift in hours (fractional, 15-min precision)
   const shiftMs = endTime.getTime() - startTime.getTime();
@@ -301,12 +353,12 @@ function calculateCoveragePrice(
   const totalHours = shiftHours * coverageLength;
 
   if (coverageType === 'Home Care') {
-    const base = totalHours * 15000;
+    const base = totalHours * pricing.home_care_rate;
     return { totalNaira: base, totalHours };
   }
 
   // Standard pricing
-  const busyMultiplier = environment === 'Busy' ? 1.3 : 1.0;
+  const busyMultiplier = environment === 'Busy' ? pricing.busy_multiplier : 1.0;
 
   // Check if this is a straight continuous booking (coverageLength days back-to-back)
   // A straight booking means the end of one day's shift is the start of the next,
@@ -319,9 +371,9 @@ function calculateCoveragePrice(
     const fullBlocks = Math.floor(totalHours / 24);
     const remainderHours = Math.round((totalHours - fullBlocks * 24) * 4) / 4;
 
-    const flatFee = fullBlocks * 36000 * busyMultiplier;
-    // Remainder billed at long-duration day rate (₦2,000/hr), scaled by busy
-    const remainderFee = remainderHours * 2000 * busyMultiplier;
+    const flatFee = fullBlocks * pricing.flat_24h_fee * busyMultiplier;
+    // Remainder billed at long-duration day rate, scaled by busy
+    const remainderFee = remainderHours * pricing.day_rate_long * busyMultiplier;
 
     return { totalNaira: Math.round(flatFee + remainderFee), totalHours };
   }
@@ -347,14 +399,14 @@ function calculateCoveragePrice(
   // Day rate tier based on total shift duration (not just day portion)
   let dayRate: number;
   if (shiftHours < 4) {
-    dayRate = 3000;
+    dayRate = pricing.day_rate_short;
   } else if (shiftHours <= 6) {
-    dayRate = 2500;
+    dayRate = pricing.day_rate_medium;
   } else {
-    dayRate = 2000;
+    dayRate = pricing.day_rate_long;
   }
 
-  const nightRate = 1500;
+  const nightRate = pricing.night_rate;
 
   const dailyCost = (dayHours * dayRate + nightHours * nightRate) * busyMultiplier;
   const totalNaira = Math.round(dailyCost * coverageLength);
@@ -403,6 +455,7 @@ function DragHandle({ panHandlers }: { panHandlers?: object }) {
 export default function RequesterHomeScreen() {
   const insets = useSafeAreaInsets();
   const { setTabBarVisible } = useTabBarVisibility();
+  const pricingConfig = usePricingConfig();
 
   const mapRef = useRef<MapView>(null);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -665,10 +718,18 @@ export default function RequesterHomeScreen() {
   const dragPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
       onPanResponderMove: () => {},
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 20) {
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 15) {
           console.log('[RequesterHome] Drag handle released — resetting');
+          Keyboard.dismiss();
+          handleResetRef.current();
+        }
+      },
+      onPanResponderTerminate: (_, gs) => {
+        if (gs.dy > 15) {
+          console.log('[RequesterHome] Drag handle terminated — resetting');
           Keyboard.dismiss();
           handleResetRef.current();
         }
@@ -757,7 +818,7 @@ export default function RequesterHomeScreen() {
   const formattedStartTime = startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   const formattedEndTime = endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   const { totalNaira: coveragePrice, totalHours: coverageTotalHours } = calculateCoveragePrice(
-    startTime, endTime, coverageLength, coverageType, environment
+    startTime, endTime, coverageLength, coverageType, environment, pricingConfig
   );
   const coveragePriceDisplay = `₦${coveragePrice.toLocaleString()}`;
   const coverageSubtitle = getCoverageLabel(coverageTotalHours, coverageLength, coverageType);
@@ -838,19 +899,30 @@ export default function RequesterHomeScreen() {
         </TouchableOpacity>
       )}
 
-      {/* ── SUMMARY TOP PILL ── */}
+      {/* ── SUMMARY BACK BUTTON ── */}
       {sheetState === 'summary' && (
-        <View style={{
-          position: 'absolute', top: insets.top + 12, left: 16, right: 16,
-          backgroundColor: '#FFFFFF', borderRadius: 999, paddingHorizontal: 20, paddingVertical: 12,
-          flexDirection: 'row', alignItems: 'center', gap: 10,
-          shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 10, elevation: 5,
-        }}>
-          <TouchableOpacity onPress={handleReset} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <X size={18} color={COLORS.text} />
-          </TouchableOpacity>
-          <Text style={[TYPOGRAPHY.bodyMedium, { color: COLORS.text, flex: 1 }]}>{summaryPillText}</Text>
-        </View>
+        <TouchableOpacity
+          onPress={handleReset}
+          activeOpacity={0.85}
+          style={{
+            position: 'absolute',
+            top: insets.top + 12,
+            left: 16,
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: '#FFFFFF',
+            justifyContent: 'center',
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.12,
+            shadowRadius: 8,
+            elevation: 5,
+          }}
+        >
+          <ArrowLeft size={20} color="#1C1C1E" />
+        </TouchableOpacity>
       )}
 
       {/* ── NON-IDLE ANIMATED SHEET ── */}
@@ -876,14 +948,14 @@ export default function RequesterHomeScreen() {
                   marginBottom: 8,
                   backgroundColor: '#FFFFFF',
                   borderRadius: 28,
-                  borderWidth: 1.5,
-                  borderColor: '#0066CC',
+                  borderWidth: 2,
+                  borderColor: '#1C1C1E',
                   flexDirection: 'row',
                   alignItems: 'center',
                   paddingHorizontal: 14,
                   height: 50,
                 }}>
-                  <Search size={18} color={COLORS.textTertiary} style={{ marginRight: 10 }} />
+                  <Search size={20} color="#1C1C1E" strokeWidth={2.5} style={{ marginRight: 10 }} />
                   <TextInput
                     autoFocus
                     value={searchText}
@@ -1132,12 +1204,9 @@ export default function RequesterHomeScreen() {
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
                     START DATE
                   </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={[TYPOGRAPHY.body, { color: COLORS.text }]}>
-                      {formattedDate}
-                    </Text>
-                    <CalendarDays size={16} color={COLORS.textTertiary} />
-                  </View>
+                  <Text style={[TYPOGRAPHY.body, { color: COLORS.text }]}>
+                    {formattedDate}
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1151,12 +1220,9 @@ export default function RequesterHomeScreen() {
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
                     START TIME
                   </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={[TYPOGRAPHY.body, { color: COLORS.text }]}>
-                      {formattedStartTime}
-                    </Text>
-                    <Clock size={16} color={COLORS.textTertiary} />
-                  </View>
+                  <Text style={[TYPOGRAPHY.body, { color: COLORS.text }]}>
+                    {formattedStartTime}
+                  </Text>
                 </TouchableOpacity>
               </View>
 
@@ -1173,12 +1239,9 @@ export default function RequesterHomeScreen() {
                   <Text style={[TYPOGRAPHY.label, { color: COLORS.textSecondary, marginBottom: 6 }]}>
                     END TIME
                   </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={[TYPOGRAPHY.body, { color: COLORS.text }]}>
-                      {formattedEndTime}
-                    </Text>
-                    <Clock size={16} color={COLORS.textTertiary} />
-                  </View>
+                  <Text style={[TYPOGRAPHY.body, { color: COLORS.text }]}>
+                    {formattedEndTime}
+                  </Text>
                 </TouchableOpacity>
 
                 {/* Coverage Length — ITEM 1 borderRadius 20, ITEM 5.1 cap at 15 */}
@@ -1376,7 +1439,7 @@ export default function RequesterHomeScreen() {
                 activeOpacity={0.85}
                 style={{
                   backgroundColor: submitting ? '#555' : '#0A0A0A',
-                  borderRadius: 16,
+                  borderRadius: 28,
                   paddingVertical: 18,
                   alignItems: 'center',
                   width: '100%',
@@ -1419,7 +1482,7 @@ export default function RequesterHomeScreen() {
       )}
 
       {/* ── MAP BACKDROP — above the sheet, covers only the map area above it ── */}
-      {(sheetState === 'searching' || sheetState === 'config' || sheetState === 'summary' || sheetState === 'matching') && (
+      {(sheetState === 'searching' || sheetState === 'config' || sheetState === 'matching') && (
         <Animated.View
           style={{
             position: 'absolute',
