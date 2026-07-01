@@ -93,8 +93,10 @@ function NavigationGuard() {
       return;
     }
 
-    // 6. Both complete — use last pathway
-    const dest = lastPathway === 'requester' ? '/(requester)/(home)' : '/(doctor)/(home)';
+    // 6. Both complete — use last pathway, then write it back
+    const dest = lastPathway === 'doctor' ? '/(doctor)/(home)' : '/(requester)/(home)';
+    const pathway = lastPathway === 'doctor' ? 'doctor' : 'requester';
+    AsyncStorage.setItem(LAST_PATHWAY_KEY, pathway).catch(() => {});
     console.log('[NavigationGuard] Both complete → last pathway:', dest);
     router.replace(dest as any);
   }, [isReady, lastPathway, session, profile]);
@@ -107,6 +109,23 @@ function NavigationGuard() {
       router.replace('/(auth)/intro' as any);
     }
   }, [session]);
+
+  // Cross-portal redirect guard — fires on segment changes after initial routing
+  useEffect(() => {
+    if (!isReady || !hasRouted.current || !profile) return;
+    const doctorComplete = profile.doctor_onboarding_complete === true;
+    const requesterComplete = profile.requester_onboarding_complete === true;
+    const inDoctor = segments[0] === '(doctor)';
+    const inRequester = segments[0] === '(requester)';
+
+    if (inDoctor && !doctorComplete && requesterComplete) {
+      console.log('[NavigationGuard] Cross-portal block: requester in doctor route → redirecting');
+      router.replace('/(requester)/(home)' as any);
+    } else if (inRequester && !requesterComplete && doctorComplete) {
+      console.log('[NavigationGuard] Cross-portal block: doctor in requester route → redirecting');
+      router.replace('/(doctor)/(home)' as any);
+    }
+  }, [segments, isReady, profile]);
 
   return null;
 }
