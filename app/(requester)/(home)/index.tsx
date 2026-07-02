@@ -808,7 +808,7 @@ export default function RequesterHomeScreen() {
 
   // ─── Realtime matching subscription + 180s timeout ───────────────────────────
   useEffect(() => {
-    if (sheetState === 'matching' && activeRequestId) {
+    if (activeRequestId) {
       console.log('[RequesterHome] Starting match timer and subscribing to requester channel:', activeRequestId);
 
       matchTimerRef.current = setTimeout(() => {
@@ -855,7 +855,7 @@ export default function RequesterHomeScreen() {
       };
     }
     return undefined;
-  }, [sheetState, activeRequestId]);
+  }, [activeRequestId]);
 
   // ─── Show tab bar only when idle ─────────────────────────────────────────────
   useEffect(() => {
