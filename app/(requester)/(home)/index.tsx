@@ -19,7 +19,7 @@ import {
   Modal,
   FlatList,
 } from 'react-native';
-import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
+import { MapView, PROVIDER_GOOGLE, Marker } from './MapViewNative';
 import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -1225,7 +1225,7 @@ export default function RequesterHomeScreen() {
 
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
-    <View style={{ flex: 1, backgroundColor: '#000' }}>
+    <View style={{ flex: 1, backgroundColor: '#F9F9F6' }}>
 
       {/* ── FULL-SCREEN MAP (always behind everything) ── */}
       <MapView

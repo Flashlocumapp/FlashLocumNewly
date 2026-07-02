@@ -237,26 +237,7 @@ export default function DoctorLayout() {
     };
   }, [user]); // intentionally omit isOnline/forceSync to avoid re-subscribing
 
-  // ── Realtime socket open/close — immediate resync on reconnect ──
-  useEffect(() => {
-    const handleOpen = () => {
-      console.log('[DoctorLayout] Realtime socket opened — marking healthy');
-      isRealtimeHealthyRef.current = true;
-      if (isOnlineRef.current) {
-        console.log('[DoctorLayout] Realtime reconnected — immediate force-sync');
-        forceSyncRef.current();
-      }
-    };
-    const handleClose = () => {
-      console.log('[DoctorLayout] Realtime socket closed — marking unhealthy');
-      isRealtimeHealthyRef.current = false;
-    };
-    supabase.realtime.onOpen(handleOpen);
-    supabase.realtime.onClose(handleClose);
-    return () => {
-      // Phoenix socket doesn't expose removeListener — refs go stale on unmount naturally
-    };
-  }, []);
+
 
   // ── Queue → state sync ──
   useEffect(() => {
