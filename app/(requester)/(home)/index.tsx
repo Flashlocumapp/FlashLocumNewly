@@ -825,6 +825,9 @@ export default function RequesterHomeScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       console.log('[RequesterHome] Calling submit-request for place:', selectedPlace.name);
+      const { totalNaira: submitPrice, totalHours: submitDurationHours } = calculateCoveragePrice(
+        startTime, endTime, coverageLength, coverageType, environment, pricingConfig
+      );
       const res = await fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/submit-request', {
         method: 'POST',
         headers: {
@@ -832,18 +835,19 @@ export default function RequesterHomeScreen() {
           'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          place_name: selectedPlace.name,
-          address: selectedPlace.address,
+          hospital_name: selectedPlace.name,
+          hospital_address: selectedPlace.address,
           latitude: selectedPlace.lat,
           longitude: selectedPlace.lng,
-          coverage_type: coverageType,
+          shift_type: coverageType,
           shift_date: shiftDate.toISOString().split('T')[0],
           start_time: startTime.toTimeString().slice(0, 5),
           end_time: endTime.toTimeString().slice(0, 5),
           coverage_length: coverageLength,
+          duration_hours: submitDurationHours,
           environment,
           note: note || null,
-          total_price: coveragePrice,
+          price: submitPrice,
         }),
       });
       console.log('[RequesterHome] submit-request response status:', res.status);
