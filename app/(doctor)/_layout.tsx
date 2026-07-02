@@ -74,7 +74,7 @@ export default function DoctorLayout() {
   const [confirmedRequest, setConfirmedRequest] = useState<DispatchRequest | null>(null);
   const [accepting, setAccepting] = useState(false);
 
-  const prevIsOnlineRef = useRef<boolean | null>(null);
+  const prevIsOnlineRef = useRef<boolean | undefined>(undefined);
   const callEdgeRef = useRef<(fn: string, body?: object) => Promise<Response | null>>(async () => null);
   const forceSyncRef = useRef<() => Promise<void>>(async () => {});
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -133,16 +133,23 @@ export default function DoctorLayout() {
   // ── Go-online / Go-offline — only fires when isOnline actually changes ──
   useEffect(() => {
     if (!user) return;
-    if (prevIsOnlineRef.current === isOnline) return; // identity didn't change, skip
-    prevIsOnlineRef.current = isOnline;
+    if (prevIsOnlineRef.current === isOnline) return;
     const toggle = async () => {
       const fn = isOnline ? 'go-online' : 'go-offline';
       console.log('[DoctorLayout] Toggling status:', fn);
-      await callEdgeRef.current(fn);
+      const res = await callEdgeRef.current(fn);
       if (isOnline) {
+        if (!res || !res.ok) {
+          console.log('[DoctorLayout] go-online failed — reverting to offline');
+          setIsOnline(false);
+          Alert.alert('Connection Error', 'Could not go online. Please check your connection and try again.');
+          return;
+        }
+        prevIsOnlineRef.current = true;
         console.log('[DoctorLayout] Went online — force-syncing queue');
         await forceSyncRef.current();
       } else {
+        prevIsOnlineRef.current = false;
         console.log('[DoctorLayout] Went offline — clearing queue');
         setRequestQueue([]);
         setDoctorScreenState('idle');
