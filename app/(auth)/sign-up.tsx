@@ -12,7 +12,7 @@ import {
 import Svg, { Path } from 'react-native-svg';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { supabase } from '@/lib/supabase';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 
@@ -188,7 +188,7 @@ export default function SignUpScreen() {
         }
 
         // Passed validation — write lastPathway to AsyncStorage
-        await AsyncStorage.setItem('flashlocum_last_pathway', role);
+        await SecureStore.setItemAsync('flashlocum_last_pathway', role);
         console.log('[SignUp] lastPathway written:', role);
 
         // Route to the portal they signed in through

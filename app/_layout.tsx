@@ -7,7 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, DarkTheme } from '@react-navigation/native';
 import { SystemBars } from 'react-native-edge-to-edge';
 import * as SplashScreen from 'expo-splash-screen';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
@@ -30,7 +30,7 @@ function NavigationGuard() {
 
   // Load last pathway from AsyncStorage once on mount
   useEffect(() => {
-    AsyncStorage.getItem(LAST_PATHWAY_KEY).then(val => {
+    SecureStore.getItemAsync(LAST_PATHWAY_KEY).then(val => {
       console.log('[NavigationGuard] Loaded last pathway from storage:', val);
       setLastPathway((val as 'doctor' | 'requester') ?? null);
     }).catch(() => setLastPathway(null));
@@ -100,7 +100,7 @@ function NavigationGuard() {
     // 6. Both complete — use last pathway, then write it back
     const dest = lastPathway === 'doctor' ? '/(doctor)/(home)' : '/(requester)/(home)';
     const pathway = lastPathway === 'doctor' ? 'doctor' : 'requester';
-    AsyncStorage.setItem(LAST_PATHWAY_KEY, pathway).catch(() => {});
+    SecureStore.setItemAsync(LAST_PATHWAY_KEY, pathway).catch(() => {});
     console.log('[NavigationGuard] Both complete → last pathway:', dest);
     router.replace(dest as any);
   }, [isReady, lastPathway, session, profile, profileLoading]);
