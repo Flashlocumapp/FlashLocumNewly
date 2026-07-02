@@ -435,7 +435,7 @@ export default function DoctorCredentials() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7F7F5',
+    backgroundColor: '#F9F9F6',
   },
   flex: {
     flex: 1,
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 24,
     paddingVertical: 16,
-    backgroundColor: '#F7F7F5',
+    backgroundColor: '#F9F9F6',
   },
   backButtonWrap: {
     position: 'absolute',

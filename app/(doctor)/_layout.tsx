@@ -74,7 +74,9 @@ export default function DoctorLayout() {
   const [confirmedRequest, setConfirmedRequest] = useState<DispatchRequest | null>(null);
   const [accepting, setAccepting] = useState(false);
 
-  const hasMounted = useRef(false);
+  const prevIsOnlineRef = useRef<boolean | null>(null);
+  const callEdgeRef = useRef<(fn: string, body?: object) => Promise<Response | null>>(async () => null);
+  const forceSyncRef = useRef<() => Promise<void>>(async () => {});
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const getToken = useCallback(async (): Promise<string | null> => {
@@ -124,20 +126,22 @@ export default function DoctorLayout() {
     }
   }, [user, callEdge]);
 
-  // ── Go-online / Go-offline (skip first mount) ──
+  // Keep stable refs for callEdge and forceSync so the toggle effect never re-fires due to their identity changing
+  useEffect(() => { callEdgeRef.current = callEdge; }, [callEdge]);
+  useEffect(() => { forceSyncRef.current = forceSync; }, [forceSync]);
+
+  // ── Go-online / Go-offline — only fires when isOnline actually changes ──
   useEffect(() => {
     if (!user) return;
-    if (!hasMounted.current) {
-      hasMounted.current = true;
-      return;
-    }
+    if (prevIsOnlineRef.current === isOnline) return; // identity didn't change, skip
+    prevIsOnlineRef.current = isOnline;
     const toggle = async () => {
       const fn = isOnline ? 'go-online' : 'go-offline';
       console.log('[DoctorLayout] Toggling status:', fn);
-      await callEdge(fn);
+      await callEdgeRef.current(fn);
       if (isOnline) {
         console.log('[DoctorLayout] Went online — force-syncing queue');
-        await forceSync();
+        await forceSyncRef.current();
       } else {
         console.log('[DoctorLayout] Went offline — clearing queue');
         setRequestQueue([]);
@@ -145,7 +149,7 @@ export default function DoctorLayout() {
       }
     };
     toggle();
-  }, [isOnline, user, callEdge, forceSync]);
+  }, [isOnline, user]); // only isOnline and user — stable refs handle callEdge/forceSync
 
   // ── Heartbeat every 60s while online ──
   useEffect(() => {
