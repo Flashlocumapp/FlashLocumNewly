@@ -968,7 +968,7 @@ export default function RequesterHomeScreen() {
     ? 'Standard working conditions.'
     : 'High patient volume expected.';
 
-  const whiteCardPaddingBottom = Platform.OS === 'ios' ? insets.bottom + 16 : TAB_BAR_HEIGHT + insets.bottom + 16;
+  const whiteCardPaddingBottom = TAB_BAR_HEIGHT + insets.bottom + 16;
 
   // Max date = today + 15 days
   const maxDate = new Date(new Date().getTime() + 15 * 24 * 60 * 60 * 1000);
@@ -1276,7 +1276,7 @@ export default function RequesterHomeScreen() {
               <View style={{ marginBottom: 8 }}>
                 <View style={{
                   flexDirection: 'row',
-                  backgroundColor: '#2C2C2E',
+                  backgroundColor: '#F9F9F6',
                   borderRadius: RADIUS.full,
                   padding: 4,
                   alignSelf: 'flex-start',
@@ -1287,13 +1287,13 @@ export default function RequesterHomeScreen() {
                       setCoverageType('Standard');
                     }}
                     style={{
-                      backgroundColor: coverageType === 'Standard' ? '#0A0A0A' : 'transparent',
+                      backgroundColor: coverageType === 'Standard' ? '#1C1C1E' : 'transparent',
                       borderRadius: RADIUS.full,
                       paddingHorizontal: 20,
                       paddingVertical: 10,
                     }}
                   >
-                    <Text style={[TYPOGRAPHY.bodyMedium, { color: coverageType === 'Standard' ? '#FFFFFF' : COLORS.text }]}>
+                    <Text style={[TYPOGRAPHY.bodyMedium, { color: coverageType === 'Standard' ? '#FFFFFF' : '#1C1C1E' }]}>
                       Standard
                     </Text>
                   </TouchableOpacity>
@@ -1303,13 +1303,13 @@ export default function RequesterHomeScreen() {
                       setCoverageType('Home Care');
                     }}
                     style={{
-                      backgroundColor: coverageType === 'Home Care' ? '#0A0A0A' : 'transparent',
+                      backgroundColor: coverageType === 'Home Care' ? '#1C1C1E' : 'transparent',
                       borderRadius: RADIUS.full,
                       paddingHorizontal: 20,
                       paddingVertical: 10,
                     }}
                   >
-                    <Text style={[TYPOGRAPHY.bodyMedium, { color: coverageType === 'Home Care' ? '#FFFFFF' : COLORS.text }]}>
+                    <Text style={[TYPOGRAPHY.bodyMedium, { color: coverageType === 'Home Care' ? '#FFFFFF' : '#1C1C1E' }]}>
                       Home Care
                     </Text>
                   </TouchableOpacity>
@@ -1434,7 +1434,7 @@ export default function RequesterHomeScreen() {
                   <Text style={[TYPOGRAPHY.label, { color: '#8E8E93' }]}>ENVIRONMENT</Text>
                   <View style={{
                     flexDirection: 'row',
-                    backgroundColor: '#3A3A3C',
+                    backgroundColor: '#F9F9F6',
                     borderRadius: RADIUS.full,
                     padding: 4,
                   }}>
@@ -1444,13 +1444,13 @@ export default function RequesterHomeScreen() {
                         setEnvironment('Normal');
                       }}
                       style={{
-                        backgroundColor: environment === 'Normal' ? '#0A0A0A' : 'transparent',
+                        backgroundColor: environment === 'Normal' ? '#1C1C1E' : 'transparent',
                         borderRadius: RADIUS.full,
                         paddingHorizontal: 16,
                         paddingVertical: 8,
                       }}
                     >
-                      <Text style={[TYPOGRAPHY.captionMedium, { color: environment === 'Normal' ? '#FFFFFF' : COLORS.text }]}>
+                      <Text style={[TYPOGRAPHY.captionMedium, { color: environment === 'Normal' ? '#FFFFFF' : '#1C1C1E' }]}>
                         Normal
                       </Text>
                     </TouchableOpacity>
@@ -1460,13 +1460,13 @@ export default function RequesterHomeScreen() {
                         setEnvironment('Busy');
                       }}
                       style={{
-                        backgroundColor: environment === 'Busy' ? '#0A0A0A' : 'transparent',
+                        backgroundColor: environment === 'Busy' ? '#1C1C1E' : 'transparent',
                         borderRadius: RADIUS.full,
                         paddingHorizontal: 16,
                         paddingVertical: 8,
                       }}
                     >
-                      <Text style={[TYPOGRAPHY.captionMedium, { color: environment === 'Busy' ? '#FFFFFF' : COLORS.text }]}>
+                      <Text style={[TYPOGRAPHY.captionMedium, { color: environment === 'Busy' ? '#FFFFFF' : '#1C1C1E' }]}>
                         Busy
                       </Text>
                     </TouchableOpacity>
@@ -1798,7 +1798,7 @@ export default function RequesterHomeScreen() {
             paddingTop: 16,
             paddingHorizontal: 16,
             paddingBottom: whiteCardPaddingBottom,
-            minHeight: 180,
+            minHeight: 220,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: -3 },
             shadowOpacity: 0.08,
