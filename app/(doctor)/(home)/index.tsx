@@ -136,10 +136,20 @@ export default function DoctorHomeScreen() {
       const res = await callEdge('force-sync');
       if (!res || !res.ok) return;
       const data = await res.json();
-      console.log('[DoctorHome] Force-sync result — requests:', data.requests?.length ?? 0);
-      if (data.requests?.length > 0) {
-        setRequestQueue(data.requests);
+      const now = new Date();
+      const freshRequests = (data.requests ?? []).filter((req: any) => {
+        if (req.status && req.status !== 'pending') return false;
+        if (req.expiry_at && new Date(req.expiry_at) <= now) return false;
+        return true;
+      });
+      console.log('[DoctorHome] Force-sync result — requests:', data.requests?.length ?? 0, 'fresh:', freshRequests.length);
+      if (freshRequests.length > 0) {
+        setRequestQueue(freshRequests);
         setDoctorScreenState('incoming');
+      } else {
+        // No valid requests — ensure we're in idle state
+        setRequestQueue([]);
+        if (doctorScreenState === 'incoming') setDoctorScreenState('idle');
       }
     } catch (e: any) {
       console.log('[DoctorHome] Force-sync error:', e.message);
@@ -266,12 +276,16 @@ export default function DoctorHomeScreen() {
     console.log('[DoctorHome] Subscribing to dispatch:lagos channel');
     const channel = supabase.channel('dispatch:lagos')
       .on('broadcast', { event: 'NEW_REQUEST' }, (payload) => {
-        const req: DispatchRequest = payload.payload;
-        console.log('[DoctorHome] NEW_REQUEST received:', req.id, req.hospital_name);
+        const req = payload.payload as DispatchRequest & { expiry_at?: string };
+        const now = new Date();
+        if (req.expiry_at && new Date(req.expiry_at) <= now) {
+          console.log('[DoctorHome] NEW_REQUEST already expired, ignoring:', req.id);
+          return;
+        }
+        console.log('[DoctorHome] NEW_REQUEST received:', req.id);
         setRequestQueue((prev) => {
-          if (prev.find((r) => r.id === req.id)) return prev;
-          const next = [...prev, req];
-          return next;
+          if (prev.some((r) => r.id === req.id)) return prev;
+          return [...prev, req];
         });
       })
       .on('broadcast', { event: 'EVICT_REQUEST' }, (payload) => {

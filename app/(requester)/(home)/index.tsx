@@ -1543,12 +1543,12 @@ export default function RequesterHomeScreen() {
 
               {/* Note — ITEM 3: unified container */}
               <View style={{
-                backgroundColor: '#F9F9F6',
+                backgroundColor: '#2C2C2E',
                 borderRadius: 22,
                 padding: 16,
                 marginBottom: 28,
               }}>
-                <Text style={[TYPOGRAPHY.label, { color: '#6B6B6B', marginBottom: 8 }]}>
+                <Text style={[TYPOGRAPHY.label, { color: '#8E8E93', marginBottom: 8 }]}>
                   NOTE (OPTIONAL)
                 </Text>
                 <TextInput
@@ -1560,20 +1560,20 @@ export default function RequesterHomeScreen() {
                   multiline
                   maxLength={80}
                   placeholder="Anything else the doctors should know? (Skills, notes, or tips)..."
-                  placeholderTextColor='#AAAAAA'
+                  placeholderTextColor='#6B6B6B'
                   style={[
                     TYPOGRAPHY.body,
                     {
                       minHeight: 80,
                       backgroundColor: 'transparent',
                       textAlignVertical: 'top',
-                      color: '#1C1C1E',
+                      color: '#FFFFFF',
                     },
                   ]}
                 />
                 <Text style={{
                   fontSize: 11,
-                  color: note.length >= 72 ? '#E53E3E' : '#AAAAAA',
+                  color: note.length >= 72 ? '#E53E3E' : '#6B6B6B',
                   textAlign: 'right',
                   marginTop: 4,
                 }}>
@@ -1582,20 +1582,23 @@ export default function RequesterHomeScreen() {
                 </Text>
               </View>
 
-              {/* Next button */}
-              <View style={{ alignItems: 'flex-end', marginTop: 8, marginBottom: 16 }}>
+              {/* Continue button */}
+              <View style={{ alignItems: 'center', marginTop: 8, marginBottom: 16 }}>
                 <TouchableOpacity
                   onPress={handleGoToSummary}
                   style={{
-                    width: 52,
+                    width: 160,
                     height: 52,
                     borderRadius: 26,
-                    backgroundColor: '#0A0A0A',
+                    backgroundColor: '#F9F9F6',
+                    flexDirection: 'row',
                     justifyContent: 'center',
                     alignItems: 'center',
+                    gap: 8,
                   }}
                 >
-                  <ArrowRight size={20} color="#FFFFFF" />
+                  <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>Continue</Text>
+                  <ArrowRight size={18} color="#1C1C1E" />
                 </TouchableOpacity>
               </View>
             </ScrollView>
