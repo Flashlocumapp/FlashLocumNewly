@@ -49,6 +49,8 @@ export default function FloatingTabBar({
   const animatedValue = useSharedValue(0);
 
   // Improved active tab detection with better path matching
+  const isCoverageActive = pathname.includes('coverage');
+
   const activeTabIndex = React.useMemo(() => {
     // Find the best matching tab based on the current pathname
     let bestMatch = -1;
@@ -163,45 +165,83 @@ export default function FloatingTabBar({
           marginBottom: bottomMargin ?? 20
         }
       ]}>
-        <BlurView
-          intensity={80}
-          style={[dynamicStyles.blurContainer, { borderRadius }]}
-        >
-          <View style={dynamicStyles.background} />
-          <Animated.View style={[dynamicStyles.indicator, indicatorStyle]} />
-          <View style={styles.tabsContainer}>
-            {tabs.map((tab, index) => {
-              const isActive = activeTabIndex === index;
-
-              return (
-                <React.Fragment key={index}>
-                <Pressable
-                  style={styles.tab}
-                  onPress={() => handleTabPress(tab.route)}
-                >
-                  <View style={styles.tabContent}>
-                    <IconSymbol
-                      android_material_icon_name={tab.icon}
-                      ios_icon_name={tab.icon}
-                      size={24}
-                      color={isActive ? theme.colors.primary : (theme.dark ? '#98989D' : '#000000')}
-                    />
-                    <Text
-                      style={[
-                        styles.tabLabel,
-                        { color: theme.dark ? '#98989D' : '#8E8E93' },
-                        isActive && { color: theme.colors.primary, fontWeight: '600' },
-                      ]}
+        {isCoverageActive ? (
+          <View style={[dynamicStyles.blurContainer, { borderRadius, backgroundColor: '#1C1C1E' }]}>
+            <Animated.View style={[dynamicStyles.indicator, indicatorStyle]} />
+            <View style={styles.tabsContainer}>
+              {tabs.map((tab, index) => {
+                const isActive = activeTabIndex === index;
+                const iconColor = isActive ? '#FFFFFF' : '#8E8E93';
+                const labelColor = isActive ? '#FFFFFF' : '#8E8E93';
+                return (
+                  <React.Fragment key={index}>
+                    <Pressable
+                      style={styles.tab}
+                      onPress={() => handleTabPress(tab.route)}
                     >
-                      {tab.label}
-                    </Text>
-                  </View>
-                </Pressable>
-                </React.Fragment>
-              );
-            })}
+                      <View style={styles.tabContent}>
+                        <IconSymbol
+                          android_material_icon_name={tab.icon}
+                          ios_icon_name={tab.icon}
+                          size={24}
+                          color={iconColor}
+                        />
+                        <Text
+                          style={[
+                            styles.tabLabel,
+                            { color: labelColor },
+                            isActive && { fontWeight: '600' },
+                          ]}
+                        >
+                          {tab.label}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  </React.Fragment>
+                );
+              })}
+            </View>
           </View>
-        </BlurView>
+        ) : (
+          <BlurView
+            intensity={80}
+            style={[dynamicStyles.blurContainer, { borderRadius }]}
+          >
+            <View style={dynamicStyles.background} />
+            <Animated.View style={[dynamicStyles.indicator, indicatorStyle]} />
+            <View style={styles.tabsContainer}>
+              {tabs.map((tab, index) => {
+                const isActive = activeTabIndex === index;
+                return (
+                  <React.Fragment key={index}>
+                    <Pressable
+                      style={styles.tab}
+                      onPress={() => handleTabPress(tab.route)}
+                    >
+                      <View style={styles.tabContent}>
+                        <IconSymbol
+                          android_material_icon_name={tab.icon}
+                          ios_icon_name={tab.icon}
+                          size={24}
+                          color={isActive ? theme.colors.primary : (theme.dark ? '#98989D' : '#000000')}
+                        />
+                        <Text
+                          style={[
+                            styles.tabLabel,
+                            { color: theme.dark ? '#98989D' : '#8E8E93' },
+                            isActive && { color: theme.colors.primary, fontWeight: '600' },
+                          ]}
+                        >
+                          {tab.label}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  </React.Fragment>
+                );
+              })}
+            </View>
+          </BlurView>
+        )}
       </View>
     </SafeAreaView>
   );

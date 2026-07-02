@@ -600,7 +600,7 @@ export default function DoctorCoverageScreen() {
       {/* Tab selector */}
       <View
         style={{
-          backgroundColor: '#EFEFEF',
+          backgroundColor: '#1C1C1E',
           borderRadius: RADIUS.full,
           flexDirection: 'row',
           padding: 4,
@@ -618,12 +618,7 @@ export default function DoctorCoverageScreen() {
                 paddingVertical: 10,
                 alignItems: 'center',
                 borderRadius: RADIUS.full,
-                backgroundColor: isActive ? '#FFFFFF' : 'transparent',
-                ...(isActive
-                  ? Platform.OS === 'ios'
-                    ? { boxShadow: '0 1px 4px rgba(0,0,0,0.10)' }
-                    : { elevation: 2 }
-                  : {}),
+                backgroundColor: isActive ? '#2C2C2E' : 'transparent',
               }}
               activeOpacity={0.8}
             >
@@ -631,7 +626,7 @@ export default function DoctorCoverageScreen() {
                 style={[
                   TYPOGRAPHY.captionMedium,
                   {
-                    color: isActive ? COLORS.text : COLORS.textSecondary,
+                    color: isActive ? '#FFFFFF' : '#8E8E93',
                     fontWeight: isActive ? '600' : '500',
                   },
                 ]}
