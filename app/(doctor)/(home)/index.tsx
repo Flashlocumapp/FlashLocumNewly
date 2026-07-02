@@ -41,28 +41,24 @@ type DoctorScreenState = 'idle' | 'incoming' | 'confirmed';
 type DispatchRequest = {
   id: string;
   requester_id: string;
-  place_name: string;
-  address: string;
-  coverage_type: 'Standard' | 'Home Care';
+  hospital_name: string;
+  hospital_address: string;
+  shift_type: 'Standard' | 'Home Care';
   shift_date: string;
   start_time: string;
   end_time: string;
-  coverage_length: number;
+  duration_hours: number;
   environment: 'Normal' | 'Busy';
   note?: string | null;
-  total_price: number;
-  total_hours?: number;
+  price: number;
 };
 
 function formatShiftSummary(req: DispatchRequest): string {
-  const startFormatted = req.start_time;
-  const endFormatted = req.end_time;
-  const [sh, sm] = startFormatted.split(':').map(Number);
-  const [eh, em] = endFormatted.split(':').map(Number);
-  const dailyHours = (eh * 60 + em - sh * 60 - sm) / 60;
-  const totalHours = dailyHours * req.coverage_length;
-  const hoursLabel = totalHours % 1 === 0 ? `${totalHours}hr.` : `${totalHours.toFixed(1)}hr.`;
-  return `${req.coverage_type} • ${req.shift_date} • ${startFormatted} – ${endFormatted} • ${hoursLabel}`;
+  const [sh, sm] = req.start_time.split(':').map(Number);
+  const [eh, em] = req.end_time.split(':').map(Number);
+  const hours = req.duration_hours;
+  const hoursLabel = hours % 1 === 0 ? `${hours}hr.` : `${hours.toFixed(1)}hr.`;
+  return `${req.shift_type} • ${req.shift_date} • ${req.start_time} – ${req.end_time} • ${hoursLabel}`;
 }
 
 function DragHandle() {
@@ -238,14 +234,18 @@ export default function DoctorHomeScreen() {
       const fn = isOnline ? 'go-online' : 'go-offline';
       console.log('[DoctorHome] Toggling status:', fn);
       await callEdge(fn);
-      if (!isOnline) {
+      if (isOnline) {
+        // Just went online — sync queue immediately
+        console.log('[DoctorHome] Went online — force-syncing queue');
+        await forceSync();
+      } else {
         console.log('[DoctorHome] Went offline — clearing queue');
         setRequestQueue([]);
         setDoctorScreenState('idle');
       }
     };
     toggle();
-  }, [isOnline, user, callEdge]);
+  }, [isOnline, user, callEdge, forceSync]);
 
   // ─── Heartbeat every 60s while online ───────────────────────────────────────
   useEffect(() => {
@@ -267,7 +267,7 @@ export default function DoctorHomeScreen() {
     const channel = supabase.channel('dispatch:lagos')
       .on('broadcast', { event: 'NEW_REQUEST' }, (payload) => {
         const req: DispatchRequest = payload.payload;
-        console.log('[DoctorHome] NEW_REQUEST received:', req.id, req.place_name);
+        console.log('[DoctorHome] NEW_REQUEST received:', req.id, req.hospital_name);
         setRequestQueue((prev) => {
           if (prev.find((r) => r.id === req.id)) return prev;
           const next = [...prev, req];
@@ -385,15 +385,15 @@ export default function DoctorHomeScreen() {
   const currentRequest = requestQueue[0] ?? null;
 
   // Fee breakdown
-  const feeAmount = currentRequest ? currentRequest.total_price : 0;
+  const feeAmount = currentRequest ? currentRequest.price : 0;
   const feeCut = currentRequest ? Math.round(feeAmount * 0.15) : 0;
   const feeYouReceive = feeAmount - feeCut;
   const feeAmountDisplay = `₦${feeAmount.toLocaleString()}`;
   const feeCutDisplay = `-₦${feeCut.toLocaleString()}`;
   const feeYouReceiveDisplay = `₦${feeYouReceive.toLocaleString()}`;
+  const confirmedPriceDisplay = confirmedRequest ? `₦${confirmedRequest.price.toLocaleString()}` : '';
 
   const confirmedShiftSummary = confirmedRequest ? formatShiftSummary(confirmedRequest) : '';
-  const confirmedPriceDisplay = confirmedRequest ? `₦${confirmedRequest.total_price.toLocaleString()}` : '';
 
   return (
     <View style={styles.container}>
@@ -528,12 +528,12 @@ export default function DoctorHomeScreen() {
 
             {/* Row 2: Hospital name */}
             <Text style={{ fontSize: 26, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginTop: 12 }}>
-              {currentRequest.place_name}
+              {currentRequest.hospital_name}
             </Text>
 
             {/* Row 3: Address */}
             <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 4 }}>
-              {currentRequest.address}
+              {currentRequest.hospital_address}
             </Text>
 
             {/* Row 4: Shift summary */}
@@ -629,11 +629,11 @@ export default function DoctorHomeScreen() {
             </Text>
 
             <Text style={{ fontSize: 26, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginTop: 8 }}>
-              {confirmedRequest.place_name}
+              {confirmedRequest.hospital_name}
             </Text>
 
             <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 4 }}>
-              {confirmedRequest.address}
+              {confirmedRequest.hospital_address}
             </Text>
 
             <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 8 }}>

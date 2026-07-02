@@ -793,14 +793,17 @@ export default function RequesterHomeScreen() {
 
   // ─── Matching progress animation ─────────────────────────────────────────────
   useEffect(() => {
-    if (sheetState === 'matching') {
-      matchProgressAnim.setValue(0.05);
+    if (sheetState !== 'matching') return;
+    matchProgressAnim.setValue(0);
+    const loop = Animated.loop(
       Animated.timing(matchProgressAnim, {
-        toValue: 0.85,
-        duration: 8000,
+        toValue: 1,
+        duration: 15000,
         useNativeDriver: false,
-      }).start();
-    }
+      })
+    );
+    loop.start();
+    return () => loop.stop();
   }, [sheetState, matchProgressAnim]);
 
   // ─── Realtime matching subscription + 180s timeout ───────────────────────────
