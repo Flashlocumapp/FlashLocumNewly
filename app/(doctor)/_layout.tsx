@@ -143,8 +143,14 @@ export default function DoctorLayout() {
         const res = await callEdgeRef.current(fn);
         if (isOnline) {
           if (!res || !res.ok) {
-            console.log('[DoctorLayout] go-online returned non-ok status:', res?.status);
-            // Don't revert — doctor can retry by toggling again
+            let body = '';
+            try { body = await res?.text() ?? ''; } catch (_) {}
+            console.log('[DoctorLayout] go-online failed — status:', res?.status, 'body:', body);
+            Alert.alert(
+              'Could not go online',
+              `Error ${res?.status ?? 'unknown'}: ${body || 'No response from server'}`,
+              [{ text: 'OK' }]
+            );
           } else {
             console.log('[DoctorLayout] Went online — force-syncing queue');
             await forceSyncRef.current();

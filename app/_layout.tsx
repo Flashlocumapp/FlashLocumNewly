@@ -14,6 +14,9 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 
+// Prevent splash from auto-hiding before fonts + auth are ready
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 const LAST_PATHWAY_KEY = 'flashlocum_last_pathway';
 
 const DevErrorBoundary = __DEV__
@@ -173,10 +176,14 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
+  // Module-level preventAutoHideAsync handles the initial call.
+  // This safety net hides the splash if NavigationGuard doesn't fire within 5s.
   useEffect(() => {
-    if (!fontsLoaded) {
-      SplashScreen.preventAutoHideAsync().catch(() => {});
-    }
+    if (!fontsLoaded) return;
+    const timer = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, 5000);
+    return () => clearTimeout(timer);
   }, [fontsLoaded]);
 
   if (!fontsLoaded) return null;
