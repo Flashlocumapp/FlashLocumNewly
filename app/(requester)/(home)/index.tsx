@@ -854,6 +854,7 @@ export default function RequesterHomeScreen() {
         }
       };
     }
+    return undefined;
   }, [sheetState, activeRequestId]);
 
   // ─── Show tab bar only when idle ─────────────────────────────────────────────
@@ -1002,13 +1003,94 @@ export default function RequesterHomeScreen() {
     handleResetRef.current = handleReset;
   }, [handleReset]);
 
-  const handleEditRequest = () => {
-    console.log('[RequesterHome] Edit Request tapped');
+  const handleEditRequest = async () => {
+    console.log('[RequesterHome] Edit Request tapped — withdrawing in-flight request');
+    if (activeRequestId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({ request_id: activeRequestId }),
+        }).catch(() => {});
+      }
+    }
+    // Clear match timer and realtime channel
+    if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+    if (realtimeChannelRef.current) {
+      supabase.removeChannel(realtimeChannelRef.current);
+      realtimeChannelRef.current = null;
+    }
+    setActiveRequestId(null);
     transitionTo('config');
   };
 
-  const handleCancelRequest = () => {
-    console.log('[RequesterHome] Cancel Request tapped');
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showCancelReasons, setShowCancelReasons] = useState(false);
+  const [cancelWithdrawn, setCancelWithdrawn] = useState(false);
+
+  const handleCancelRequest = async () => {
+    console.log('[RequesterHome] Cancel tapped — showing modal and withdrawing in background');
+    setShowCancelModal(true);
+    // Immediately withdraw in background
+    if (activeRequestId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        try {
+          await fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            body: JSON.stringify({ request_id: activeRequestId }),
+          });
+          setCancelWithdrawn(true);
+          console.log('[RequesterHome] Request withdrawn while cancel modal is open');
+        } catch (e) {
+          console.log('[RequesterHome] Withdraw failed silently:', e);
+        }
+      }
+    }
+  };
+
+  const handleWaitForDoctor = async () => {
+    console.log('[RequesterHome] Wait for Doctor — re-broadcasting request');
+    setShowCancelModal(false);
+    if (activeRequestId && cancelWithdrawn) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        try {
+          await fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/rebroadcast-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            body: JSON.stringify({ request_id: activeRequestId }),
+          });
+          console.log('[RequesterHome] Request re-broadcast successfully');
+        } catch (e) {
+          console.log('[RequesterHome] Re-broadcast failed:', e);
+        }
+      }
+    }
+    setCancelWithdrawn(false);
+  };
+
+  const handleConfirmCancel = () => {
+    setShowCancelModal(false);
+    setShowCancelReasons(true);
+  };
+
+  const handleCancelReasonSelected = async (reason: string) => {
+    console.log('[RequesterHome] Cancel reason selected:', reason);
+    // Update the request with cancellation reason
+    if (activeRequestId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        supabase.from('dispatch_requests')
+          .update({ status: 'cancelled', cancellation_reason: reason })
+          .eq('id', activeRequestId)
+          .then(() => console.log('[RequesterHome] Cancellation reason saved'));
+      }
+    }
+    setShowCancelReasons(false);
+    setCancelWithdrawn(false);
     handleReset();
   };
 
@@ -1985,6 +2067,112 @@ export default function RequesterHomeScreen() {
           setShowEndTimePicker(false);
         }}
       />
+
+      {/* ── CANCEL CONFIRMATION MODAL ── */}
+      <Modal
+        visible={showCancelModal}
+        transparent
+        animationType="fade"
+        onRequestClose={handleWaitForDoctor}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}
+          onPress={handleWaitForDoctor}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{
+              backgroundColor: '#1C1C1E',
+              borderRadius: 24,
+              padding: 28,
+              width: '100%',
+            }}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
+                Cancel Request?
+              </Text>
+              <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
+                Your request has been paused. Doctors can no longer see it. Would you like to wait or cancel?
+              </Text>
+              <TouchableOpacity
+                onPress={handleWaitForDoctor}
+                style={{
+                  backgroundColor: '#F9F9F6',
+                  borderRadius: 999,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                  marginBottom: 12,
+                }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Wait for Doctor</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleConfirmCancel}
+                style={{
+                  backgroundColor: '#2C2C2E',
+                  borderRadius: 999,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>Cancel Request</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── CANCELLATION REASON MODAL ── */}
+      <Modal
+        visible={showCancelReasons}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCancelReasons(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+          <View style={{
+            backgroundColor: '#1C1C1E',
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+            paddingTop: 12,
+            paddingBottom: insets.bottom + 24,
+            paddingHorizontal: 24,
+          }}>
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              <View style={{ width: 36, height: 4, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
+            </View>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 6 }}>
+              Reason for Cancellation
+            </Text>
+            <Text style={{ fontSize: 14, color: '#8E8E93', marginBottom: 24 }}>
+              Help us improve by letting us know why you cancelled.
+            </Text>
+            {[
+              'Found a doctor elsewhere',
+              'No longer needed',
+              'Wrong details entered',
+              'Taking too long',
+              'Other',
+            ].map((reason) => (
+              <TouchableOpacity
+                key={reason}
+                onPress={() => handleCancelReasonSelected(reason)}
+                style={{
+                  backgroundColor: '#2C2C2E',
+                  borderRadius: 16,
+                  paddingVertical: 16,
+                  paddingHorizontal: 20,
+                  marginBottom: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Text style={{ fontSize: 15, color: '#FFFFFF', fontWeight: '500' }}>{reason}</Text>
+                <Text style={{ fontSize: 18, color: '#8E8E93' }}>›</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
