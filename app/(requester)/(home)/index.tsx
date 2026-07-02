@@ -616,10 +616,19 @@ export default function RequesterHomeScreen() {
         const immediatePos = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Highest,
         });
+        console.log('[RequesterHome][GPS-1] getCurrentPosition:', {
+          lat: immediatePos.coords.latitude,
+          lng: immediatePos.coords.longitude,
+          accuracy: immediatePos.coords.accuracy,
+          timestamp: new Date(immediatePos.timestamp).toISOString(),
+          mapRefReady: !!mapRef.current,
+          hasInitialFix: hasInitialFix.current,
+        });
         if (!hasInitialFix.current) {
           hasInitialFix.current = true;
           console.log('[RequesterHome] Immediate GPS fix:', immediatePos.coords.latitude, immediatePos.coords.longitude);
           setUserCoords({ latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude });
+          console.log('[RequesterHome][MAP-ANIMATE] animateToRegion:', { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude, source: 'immediatePos' });
           mapRef.current?.animateToRegion({
             latitude: immediatePos.coords.latitude,
             longitude: immediatePos.coords.longitude,
@@ -631,8 +640,17 @@ export default function RequesterHomeScreen() {
         locationSub.current = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.Highest, timeInterval: 2000, distanceInterval: 1, mayShowUserSettingsDialog: true },
           (loc) => {
+            console.log('[RequesterHome][GPS-2] watchPosition update:', {
+              lat: loc.coords.latitude,
+              lng: loc.coords.longitude,
+              accuracy: loc.coords.accuracy,
+              timestamp: new Date(loc.timestamp).toISOString(),
+              hasInitialFix: hasInitialFix.current,
+              mapRefReady: !!mapRef.current,
+            });
             if (!hasInitialFix.current) {
               hasInitialFix.current = true;
+              console.log('[RequesterHome][MAP-ANIMATE] animateToRegion:', { latitude: loc.coords.latitude, longitude: loc.coords.longitude, source: 'watchStream' });
               mapRef.current?.animateToRegion({
                 latitude: loc.coords.latitude,
                 longitude: loc.coords.longitude,
@@ -662,6 +680,11 @@ export default function RequesterHomeScreen() {
     loop.start();
     return () => loop.stop();
   }, [pulseAnim]);
+
+  // ─── GPS diagnostic watcher ───────────────────────────────────────────────────
+  useEffect(() => {
+    console.log('[RequesterHome][MARKER-STATE] userCoords changed:', userCoords);
+  }, [userCoords]);
 
   // ─── Sheet height animation ───────────────────────────────────────────────────
   const animateSheet = useCallback((state: SheetState) => {

@@ -61,6 +61,14 @@ export default function DoctorHomeScreen() {
       const immediatePos = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Highest,
       });
+      console.log('[DoctorHome][GPS-1] getCurrentPosition:', {
+        lat: immediatePos.coords.latitude,
+        lng: immediatePos.coords.longitude,
+        accuracy: immediatePos.coords.accuracy,
+        timestamp: new Date(immediatePos.timestamp).toISOString(),
+        mapRefReady: !!mapRef.current,
+        hasAnimated: hasAnimatedToUser.current,
+      });
       if (active) {
         const coords = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude };
         console.log('[DoctorHome] Immediate GPS fix:', coords);
@@ -68,6 +76,7 @@ export default function DoctorHomeScreen() {
         if (!hasAnimatedToUser.current && mapRef.current) {
           hasAnimatedToUser.current = true;
           console.log('[DoctorHome] Animating map to immediate fix');
+          console.log('[DoctorHome][MAP-ANIMATE] animateToRegion:', { ...coords, source: 'immediatePos' });
           mapRef.current.animateToRegion({ ...coords, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 800);
         }
       }
@@ -81,12 +90,21 @@ export default function DoctorHomeScreen() {
         },
         (loc) => {
           if (!active) return;
+          console.log('[DoctorHome][GPS-2] watchPosition update:', {
+            lat: loc.coords.latitude,
+            lng: loc.coords.longitude,
+            accuracy: loc.coords.accuracy,
+            timestamp: new Date(loc.timestamp).toISOString(),
+            hasAnimated: hasAnimatedToUser.current,
+            mapRefReady: !!mapRef.current,
+          });
           const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
           console.log('[DoctorHome] Location update:', coords);
           setUserLocation(coords);
           if (!hasAnimatedToUser.current && mapRef.current) {
             hasAnimatedToUser.current = true;
             console.log('[DoctorHome] Animating map to user location');
+            console.log('[DoctorHome][MAP-ANIMATE] animateToRegion:', { ...coords, source: 'watchStream' });
             mapRef.current.animateToRegion(
               { ...coords, latitudeDelta: 0.01, longitudeDelta: 0.01 },
               800,
@@ -125,6 +143,15 @@ export default function DoctorHomeScreen() {
     loop.start();
     return () => loop.stop();
   }, [isOnline, radarScale, radarOpacity]);
+
+  // ─── GPS diagnostic watchers ─────────────────────────────────────────────────
+  useEffect(() => {
+    console.log('[DoctorHome][MARKER-STATE] userLocation changed:', userLocation);
+  }, [userLocation]);
+
+  useEffect(() => {
+    console.log('[DoctorHome][ONLINE-STATE] isOnline:', isOnline, 'userLocation at this moment:', userLocation);
+  }, [isOnline]);
 
   // ─── Toggle online/offline ───────────────────────────────────────────────────
   const handleToggleStatus = () => {
