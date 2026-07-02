@@ -17,6 +17,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/constants/Theme'
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
+import LiveTimer from '@/components/LiveTimer';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -174,26 +175,21 @@ interface RequesterCardProps {
   isHistory?: boolean;
 }
 
-function RequesterCard({
-  session,
-  onCall,
-  onStartShift,
-  onPauseShift,
-  onResumeShift,
-  onEndShift,
-  onCancel,
-  isHistory,
-}: RequesterCardProps) {
+function RequesterCard({ session, onCall, onStartShift, onPauseShift, onResumeShift, onEndShift, onCancel, isHistory }: RequesterCardProps) {
   const isActive = session.status === 'active';
   const isPaused = session.status === 'paused';
   const isUpcoming = session.status === 'upcoming';
-  const isMultiday = session.shift_type === 'multiday';
+  const isMultiday = session.shift_type?.toLowerCase() === 'multiday';
   const accentColor = isActive ? '#2DC653' : isPaused ? '#F4A261' : 'transparent';
   const showAccent = isActive || isPaused;
 
   const shiftStart = formatTime(session.shift_start);
   const shiftEnd = formatTime(session.shift_end);
-  const timeRange = `${shiftStart}–${shiftEnd}`;
+  const dayLabel = session.shift_date
+    ? new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short' })
+    : '';
+  const shiftSummary = `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd}`;
+
   const ratingDisplay = Number(session.doctor_rating).toFixed(1);
   const reliabilityDisplay = Math.round(Number(session.doctor_reliability));
 
@@ -202,240 +198,128 @@ function RequesterCard({
       style={[
         {
           backgroundColor: '#FFFFFF',
-          borderRadius: RADIUS.xl,
-          marginBottom: SPACING.base,
+          borderRadius: 20,
+          marginBottom: 12,
           overflow: 'hidden',
           opacity: isHistory ? 0.7 : 1,
         },
         Platform.OS === 'ios'
-          ? { boxShadow: '0 2px 8px rgba(0,102,204,0.08)' }
-          : { elevation: 4 },
+          ? { boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }
+          : { elevation: 3 },
       ]}
     >
-      {/* Left accent border */}
+      {/* Left accent */}
       {showAccent && (
-        <View
-          style={{
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: 3,
-            backgroundColor: accentColor,
-            borderTopLeftRadius: RADIUS.xl,
-            borderBottomLeftRadius: RADIUS.xl,
-          }}
-        />
+        <View style={{
+          position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
+          backgroundColor: accentColor, borderTopLeftRadius: 20, borderBottomLeftRadius: 20,
+        }} />
       )}
 
-      <View style={{ padding: SPACING.base, paddingLeft: showAccent ? SPACING.base + 3 : SPACING.base }}>
-        {/* Header row */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md }}>
-          <StatusPill status={session.status} />
-          <DateChip dateStr={session.shift_date} />
+      <View style={{ padding: 16, paddingLeft: showAccent ? 19 : 16 }}>
+        {/* Doctor info — no avatar, clean text */}
+        <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }} numberOfLines={1}>
+          {session.doctor_name}
+        </Text>
+
+        {/* MDCN · ★ rating · ● reliability — one line */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3, gap: 6 }}>
+          <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#71717A' }}>
+            {session.doctor_mdcn || 'MDCN/R/—'}
+          </Text>
+          <Text style={{ color: '#D4D4D8', fontSize: 12 }}>·</Text>
+          <Text style={{ fontSize: 12, color: '#F4A261' }}>★</Text>
+          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#F4A261' }}>{ratingDisplay}</Text>
+          <Text style={{ color: '#D4D4D8', fontSize: 12 }}>·</Text>
+          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#2DC653' }} />
+          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#2DC653' }}>{reliabilityDisplay}%</Text>
         </View>
 
-        {/* Doctor info */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.md }}>
-          <DoctorAvatar name={session.doctor_name} />
-          <View style={{ flex: 1 }}>
-            <Text style={[TYPOGRAPHY.h4, { color: COLORS.text }]} numberOfLines={1}>
-              {session.doctor_name}
-            </Text>
-            <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, marginTop: 2 }]}>
-              {session.doctor_mdcn}
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: SPACING.md }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                <Text style={{ fontSize: 13, color: '#F4A261' }}>★</Text>
-                <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]}>{ratingDisplay}</Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.success }} />
-                <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]}>{reliabilityDisplay}%</Text>
-              </View>
-            </View>
-          </View>
-        </View>
+        {/* Shift summary */}
+        <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#71717A', marginTop: 3 }} numberOfLines={1}>
+          {shiftSummary}
+        </Text>
 
-        {/* Divider */}
-        <View style={{ height: 1, backgroundColor: COLORS.divider, marginBottom: SPACING.md }} />
+        {/* Live timer for active */}
+        {isActive && <LiveTimer startedAt={session.started_at} />}
 
-        {/* Stats row */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: isHistory ? 0 : SPACING.md, gap: SPACING.base }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
-            <Text style={{ fontSize: 14 }}>🏥</Text>
-            <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary, flex: 1 }]} numberOfLines={1}>
-              {session.hospital_name}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Text style={{ fontSize: 14 }}>🕐</Text>
-            <Text style={[TYPOGRAPHY.caption, { color: COLORS.textSecondary }]}>{timeRange}</Text>
-          </View>
-        </View>
-
-        {/* History: show ended_at */}
+        {/* History ended_at */}
         {isHistory && session.ended_at && (
-          <Text style={[TYPOGRAPHY.caption, { color: COLORS.textTertiary, marginTop: SPACING.xs }]}>
-            {'Ended: '}
-            {new Date(session.ended_at).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+          <Text style={{ fontSize: 12, color: '#A1A1AA', marginTop: 8 }}>
+            {'Ended: '}{new Date(session.ended_at).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
           </Text>
         )}
 
-        {/* Action buttons */}
+        {/* Action buttons — single non-wrapping row */}
         {!isHistory && (
-          <View style={{ flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' }}>
-            {/* CALL button — always shown for non-history */}
-            <TouchableOpacity
-              onPress={() => {
-                console.log('[RequesterCoverage] Call doctor pressed:', session.id);
-                onCall(session);
-              }}
-              style={{
-                flex: 1,
-                minWidth: 70,
-                borderWidth: 1.5,
-                borderColor: '#1C1C1E',
-                borderRadius: RADIUS.full,
-                paddingVertical: 12,
-                alignItems: 'center',
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={[TYPOGRAPHY.captionMedium, { color: '#1C1C1E', fontWeight: '700' }]}>
-                CALL
-              </Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+            {/* CALL — always shown */}
+            <TouchableOpacity onPress={() => {
+              console.log('[RequesterCoverage] Call doctor pressed:', session.id);
+              onCall(session);
+            }} activeOpacity={0.8}
+              style={{ flex: 1, borderWidth: 1.5, borderColor: '#1C1C1E', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E', letterSpacing: 0.3 }}>CALL</Text>
             </TouchableOpacity>
 
-            {/* Upcoming buttons */}
+            {/* Upcoming */}
             {isUpcoming && (
               <>
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log('[RequesterCoverage] Start shift pressed:', session.id);
-                    onStartShift(session);
-                  }}
-                  style={{
-                    flex: 2,
-                    minWidth: 100,
-                    backgroundColor: COLORS.primary,
-                    borderRadius: RADIUS.full,
-                    paddingVertical: 12,
-                    alignItems: 'center',
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[TYPOGRAPHY.captionMedium, { color: '#FFFFFF', fontWeight: '700' }]}>
-                    START SHIFT
-                  </Text>
+                <TouchableOpacity onPress={() => {
+                  console.log('[RequesterCoverage] Start shift pressed:', session.id);
+                  onStartShift(session);
+                }} activeOpacity={0.8}
+                  style={{ flex: 2, backgroundColor: '#1C1C1E', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF', letterSpacing: 0.3 }}>START SHIFT</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log('[RequesterCoverage] Cancel shift pressed:', session.id);
-                    onCancel(session);
-                  }}
-                  style={{
-                    flex: 1,
-                    minWidth: 70,
-                    backgroundColor: COLORS.dangerMuted,
-                    borderRadius: RADIUS.full,
-                    paddingVertical: 12,
-                    alignItems: 'center',
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[TYPOGRAPHY.captionMedium, { color: COLORS.danger, fontWeight: '700' }]}>
-                    CANCEL
-                  </Text>
+                <TouchableOpacity onPress={() => {
+                  console.log('[RequesterCoverage] Cancel shift pressed:', session.id);
+                  onCancel(session);
+                }} activeOpacity={0.8}
+                  style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#DC2626', letterSpacing: 0.3 }}>CANCEL</Text>
                 </TouchableOpacity>
               </>
             )}
 
-            {/* Active buttons */}
-            {isActive && isMultiday && (
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('[RequesterCoverage] Pause shift pressed:', session.id);
-                  onPauseShift(session);
-                }}
-                style={{
-                  flex: 1,
-                  minWidth: 90,
-                  backgroundColor: COLORS.warningMuted,
-                  borderRadius: RADIUS.full,
-                  paddingVertical: 12,
-                  alignItems: 'center',
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={[TYPOGRAPHY.captionMedium, { color: COLORS.warning, fontWeight: '700' }]}>
-                  PAUSE
-                </Text>
-              </TouchableOpacity>
-            )}
+            {/* Active */}
             {isActive && (
-              <TouchableOpacity
-                onPress={() => {
+              <>
+                {isMultiday && (
+                  <TouchableOpacity onPress={() => {
+                    console.log('[RequesterCoverage] Pause shift pressed:', session.id);
+                    onPauseShift(session);
+                  }} activeOpacity={0.8}
+                    style={{ flex: 1, backgroundColor: '#FEF3C7', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#92400E', letterSpacing: 0.3 }}>PAUSE</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => {
                   console.log('[RequesterCoverage] End shift pressed:', session.id);
                   onEndShift(session);
-                }}
-                style={{
-                  flex: 1,
-                  minWidth: 90,
-                  backgroundColor: COLORS.dangerMuted,
-                  borderRadius: RADIUS.full,
-                  paddingVertical: 12,
-                  alignItems: 'center',
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={[TYPOGRAPHY.captionMedium, { color: COLORS.danger, fontWeight: '700' }]}>
-                  END SHIFT
-                </Text>
-              </TouchableOpacity>
+                }} activeOpacity={0.8}
+                  style={{ flex: 2, backgroundColor: '#FEE2E2', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#DC2626', letterSpacing: 0.3 }}>END SHIFT</Text>
+                </TouchableOpacity>
+              </>
             )}
 
-            {/* Paused buttons */}
+            {/* Paused */}
             {isPaused && (
               <>
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log('[RequesterCoverage] Resume shift pressed:', session.id);
-                    onResumeShift(session);
-                  }}
-                  style={{
-                    flex: 1,
-                    minWidth: 90,
-                    backgroundColor: COLORS.successMuted,
-                    borderRadius: RADIUS.full,
-                    paddingVertical: 12,
-                    alignItems: 'center',
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[TYPOGRAPHY.captionMedium, { color: COLORS.success, fontWeight: '700' }]}>
-                    RESUME
-                  </Text>
+                <TouchableOpacity onPress={() => {
+                  console.log('[RequesterCoverage] Resume shift pressed:', session.id);
+                  onResumeShift(session);
+                }} activeOpacity={0.8}
+                  style={{ flex: 1, backgroundColor: '#DCFCE7', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#15803D', letterSpacing: 0.3 }}>RESUME</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log('[RequesterCoverage] End shift (from paused) pressed:', session.id);
-                    onEndShift(session);
-                  }}
-                  style={{
-                    flex: 1,
-                    minWidth: 90,
-                    backgroundColor: COLORS.dangerMuted,
-                    borderRadius: RADIUS.full,
-                    paddingVertical: 12,
-                    alignItems: 'center',
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[TYPOGRAPHY.captionMedium, { color: COLORS.danger, fontWeight: '700' }]}>
-                    END SHIFT
-                  </Text>
+                <TouchableOpacity onPress={() => {
+                  console.log('[RequesterCoverage] End shift (from paused) pressed:', session.id);
+                  onEndShift(session);
+                }} activeOpacity={0.8}
+                  style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#DC2626', letterSpacing: 0.3 }}>END SHIFT</Text>
                 </TouchableOpacity>
               </>
             )}
