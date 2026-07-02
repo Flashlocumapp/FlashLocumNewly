@@ -823,6 +823,20 @@ export default function RequesterHomeScreen() {
     })
   ).current;
 
+  // ─── Idle card drag responder — swipe up to open search ─────────────────────
+  const idleDragResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 5,
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy < -20) {
+          console.log('[RequesterHome] Idle drag handle swiped up — opening search');
+          transitionTo('searching');
+        }
+      },
+    })
+  ).current;
+
   // ─── Handlers ────────────────────────────────────────────────────────────────
   const handleSearchTap = () => {
     console.log('[RequesterHome] Search input tapped');
@@ -1061,7 +1075,7 @@ export default function RequesterHomeScreen() {
           {/* SEARCHING */}
           {sheetState === 'searching' && (
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-              <View style={{ flex: 1, paddingTop: 20 }}>
+              <Pressable onPress={() => Keyboard.dismiss()} style={{ flex: 1, paddingTop: 20 }}>
                 <DragHandle panHandlers={dragPanResponder.panHandlers} />
 
                 {/* Search input */}
@@ -1144,6 +1158,7 @@ export default function RequesterHomeScreen() {
                 {searchResults.length > 0 && (
                   <ScrollView
                     keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="on-drag"
                     style={{
                       marginHorizontal: 16,
                       backgroundColor: '#2C2C2E',
@@ -1195,7 +1210,7 @@ export default function RequesterHomeScreen() {
                     <Text style={{ fontSize: 14, color: '#8E8E93' }}>No places found in Lagos</Text>
                   </View>
                 )}
-              </View>
+              </Pressable>
             </KeyboardAvoidingView>
           )}
 
@@ -1790,8 +1805,11 @@ export default function RequesterHomeScreen() {
             shadowRadius: 10,
             elevation: 10,
           }}>
-            {/* Drag handle */}
-            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+            {/* Drag handle — swipe up to search */}
+            <View
+              {...idleDragResponder.panHandlers}
+              style={{ alignItems: 'center', marginBottom: 16, paddingVertical: 8 }}
+            >
               <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
             </View>
             {/* Search capsule */}
