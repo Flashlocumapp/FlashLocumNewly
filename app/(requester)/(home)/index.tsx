@@ -587,6 +587,7 @@ export default function RequesterHomeScreen() {
   // Realtime refs for matching
   const matchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const realtimeChannelRef = useRef<any>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ─── Load recent place on mount ───────────────────────────────────────────────
   useEffect(() => {
@@ -824,6 +825,11 @@ export default function RequesterHomeScreen() {
       realtimeChannelRef.current = supabase.channel(channelName)
         .on('broadcast', { event: 'MATCH_CONFIRMED' }, (payload) => {
           console.log('[RequesterHome] MATCH_CONFIRMED received:', JSON.stringify(payload));
+          if (pollIntervalRef.current) {
+            console.log('[RequesterHome] MATCH_CONFIRMED — clearing poll interval');
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
           if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
           const doctor = payload.payload?.doctor;
           setMatchedDoctor({
@@ -837,6 +843,10 @@ export default function RequesterHomeScreen() {
         })
         .on('broadcast', { event: 'REQUEST_EXPIRED' }, () => {
           console.log('[RequesterHome] REQUEST_EXPIRED received');
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
           if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
           Alert.alert('Request Expired', 'Your request expired. Please try again.');
           transitionTo('summary');
@@ -845,8 +855,67 @@ export default function RequesterHomeScreen() {
           console.log('[RequesterHome] Realtime channel status:', channelName, status);
         });
 
+      // Poll every 5 seconds as fallback in case MATCH_CONFIRMED broadcast was missed
+      pollIntervalRef.current = setInterval(async () => {
+        if (!activeRequestId) return;
+        console.log('[RequesterHome] Polling for match status:', activeRequestId);
+        const { data, error } = await supabase
+          .from('coverage_requests')
+          .select('status, matched_doctor_id')
+          .eq('id', activeRequestId)
+          .single();
+
+        if (error) {
+          console.log('[RequesterHome] Poll error:', error.message);
+          return;
+        }
+
+        if (data?.status === 'matched' && data?.matched_doctor_id) {
+          console.log('[RequesterHome] Poll detected match — fetching doctor details');
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+          if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+
+          const { data: session } = await supabase
+            .from('coverage_sessions')
+            .select('doctor_name, doctor_mdcn, doctor_rating, doctor_reliability')
+            .eq('request_id', activeRequestId)
+            .single();
+
+          if (session) {
+            setMatchedDoctor({
+              name: session.doctor_name || 'Dr. Unknown',
+              mdcn: session.doctor_mdcn || 'MDCN/R/00000',
+              rating: session.doctor_rating || 5.0,
+              reliability: session.doctor_reliability || 100,
+              shift_summary: `${coverageType} · ${formattedDateShort} · ${formattedStartTime} – ${formattedEndTime}`,
+            });
+            transitionTo('matched');
+          }
+        }
+
+        if (
+          data?.status === 'cancelled' ||
+          data?.status === 'withdrawn' ||
+          data?.status === 'expired'
+        ) {
+          console.log('[RequesterHome] Poll detected cancellation/expiry:', data.status);
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+        }
+      }, 5000);
+
       return () => {
         if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+        if (pollIntervalRef.current) {
+          console.log('[RequesterHome] Cleanup — clearing poll interval');
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
         if (realtimeChannelRef.current) {
           console.log('[RequesterHome] Removing realtime channel:', channelName);
           supabase.removeChannel(realtimeChannelRef.current);
