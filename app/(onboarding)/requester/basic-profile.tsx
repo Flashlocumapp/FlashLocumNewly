@@ -33,8 +33,8 @@ export default function RequesterBasicProfile() {
   const [submitError, setSubmitError] = useState('');
 
   const handleBack = () => {
-    console.log('[RequesterBasicProfile] Back button pressed, onboarding_complete:', profile?.onboarding_complete);
-    if (profile?.onboarding_complete) {
+    console.log('[RequesterBasicProfile] Back button pressed, requester_onboarding_complete:', profile?.requester_onboarding_complete);
+    if (profile?.requester_onboarding_complete) {
       router.replace('/(requester)/(home)' as any);
     } else {
       router.replace('/(auth)/role-select');

@@ -19,7 +19,7 @@ const DevErrorBoundary = __DEV__
   : ({ children }: { children: React.ReactNode }) => <>{children}</>;
 
 function NavigationGuard() {
-  const { session, user, profile, isReady } = useAuth();
+  const { session, user, profile, isReady, profileLoading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
   const [lastPathway, setLastPathway] = useState<'doctor' | 'requester' | null | undefined>(undefined);
@@ -37,6 +37,7 @@ function NavigationGuard() {
   useEffect(() => {
     if (!isReady || lastPathway === undefined) return;
     if (hasRouted.current) return;
+    if (profileLoading) return; // wait for profile fetch to complete
 
     hasRouted.current = true;
     SplashScreen.hideAsync();
@@ -99,16 +100,16 @@ function NavigationGuard() {
     AsyncStorage.setItem(LAST_PATHWAY_KEY, pathway).catch(() => {});
     console.log('[NavigationGuard] Both complete → last pathway:', dest);
     router.replace(dest as any);
-  }, [isReady, lastPathway, session, profile]);
+  }, [isReady, lastPathway, session, profile, profileLoading]);
 
-  // Sign-out watcher — reset hasRouted so next sign-in re-routes
+  // Sign-out watcher — only reset after session AND profile are both gone
   useEffect(() => {
-    if (!session && hasRouted.current) {
-      console.log('[NavigationGuard] Session lost after routing — resetting and going to intro');
+    if (!session && !profile && hasRouted.current) {
+      console.log('[NavigationGuard] Session + profile both gone — resetting and going to intro');
       hasRouted.current = false;
       router.replace('/(auth)/intro' as any);
     }
-  }, [session]);
+  }, [session, profile]);
 
   // Cross-portal redirect guard — fires on segment changes after initial routing
   useEffect(() => {

@@ -828,6 +828,23 @@ export default function RequesterHomeScreen() {
       const { totalNaira: submitPrice, totalHours: submitDurationHours } = calculateCoveragePrice(
         startTime, endTime, coverageLength, coverageType, environment, pricingConfig
       );
+
+      // Construct ISO datetime strings for start_date and end_date
+      const shiftDateStr = shiftDate.toISOString().split('T')[0]; // YYYY-MM-DD
+
+      const startDateObj = new Date(shiftDate);
+      startDateObj.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
+
+      const endDateObj = new Date(shiftDate);
+      endDateObj.setHours(endTime.getHours(), endTime.getMinutes(), 0, 0);
+      if (endDateObj <= startDateObj) {
+        endDateObj.setDate(endDateObj.getDate() + 1);
+      }
+
+      const startDateISO = startDateObj.toISOString();
+      const endDateISO = endDateObj.toISOString();
+      console.log('[RequesterHome] Constructed start_date:', startDateISO, 'end_date:', endDateISO);
+
       const res = await fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/submit-request', {
         method: 'POST',
         headers: {
@@ -840,9 +857,11 @@ export default function RequesterHomeScreen() {
           latitude: selectedPlace.lat,
           longitude: selectedPlace.lng,
           shift_type: coverageType,
-          shift_date: shiftDate.toISOString().split('T')[0],
+          shift_date: shiftDateStr,
           start_time: startTime.toTimeString().slice(0, 5),
           end_time: endTime.toTimeString().slice(0, 5),
+          start_date: startDateISO,
+          end_date: endDateISO,
           coverage_length: coverageLength,
           duration_hours: submitDurationHours,
           environment,
