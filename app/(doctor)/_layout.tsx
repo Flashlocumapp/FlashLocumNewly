@@ -79,6 +79,7 @@ export default function DoctorLayout() {
   const forceSyncRef = useRef<() => Promise<void>>(async () => {});
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const isOnlineRef = useRef(false);
+  const isRealtimeHealthyRef = useRef(false);
 
   const getToken = useCallback(async (): Promise<string | null> => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -181,13 +182,16 @@ export default function DoctorLayout() {
     return () => clearInterval(id);
   }, [isOnline, user, callEdge]);
 
-  // ── 15-second polling fallback while online ──
-  // Ensures requests are picked up even if the realtime WebSocket broadcast is missed
+  // ── 15-second polling fallback — only fires when Realtime is unhealthy ──
   useEffect(() => {
     if (!isOnline || !user) return;
     const id = setInterval(() => {
-      console.log('[DoctorLayout] Poll tick — force-syncing');
-      forceSyncRef.current();
+      if (!isRealtimeHealthyRef.current) {
+        console.log('[DoctorLayout] Poll tick — Realtime unhealthy, force-syncing');
+        forceSyncRef.current();
+      } else {
+        console.log('[DoctorLayout] Poll tick — Realtime healthy, skipping');
+      }
     }, 15000);
     return () => clearInterval(id);
   }, [isOnline, user]);
@@ -220,6 +224,7 @@ export default function DoctorLayout() {
       })
       .subscribe((status) => {
         console.log('[DoctorLayout] dispatch:lagos subscription status:', status);
+        isRealtimeHealthyRef.current = status === 'SUBSCRIBED';
         if (status === 'SUBSCRIBED' && isOnlineRef.current) {
           forceSync();
         }
@@ -231,6 +236,27 @@ export default function DoctorLayout() {
       channelRef.current = null;
     };
   }, [user]); // intentionally omit isOnline/forceSync to avoid re-subscribing
+
+  // ── Realtime socket open/close — immediate resync on reconnect ──
+  useEffect(() => {
+    const handleOpen = () => {
+      console.log('[DoctorLayout] Realtime socket opened — marking healthy');
+      isRealtimeHealthyRef.current = true;
+      if (isOnlineRef.current) {
+        console.log('[DoctorLayout] Realtime reconnected — immediate force-sync');
+        forceSyncRef.current();
+      }
+    };
+    const handleClose = () => {
+      console.log('[DoctorLayout] Realtime socket closed — marking unhealthy');
+      isRealtimeHealthyRef.current = false;
+    };
+    supabase.realtime.onOpen(handleOpen);
+    supabase.realtime.onClose(handleClose);
+    return () => {
+      // Phoenix socket doesn't expose removeListener — refs go stale on unmount naturally
+    };
+  }, []);
 
   // ── Queue → state sync ──
   useEffect(() => {
