@@ -78,6 +78,7 @@ export default function DoctorLayout() {
   const callEdgeRef = useRef<(fn: string, body?: object) => Promise<Response | null>>(async () => null);
   const forceSyncRef = useRef<() => Promise<void>>(async () => {});
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const isOnlineRef = useRef(false);
 
   const getToken = useCallback(async (): Promise<string | null> => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -129,6 +130,7 @@ export default function DoctorLayout() {
   // Keep stable refs for callEdge and forceSync so the toggle effect never re-fires due to their identity changing
   useEffect(() => { callEdgeRef.current = callEdge; }, [callEdge]);
   useEffect(() => { forceSyncRef.current = forceSync; }, [forceSync]);
+  useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
 
   // ── Go-online / Go-offline — only fires when isOnline actually changes ──
   useEffect(() => {
@@ -196,6 +198,9 @@ export default function DoctorLayout() {
           if (prev.some((r) => r.id === req.id)) return prev;
           return [...prev, req];
         });
+        if (isOnlineRef.current) {
+          setDoctorScreenState('incoming');
+        }
       })
       .on('broadcast', { event: 'EVICT_REQUEST' }, (payload) => {
         const evictedId: string = payload.payload?.request_id;
@@ -204,7 +209,7 @@ export default function DoctorLayout() {
       })
       .subscribe((status) => {
         console.log('[DoctorLayout] dispatch:lagos subscription status:', status);
-        if (status === 'SUBSCRIBED' && isOnline) {
+        if (status === 'SUBSCRIBED' && isOnlineRef.current) {
           forceSync();
         }
       });
