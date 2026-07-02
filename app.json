@@ -31,6 +31,10 @@
         "googleMaps": {
           "apiKey": "AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU"
         }
+      },
+      "navigationBar": {
+        "backgroundColor": "#F9F9F6",
+        "barStyle": "dark-content"
       }
     },
     "web": {
