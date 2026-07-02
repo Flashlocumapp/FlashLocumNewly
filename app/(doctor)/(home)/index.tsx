@@ -398,13 +398,17 @@ export default function DoctorHomeScreen() {
             tracksViewChanges={false}
           >
             <View style={styles.markerContainer}>
+              {/* Soft dark glow — animated scale+opacity */}
               <Animated.View
                 style={[
                   styles.radarRing,
                   { transform: [{ scale: radarScale }], opacity: radarOpacity },
                 ]}
               />
-              <MaterialCommunityIcons name="stethoscope" size={32} color="#1C1C1E" />
+              {/* Dark charcoal circle background with white stethoscope */}
+              <View style={styles.stethoscopeCircle}>
+                <MaterialCommunityIcons name="stethoscope" size={28} color="#FFFFFF" />
+              </View>
             </View>
           </Marker>
         )}
@@ -426,6 +430,8 @@ export default function DoctorHomeScreen() {
         {/* ── IDLE STATE ── */}
         {doctorScreenState === 'idle' && (
           <>
+            {/* Decorative drag handle */}
+            <View style={styles.dragHandle} />
             {/* Coverage sub-card */}
             <View style={styles.subCard}>
               <Text style={styles.subCardLabel}>COVERAGE</Text>
@@ -680,17 +686,39 @@ const styles = StyleSheet.create({
   },
   // Marker
   markerContainer: {
-    width: 64,
-    height: 64,
+    width: 80,
+    height: 80,
     alignItems: 'center',
     justifyContent: 'center',
   },
   radarRing: {
     position: 'absolute',
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(52,199,89,0.25)',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(28,28,30,0.35)',
+  },
+  stethoscopeCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#1C1C1E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#3A3A3C',
+    alignSelf: 'center',
+    marginBottom: 16,
+    marginTop: 12,
   },
   // Pill
   pill: {
