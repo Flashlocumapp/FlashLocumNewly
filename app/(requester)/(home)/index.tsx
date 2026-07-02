@@ -549,8 +549,25 @@ export default function RequesterHomeScreen() {
       console.log('[RequesterHome] Requesting location permission');
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
+        // One-time immediate fix
+        console.log('[RequesterHome] Fetching immediate GPS fix');
+        const immediatePos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Highest,
+        });
+        if (!hasInitialFix.current) {
+          hasInitialFix.current = true;
+          console.log('[RequesterHome] Immediate GPS fix:', immediatePos.coords.latitude, immediatePos.coords.longitude);
+          setUserCoords({ latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude });
+          mapRef.current?.animateToRegion({
+            latitude: immediatePos.coords.latitude,
+            longitude: immediatePos.coords.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }, 800);
+        }
+        console.log('[RequesterHome] Starting watch stream');
         locationSub.current = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.Highest, timeInterval: 2000, distanceInterval: 5, mayShowUserSettingsDialog: true },
+          { accuracy: Location.Accuracy.Highest, timeInterval: 2000, distanceInterval: 1, mayShowUserSettingsDialog: true },
           (loc) => {
             if (!hasInitialFix.current) {
               hasInitialFix.current = true;
@@ -958,7 +975,7 @@ export default function RequesterHomeScreen() {
         maxZoomLevel={14}
       >
         {userCoords && (
-          <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={true}>
+          <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
             <View style={{ width: 100, height: 100, alignItems: 'center', justifyContent: 'center' }}>
               <Animated.View style={{
                 position: 'absolute', width: 100, height: 100, borderRadius: 50,

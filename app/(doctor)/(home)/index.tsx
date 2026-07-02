@@ -161,12 +161,28 @@ export default function DoctorHomeScreen() {
         console.log('[DoctorHome] Location permission denied');
         return;
       }
-      console.log('[DoctorHome] Location permission granted, starting watch');
+      console.log('[DoctorHome] Location permission granted, fetching immediate fix');
+      // One-time immediate fix — snaps map before watch stream fires
+      const immediatePos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Highest,
+      });
+      if (active) {
+        const coords = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude };
+        console.log('[DoctorHome] Immediate GPS fix:', coords);
+        setUserLocation(coords);
+        if (!hasAnimatedToUser.current && mapRef.current) {
+          hasAnimatedToUser.current = true;
+          console.log('[DoctorHome] Animating map to immediate fix');
+          mapRef.current.animateToRegion({ ...coords, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 800);
+        }
+      }
+      console.log('[DoctorHome] Starting watch stream');
       locationSubscription.current = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.Highest,
           timeInterval: 2000,
-          distanceInterval: 5,
+          distanceInterval: 1,
+          mayShowUserSettingsDialog: true,
         },
         (loc) => {
           if (!active) return;
@@ -387,7 +403,6 @@ export default function DoctorHomeScreen() {
         style={StyleSheet.absoluteFillObject}
         provider={PROVIDER_GOOGLE}
         initialRegion={LAGOS_REGION}
-        showsUserLocation={true}
         showsMyLocationButton={false}
         customMapStyle={DESATURATED_MAP_STYLE}
       >
