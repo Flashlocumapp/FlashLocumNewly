@@ -181,6 +181,17 @@ export default function DoctorLayout() {
     return () => clearInterval(id);
   }, [isOnline, user, callEdge]);
 
+  // ── 15-second polling fallback while online ──
+  // Ensures requests are picked up even if the realtime WebSocket broadcast is missed
+  useEffect(() => {
+    if (!isOnline || !user) return;
+    const id = setInterval(() => {
+      console.log('[DoctorLayout] Poll tick — force-syncing');
+      forceSyncRef.current();
+    }, 15000);
+    return () => clearInterval(id);
+  }, [isOnline, user]);
+
   // ── Realtime subscription ──
   useEffect(() => {
     if (!user) return;
