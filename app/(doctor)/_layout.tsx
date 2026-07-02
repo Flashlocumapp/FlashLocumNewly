@@ -279,7 +279,10 @@ export default function DoctorLayout() {
         await forceSync();
         return;
       }
-      if (!res.ok) throw new Error('Accept failed');
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(body || 'Accept failed');
+      }
       console.log('[DoctorLayout] Request accepted successfully — transitioning to confirmed');
       setConfirmedRequest(req);
       setDoctorScreenState('confirmed');
