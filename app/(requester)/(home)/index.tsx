@@ -138,7 +138,8 @@ const MINIMALIST_MAP_STYLE = [
 ];
 
 // ─── Custom Time Picker ───────────────────────────────────────────────────────
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const HOURS = Array.from({ length: 12 }, (_, i) => i + 1); // 1–12
+const AMPM = ['AM', 'PM'];
 const MINUTES = [0, 15, 30, 45];
 const ITEM_HEIGHT = 48;
 
@@ -159,46 +160,66 @@ function CustomTimePicker({
   shiftDate: Date;
   watNow: Date;
 }) {
-  const [selectedHour, setSelectedHour] = useState(initialTime.getHours());
+  const [selectedHour, setSelectedHour] = useState(() => {
+    const h = initialTime.getHours();
+    if (h === 0) return 12;
+    if (h > 12) return h - 12;
+    return h;
+  });
   const [selectedMinute, setSelectedMinute] = useState(() => {
     const m = initialTime.getMinutes();
     // snap to nearest 15
     return MINUTES.reduce((prev, curr) => Math.abs(curr - m) < Math.abs(prev - m) ? curr : prev, 0);
   });
+  const [selectedAmPm, setSelectedAmPm] = useState<'AM' | 'PM'>(() => {
+    return initialTime.getHours() < 12 ? 'AM' : 'PM';
+  });
 
   const hourListRef = useRef<FlatList<number>>(null);
   const minuteListRef = useRef<FlatList<number>>(null);
+  const ampmListRef = useRef<FlatList<string>>(null);
 
   useEffect(() => {
     if (visible) {
-      const h = initialTime.getHours();
+      const h24 = initialTime.getHours();
+      const ampm = h24 < 12 ? 'AM' : 'PM';
+      const h12 = h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24;
       const rawM = initialTime.getMinutes();
       const snappedM = MINUTES.reduce((prev, curr) => Math.abs(curr - rawM) < Math.abs(prev - rawM) ? curr : prev, 0);
-      setSelectedHour(h);
+      setSelectedHour(h12);
+      setSelectedAmPm(ampm);
       setSelectedMinute(snappedM);
       setTimeout(() => {
-        hourListRef.current?.scrollToIndex({ index: h, animated: false });
+        hourListRef.current?.scrollToIndex({ index: h12 - 1, animated: false });
         const mIdx = MINUTES.indexOf(snappedM);
         minuteListRef.current?.scrollToIndex({ index: mIdx >= 0 ? mIdx : 0, animated: false });
+        ampmListRef.current?.scrollToIndex({ index: ampm === 'AM' ? 0 : 1, animated: false });
       }, 100);
     }
   }, [visible]);
 
   const handleDone = () => {
-    console.log('[CustomTimePicker] Done pressed — hour:', selectedHour, 'minute:', selectedMinute);
-    // WAT validation: if shift date is today (WAT), ensure selected time is in the future
+    // Convert 12h + AM/PM to 24h
+    let h24: number;
+    if (selectedAmPm === 'AM') {
+      h24 = selectedHour === 12 ? 0 : selectedHour;
+    } else {
+      h24 = selectedHour === 12 ? 12 : selectedHour + 12;
+    }
+    console.log('[CustomTimePicker] Done pressed — h24:', h24, 'minute:', selectedMinute, 'ampm:', selectedAmPm);
+    // WAT validation
     const shiftDateStr = shiftDate.toISOString().split('T')[0];
     const watTodayStr = watNow.toISOString().split('T')[0];
     if (shiftDateStr === watTodayStr) {
       const watHour = watNow.getUTCHours();
       const watMinute = watNow.getUTCMinutes();
-      if (selectedHour < watHour || (selectedHour === watHour && selectedMinute <= watMinute)) {
+      if (h24 < watHour || (h24 === watHour && selectedMinute <= watMinute)) {
         Alert.alert('Invalid Time', 'Please select a future time.');
         return;
       }
     }
     const result = new Date(isForDate);
-    result.setHours(selectedHour, selectedMinute, 0, 0);
+    result.setHours(h24, selectedMinute, 0, 0);
     onDone(result);
   };
 
@@ -256,68 +277,107 @@ function CustomTimePicker({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
-      <TouchableWithoutFeedback onPress={onCancel}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
-          <TouchableWithoutFeedback>
-            <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-                <TouchableOpacity onPress={onCancel}>
-                  <Text style={{ fontSize: 16, color: COLORS.textSecondary }}>Cancel</Text>
-                </TouchableOpacity>
-                <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.text }}>Select Time</Text>
-                <TouchableOpacity onPress={handleDone}>
-                  <Text style={{ fontSize: 16, fontWeight: '600', color: '#1C1C1E' }}>Done</Text>
-                </TouchableOpacity>
+      <Pressable onPress={onCancel} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+        <Pressable onPress={(e) => e.stopPropagation()}>
+          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
+              <TouchableOpacity onPress={onCancel}>
+                <Text style={{ fontSize: 16, color: COLORS.textSecondary }}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.text }}>Select Time</Text>
+              <TouchableOpacity onPress={handleDone}>
+                <Text style={{ fontSize: 16, fontWeight: '600', color: '#1C1C1E' }}>Done</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 12, gap: 12 }}>
+              {/* Hour column */}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, textAlign: 'center', marginBottom: 8, letterSpacing: 0.8 }}>
+                  HOUR
+                </Text>
+                <FlatList
+                  ref={hourListRef}
+                  data={HOURS}
+                  keyExtractor={(item) => String(item)}
+                  renderItem={renderHourItem}
+                  snapToInterval={ITEM_HEIGHT}
+                  decelerationRate="fast"
+                  showsVerticalScrollIndicator={false}
+                  style={{ height: ITEM_HEIGHT * 5 }}
+                  getItemLayout={(_, index) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index })}
+                  onScrollToIndexFailed={() => {}}
+                />
               </View>
 
-              <View style={{ flexDirection: 'row', paddingHorizontal: 20, paddingVertical: 12, gap: 12 }}>
-                {/* Hour column */}
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, textAlign: 'center', marginBottom: 8, letterSpacing: 0.8 }}>
-                    HOUR
-                  </Text>
-                  <FlatList
-                    ref={hourListRef}
-                    data={HOURS}
-                    keyExtractor={(item) => String(item)}
-                    renderItem={renderHourItem}
-                    snapToInterval={ITEM_HEIGHT}
-                    decelerationRate="fast"
-                    showsVerticalScrollIndicator={false}
-                    style={{ height: ITEM_HEIGHT * 5 }}
-                    getItemLayout={(_, index) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index })}
-                    onScrollToIndexFailed={() => {}}
-                  />
-                </View>
+              {/* Separator */}
+              <View style={{ justifyContent: 'center', paddingBottom: 8 }}>
+                <Text style={{ fontSize: 28, fontWeight: '700', color: COLORS.text }}>:</Text>
+              </View>
 
-                {/* Separator */}
-                <View style={{ justifyContent: 'center', paddingBottom: 8 }}>
-                  <Text style={{ fontSize: 28, fontWeight: '700', color: COLORS.text }}>:</Text>
-                </View>
+              {/* Minute column */}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, textAlign: 'center', marginBottom: 8, letterSpacing: 0.8 }}>
+                  MIN
+                </Text>
+                <FlatList
+                  ref={minuteListRef}
+                  data={MINUTES}
+                  keyExtractor={(item) => String(item)}
+                  renderItem={renderMinuteItem}
+                  snapToInterval={ITEM_HEIGHT}
+                  decelerationRate="fast"
+                  showsVerticalScrollIndicator={false}
+                  style={{ height: ITEM_HEIGHT * 4 }}
+                  getItemLayout={(_, index) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index })}
+                  onScrollToIndexFailed={() => {}}
+                />
+              </View>
 
-                {/* Minute column */}
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, textAlign: 'center', marginBottom: 8, letterSpacing: 0.8 }}>
-                    MIN
-                  </Text>
-                  <FlatList
-                    ref={minuteListRef}
-                    data={MINUTES}
-                    keyExtractor={(item) => String(item)}
-                    renderItem={renderMinuteItem}
-                    snapToInterval={ITEM_HEIGHT}
-                    decelerationRate="fast"
-                    showsVerticalScrollIndicator={false}
-                    style={{ height: ITEM_HEIGHT * 4 }}
-                    getItemLayout={(_, index) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index })}
-                    onScrollToIndexFailed={() => {}}
-                  />
-                </View>
+              {/* AM/PM column */}
+              <View style={{ width: 64 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, textAlign: 'center', marginBottom: 8, letterSpacing: 0.8 }}>
+                  AM/PM
+                </Text>
+                <FlatList
+                  ref={ampmListRef}
+                  data={AMPM}
+                  keyExtractor={(item) => item}
+                  renderItem={({ item }) => {
+                    const isSelected = item === selectedAmPm;
+                    return (
+                      <TouchableOpacity
+                        onPress={() => {
+                          console.log('[CustomTimePicker] AM/PM selected:', item);
+                          setSelectedAmPm(item as 'AM' | 'PM');
+                        }}
+                        style={{
+                          height: ITEM_HEIGHT,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          backgroundColor: isSelected ? '#0A0A0A' : 'transparent',
+                          borderRadius: 12,
+                          marginHorizontal: 4,
+                        }}
+                      >
+                        <Text style={{ fontSize: 18, fontWeight: isSelected ? '700' : '400', color: isSelected ? '#FFFFFF' : COLORS.text }}>
+                          {item}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  }}
+                  snapToInterval={ITEM_HEIGHT}
+                  decelerationRate="fast"
+                  showsVerticalScrollIndicator={false}
+                  style={{ height: ITEM_HEIGHT * 2 }}
+                  getItemLayout={(_, index) => ({ length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index })}
+                  onScrollToIndexFailed={() => {}}
+                />
               </View>
             </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
+          </View>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
