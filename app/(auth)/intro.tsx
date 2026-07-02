@@ -1,28 +1,19 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Inter_600SemiBold, useFonts } from '@expo-google-fonts/inter';
 
-type Phase =
-  | { kind: 'lets' }
-  | { kind: 'full'; word: string };
+const PHRASES = ["Let's request", "Let's accept", "Let's cover"];
 
-const PHASES: Phase[] = [
-  { kind: 'lets' },
-  { kind: 'full', word: 'request' },
-  { kind: 'lets' },
-  { kind: 'full', word: 'respond' },
-  { kind: 'lets' },
-  { kind: 'full', word: 'cover' },
-];
-
-const CHAR_DELAY = 60;
-const HOLD_LETS = 600;
-const HOLD_FULL = 1400;
-const FADE_OUT_DURATION = 300;
+const CHAR_DELAY = 55;
+const HOLD_FULL = 2000;
+const FADE_OUT_DURATION = 250;
 const BG_TRANSITION_DURATION = 400;
 
 export default function IntroScreen() {
   const router = useRouter();
+
+  const [fontsLoaded] = useFonts({ Inter_600SemiBold });
 
   const unmountedRef = useRef(false);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -30,12 +21,8 @@ export default function IntroScreen() {
   const displayedTextRef = useRef('');
   const [, forceUpdate] = React.useReducer((x: number) => x + 1, 0);
 
-  const textOpacity = useRef(new Animated.Value(0)).current;
-  const dotOpacity = useRef(new Animated.Value(0)).current;
+  const contentOpacity = useRef(new Animated.Value(0)).current;
   const bgColor = useRef(new Animated.Value(0)).current;
-
-  const showDot = useRef(false);
-  const dotLoopRef = useRef<Animated.CompositeAnimation | null>(null);
 
   const addTimeout = (fn: () => void, ms: number) => {
     const id = setTimeout(() => {
@@ -48,81 +35,42 @@ export default function IntroScreen() {
   useEffect(() => {
     unmountedRef.current = false;
 
-    const runPhase = (index: number) => {
+    const runPhrase = (index: number) => {
       if (unmountedRef.current) return;
-      if (index >= PHASES.length) return;
+      if (index >= PHRASES.length) return;
 
-      const phase = PHASES[index];
-      const isLast = index === PHASES.length - 1;
+      const phrase = PHRASES[index];
+      const isLast = index === PHRASES.length - 1;
 
-      // Build the full string to type
-      const fullText = phase.kind === 'lets' ? "Let's..." : `Let's ${phase.word}`;
-      const holdDuration = phase.kind === 'lets' ? HOLD_LETS : HOLD_FULL;
-
-      // Reset
+      // Reset state
       displayedTextRef.current = '';
-      showDot.current = false;
-      dotOpacity.setValue(0);
-      textOpacity.setValue(0);
-      if (dotLoopRef.current) {
-        dotLoopRef.current.stop();
-        dotLoopRef.current = null;
-      }
+      contentOpacity.setValue(1);
+      forceUpdate();
 
-      // Fade in first character immediately
-      Animated.timing(textOpacity, {
-        toValue: 1,
-        duration: 80,
-        useNativeDriver: true,
-      }).start();
+      console.log(`[IntroScreen] Starting phrase ${index + 1}/${PHRASES.length}: "${phrase}"`);
 
-      // Type characters
+      // Type characters one by one
       let charIndex = 0;
       const typeNext = () => {
         if (unmountedRef.current) return;
         charIndex += 1;
-        displayedTextRef.current = fullText.slice(0, charIndex);
+        displayedTextRef.current = phrase.slice(0, charIndex);
         forceUpdate();
 
-        if (charIndex < fullText.length) {
+        if (charIndex < phrase.length) {
           addTimeout(typeNext, CHAR_DELAY);
         } else {
-          // Finished typing — show dot for full phrases
-          if (phase.kind === 'full') {
-            showDot.current = true;
-            forceUpdate();
-            dotOpacity.setValue(1);
-            const loop = Animated.loop(
-              Animated.sequence([
-                Animated.timing(dotOpacity, { toValue: 0.3, duration: 500, useNativeDriver: true }),
-                Animated.timing(dotOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
-              ])
-            );
-            dotLoopRef.current = loop;
-            loop.start();
-          }
-
-          // Hold then fade out
+          // Finished typing — hold then fade out
+          console.log(`[IntroScreen] Phrase complete: "${phrase}", holding for ${HOLD_FULL}ms`);
           addTimeout(() => {
-            if (dotLoopRef.current) {
-              dotLoopRef.current.stop();
-              dotLoopRef.current = null;
-            }
-            Animated.parallel([
-              Animated.timing(textOpacity, {
-                toValue: 0,
-                duration: FADE_OUT_DURATION,
-                useNativeDriver: true,
-              }),
-              Animated.timing(dotOpacity, {
-                toValue: 0,
-                duration: FADE_OUT_DURATION,
-                useNativeDriver: true,
-              }),
-            ]).start(() => {
+            Animated.timing(contentOpacity, {
+              toValue: 0,
+              duration: FADE_OUT_DURATION,
+              useNativeDriver: true,
+            }).start(() => {
               if (unmountedRef.current) return;
               if (isLast) {
-                // Transition background to white then navigate
+                console.log('[IntroScreen] All phrases done, transitioning to role-select');
                 Animated.timing(bgColor, {
                   toValue: 1,
                   duration: BG_TRANSITION_DURATION,
@@ -133,25 +81,22 @@ export default function IntroScreen() {
                   }
                 });
               } else {
-                runPhase(index + 1);
+                runPhrase(index + 1);
               }
             });
-          }, holdDuration);
+          }, HOLD_FULL);
         }
       };
 
       addTimeout(typeNext, CHAR_DELAY);
     };
 
-    runPhase(0);
+    runPhrase(0);
 
     return () => {
       unmountedRef.current = true;
       timeoutsRef.current.forEach(clearTimeout);
       timeoutsRef.current = [];
-      if (dotLoopRef.current) {
-        dotLoopRef.current.stop();
-      }
     };
   }, []);
 
@@ -161,20 +106,17 @@ export default function IntroScreen() {
   });
 
   const displayText = displayedTextRef.current;
-  const hasDot = showDot.current;
+
+  if (!fontsLoaded) {
+    return <Animated.View style={[styles.container, { backgroundColor }]} />;
+  }
 
   return (
     <Animated.View style={[styles.container, { backgroundColor }]}>
-      <View style={styles.textRow}>
-        <Animated.Text style={[styles.text, { opacity: textOpacity }]}>
-          {displayText}
-        </Animated.Text>
-        {hasDot ? (
-          <Animated.Text style={[styles.dot, { opacity: dotOpacity }]}>
-            {' •'}
-          </Animated.Text>
-        ) : null}
-      </View>
+      <Animated.View style={[styles.textRow, { opacity: contentOpacity }]}>
+        <Text style={styles.text}>{displayText}</Text>
+        <View style={styles.ball} />
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -192,15 +134,15 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: 32,
-    fontWeight: '300',
+    fontFamily: 'Inter_600SemiBold',
     color: '#FFFFFF',
-    letterSpacing: 1,
-    textAlign: 'center',
   },
-  dot: {
-    fontSize: 32,
-    fontWeight: '300',
-    color: '#FFFFFF',
-    letterSpacing: 1,
+  ball: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#FFFFFF',
+    alignSelf: 'center',
+    marginLeft: 4,
   },
 });
