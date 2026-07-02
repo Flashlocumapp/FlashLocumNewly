@@ -1,7 +1,9 @@
 import 'react-native-url-polyfill/auto';
 import 'react-native-reanimated';
 import React, { useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import * as NavigationBar from 'expo-navigation-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, DarkTheme } from '@react-navigation/native';
@@ -132,6 +134,13 @@ function NavigationGuard() {
 }
 
 function RootLayoutInner() {
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      NavigationBar.setBackgroundColorAsync('#F9F9F6');
+      NavigationBar.setButtonStyleAsync('dark');
+    }
+  }, []);
+
   return (
     <ThemeProvider value={DarkTheme}>
       <SafeAreaProvider>

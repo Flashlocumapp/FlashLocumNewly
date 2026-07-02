@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  Image,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -23,10 +24,11 @@ interface DoctorProfile {
   phone: string | null;
   gender: string | null;
   verification_status: string | null;
+  mdcn_number: string | null;
   bank_name: string | null;
   account_number: string | null;
   account_name: string | null;
-  mdcn_number: string | null;
+  selfie_url: string | null;
 }
 
 function SectionHeader({ title }: { title: string }) {
@@ -56,7 +58,7 @@ function EditableRow({ label, value, onPress }: { label: string; value: string; 
       <Text style={styles.rowLabel}>{label}</Text>
       <View style={styles.editablePill}>
         <Text style={styles.editablePillText}>{value}</Text>
-        <ChevronRight size={14} color="#1C1C1E" style={{ marginLeft: 2 }} />
+        <ChevronRight size={14} color="#FFFFFF" style={{ marginLeft: 2 }} />
       </View>
     </TouchableOpacity>
   );
@@ -78,6 +80,7 @@ export default function DoctorAccountScreen() {
 
   const [profile, setProfile] = useState<DoctorProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
 
   // Phone edit modal
   const [phoneModalVisible, setPhoneModalVisible] = useState(false);
@@ -96,21 +99,36 @@ export default function DoctorAccountScreen() {
       const [profileRes, doctorProfileRes] = await Promise.all([
         supabase
           .from('profiles')
-          .select('first_name, last_name, phone, gender, verification_status, bank_name, account_number, account_name')
+          .select('first_name, last_name, phone, gender, verification_status')
           .eq('id', user.id)
           .single(),
         supabase
           .from('doctor_profiles')
-          .select('mdcn_number')
+          .select('mdcn_number, bank_name, account_number, account_name, selfie_url')
           .eq('id', user.id)
           .single(),
       ]);
       if (profileRes.error) console.log('[DoctorAccount] Profile fetch error:', profileRes.error.message);
       if (doctorProfileRes.error) console.log('[DoctorAccount] DoctorProfile fetch error:', doctorProfileRes.error.message);
       setProfile({
-        ...(profileRes.data as Omit<DoctorProfile, 'mdcn_number'>),
+        first_name: profileRes.data?.first_name ?? null,
+        last_name: profileRes.data?.last_name ?? null,
+        phone: profileRes.data?.phone ?? null,
+        gender: profileRes.data?.gender ?? null,
+        verification_status: profileRes.data?.verification_status ?? null,
         mdcn_number: doctorProfileRes.data?.mdcn_number ?? null,
+        bank_name: doctorProfileRes.data?.bank_name ?? null,
+        account_number: doctorProfileRes.data?.account_number ?? null,
+        account_name: doctorProfileRes.data?.account_name ?? null,
+        selfie_url: doctorProfileRes.data?.selfie_url ?? null,
       });
+      const rawSelfieUrl = doctorProfileRes.data?.selfie_url ?? null;
+      if (rawSelfieUrl) {
+        const { data: signedData } = await supabase.storage
+          .from('doctor-documents')
+          .createSignedUrl(rawSelfieUrl, 3600);
+        if (signedData?.signedUrl) setSelfieUrl(signedData.signedUrl);
+      }
       setLoading(false);
     };
     fetchProfile();
@@ -213,7 +231,15 @@ export default function DoctorAccountScreen() {
         {/* Avatar + Name */}
         <View style={styles.avatarSection}>
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarInitials}>{initials}</Text>
+            {selfieUrl ? (
+              <Image
+                source={{ uri: selfieUrl }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.avatarInitials}>{initials}</Text>
+            )}
           </View>
           <Text style={styles.displayName}>{displayName}</Text>
           <Text style={styles.emailText}>{userEmail}</Text>
@@ -329,14 +355,14 @@ const styles = StyleSheet.create({
   displayName: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', marginBottom: 4 },
   emailText: { fontSize: 14, color: '#8E8E93' },
   sectionHeader: { fontSize: 11, fontWeight: '700', color: '#8E8E93', letterSpacing: 1, marginBottom: 8, marginTop: 24, marginLeft: 4 },
-  card: { backgroundColor: '#2C2C2E', borderRadius: 16, overflow: 'hidden' },
+  card: { backgroundColor: '#F9F9F6', borderRadius: 16, overflow: 'hidden' },
   cardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14 },
-  cardDivider: { height: 1, backgroundColor: '#3A3A3C', marginLeft: 16 },
-  rowLabel: { fontSize: 14, color: '#8E8E93', flex: 1 },
+  cardDivider: { height: 1, backgroundColor: '#E5E5E5', marginLeft: 16 },
+  rowLabel: { fontSize: 14, color: '#6B6B6B', flex: 1 },
   rowLabelRed: { color: '#E63946' },
-  rowValue: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', textAlign: 'right', maxWidth: '55%' },
-  editablePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9F9F6', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
-  editablePillText: { fontSize: 14, fontWeight: '600', color: '#1C1C1E' },
+  rowValue: { fontSize: 14, fontWeight: '600', color: '#1C1C1E', textAlign: 'right', maxWidth: '55%' },
+  editablePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1C1C1E', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
+  editablePillText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
   verifiedBadge: { backgroundColor: '#1A3A2A', borderColor: '#34C759', borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   verifiedText: { fontSize: 13, color: '#34C759', fontWeight: '600' },
   pendingBadge: { backgroundColor: '#3A2A1A', borderColor: '#F4A261', borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
@@ -356,4 +382,5 @@ const styles = StyleSheet.create({
   genderOptionText: { fontSize: 17, color: '#1C1C1E', fontWeight: '400' },
   genderOptionSelected: { fontWeight: '700' },
   modalDivider: { height: 1, backgroundColor: '#E0E0E0' },
+  avatarImage: { width: 80, height: 80, borderRadius: 40 },
 });

@@ -42,7 +42,7 @@ function EditableRow({ label, value, onPress }: { label: string; value: string; 
       <Text style={styles.rowLabel}>{label}</Text>
       <View style={styles.editablePill}>
         <Text style={styles.editablePillText}>{value}</Text>
-        <ChevronRight size={14} color="#1C1C1E" style={{ marginLeft: 2 }} />
+        <ChevronRight size={14} color="#FFFFFF" style={{ marginLeft: 2 }} />
       </View>
     </TouchableOpacity>
   );
@@ -261,13 +261,13 @@ const styles = StyleSheet.create({
   displayName: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', marginBottom: 4 },
   emailText: { fontSize: 14, color: '#8E8E93' },
   sectionHeader: { fontSize: 11, fontWeight: '700', color: '#8E8E93', letterSpacing: 1, marginBottom: 8, marginTop: 24, marginLeft: 4 },
-  card: { backgroundColor: '#2C2C2E', borderRadius: 16, overflow: 'hidden' },
+  card: { backgroundColor: '#F9F9F6', borderRadius: 16, overflow: 'hidden' },
   cardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14 },
-  cardDivider: { height: 1, backgroundColor: '#3A3A3C', marginLeft: 16 },
-  rowLabel: { fontSize: 14, color: '#8E8E93', flex: 1 },
+  cardDivider: { height: 1, backgroundColor: '#E5E5E5', marginLeft: 16 },
+  rowLabel: { fontSize: 14, color: '#6B6B6B', flex: 1 },
   rowLabelRed: { color: '#E63946' },
-  editablePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F9F9F6', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
-  editablePillText: { fontSize: 14, fontWeight: '600', color: '#1C1C1E' },
+  editablePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1C1C1E', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
+  editablePillText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: '#F9F9F6', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 48 },
   modalTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C1E', textAlign: 'center', marginBottom: 20 },
