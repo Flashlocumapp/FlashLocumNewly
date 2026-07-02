@@ -1540,12 +1540,12 @@ export default function RequesterHomeScreen() {
 
               {/* Note — ITEM 3: unified container */}
               <View style={{
-                backgroundColor: '#2C2C2E',
+                backgroundColor: '#F9F9F6',
                 borderRadius: 22,
                 padding: 16,
                 marginBottom: 28,
               }}>
-                <Text style={[TYPOGRAPHY.label, { color: '#8E8E93', marginBottom: 8 }]}>
+                <Text style={[TYPOGRAPHY.label, { color: '#6B6B6B', marginBottom: 8 }]}>
                   NOTE (OPTIONAL)
                 </Text>
                 <TextInput
@@ -1555,18 +1555,28 @@ export default function RequesterHomeScreen() {
                     setNote(v);
                   }}
                   multiline
-                  placeholder="Add any special requirements..."
-                  placeholderTextColor={COLORS.textTertiary}
+                  maxLength={80}
+                  placeholder="Anything else the doctors should know? (Skills, notes, or tips)..."
+                  placeholderTextColor='#AAAAAA'
                   style={[
                     TYPOGRAPHY.body,
                     {
                       minHeight: 80,
                       backgroundColor: 'transparent',
                       textAlignVertical: 'top',
-                      color: '#FFFFFF',
+                      color: '#1C1C1E',
                     },
                   ]}
                 />
+                <Text style={{
+                  fontSize: 11,
+                  color: note.length >= 72 ? '#E53E3E' : '#AAAAAA',
+                  textAlign: 'right',
+                  marginTop: 4,
+                }}>
+                  {note.length}
+                  {' / 80'}
+                </Text>
               </View>
 
               {/* Next button */}
