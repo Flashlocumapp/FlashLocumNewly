@@ -136,8 +136,12 @@ function NavigationGuard() {
 function RootLayoutInner() {
   useEffect(() => {
     if (Platform.OS === 'android') {
-      NavigationBar.setBackgroundColorAsync('#F9F9F6');
-      NavigationBar.setButtonStyleAsync('dark');
+      try {
+        NavigationBar.setBackgroundColorAsync('#F9F9F6');
+        NavigationBar.setButtonStyleAsync('dark');
+      } catch (_) {
+        // expo-navigation-bar requires a native rebuild — silently ignore in Expo Go
+      }
     }
   }, []);
 

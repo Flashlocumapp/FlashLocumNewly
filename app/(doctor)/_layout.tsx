@@ -134,25 +134,28 @@ export default function DoctorLayout() {
   useEffect(() => {
     if (!user) return;
     if (prevIsOnlineRef.current === isOnline) return;
+    // Commit immediately — prevents cascade if the async call fails
+    prevIsOnlineRef.current = isOnline;
     const toggle = async () => {
       const fn = isOnline ? 'go-online' : 'go-offline';
       console.log('[DoctorLayout] Toggling status:', fn);
-      const res = await callEdgeRef.current(fn);
-      if (isOnline) {
-        if (!res || !res.ok) {
-          console.log('[DoctorLayout] go-online failed — reverting to offline');
-          setIsOnline(false);
-          Alert.alert('Connection Error', 'Could not go online. Please check your connection and try again.');
-          return;
+      try {
+        const res = await callEdgeRef.current(fn);
+        if (isOnline) {
+          if (!res || !res.ok) {
+            console.log('[DoctorLayout] go-online returned non-ok status:', res?.status);
+            // Don't revert — doctor can retry by toggling again
+          } else {
+            console.log('[DoctorLayout] Went online — force-syncing queue');
+            await forceSyncRef.current();
+          }
+        } else {
+          console.log('[DoctorLayout] Went offline — clearing queue');
+          setRequestQueue([]);
+          setDoctorScreenState('idle');
         }
-        prevIsOnlineRef.current = true;
-        console.log('[DoctorLayout] Went online — force-syncing queue');
-        await forceSyncRef.current();
-      } else {
-        prevIsOnlineRef.current = false;
-        console.log('[DoctorLayout] Went offline — clearing queue');
-        setRequestQueue([]);
-        setDoctorScreenState('idle');
+      } catch (e: any) {
+        console.log('[DoctorLayout] Toggle error:', e.message);
       }
     };
     toggle();

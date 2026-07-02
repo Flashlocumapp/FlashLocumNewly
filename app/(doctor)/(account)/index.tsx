@@ -76,9 +76,23 @@ function ActionRow({ label, onPress, labelRed, chevronRed }: { label: string; on
 export default function DoctorAccountScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, profile: authProfile } = useAuth();
 
-  const [profile, setProfile] = useState<DoctorProfile | null>(null);
+  const [profile, setProfile] = useState<DoctorProfile | null>(() => {
+    if (!authProfile) return null;
+    return {
+      first_name: authProfile.first_name ?? null,
+      last_name: authProfile.last_name ?? null,
+      phone: authProfile.phone ?? null,
+      gender: authProfile.gender ?? null,
+      verification_status: null,
+      mdcn_number: null,
+      bank_name: null,
+      account_number: null,
+      account_name: null,
+      selfie_url: null,
+    };
+  });
   const [loading, setLoading] = useState(true);
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
 
@@ -111,10 +125,10 @@ export default function DoctorAccountScreen() {
       if (profileRes.error) console.log('[DoctorAccount] Profile fetch error:', profileRes.error.message);
       if (doctorProfileRes.error) console.log('[DoctorAccount] DoctorProfile fetch error:', doctorProfileRes.error.message);
       setProfile({
-        first_name: profileRes.data?.first_name ?? null,
-        last_name: profileRes.data?.last_name ?? null,
-        phone: profileRes.data?.phone ?? null,
-        gender: profileRes.data?.gender ?? null,
+        first_name: authProfile?.first_name ?? profileRes.data?.first_name ?? null,
+        last_name: authProfile?.last_name ?? profileRes.data?.last_name ?? null,
+        phone: authProfile?.phone ?? profileRes.data?.phone ?? null,
+        gender: authProfile?.gender ?? profileRes.data?.gender ?? null,
         verification_status: profileRes.data?.verification_status ?? null,
         mdcn_number: doctorProfileRes.data?.mdcn_number ?? null,
         bank_name: doctorProfileRes.data?.bank_name ?? null,
@@ -285,7 +299,14 @@ export default function DoctorAccountScreen() {
         {/* Section 4 — ACCOUNT MANAGEMENT */}
         <SectionHeader title="ACCOUNT MANAGEMENT" />
         <Card>
-          <ActionRow label="Switch to Request Coverage" onPress={() => { console.log('[DoctorAccount] Switch to Request Coverage pressed'); router.push('/(app)/(home)' as any); }} />
+          <ActionRow label="Switch to Request Coverage" onPress={() => {
+            console.log('[DoctorAccount] Switch to Request Coverage pressed');
+            if (authProfile?.requester_onboarding_complete) {
+              router.replace('/(requester)/(home)' as any);
+            } else {
+              router.replace('/(onboarding)/requester/basic-profile' as any);
+            }
+          }} />
           <CardDivider />
           <ActionRow label="Sign Out" onPress={handleSignOut} />
         </Card>

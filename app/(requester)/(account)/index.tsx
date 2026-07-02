@@ -60,9 +60,17 @@ function ActionRow({ label, onPress, labelRed, chevronRed }: { label: string; on
 export default function RequesterAccountScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, profile: authProfile } = useAuth();
 
-  const [profile, setProfile] = useState<RequesterProfile | null>(null);
+  const [profile, setProfile] = useState<RequesterProfile | null>(() => {
+    if (!authProfile) return null;
+    return {
+      first_name: authProfile.first_name ?? null,
+      last_name: authProfile.last_name ?? null,
+      phone: authProfile.phone ?? null,
+      gender: authProfile.gender ?? null,
+    };
+  });
   const [loading, setLoading] = useState(true);
 
   const [phoneModalVisible, setPhoneModalVisible] = useState(false);
@@ -82,8 +90,15 @@ export default function RequesterAccountScreen() {
         .select('first_name, last_name, phone, gender')
         .eq('id', user.id)
         .single();
-      if (error) console.log('[RequesterAccount] Profile fetch error:', error.message);
-      else setProfile(data as RequesterProfile);
+      if (error) {
+        console.log('[RequesterAccount] Profile fetch error:', error.message);
+      }
+      setProfile({
+        first_name: authProfile?.first_name ?? data?.first_name ?? null,
+        last_name: authProfile?.last_name ?? data?.last_name ?? null,
+        phone: authProfile?.phone ?? data?.phone ?? null,
+        gender: authProfile?.gender ?? data?.gender ?? null,
+      });
       setLoading(false);
     };
     fetchProfile();
@@ -192,7 +207,14 @@ export default function RequesterAccountScreen() {
 
         <SectionHeader title="ACCOUNT MANAGEMENT" />
         <Card>
-          <ActionRow label="Switch to Cover & Earn" onPress={() => { console.log('[RequesterAccount] Switch to Cover & Earn pressed'); router.push('/(app)/(home)' as any); }} />
+          <ActionRow label="Switch to Cover & Earn" onPress={() => {
+            console.log('[RequesterAccount] Switch to Cover & Earn pressed');
+            if (authProfile?.doctor_onboarding_complete) {
+              router.replace('/(doctor)/(home)' as any);
+            } else {
+              router.replace('/(onboarding)/doctor/basic-profile' as any);
+            }
+          }} />
           <CardDivider />
           <ActionRow label="Sign Out" onPress={handleSignOut} />
         </Card>
