@@ -150,9 +150,13 @@ export default function DoctorAccountScreen() {
 
   const firstName = profile?.first_name ?? '';
   const lastName = profile?.last_name ?? '';
-  const fullName = [firstName, lastName].filter(Boolean).join(' ') || '—';
+  const fullName = [firstName, lastName].filter(Boolean).join(' ')
+    || (user?.user_metadata?.full_name as string | undefined)?.trim()
+    || '—';
   const displayName = fullName !== '—' ? `Dr. ${fullName}` : 'Dr. —';
-  const initials = [firstName[0], lastName[0]].filter(Boolean).join('').toUpperCase() || '?';
+  const initials = fullName !== '—'
+    ? fullName.trim().split(' ').map((n: string) => n[0]).filter(Boolean).join('').toUpperCase().slice(0, 2)
+    : '?';
   const userEmail = user?.email ?? '';
 
   const phoneValue = profile?.phone ?? '—';

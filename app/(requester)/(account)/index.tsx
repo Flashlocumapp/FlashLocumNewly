@@ -106,8 +106,12 @@ export default function RequesterAccountScreen() {
 
   const firstName = profile?.first_name ?? '';
   const lastName = profile?.last_name ?? '';
-  const fullName = [firstName, lastName].filter(Boolean).join(' ') || '—';
-  const initials = [firstName[0], lastName[0]].filter(Boolean).join('').toUpperCase() || '?';
+  const fullName = [firstName, lastName].filter(Boolean).join(' ')
+    || (user?.user_metadata?.full_name as string | undefined)?.trim()
+    || '—';
+  const initials = fullName !== '—'
+    ? fullName.trim().split(' ').map((n: string) => n[0]).filter(Boolean).join('').toUpperCase().slice(0, 2)
+    : '?';
   const userEmail = user?.email ?? '';
   const phoneValue = profile?.phone ?? '—';
   const rawGender = profile?.gender ?? '';
@@ -278,8 +282,8 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 16 },
   loadingContainer: { flex: 1, backgroundColor: '#1C1C1E', alignItems: 'center', justifyContent: 'center' },
   avatarSection: { alignItems: 'center', marginBottom: 28 },
-  avatarCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#2C2C2E', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  avatarInitials: { fontSize: 28, fontWeight: '700', color: '#FFFFFF' },
+  avatarCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#F9F9F6', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  avatarInitials: { fontSize: 28, fontWeight: '700', color: '#1C1C1E' },
   displayName: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', marginBottom: 4 },
   emailText: { fontSize: 14, color: '#8E8E93' },
   sectionHeader: { fontSize: 11, fontWeight: '700', color: '#8E8E93', letterSpacing: 1, marginBottom: 8, marginTop: 24, marginLeft: 4 },
