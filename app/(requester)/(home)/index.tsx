@@ -1229,6 +1229,7 @@ export default function RequesterHomeScreen() {
     <View style={{ flex: 1, backgroundColor: '#F9F9F6' }}>
 
       {/* ── FULL-SCREEN MAP (always behind everything) ── */}
+      {console.log('[RequesterHome] About to render MapView — provider:', PROVIDER_GOOGLE, 'ref:', !!mapRef)}
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
@@ -1237,7 +1238,6 @@ export default function RequesterHomeScreen() {
         customMapStyle={MINIMALIST_MAP_STYLE}
         maxZoomLevel={14}
         onMapReady={() => console.log('[RequesterHome] MAP READY ✓')}
-        onMapLoadError={(e: any) => console.log('[RequesterHome] MAP LOAD ERROR:', e?.nativeEvent)}
       >
         {userCoords && (
           <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
