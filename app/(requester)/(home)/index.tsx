@@ -24,7 +24,7 @@ import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { supabase } from '@/lib/supabase';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { useTabBarVisibility, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
@@ -592,7 +592,7 @@ export default function RequesterHomeScreen() {
 
   // ─── Load recent place on mount ───────────────────────────────────────────────
   useEffect(() => {
-    AsyncStorage.getItem(RECENT_PLACE_KEY).then((raw) => {
+    SecureStore.getItemAsync(RECENT_PLACE_KEY).then((raw) => {
       if (raw) {
         try {
           const parsed = JSON.parse(raw) as SelectedPlace;
@@ -794,7 +794,7 @@ export default function RequesterHomeScreen() {
       setSearchText('');
       setSearchResults([]);
       // Save to recent
-      AsyncStorage.setItem(RECENT_PLACE_KEY, JSON.stringify(place)).then(() => {
+      SecureStore.setItemAsync(RECENT_PLACE_KEY, JSON.stringify(place)).then(() => {
         console.log('[RequesterHome] Saved recent place:', place.name);
         setRecentPlace(place);
       });
@@ -812,7 +812,7 @@ export default function RequesterHomeScreen() {
     if (!recentPlace) return;
     console.log('[RequesterHome] Recent place tapped:', recentPlace.name);
     setSelectedPlace(recentPlace);
-    AsyncStorage.setItem(RECENT_PLACE_KEY, JSON.stringify(recentPlace));
+    SecureStore.setItemAsync(RECENT_PLACE_KEY, JSON.stringify(recentPlace));
     transitionTo('config');
   }, [recentPlace, transitionTo]);
 
