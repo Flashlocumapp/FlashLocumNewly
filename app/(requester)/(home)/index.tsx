@@ -1230,8 +1230,30 @@ export default function RequesterHomeScreen() {
 
       {/* ── FULL-SCREEN MAP (always behind everything) ── */}
       {console.log('[RequesterHome] About to render MapView — provider:', PROVIDER_GOOGLE, 'ref:', !!mapRef)}
-      {/* MAP TEMPORARILY COMMENTED OUT FOR DIAGNOSIS */}
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#E8F4E8' }]} />
+      <MapView
+        ref={mapRef}
+        style={StyleSheet.absoluteFillObject}
+        provider={PROVIDER_GOOGLE}
+        initialRegion={LAGOS_REGION}
+        customMapStyle={MINIMALIST_MAP_STYLE}
+        maxZoomLevel={14}
+        onMapReady={() => console.log('[RequesterHome] MAP READY ✓')}
+      >
+        {userCoords && (
+          <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+            <View style={{ width: 100, height: 100, alignItems: 'center', justifyContent: 'center' }}>
+              <Animated.View style={{
+                position: 'absolute', width: 100, height: 100, borderRadius: 50,
+                backgroundColor: 'rgba(37,99,235,0.12)',
+                transform: [{ scale: pulseAnim }],
+                opacity: pulseAnim.interpolate({ inputRange: [1, 1.6], outputRange: [0.9, 0], extrapolate: 'clamp' }),
+              }} />
+              <View style={{ position: 'absolute', width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(37,99,235,0.22)' }} />
+              <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#2563EB', borderWidth: 2.5, borderColor: '#FFFFFF', shadowColor: '#2563EB', shadowOpacity: 0.5, shadowRadius: 4, elevation: 4 }} />
+            </View>
+          </Marker>
+        )}
+      </MapView>
 
       {/* ── RE-CENTRE FAB ── */}
       {userCoords && (
