@@ -33,6 +33,7 @@ export default function IntroScreen() {
   };
 
   useEffect(() => {
+    if (!fontsLoaded) return;
     unmountedRef.current = false;
 
     const runPhrase = (index: number) => {
@@ -98,7 +99,7 @@ export default function IntroScreen() {
       timeoutsRef.current.forEach(clearTimeout);
       timeoutsRef.current = [];
     };
-  }, []);
+  }, [fontsLoaded]);
 
   const backgroundColor = bgColor.interpolate({
     inputRange: [0, 1],

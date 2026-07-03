@@ -1747,7 +1747,7 @@ export default function RequesterHomeScreen() {
                   }}
                   multiline
                   maxLength={80}
-                  placeholder="Anything else the doctors should know? (Skills, notes, or tips)..."
+                  placeholder="Anything else the doctor should know? (Skills, notes, or tips)..."
                   placeholderTextColor='#6B6B6B'
                   style={[
                     TYPOGRAPHY.body,
@@ -2196,7 +2196,7 @@ export default function RequesterHomeScreen() {
                 Cancel Request?
               </Text>
               <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
-                Your request has been paused. Doctors can no longer see it. Would you like to wait or cancel?
+                Doctors are currently being notified. Staying online gives you the best chance of being matched quickly.
               </Text>
               <TouchableOpacity
                 onPress={handleWaitForDoctor}

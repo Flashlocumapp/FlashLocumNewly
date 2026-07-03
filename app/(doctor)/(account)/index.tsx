@@ -153,7 +153,8 @@ export default function DoctorAccountScreen() {
   const fullName = [firstName, lastName].filter(Boolean).join(' ')
     || (user?.user_metadata?.full_name as string | undefined)?.trim()
     || '—';
-  const displayName = fullName !== '—' ? `Dr. ${fullName}` : 'Dr. —';
+  const cleanedName = fullName !== '—' ? fullName.replace(/^dr\.?\s*/i, '').trim() : '';
+  const displayName = cleanedName ? `Dr. ${cleanedName}` : 'Dr. —';
   const initials = fullName !== '—'
     ? fullName.trim().split(' ').map((n: string) => n[0]).filter(Boolean).join('').toUpperCase().slice(0, 2)
     : '?';
