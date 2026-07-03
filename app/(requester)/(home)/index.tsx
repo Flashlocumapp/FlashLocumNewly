@@ -1224,6 +1224,7 @@ export default function RequesterHomeScreen() {
   const isPlusDisabled = coverageLength >= 15;
 
   // ─── Render ───────────────────────────────────────────────────────────────────
+  console.log('[RequesterHome] RENDER — Platform:', Platform.OS, 'MapView type:', typeof MapView, 'MapView value:', MapView);
   return (
     <View style={{ flex: 1, backgroundColor: '#F9F9F6' }}>
 
@@ -1235,6 +1236,8 @@ export default function RequesterHomeScreen() {
         initialRegion={LAGOS_REGION}
         customMapStyle={MINIMALIST_MAP_STYLE}
         maxZoomLevel={14}
+        onMapReady={() => console.log('[RequesterHome] MAP READY ✓')}
+        onMapLoadError={(e: any) => console.log('[RequesterHome] MAP LOAD ERROR:', e?.nativeEvent)}
       >
         {userCoords && (
           <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
