@@ -19,7 +19,7 @@ import {
   Modal,
   FlatList,
 } from 'react-native';
-import MapView, { PROVIDER_GOOGLE, Marker } from 'react-native-maps';
+import MapView, { PROVIDER_GOOGLE, Marker } from '@/components/MapViewWrapper';
 import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
