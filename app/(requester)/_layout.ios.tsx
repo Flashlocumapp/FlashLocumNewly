@@ -28,7 +28,7 @@ export default function RequesterLayoutIOS() {
 
   return (
     <TabBarVisibilityContext.Provider value={{ setTabBarVisible }}>
-      <View style={{ flex: 1, backgroundColor: '#000' }}>
+      <View style={{ flex: 1, backgroundColor: '#F9F9F6' }}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(home)" />
           <Stack.Screen name="(coverage)" />
