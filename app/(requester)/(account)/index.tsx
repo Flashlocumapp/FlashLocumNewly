@@ -9,6 +9,9 @@ import {
   Modal,
   TextInput,
   StyleSheet,
+  Linking,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -204,9 +207,9 @@ export default function RequesterAccountScreen() {
 
         <SectionHeader title="SUPPORT" />
         <Card>
-          <ActionRow label="Help Center" onPress={() => { console.log('[RequesterAccount] Help Center pressed'); Alert.alert('Help Center', 'Coming soon.'); }} />
+          <ActionRow label="Email Us" onPress={() => { console.log('[RequesterAccount] Email Us pressed'); Linking.openURL('mailto:support@flashlocum.com'); }} />
           <CardDivider />
-          <ActionRow label="Support Center" onPress={() => { console.log('[RequesterAccount] Support Center pressed'); Alert.alert('Support Center', 'Coming soon.'); }} />
+          <ActionRow label="WhatsApp" onPress={() => { console.log('[RequesterAccount] WhatsApp pressed'); Linking.openURL('https://wa.me/2349134336851'); }} />
         </Card>
 
         <SectionHeader title="ACCOUNT MANAGEMENT" />
@@ -216,7 +219,7 @@ export default function RequesterAccountScreen() {
             if (authProfile?.doctor_onboarding_complete) {
               router.replace('/(doctor)/(home)' as any);
             } else {
-              router.replace('/(onboarding)/doctor/basic-profile' as any);
+              router.push('/(onboarding)/doctor/basic-profile' as any);
             }
           }} />
           <CardDivider />
@@ -231,6 +234,7 @@ export default function RequesterAccountScreen() {
 
       {/* Phone Edit Modal */}
       <Modal visible={phoneModalVisible} transparent animationType="slide" onRequestClose={() => setPhoneModalVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setPhoneModalVisible(false)}>
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>Edit Phone Number</Text>
@@ -255,6 +259,7 @@ export default function RequesterAccountScreen() {
             </View>
           </View>
         </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Gender Edit Modal */}

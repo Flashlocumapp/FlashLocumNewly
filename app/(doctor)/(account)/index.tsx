@@ -10,6 +10,9 @@ import {
   Modal,
   TextInput,
   StyleSheet,
+  Linking,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -296,9 +299,9 @@ export default function DoctorAccountScreen() {
         {/* Section 3 — SUPPORT */}
         <SectionHeader title="SUPPORT" />
         <Card>
-          <ActionRow label="Help Center" onPress={() => { console.log('[DoctorAccount] Help Center pressed'); Alert.alert('Help Center', 'Coming soon.'); }} />
+          <ActionRow label="Email Us" onPress={() => { console.log('[DoctorAccount] Email Us pressed'); Linking.openURL('mailto:support@flashlocum.com'); }} />
           <CardDivider />
-          <ActionRow label="Support Center" onPress={() => { console.log('[DoctorAccount] Support Center pressed'); Alert.alert('Support Center', 'Coming soon.'); }} />
+          <ActionRow label="WhatsApp" onPress={() => { console.log('[DoctorAccount] WhatsApp pressed'); Linking.openURL('https://wa.me/2349134336851'); }} />
         </Card>
 
         {/* Section 4 — ACCOUNT MANAGEMENT */}
@@ -309,7 +312,7 @@ export default function DoctorAccountScreen() {
             if (authProfile?.requester_onboarding_complete) {
               router.replace('/(requester)/(home)' as any);
             } else {
-              router.replace('/(onboarding)/requester/basic-profile' as any);
+              router.push('/(onboarding)/requester/basic-profile' as any);
             }
           }} />
           <CardDivider />
@@ -325,6 +328,7 @@ export default function DoctorAccountScreen() {
 
       {/* Phone Edit Modal */}
       <Modal visible={phoneModalVisible} transparent animationType="slide" onRequestClose={() => setPhoneModalVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setPhoneModalVisible(false)}>
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>Edit Phone Number</Text>
@@ -349,6 +353,7 @@ export default function DoctorAccountScreen() {
             </View>
           </View>
         </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Gender Edit Modal */}
