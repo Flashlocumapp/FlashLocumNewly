@@ -9,7 +9,6 @@ import {
   Modal,
   TextInput,
   StyleSheet,
-  Linking,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -207,9 +206,9 @@ export default function RequesterAccountScreen() {
 
         <SectionHeader title="SUPPORT" />
         <Card>
-          <ActionRow label="Email Us" onPress={() => { console.log('[RequesterAccount] Email Us pressed'); Linking.openURL('mailto:support@flashlocum.com'); }} />
+          <ActionRow label="Help Center" onPress={() => { console.log('[RequesterAccount] Help Center pressed'); router.push('/(requester)/(account)/help-center' as any); }} />
           <CardDivider />
-          <ActionRow label="WhatsApp" onPress={() => { console.log('[RequesterAccount] WhatsApp pressed'); Linking.openURL('https://wa.me/2349134336851'); }} />
+          <ActionRow label="Contact Support" onPress={() => { console.log('[RequesterAccount] Contact Support pressed'); router.push('/(requester)/(account)/contact-support' as any); }} />
         </Card>
 
         <SectionHeader title="ACCOUNT MANAGEMENT" />

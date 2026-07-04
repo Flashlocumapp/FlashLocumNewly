@@ -10,7 +10,6 @@ import {
   Modal,
   TextInput,
   StyleSheet,
-  Linking,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -299,9 +298,9 @@ export default function DoctorAccountScreen() {
         {/* Section 3 — SUPPORT */}
         <SectionHeader title="SUPPORT" />
         <Card>
-          <ActionRow label="Email Us" onPress={() => { console.log('[DoctorAccount] Email Us pressed'); Linking.openURL('mailto:support@flashlocum.com'); }} />
+          <ActionRow label="Help Center" onPress={() => { console.log('[DoctorAccount] Help Center pressed'); router.push('/(doctor)/(account)/help-center' as any); }} />
           <CardDivider />
-          <ActionRow label="WhatsApp" onPress={() => { console.log('[DoctorAccount] WhatsApp pressed'); Linking.openURL('https://wa.me/2349134336851'); }} />
+          <ActionRow label="Contact Support" onPress={() => { console.log('[DoctorAccount] Contact Support pressed'); router.push('/(doctor)/(account)/contact-support' as any); }} />
         </Card>
 
         {/* Section 4 — ACCOUNT MANAGEMENT */}
