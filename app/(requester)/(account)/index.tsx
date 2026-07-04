@@ -218,7 +218,7 @@ export default function RequesterAccountScreen() {
             if (authProfile?.doctor_onboarding_complete) {
               router.replace('/(doctor)/(home)' as any);
             } else {
-              router.push('/(onboarding)/doctor/basic-profile' as any);
+              router.push({ pathname: '/(onboarding)/doctor/basic-profile', params: { from: 'requester-account' } } as any);
             }
           }} />
           <CardDivider />

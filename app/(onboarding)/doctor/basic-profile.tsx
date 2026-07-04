@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,6 +23,7 @@ export default function DoctorBasicProfile() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
+  const { from } = useLocalSearchParams<{ from?: string }>();
 
   const [phone, setPhone] = useState('');
   const [gender, setGender] = useState<Gender>(null);
@@ -34,8 +35,10 @@ export default function DoctorBasicProfile() {
   const [submitError, setSubmitError] = useState('');
 
   const handleBack = () => {
-    console.log('[DoctorBasicProfile] Back button pressed, doctor_onboarding_complete:', profile?.doctor_onboarding_complete);
-    if (profile?.doctor_onboarding_complete) {
+    console.log('[DoctorBasicProfile] Back button pressed, from:', from, 'doctor_onboarding_complete:', profile?.doctor_onboarding_complete);
+    if (from === 'requester-account') {
+      router.replace('/(requester)/(account)' as any);
+    } else if (profile?.doctor_onboarding_complete) {
       router.replace('/(doctor)/(home)' as any);
     } else {
       router.replace('/(auth)/role-select');
