@@ -23,6 +23,8 @@ interface AccordionSection {
   content: React.ReactNode;
 }
 
+
+
 function Bold({ children }: { children: string }) {
   return <Text style={styles.boldText}>{children}</Text>;
 }
@@ -233,7 +235,6 @@ export default function HelpCenterScreen() {
   const [openSection, setOpenSection] = useState<number | null>(null);
 
   const handleToggle = (id: number) => {
-    console.log('[HelpCenter] Accordion section toggled:', id);
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setOpenSection((prev) => (prev === id ? null : id));
   };
@@ -245,7 +246,6 @@ export default function HelpCenterScreen() {
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => {
-            console.log('[HelpCenter] Back pressed');
             router.back();
           }}
           activeOpacity={0.7}
