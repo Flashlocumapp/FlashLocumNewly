@@ -106,10 +106,9 @@ const SHEET_HEIGHTS = {
   config: SCREEN_HEIGHT * 0.75,
   summary: 240 + 80,
   matching: 300 + 80,
-  matched: SCREEN_HEIGHT * 0.55,
 };
 
-type SheetState = 'idle' | 'searching' | 'config' | 'summary' | 'matching' | 'matched';
+type SheetState = 'idle' | 'searching' | 'config' | 'summary' | 'matching';
 
 type SelectedPlace = {
   name: string;
@@ -574,14 +573,6 @@ export default function RequesterHomeScreen() {
   const matchProgressAnim = useRef(new Animated.Value(0.05)).current;
   const [submitting, setSubmitting] = useState(false);
 
-  // Matched doctor state
-  const [matchedDoctor, setMatchedDoctor] = useState<{
-    name: string;
-    mdcn: string;
-    rating: number;
-    reliability: number;
-    shift_summary: string;
-  } | null>(null);
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
 
   // Realtime refs for matching
@@ -856,15 +847,8 @@ export default function RequesterHomeScreen() {
             pollIntervalRef.current = null;
           }
           if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
-          const doctor = payload.payload?.doctor;
-          setMatchedDoctor({
-            name: doctor?.name || 'Dr. Unknown',
-            mdcn: doctor?.mdcn || 'MDCN/R/00000',
-            rating: doctor?.rating || 5.0,
-            reliability: doctor?.reliability || 100,
-            shift_summary: `${coverageType} · ${formattedDateShort} · ${formattedStartTime} – ${formattedEndTime}`,
-          });
-          transitionTo('matched');
+          console.log('[RequesterHome] MATCH_CONFIRMED — resetting to idle');
+          transitionTo('idle');
         })
         .on('broadcast', { event: 'REQUEST_EXPIRED' }, () => {
           console.log('[RequesterHome] REQUEST_EXPIRED received');
@@ -910,14 +894,8 @@ export default function RequesterHomeScreen() {
               .single();
 
             if (session) {
-              setMatchedDoctor({
-                name: session.doctor_name || 'Dr. Unknown',
-                mdcn: session.doctor_mdcn || 'MDCN/R/00000',
-                rating: session.doctor_rating || 5.0,
-                reliability: session.doctor_reliability || 100,
-                shift_summary: `${coverageType} · ${formattedDateShort} · ${formattedStartTime} – ${formattedEndTime}`,
-              });
-              transitionTo('matched');
+              console.log('[RequesterHome] Poll match confirmed — resetting to idle');
+              transitionTo('idle');
             }
             return; // stop polling
           } else if (
@@ -1097,7 +1075,6 @@ export default function RequesterHomeScreen() {
     setEnvironment('Normal');
     setNote('');
     setActiveRequestId(null);
-    setMatchedDoctor(null);
     transitionTo('idle');
   }, [transitionTo]);
 
@@ -1896,140 +1873,6 @@ export default function RequesterHomeScreen() {
             </View>
           )}
 
-          {/* MATCHED — Doctor Accepted */}
-          {sheetState === 'matched' && (
-            <View style={{ padding: 20, paddingBottom: insets.bottom + 16 }}>
-              <DragHandle />
-
-              {/* Header label */}
-              <Text style={{
-                fontSize: 11,
-                fontFamily: 'Inter_600SemiBold',
-                letterSpacing: 1.4,
-                color: '#8E8E93',
-                marginTop: 8,
-                marginBottom: 12,
-              }}>
-                DOCTOR ACCEPTED
-              </Text>
-
-              {/* Doctor profile card */}
-              <View style={{
-                backgroundColor: '#2C2C2E',
-                borderRadius: 16,
-                padding: 14,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 12,
-                marginBottom: 16,
-              }}>
-                {/* Avatar placeholder */}
-                <View style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 24,
-                  backgroundColor: '#3A3A3C',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  flexShrink: 0,
-                }}>
-                  <Text style={{ fontSize: 20 }}>👨‍⚕️</Text>
-                </View>
-
-                {/* Doctor info */}
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 16, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>
-                    {matchedDoctor?.name || 'Dr. Unknown'}
-                  </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 }}>
-                    <Text style={{ fontSize: 12, color: '#8E8E93' }}>
-                      {matchedDoctor?.mdcn || 'MDCN/R/00000'}
-                    </Text>
-                    <Text style={{ fontSize: 12, color: '#F4A261' }}>
-                      ★ {Number(matchedDoctor?.rating || 5.0).toFixed(1)}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                      <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759' }} />
-                      <Text style={{ fontSize: 12, color: '#FFFFFF' }}>
-                        {matchedDoctor?.reliability || 100}%
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 3 }} numberOfLines={1}>
-                    {matchedDoctor?.shift_summary || ''}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Reminder text */}
-              <Text style={{
-                fontSize: 14,
-                color: '#8E8E93',
-                fontFamily: 'Inter_400Regular',
-                lineHeight: 20,
-                marginBottom: 20,
-              }}>
-                Remember to start shift under Upcoming Coverage once the doctor arrives.
-              </Text>
-
-              {/* Action buttons */}
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log('[RequesterHome] Edit Shift pressed from matched state');
-                    transitionTo('config');
-                  }}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#2C2C2E',
-                    borderRadius: 999,
-                    paddingVertical: 14,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>
-                    Edit Shift
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log('[RequesterHome] Cancel Shift pressed from matched state');
-                    handleReset();
-                  }}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#2C2C2E',
-                    borderRadius: 999,
-                    paddingVertical: 14,
-                    alignItems: 'center',
-                  }}
-                >
-                  <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>
-                    Cancel Shift
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log('[RequesterHome] Call button pressed from matched state');
-                  }}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#FFFFFF',
-                    borderRadius: 999,
-                    paddingVertical: 14,
-                    alignItems: 'center',
-                    flexDirection: 'row',
-                    justifyContent: 'center',
-                    gap: 6,
-                  }}
-                >
-                  <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>
-                    Call
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
         </Animated.View>
       )}
 

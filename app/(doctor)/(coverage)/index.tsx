@@ -10,13 +10,13 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  Switch,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/constants/Theme';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import LiveTimer from '@/components/LiveTimer';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -50,7 +50,7 @@ type CoverageSession = {
   created_at: string;
 };
 
-const TABS = ['Active', 'Upcoming', 'History'] as const;
+const TABS = ['Upcoming', 'History'] as const;
 type TabType = typeof TABS[number];
 
 const STATUS_PILL: Record<string, { bg: string; text: string }> = {
@@ -83,40 +83,6 @@ function formatDateChip(dateStr: string) {
   });
 }
 
-function StatusPill({ status }: { status: string }) {
-  const pill = STATUS_PILL[status] ?? STATUS_PILL.upcoming;
-  const label = status.toUpperCase();
-  return (
-    <View
-      style={{
-        backgroundColor: pill.bg,
-        borderRadius: RADIUS.full,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        alignSelf: 'flex-start',
-      }}
-    >
-      <Text style={[TYPOGRAPHY.label, { color: pill.text }]}>{label}</Text>
-    </View>
-  );
-}
-
-function DateChip({ dateStr }: { dateStr: string }) {
-  const label = formatDateChip(dateStr);
-  return (
-    <View
-      style={{
-        backgroundColor: '#E4E4E7',
-        borderRadius: RADIUS.full,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-      }}
-    >
-      <Text style={[TYPOGRAPHY.captionMedium, { color: '#3F3F46' }]}>{label}</Text>
-    </View>
-  );
-}
-
 function EmptyState({ message }: { message: string }) {
   return (
     <View style={{ alignItems: 'center', marginTop: SPACING.xxxl }}>
@@ -144,17 +110,10 @@ interface DoctorCardProps {
   session: CoverageSession;
   onCall: (session: CoverageSession) => void;
   onCancel: (session: CoverageSession) => void;
-  onResume: (session: CoverageSession) => void;
-  onEndShift: (session: CoverageSession) => void;
   isHistory?: boolean;
 }
 
-function DoctorCard({ session, onCall, onCancel, onResume, onEndShift, isHistory }: DoctorCardProps) {
-  const isActive = session.status === 'active';
-  const isPaused = session.status === 'paused';
-  const accentColor = isActive ? '#2DC653' : isPaused ? '#F4A261' : 'transparent';
-  const showAccent = isActive || isPaused;
-
+function DoctorCard({ session, onCall, onCancel, isHistory }: DoctorCardProps) {
   const shiftStart = formatTime(session.shift_start);
   const shiftEnd = formatTime(session.shift_end);
 
@@ -166,8 +125,6 @@ function DoctorCard({ session, onCall, onCancel, onResume, onEndShift, isHistory
   const initials = getDoctorInitials(session.doctor_name || 'Doctor');
   const ratingDisplay = Number(session.doctor_rating).toFixed(1);
   const reliabilityDisplay = Math.round(Number(session.doctor_reliability));
-
-  const dotColor = isActive ? '#2DC653' : isPaused ? '#F4A261' : '#8E8E93';
 
   return (
     <View
@@ -184,18 +141,10 @@ function DoctorCard({ session, onCall, onCancel, onResume, onEndShift, isHistory
           : { elevation: 3 },
       ]}
     >
-      {/* Left accent */}
-      {showAccent && (
-        <View style={{
-          position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
-          backgroundColor: accentColor, borderTopLeftRadius: 20, borderBottomLeftRadius: 20,
-        }} />
-      )}
-
-      <View style={{ padding: 16, paddingLeft: showAccent ? 19 : 16 }}>
+      <View style={{ padding: 16 }}>
         {/* Avatar row */}
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {/* Avatar with status dot */}
+          {/* Avatar */}
           <View style={{ marginRight: 12 }}>
             <View style={{
               width: 52, height: 52, borderRadius: 26,
@@ -206,13 +155,6 @@ function DoctorCard({ session, onCall, onCancel, onResume, onEndShift, isHistory
                 {initials}
               </Text>
             </View>
-            {/* Status dot */}
-            <View style={{
-              position: 'absolute', bottom: 1, right: 1,
-              width: 13, height: 13, borderRadius: 7,
-              backgroundColor: dotColor,
-              borderWidth: 2, borderColor: '#FFFFFF',
-            }} />
           </View>
 
           {/* Text info */}
@@ -239,9 +181,6 @@ function DoctorCard({ session, onCall, onCancel, onResume, onEndShift, isHistory
           </View>
         </View>
 
-        {/* Live timer for active */}
-        {isActive && <LiveTimer startedAt={session.started_at} />}
-
         {/* History ended_at */}
         {isHistory && session.ended_at && (
           <Text style={{ fontSize: 12, color: '#A1A1AA', marginTop: 8 }}>
@@ -249,53 +188,23 @@ function DoctorCard({ session, onCall, onCancel, onResume, onEndShift, isHistory
           </Text>
         )}
 
-        {/* Action buttons — single row */}
-        {!isHistory && (
+        {/* Action buttons — upcoming only */}
+        {!isHistory && session.status === 'upcoming' && (
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
-            {isActive && (
-              <View style={{
-                flex: 1, backgroundColor: '#2DC653', borderRadius: 999,
-                paddingVertical: 11, alignItems: 'center',
-              }}>
-                <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF', letterSpacing: 0.3 }}>ON CALL</Text>
-              </View>
-            )}
-            {isPaused && (
-              <>
-                <TouchableOpacity onPress={() => {
-                  console.log('[DoctorCoverage] Resume shift pressed:', session.id);
-                  onResume(session);
-                }} activeOpacity={0.8}
-                  style={{ flex: 1, backgroundColor: '#DCFCE7', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#15803D', letterSpacing: 0.3 }}>RESUME</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => {
-                  console.log('[DoctorCoverage] End shift pressed:', session.id);
-                  onEndShift(session);
-                }} activeOpacity={0.8}
-                  style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#DC2626', letterSpacing: 0.3 }}>END SHIFT</Text>
-                </TouchableOpacity>
-              </>
-            )}
-            {session.status === 'upcoming' && (
-              <>
-                <TouchableOpacity onPress={() => {
-                  console.log('[DoctorCoverage] Call requester pressed:', session.id);
-                  onCall(session);
-                }} activeOpacity={0.8}
-                  style={{ flex: 1, borderWidth: 1.5, borderColor: '#1C1C1E', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E', letterSpacing: 0.3 }}>CALL</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => {
-                  console.log('[DoctorCoverage] Cancel shift pressed:', session.id);
-                  onCancel(session);
-                }} activeOpacity={0.8}
-                  style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#DC2626', letterSpacing: 0.3 }}>CANCEL</Text>
-                </TouchableOpacity>
-              </>
-            )}
+            <TouchableOpacity onPress={() => {
+              console.log('[DoctorCoverage] Call requester pressed:', session.id);
+              onCall(session);
+            }} activeOpacity={0.8}
+              style={{ flex: 1, borderWidth: 1.5, borderColor: '#1C1C1E', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E', letterSpacing: 0.3 }}>CALL</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => {
+              console.log('[DoctorCoverage] Cancel shift pressed:', session.id);
+              onCancel(session);
+            }} activeOpacity={0.8}
+              style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#DC2626', letterSpacing: 0.3 }}>CANCEL</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -306,8 +215,7 @@ function DoctorCard({ session, onCall, onCancel, onResume, onEndShift, isHistory
 export default function DoctorCoverageScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>('Active');
-  const [activeSessions, setActiveSessions] = useState<CoverageSession[]>([]);
+  const [activeTab, setActiveTab] = useState<TabType>('Upcoming');
   const [upcomingSessions, setUpcomingSessions] = useState<CoverageSession[]>([]);
   const [historySessions, setHistorySessions] = useState<CoverageSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -328,10 +236,7 @@ export default function DoctorCoverageScreen() {
         return;
       }
 
-      const [activeRes, upcomingRes, historyRes] = await Promise.all([
-        fetch(`${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=active,paused`, {
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        }),
+      const [upcomingRes, historyRes] = await Promise.all([
         fetch(`${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=upcoming`, {
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         }),
@@ -339,15 +244,6 @@ export default function DoctorCoverageScreen() {
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         }),
       ]);
-
-      if (activeRes.ok) {
-        const data = await activeRes.json();
-        console.log('[DoctorCoverage] Active sessions fetched:', data?.sessions?.length ?? 0);
-        setActiveSessions(data?.sessions ?? []);
-      } else {
-        const errText = await activeRes.text();
-        console.log('[DoctorCoverage] Active fetch error:', activeRes.status, errText);
-      }
 
       if (upcomingRes.ok) {
         const data = await upcomingRes.json();
@@ -394,32 +290,10 @@ export default function DoctorCoverageScreen() {
   const handleStatusChange = useCallback((sessionId: string, newStatus: CoverageSession['status']) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 
-    const updateInList = (list: CoverageSession[]) =>
-      list.map(s => s.id === sessionId ? { ...s, status: newStatus } : s);
-
     const removeFromList = (list: CoverageSession[]) =>
       list.filter(s => s.id !== sessionId);
 
-    if (newStatus === 'active' || newStatus === 'paused') {
-      // Move from upcoming to active if needed
-      setUpcomingSessions(prev => {
-        const found = prev.find(s => s.id === sessionId);
-        if (found) {
-          setActiveSessions(active => [...active, { ...found, status: newStatus }]);
-          return removeFromList(prev);
-        }
-        return prev;
-      });
-      setActiveSessions(prev => updateInList(prev));
-    } else if (newStatus === 'completed' || newStatus === 'cancelled') {
-      setActiveSessions(prev => {
-        const found = prev.find(s => s.id === sessionId);
-        if (found) {
-          setHistorySessions(hist => [{ ...found, status: newStatus }, ...hist]);
-          return removeFromList(prev);
-        }
-        return prev;
-      });
+    if (newStatus === 'completed' || newStatus === 'cancelled') {
       setUpcomingSessions(prev => {
         const found = prev.find(s => s.id === sessionId);
         if (found) {
@@ -436,7 +310,7 @@ export default function DoctorCoverageScreen() {
     channelsRef.current.forEach(ch => supabase.removeChannel(ch));
     channelsRef.current = [];
 
-    // Subscribe to each session
+    // Subscribe to each upcoming session
     sessions.forEach(session => {
       const ch = supabase
         .channel(`coverage:${session.id}`)
@@ -470,9 +344,8 @@ export default function DoctorCoverageScreen() {
 
   useEffect(() => {
     if (!user?.id) return;
-    const allSessions = [...activeSessions, ...upcomingSessions];
-    setupRealtimeSubscriptions(allSessions, user.id);
-  }, [activeSessions, upcomingSessions, user?.id, setupRealtimeSubscriptions]);
+    setupRealtimeSubscriptions(upcomingSessions, user.id);
+  }, [upcomingSessions, user?.id, setupRealtimeSubscriptions]);
 
   useEffect(() => {
     return () => {
@@ -506,42 +379,11 @@ export default function DoctorCoverageScreen() {
     ]);
   }, [updateSessionStatus, handleStatusChange]);
 
-  const handleResume = useCallback(async (session: CoverageSession) => {
-    console.log('[DoctorCoverage] Resume action:', session.id);
-    const ok = await updateSessionStatus(session.id, 'active');
-    if (ok) handleStatusChange(session.id, 'active');
-  }, [updateSessionStatus, handleStatusChange]);
-
-  const handleEndShift = useCallback((session: CoverageSession) => {
-    console.log('[DoctorCoverage] End shift action initiated:', session.id);
-    Alert.alert('End Shift?', 'Are you sure you want to end this shift?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'End Shift',
-        style: 'destructive',
-        onPress: async () => {
-          console.log('[DoctorCoverage] End shift confirmed:', session.id);
-          const ok = await updateSessionStatus(session.id, 'completed');
-          if (ok) handleStatusChange(session.id, 'completed');
-        },
-      },
-    ]);
-  }, [updateSessionStatus, handleStatusChange]);
-
-  const handleTabPress = (tab: TabType) => {
-    console.log('[DoctorCoverage] Tab pressed:', tab);
-    setActiveTab(tab);
-  };
-
-  const currentSessions =
-    activeTab === 'Active' ? activeSessions :
-    activeTab === 'Upcoming' ? upcomingSessions :
-    historySessions;
-
-  const emptyMessage =
-    activeTab === 'Active' ? 'No active shifts right now.' :
-    activeTab === 'Upcoming' ? 'No upcoming shifts. Stay online to receive requests.' :
-    'No past coverage yet.';
+  const isHistoryTab = activeTab === 'History';
+  const currentSessions = isHistoryTab ? historySessions : upcomingSessions;
+  const emptyMessage = isHistoryTab
+    ? 'No past coverage yet.'
+    : 'No upcoming shifts. Stay online to receive requests.';
 
   return (
     <ScrollView
@@ -560,45 +402,38 @@ export default function DoctorCoverageScreen() {
         Your operational coverage
       </Text>
 
-      {/* Tab selector */}
-      <View
-        style={{
-          backgroundColor: '#1C1C1E',
-          borderRadius: RADIUS.full,
-          flexDirection: 'row',
-          padding: 4,
-          marginBottom: SPACING.xxl,
-        }}
-      >
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab;
-          return (
-            <TouchableOpacity
-              key={tab}
-              onPress={() => handleTabPress(tab)}
-              style={{
-                flex: 1,
-                paddingVertical: 10,
-                alignItems: 'center',
-                borderRadius: RADIUS.full,
-                backgroundColor: isActive ? '#2C2C2E' : 'transparent',
-              }}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  TYPOGRAPHY.captionMedium,
-                  {
-                    color: isActive ? '#FFFFFF' : '#8E8E93',
-                    fontWeight: isActive ? '600' : '500',
-                  },
-                ]}
-              >
-                {tab}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+      {/* Switch tab selector */}
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: SPACING.xxl,
+        gap: 12,
+      }}>
+        <Text style={{
+          fontSize: 14,
+          fontFamily: 'Inter_600SemiBold',
+          color: !isHistoryTab ? '#1C1C1E' : '#8E8E93',
+        }}>
+          Upcoming
+        </Text>
+        <Switch
+          value={isHistoryTab}
+          onValueChange={(val) => {
+            const next: TabType = val ? 'History' : 'Upcoming';
+            console.log('[DoctorCoverage] Tab switch toggled to:', next);
+            setActiveTab(next);
+          }}
+          trackColor={{ false: '#3A3A3C', true: '#2DC653' }}
+          thumbColor="#FFFFFF"
+        />
+        <Text style={{
+          fontSize: 14,
+          fontFamily: 'Inter_600SemiBold',
+          color: isHistoryTab ? '#1C1C1E' : '#8E8E93',
+        }}>
+          History
+        </Text>
       </View>
 
       {/* Content */}
@@ -613,9 +448,7 @@ export default function DoctorCoverageScreen() {
             session={session}
             onCall={handleCall}
             onCancel={handleCancel}
-            onResume={handleResume}
-            onEndShift={handleEndShift}
-            isHistory={activeTab === 'History'}
+            isHistory={isHistoryTab}
           />
         ))
       )}

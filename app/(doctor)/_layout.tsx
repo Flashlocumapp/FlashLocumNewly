@@ -290,9 +290,9 @@ export default function DoctorLayout() {
         const body = await res.text().catch(() => '');
         throw new Error(body || 'Accept failed');
       }
-      console.log('[DoctorLayout] Request accepted successfully — transitioning to confirmed');
+      console.log('[DoctorLayout] Request accepted successfully — transitioning to idle');
       setConfirmedRequest(req);
-      setDoctorScreenState('confirmed');
+      setDoctorScreenState('idle');
       setRequestQueue([]);
     } catch (e: any) {
       console.log('[DoctorLayout] Accept error:', e.message);
@@ -315,7 +315,6 @@ export default function DoctorLayout() {
 
   const currentRequest = requestQueue[0] ?? null;
   const showCard = doctorScreenState === 'incoming' && currentRequest !== null;
-  const showConfirmed = doctorScreenState === 'confirmed' && confirmedRequest !== null;
 
   // Fee breakdown
   const feeAmount = currentRequest?.price ?? 0;
@@ -325,15 +324,11 @@ export default function DoctorLayout() {
   const feeCutDisplay = `-₦${feeCut.toLocaleString()}`;
   const feeYouReceiveDisplay = `₦${feeYouReceive.toLocaleString()}`;
 
-  const confirmedPriceDisplay = confirmedRequest ? `₦${confirmedRequest.price.toLocaleString()}` : '';
-  const confirmedShiftSummary = confirmedRequest ? formatShiftSummary(confirmedRequest) : '';
   const currentEnvironment = currentRequest?.environment ?? '';
   const currentHospitalName = currentRequest?.hospital_name ?? '';
   const currentHospitalAddress = currentRequest?.hospital_address ?? '';
   const currentShiftSummary = currentRequest ? formatShiftSummary(currentRequest) : '';
   const currentNote = currentRequest?.note ?? null;
-  const confirmedHospitalName = confirmedRequest?.hospital_name ?? '';
-  const confirmedHospitalAddress = confirmedRequest?.hospital_address ?? '';
 
   const cardPaddingBottom = insets.bottom + 24;
 
@@ -357,7 +352,7 @@ export default function DoctorLayout() {
         </Stack>
 
         {/* Tab bar — hidden when a request card is showing */}
-        {!showCard && !showConfirmed && <DoctorTabBar tabs={TABS} />}
+        {!showCard && <DoctorTabBar tabs={TABS} />}
 
         {/* ── INCOMING REQUEST CARD ── */}
         {showCard && currentRequest && (
@@ -426,45 +421,6 @@ export default function DoctorLayout() {
                   ? <ActivityIndicator size="small" color="#1C1C1E" />
                   : <Text style={styles.acceptButtonText}>Accept</Text>
                 }
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* ── CONFIRMED CARD ── */}
-        {showConfirmed && confirmedRequest && (
-          <View style={[styles.card, { paddingBottom: cardPaddingBottom }]}>
-            <View style={{ alignItems: 'center', paddingVertical: 10 }}>
-              <View style={{ width: 36, height: 4, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-              <View style={styles.confirmedDot} />
-              <Text style={styles.confirmedLabel}>COVERAGE CONFIRMED</Text>
-            </View>
-            <Text style={styles.hospitalName}>{confirmedHospitalName}</Text>
-            <Text style={styles.addressText}>{confirmedHospitalAddress}</Text>
-            <Text style={styles.shiftSummaryText}>{confirmedShiftSummary}</Text>
-            <Text style={styles.confirmedPrice}>{confirmedPriceDisplay}</Text>
-            <View style={styles.buttonRow}>
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('[DoctorLayout] Cancel Shift pressed');
-                  setDoctorScreenState('idle');
-                  setConfirmedRequest(null);
-                }}
-                activeOpacity={0.85}
-                style={styles.declineButton}
-              >
-                <Text style={styles.declineButtonText}>Cancel Shift</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('[DoctorLayout] Call button pressed');
-                }}
-                activeOpacity={0.85}
-                style={styles.acceptButton}
-              >
-                <Text style={styles.acceptButtonText}>Call</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -585,23 +541,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Inter_700Bold',
     color: '#1C1C1E',
-  },
-  confirmedDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#34C759',
-  },
-  confirmedLabel: {
-    fontSize: 13,
-    color: '#34C759',
-    fontFamily: 'Inter_600SemiBold',
-    letterSpacing: 1,
-  },
-  confirmedPrice: {
-    fontSize: 22,
-    fontFamily: 'Inter_700Bold',
-    color: '#FFFFFF',
-    marginTop: 16,
   },
 });
