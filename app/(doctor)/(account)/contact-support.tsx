@@ -20,12 +20,10 @@ export default function ContactSupportScreen() {
   const router = useRouter();
 
   const handleWhatsApp = () => {
-    console.log('[ContactSupport] WhatsApp Support pressed');
     Linking.openURL('https://wa.me/2349134336851');
   };
 
   const handleEmail = () => {
-    console.log('[ContactSupport] Email Support pressed');
     Linking.openURL('mailto:support@flashlocum.com');
   };
 
@@ -36,13 +34,12 @@ export default function ContactSupportScreen() {
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => {
-            console.log('[ContactSupport] Back pressed');
             router.back();
           }}
           activeOpacity={0.7}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={24} color="#1C1C1E" />
         </TouchableOpacity>
         <Text style={styles.title}>Contact Support</Text>
         <View style={styles.headerSpacer} />
@@ -71,7 +68,7 @@ export default function ContactSupportScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1C1C1E', paddingHorizontal: 16 },
+  container: { flex: 1, backgroundColor: '#F5F5F0', paddingHorizontal: 16 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -88,7 +85,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1C1C1E',
     textAlign: 'center',
   },
   headerSpacer: { width: 36 },
