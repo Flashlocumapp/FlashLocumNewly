@@ -33,3 +33,22 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     detectSessionInUrl: false,
   },
 });
+
+/**
+ * Always returns a valid access token.
+ * Tries refreshSession() first to get a fresh JWT.
+ * Falls back to getSession() if refresh fails (e.g. no network).
+ * Returns null only if the user is not logged in at all.
+ */
+export async function getValidToken(): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (!error && data.session?.access_token) {
+      return data.session.access_token;
+    }
+  } catch {
+    // network error — fall through to cached session
+  }
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
+}

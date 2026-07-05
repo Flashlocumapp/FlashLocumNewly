@@ -22,7 +22,7 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
 import { useDoctorDispatch } from '@/contexts/DoctorDispatchContext';
-import { supabase } from '@/lib/supabase';
+import { supabase, getValidToken } from '@/lib/supabase';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
@@ -374,8 +374,7 @@ export default function DoctorHomeScreen() {
         onPress: async () => {
           console.log('[DoctorHome] Cancel shift confirmed for session:', activeSession.id);
           try {
-            const { data: { session: authSession } } = await supabase.auth.getSession();
-            const token = authSession?.access_token;
+            const token = await getValidToken();
             if (!token) throw new Error('Not authenticated');
             const res = await fetch(`${EDGE_BASE}/update-shift-status`, {
               method: 'POST',

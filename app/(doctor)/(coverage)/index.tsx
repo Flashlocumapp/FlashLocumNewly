@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/constants/Theme';
-import { supabase } from '@/lib/supabase';
+import { supabase, getValidToken } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 
@@ -219,8 +219,7 @@ export default function DoctorCoverageScreen() {
   const channelsRef = useRef<ReturnType<typeof supabase.channel>[]>([]);
 
   const getAccessToken = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
+    return getValidToken();
   }, []);
 
   const fetchSessions = useCallback(async () => {

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase';
+import { supabase, getValidToken } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 
@@ -81,9 +81,9 @@ export default function DoctorPayout() {
   useEffect(() => {
     const loadBanks = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const token = await getValidToken();
         const response = await fetch(MONNIFY_BANKS_URL, {
-          headers: { Authorization: `Bearer ${session?.access_token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         if (!response.ok) return;
         const json = await response.json();
@@ -102,12 +102,12 @@ export default function DoctorPayout() {
     setAccountNameError('');
     setAccountName('');
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const token = await getValidToken();
       const response = await fetch(MONNIFY_VERIFY_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ accountNumber: accNum, bankCode: bank.code }),
       });

@@ -16,7 +16,7 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
-import { supabase } from '@/lib/supabase';
+import { supabase, getValidToken } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
 import { DoctorDispatchContext, CoverageSession } from '@/contexts/DoctorDispatchContext';
@@ -120,22 +120,8 @@ export default function DoctorLayout() {
   const isOnlineRef = useRef(false);
   const isRealtimeHealthyRef = useRef(false);
 
-  const getToken = useCallback(async (): Promise<string | null> => {
-    console.log('[getToken] Attempting to refresh session for fresh token');
-    // Try to get a fresh token first
-    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-    if (!refreshError && refreshData.session?.access_token) {
-      console.log('[getToken] Successfully refreshed session token');
-      return refreshData.session.access_token;
-    }
-    console.warn('[getToken] refreshSession failed, falling back to cached session:', refreshError?.message);
-    // Fall back to cached session
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
-  }, []);
-
   const callEdge = useCallback(async (fn: string, body?: object) => {
-    const token = await getToken();
+    const token = await getValidToken();
     if (!token) return null;
     console.log(`[DoctorLayout] Calling edge function: ${fn}`, body ?? '');
     const res = await fetch(`${EDGE_BASE}/${fn}`, {
@@ -148,7 +134,7 @@ export default function DoctorLayout() {
     });
     console.log(`[DoctorLayout] ${fn} response status:`, res.status);
     return res;
-  }, [getToken]);
+  }, []);
 
   const forceSync = useCallback(async () => {
     if (!user) return;
@@ -178,7 +164,7 @@ export default function DoctorLayout() {
 
   // Fetch active session from edge function
   const fetchActiveSession = useCallback(async () => {
-    const token = await getToken();
+    const token = await getValidToken();
     if (!token) return;
     console.log('[DoctorLayout] Fetching active session for doctor');
     try {
@@ -200,7 +186,7 @@ export default function DoctorLayout() {
     } catch (e: any) {
       console.log('[DoctorLayout] fetchActiveSession error:', e.message);
     }
-  }, [getToken]);
+  }, []);
 
   // Keep stable refs
   useEffect(() => { callEdgeRef.current = callEdge; }, [callEdge]);
@@ -465,7 +451,7 @@ export default function DoctorLayout() {
     console.log('[DoctorLayout] Accept button pressed for request:', req.id);
     setAccepting(true);
     try {
-      const token = await getToken();
+      const token = await getValidToken();
       if (!token) throw new Error('Not authenticated');
       const res = await fetch(`${EDGE_BASE}/accept-request`, {
         method: 'POST',
@@ -501,7 +487,7 @@ export default function DoctorLayout() {
     } finally {
       setAccepting(false);
     }
-  }, [requestQueue, user, getToken, forceSync, fetchActiveSession]);
+  }, [requestQueue, user, forceSync, fetchActiveSession]);
 
   // ── Decline ──
   const handleDecline = useCallback(async () => {

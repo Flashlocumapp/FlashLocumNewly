@@ -27,7 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
-import { supabase } from '@/lib/supabase';
+import { supabase, getValidToken } from '@/lib/supabase';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { useTabBarVisibility, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -903,8 +903,7 @@ export default function RequesterHomeScreen() {
   const fetchActiveSession = useCallback(async () => {
     console.log('[RequesterHome] Fetching active session for requester');
     try {
-      const { data: { session: authSession } } = await supabase.auth.getSession();
-      const token = authSession?.access_token;
+      const token = await getValidToken();
       if (!token) return;
       const res = await fetch(`${EDGE_BASE}/get-active-session?role=requester`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -1474,8 +1473,8 @@ export default function RequesterHomeScreen() {
     console.log('[RequesterHome] Request Coverage tapped — submitting to submit-request Edge Function');
     setSubmitting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      const token = await getValidToken();
+      if (!token) throw new Error('Not authenticated');
       console.log('[RequesterHome] Calling submit-request for place:', selectedPlace.name);
 
       // Construct ISO datetime strings for start_date and end_date
@@ -1498,7 +1497,7 @@ export default function RequesterHomeScreen() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           hospital_name: selectedPlace.name,
@@ -1557,11 +1556,11 @@ export default function RequesterHomeScreen() {
   const handleEditRequest = async () => {
     console.log('[RequesterHome] Edit Request tapped — withdrawing in-flight request');
     if (activeRequestId) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+      const token = await getValidToken();
+      if (token) {
         fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({ request_id: activeRequestId }),
         }).catch(() => {});
       }
@@ -1585,12 +1584,12 @@ export default function RequesterHomeScreen() {
     setShowCancelModal(true);
     // Immediately withdraw in background
     if (activeRequestId) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+      const token = await getValidToken();
+      if (token) {
         try {
           await fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ request_id: activeRequestId }),
           });
           setCancelWithdrawn(true);
@@ -1606,12 +1605,12 @@ export default function RequesterHomeScreen() {
     console.log('[RequesterHome] Wait for Doctor — re-broadcasting request');
     setShowCancelModal(false);
     if (activeRequestId && cancelWithdrawn) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+      const token = await getValidToken();
+      if (token) {
         try {
           await fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/rebroadcast-request', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ request_id: activeRequestId }),
           });
           console.log('[RequesterHome] Request re-broadcast successfully');
@@ -1632,8 +1631,8 @@ export default function RequesterHomeScreen() {
     console.log('[RequesterHome] Cancel reason selected:', reason);
     // Update the request with cancellation reason
     if (activeRequestId) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+      const token = await getValidToken();
+      if (token) {
         supabase.from('dispatch_requests')
           .update({ status: 'cancelled', cancellation_reason: reason })
           .eq('id', activeRequestId)
@@ -1647,8 +1646,7 @@ export default function RequesterHomeScreen() {
 
   // ─── Session action handlers ──────────────────────────────────────────────────
   const callSessionEdge = useCallback(async (fn: string, sessionId: string) => {
-    const { data: { session: authSession } } = await supabase.auth.getSession();
-    const token = authSession?.access_token;
+    const token = await getValidToken();
     if (!token) throw new Error('Not authenticated');
     console.log('[RequesterHome] Calling session edge function:', fn, 'session:', sessionId);
     const res = await fetch(`${EDGE_BASE}/${fn}`, {
@@ -1726,8 +1724,7 @@ export default function RequesterHomeScreen() {
         onPress: async () => {
           console.log('[RequesterHome] Cancel active shift confirmed:', activeSession.id);
           try {
-            const { data: { session: authSession } } = await supabase.auth.getSession();
-            const token = authSession?.access_token;
+            const token = await getValidToken();
             if (!token) throw new Error('Not authenticated');
             const res = await fetch(`${EDGE_BASE}/update-shift-status`, {
               method: 'POST',
