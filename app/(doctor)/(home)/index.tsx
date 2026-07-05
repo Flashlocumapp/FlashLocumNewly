@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   Animated,
   Dimensions,
   StyleSheet,
+  Alert,
+  Linking,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +21,10 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
 import { useDoctorDispatch } from '@/contexts/DoctorDispatchContext';
+import { supabase } from '@/lib/supabase';
+import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
+
+const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
 const { height: screenHeight } = Dimensions.get('window');
 const SHEET_HEIGHT = screenHeight * 0.45;
@@ -30,11 +36,194 @@ const LAGOS_REGION = {
   longitudeDelta: 0.15,
 };
 
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function formatElapsed(startedAt: string): string {
+  const diffMs = Date.now() - new Date(startedAt).getTime();
+  const totalSec = Math.max(0, Math.floor(diffMs / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return [
+    String(h).padStart(2, '0'),
+    String(m).padStart(2, '0'),
+    String(s).padStart(2, '0'),
+  ].join(':');
+}
+
+function EnvironmentBadge({ environment }: { environment: string }) {
+  const isBusy = environment === 'Busy';
+  const bg = isBusy ? '#1A3A2A' : '#2C2C2E';
+  const color = isBusy ? '#34C759' : '#8E8E93';
+  return (
+    <View style={{ backgroundColor: bg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
+      <Text style={{ fontSize: 12, color, fontFamily: 'Inter_600SemiBold' }}>{environment}</Text>
+    </View>
+  );
+}
+
+function DoctorUpcomingCard({
+  session,
+  onCancel,
+  onCall,
+}: {
+  session: CoverageSession;
+  onCancel: () => void;
+  onCall: () => void;
+}) {
+  const shiftStart = formatTime(session.shift_start);
+  const shiftEnd = formatTime(session.shift_end);
+  const dayLabel = session.shift_date
+    ? new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short' })
+    : '';
+  const ratingDisplay = Number(session.doctor_rating).toFixed(1);
+  const reliabilityDisplay = Math.round(Number(session.doctor_reliability));
+
+  const isPaused = session.status === 'paused';
+  const shiftPillText = isPaused
+    ? `${session.shift_type} · Day ${session.current_day} of ${session.coverage_length} · ${shiftStart} – ${shiftEnd}`
+    : `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd}`;
+
+  return (
+    <View style={styles.subCard}>
+      {/* Header row */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <Text style={styles.subCardLabel}>UPCOMING COVERAGE</Text>
+        <EnvironmentBadge environment={session.environment} />
+      </View>
+
+      {/* Hospital name */}
+      <Text style={styles.subCardHeading} numberOfLines={1}>{session.hospital_name}</Text>
+
+      {/* Rating row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+        <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_400Regular' }}>
+          {'★ '}
+          <Text style={{ color: '#FFFFFF' }}>{ratingDisplay}</Text>
+        </Text>
+        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759' }} />
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>
+          {reliabilityDisplay}
+          {'%'}
+        </Text>
+      </View>
+
+      {/* Address */}
+      <Text style={[styles.subCardBody, { marginTop: 4 }]} numberOfLines={1}>{session.hospital_address}</Text>
+
+      {/* Shift pill */}
+      <View style={styles.shiftPill}>
+        <Text style={styles.shiftPillText} numberOfLines={1}>{shiftPillText}</Text>
+      </View>
+
+      {/* Action buttons */}
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+        <TouchableOpacity
+          onPress={() => {
+            console.log('[DoctorHome] Cancel shift pressed for session:', session.id);
+            onCancel();
+          }}
+          activeOpacity={0.8}
+          style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
+        >
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#DC2626', letterSpacing: 0.3 }}>CANCEL SHIFT</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => {
+            console.log('[DoctorHome] Call requester pressed for session:', session.id);
+            onCall();
+          }}
+          activeOpacity={0.8}
+          style={{ flex: 1, borderWidth: 1.5, borderColor: '#FFFFFF', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
+        >
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF', letterSpacing: 0.3 }}>CALL</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function DoctorActiveCard({ session }: { session: CoverageSession; onCall: () => void }) {
+  const [elapsed, setElapsed] = useState('00:00:00');
+
+  const currentDayLog = session.day_logs?.[session.current_day - 1];
+  const startedAt = currentDayLog?.started_at ?? session.started_at;
+
+  useEffect(() => {
+    if (!startedAt) return;
+    const tick = () => setElapsed(formatElapsed(startedAt));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+
+  const shiftStart = formatTime(session.shift_start);
+  const shiftEnd = formatTime(session.shift_end);
+  const ratingDisplay = Number(session.doctor_rating).toFixed(1);
+  const reliabilityDisplay = Math.round(Number(session.doctor_reliability));
+  const shiftPillText = `${session.shift_type} · ${shiftStart} – ${shiftEnd}`;
+  const showDayPill = session.coverage_length > 1;
+  const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;
+
+  return (
+    <View style={styles.subCard}>
+      {/* Header row */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <Text style={styles.subCardLabel}>ACTIVE COVERAGE</Text>
+        <EnvironmentBadge environment={session.environment} />
+      </View>
+
+      {/* Hospital name */}
+      <Text style={styles.subCardHeading} numberOfLines={1}>{session.hospital_name}</Text>
+
+      {/* Rating row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+        <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_400Regular' }}>
+          {'★ '}
+          <Text style={{ color: '#FFFFFF' }}>{ratingDisplay}</Text>
+        </Text>
+        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759' }} />
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>
+          {reliabilityDisplay}
+          {'%'}
+        </Text>
+      </View>
+
+      {/* Address */}
+      <Text style={[styles.subCardBody, { marginTop: 4 }]} numberOfLines={1}>{session.hospital_address}</Text>
+
+      {/* Shift pill */}
+      <View style={styles.shiftPill}>
+        <Text style={styles.shiftPillText} numberOfLines={1}>{shiftPillText}</Text>
+      </View>
+
+      {/* Timer row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>⏱</Text>
+          <Text style={{ fontSize: 22, color: '#FFFFFF', fontFamily: 'Inter_700Bold', letterSpacing: 1 }}>{elapsed}</Text>
+        </View>
+        {showDayPill && (
+          <View style={{ backgroundColor: '#1A3A2A', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
+            <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{dayPillText}</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
 export default function DoctorHomeScreen() {
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
 
-  const { isOnline, setIsOnline } = useDoctorDispatch();
+  const { isOnline, setIsOnline, activeSession, setActiveSession, activeJobCount } = useDoctorDispatch();
 
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
@@ -76,7 +265,6 @@ export default function DoctorHomeScreen() {
         if (!hasAnimatedToUser.current && mapRef.current) {
           hasAnimatedToUser.current = true;
           console.log('[DoctorHome] Animating map to immediate fix');
-          console.log('[DoctorHome][MAP-ANIMATE] animateToRegion:', { ...coords, source: 'immediatePos' });
           mapRef.current.animateToRegion({ ...coords, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 800);
         }
       }
@@ -90,21 +278,10 @@ export default function DoctorHomeScreen() {
         },
         (loc) => {
           if (!active) return;
-          console.log('[DoctorHome][GPS-2] watchPosition update:', {
-            lat: loc.coords.latitude,
-            lng: loc.coords.longitude,
-            accuracy: loc.coords.accuracy,
-            timestamp: new Date(loc.timestamp).toISOString(),
-            hasAnimated: hasAnimatedToUser.current,
-            mapRefReady: !!mapRef.current,
-          });
           const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-          console.log('[DoctorHome] Location update:', coords);
           setUserLocation(coords);
           if (!hasAnimatedToUser.current && mapRef.current) {
             hasAnimatedToUser.current = true;
-            console.log('[DoctorHome] Animating map to user location');
-            console.log('[DoctorHome][MAP-ANIMATE] animateToRegion:', { ...coords, source: 'watchStream' });
             mapRef.current.animateToRegion(
               { ...coords, latitudeDelta: 0.01, longitudeDelta: 0.01 },
               800,
@@ -144,31 +321,81 @@ export default function DoctorHomeScreen() {
     return () => loop.stop();
   }, [isOnline, radarScale, radarOpacity]);
 
-  // ─── GPS diagnostic watchers ─────────────────────────────────────────────────
   useEffect(() => {
     console.log('[DoctorHome][MARKER-STATE] userLocation changed:', userLocation);
   }, [userLocation]);
 
   useEffect(() => {
-    console.log('[DoctorHome][ONLINE-STATE] isOnline:', isOnline, 'userLocation at this moment:', userLocation);
+    console.log('[DoctorHome][ONLINE-STATE] isOnline:', isOnline);
   }, [isOnline]);
 
   // ─── Toggle online/offline ───────────────────────────────────────────────────
   const handleToggleStatus = () => {
+    if (isJobCapReached) return;
     const next = !isOnline;
     console.log('[DoctorHome] Status pill pressed — toggling to:', next ? 'Online' : 'Offline');
     setIsOnline(next);
   };
 
+  // ─── Cancel shift ────────────────────────────────────────────────────────────
+  const handleCancelShift = useCallback(() => {
+    if (!activeSession) return;
+    Alert.alert('Cancel Shift?', 'This will cancel the booking.', [
+      { text: 'Keep', style: 'cancel' },
+      {
+        text: 'Cancel Shift',
+        style: 'destructive',
+        onPress: async () => {
+          console.log('[DoctorHome] Cancel shift confirmed for session:', activeSession.id);
+          try {
+            const { data: { session: authSession } } = await supabase.auth.getSession();
+            const token = authSession?.access_token;
+            if (!token) throw new Error('Not authenticated');
+            const res = await fetch(`${EDGE_BASE}/update-shift-status`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ session_id: activeSession.id, status: 'cancelled' }),
+            });
+            console.log('[DoctorHome] update-shift-status response:', res.status);
+            if (!res.ok) {
+              const errText = await res.text().catch(() => '');
+              throw new Error(errText || 'Cancel failed');
+            }
+            setActiveSession(null);
+          } catch (e: any) {
+            console.log('[DoctorHome] Cancel shift error:', e.message);
+            Alert.alert('Error', e.message);
+          }
+        },
+      },
+    ]);
+  }, [activeSession, setActiveSession]);
+
+  // ─── Call requester ──────────────────────────────────────────────────────────
+  const handleCallRequester = useCallback(() => {
+    if (!activeSession?.requester_phone) {
+      Alert.alert('No phone number available');
+      return;
+    }
+    console.log('[DoctorHome] Call requester pressed:', activeSession.requester_phone);
+    Linking.openURL(`tel:${activeSession.requester_phone}`);
+  }, [activeSession]);
+
   if (!fontsLoaded) return null;
 
-  const pillBg = isOnline ? '#34C759' : '#3A3A3C';
-  const dotBg = isOnline ? '#FFFFFF' : '#8E8E93';
-  const statusText = isOnline ? 'Online' : 'Offline';
+  const isJobCapReached = activeJobCount >= 3;
+  const pillBg = isJobCapReached ? '#3A3A3C' : isOnline ? '#34C759' : '#3A3A3C';
+  const dotBg = isJobCapReached ? '#8E8E93' : isOnline ? '#FFFFFF' : '#8E8E93';
+  const statusText = isJobCapReached ? '3 Jobs Active' : isOnline ? 'Online' : 'Offline';
   const pillTop = insets.top + 12;
   const sheetPaddingBottom = insets.bottom + 80;
 
   const showMarker = isOnline && userLocation !== null;
+
+  // Determine which sub-card to show
+  const hasActiveSession = activeSession !== null;
+  const isUpcomingOrPaused = hasActiveSession && (activeSession.status === 'upcoming' || activeSession.status === 'paused');
+  const isActive = hasActiveSession && activeSession.status === 'active';
 
   return (
     <View style={styles.container}>
@@ -205,26 +432,44 @@ export default function DoctorHomeScreen() {
       {/* Online/Offline pill */}
       <TouchableOpacity
         onPress={handleToggleStatus}
-        activeOpacity={0.85}
+        activeOpacity={isJobCapReached ? 1 : 0.85}
         style={[styles.pill, { top: pillTop, backgroundColor: pillBg }]}
+        disabled={isJobCapReached}
       >
         <View style={[styles.pillDot, { backgroundColor: dotBg }]} />
         <Text style={styles.pillText}>{statusText}</Text>
       </TouchableOpacity>
 
-      {/* Bottom sheet — idle state only */}
+      {/* Bottom sheet */}
       <View style={[styles.sheet, { paddingBottom: sheetPaddingBottom }]}>
         {/* Decorative drag handle */}
         <View style={styles.dragHandle} />
 
-        {/* Coverage sub-card */}
-        <View style={styles.subCard}>
-          <Text style={styles.subCardLabel}>COVERAGE</Text>
-          <Text style={styles.subCardHeading}>No coverage yet</Text>
-          <Text style={styles.subCardBody}>
-            Stay online to start receiving dispatch requests.
-          </Text>
-        </View>
+        {/* Coverage sub-card — conditional */}
+        {!hasActiveSession && (
+          <View style={styles.subCard}>
+            <Text style={styles.subCardLabel}>COVERAGE</Text>
+            <Text style={styles.subCardHeading}>No coverage yet</Text>
+            <Text style={styles.subCardBody}>
+              Stay online to start receiving dispatch requests.
+            </Text>
+          </View>
+        )}
+
+        {isUpcomingOrPaused && activeSession && (
+          <DoctorUpcomingCard
+            session={activeSession}
+            onCancel={handleCancelShift}
+            onCall={handleCallRequester}
+          />
+        )}
+
+        {isActive && activeSession && (
+          <DoctorActiveCard
+            session={activeSession}
+            onCall={handleCallRequester}
+          />
+        )}
 
         {/* Stats row */}
         <View style={styles.statsRow}>
@@ -336,7 +581,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginHorizontal: 16,
     marginBottom: 12,
-    marginTop: 16,
+    marginTop: 0,
   },
   subCardLabel: {
     fontSize: 11,
@@ -356,6 +601,19 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     fontFamily: 'Inter_400Regular',
     lineHeight: 20,
+  },
+  shiftPill: {
+    backgroundColor: '#3A3A3C',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  shiftPillText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontFamily: 'Inter_400Regular',
   },
   statsRow: {
     flexDirection: 'row',

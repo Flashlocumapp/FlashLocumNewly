@@ -18,6 +18,52 @@ type DispatchRequest = {
   expiry_at?: string;
 };
 
+export type DayLog = {
+  day: number;
+  started_at: string;
+  paused_at: string | null;
+  duration_seconds: number;
+};
+
+export type CoverageSession = {
+  id: string;
+  request_id: string;
+  doctor_id: string;
+  requester_id: string;
+  hospital_name: string;
+  hospital_address: string;
+  shift_date: string;
+  shift_start: string;
+  shift_end: string;
+  shift_type: string;
+  coverage_type: string;
+  coverage_length: number;
+  environment: string;
+  price: number;
+  hourly_rate_kobo: number;
+  current_day: number;
+  day_logs: DayLog[];
+  status: 'upcoming' | 'active' | 'paused' | 'payment_pending' | 'completed' | 'cancelled';
+  started_at: string | null;
+  ended_at: string | null;
+  paused_at: string | null;
+  payment_initiated_at: string | null;
+  payment_deadline_at: string | null;
+  payment_status: string;
+  monnify_reference: string | null;
+  monnify_account_number: string | null;
+  monnify_bank_name: string | null;
+  monnify_account_name: string | null;
+  doctor_name: string;
+  doctor_mdcn: string;
+  doctor_rating: number;
+  doctor_reliability: number;
+  doctor_phone: string | null;
+  requester_name: string;
+  requester_phone: string | null;
+  created_at: string;
+};
+
 type DoctorDispatchCtx = {
   isOnline: boolean;
   setIsOnline: (v: boolean) => void;
@@ -27,6 +73,10 @@ type DoctorDispatchCtx = {
   accepting: boolean;
   handleAccept: () => Promise<void>;
   handleDecline: () => Promise<void>;
+  activeSession: CoverageSession | null;
+  setActiveSession: (s: CoverageSession | null) => void;
+  activeJobCount: number;
+  setActiveJobCount: (n: number) => void;
 };
 
 export const DoctorDispatchContext = createContext<DoctorDispatchCtx>({
@@ -38,6 +88,10 @@ export const DoctorDispatchContext = createContext<DoctorDispatchCtx>({
   accepting: false,
   handleAccept: async () => {},
   handleDecline: async () => {},
+  activeSession: null,
+  setActiveSession: () => {},
+  activeJobCount: 0,
+  setActiveJobCount: () => {},
 });
 
 export const useDoctorDispatch = () => useContext(DoctorDispatchContext);

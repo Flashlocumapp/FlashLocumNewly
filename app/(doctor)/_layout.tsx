@@ -19,7 +19,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
-import { DoctorDispatchContext } from '@/contexts/DoctorDispatchContext';
+import { DoctorDispatchContext, CoverageSession } from '@/contexts/DoctorDispatchContext';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
@@ -74,10 +74,15 @@ export default function DoctorLayout() {
   const [confirmedRequest, setConfirmedRequest] = useState<DispatchRequest | null>(null);
   const [accepting, setAccepting] = useState(false);
 
+  // Active session state
+  const [activeSession, setActiveSession] = useState<CoverageSession | null>(null);
+  const [activeJobCount, setActiveJobCount] = useState(0);
+
   const prevIsOnlineRef = useRef<boolean | undefined>(undefined);
   const callEdgeRef = useRef<(fn: string, body?: object) => Promise<Response | null>>(async () => null);
   const forceSyncRef = useRef<() => Promise<void>>(async () => {});
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const isOnlineRef = useRef(false);
   const isRealtimeHealthyRef = useRef(false);
 
@@ -128,16 +133,47 @@ export default function DoctorLayout() {
     }
   }, [user, callEdge]);
 
-  // Keep stable refs for callEdge and forceSync so the toggle effect never re-fires due to their identity changing
+  // Fetch active session from edge function
+  const fetchActiveSession = useCallback(async () => {
+    const token = await getToken();
+    if (!token) return;
+    console.log('[DoctorLayout] Fetching active session for doctor');
+    try {
+      const res = await fetch(`${EDGE_BASE}/get-active-session?role=doctor`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      console.log('[DoctorLayout] get-active-session response status:', res.status);
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        console.log('[DoctorLayout] get-active-session error:', errText);
+        return;
+      }
+      const data = await res.json();
+      const session: CoverageSession | null = data?.session ?? null;
+      const jobCount: number = data?.active_job_count ?? 0;
+      console.log('[DoctorLayout] Active session fetched:', session?.id ?? 'none', 'job count:', jobCount);
+      setActiveSession(session);
+      setActiveJobCount(jobCount);
+    } catch (e: any) {
+      console.log('[DoctorLayout] fetchActiveSession error:', e.message);
+    }
+  }, [getToken]);
+
+  // Keep stable refs
   useEffect(() => { callEdgeRef.current = callEdge; }, [callEdge]);
   useEffect(() => { forceSyncRef.current = forceSync; }, [forceSync]);
   useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
+
+  // On mount — restore session state after app restart
+  useEffect(() => {
+    if (!user) return;
+    fetchActiveSession();
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Go-online / Go-offline — only fires when isOnline actually changes ──
   useEffect(() => {
     if (!user) return;
     if (prevIsOnlineRef.current === isOnline) return;
-    // Commit immediately — prevents cascade if the async call fails
     prevIsOnlineRef.current = isOnline;
     const toggle = async () => {
       const fn = isOnline ? 'go-online' : 'go-offline';
@@ -168,7 +204,7 @@ export default function DoctorLayout() {
       }
     };
     toggle();
-  }, [isOnline, user]); // only isOnline and user — stable refs handle callEdge/forceSync
+  }, [isOnline, user]);
 
   // ── Heartbeat every 60s while online ──
   useEffect(() => {
@@ -182,7 +218,7 @@ export default function DoctorLayout() {
     return () => clearInterval(id);
   }, [isOnline, user, callEdge]);
 
-  // ── 15-second polling fallback — only fires when Realtime is unhealthy ──
+  // ── 15-second polling fallback ──
   useEffect(() => {
     if (!isOnline || !user) return;
     const id = setInterval(() => {
@@ -196,7 +232,7 @@ export default function DoctorLayout() {
     return () => clearInterval(id);
   }, [isOnline, user]);
 
-  // ── Realtime subscription ──
+  // ── Realtime subscription — dispatch channel ──
   useEffect(() => {
     if (!user) return;
     console.log('[DoctorLayout] Subscribing to dispatch:lagos channel');
@@ -235,9 +271,66 @@ export default function DoctorLayout() {
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [user]); // intentionally omit isOnline/forceSync to avoid re-subscribing
+  }, [user]); // intentionally omit isOnline/forceSync
 
+  // ── Realtime subscription — session channel (when activeSession changes) ──
+  useEffect(() => {
+    if (!activeSession) {
+      if (sessionChannelRef.current) {
+        console.log('[DoctorLayout] No active session — removing session channel');
+        supabase.removeChannel(sessionChannelRef.current);
+        sessionChannelRef.current = null;
+      }
+      return;
+    }
 
+    const channelName = `session:${activeSession.id}`;
+    console.log('[DoctorLayout] Subscribing to session channel:', channelName);
+
+    // Remove old channel if any
+    if (sessionChannelRef.current) {
+      supabase.removeChannel(sessionChannelRef.current);
+      sessionChannelRef.current = null;
+    }
+
+    const ch = supabase.channel(channelName)
+      .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
+        console.log('[DoctorLayout] SHIFT_STARTED received:', payload);
+        const updated = payload?.payload?.session as Partial<CoverageSession>;
+        setActiveSession((prev) => prev ? { ...prev, ...updated, status: 'active' } : prev);
+      })
+      .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
+        console.log('[DoctorLayout] SHIFT_PAUSED received:', payload);
+        const updated = payload?.payload?.session as Partial<CoverageSession>;
+        setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      })
+      .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
+        console.log('[DoctorLayout] SHIFT_RESUMED received:', payload);
+        const updated = payload?.payload?.session as Partial<CoverageSession>;
+        setActiveSession((prev) => prev ? { ...prev, ...updated, status: 'active' } : prev);
+      })
+      .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
+        console.log('[DoctorLayout] SHIFT_ENDED received:', payload);
+        const updated = payload?.payload?.session as Partial<CoverageSession>;
+        setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      })
+      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+        console.log('[DoctorLayout] PAYMENT_CONFIRMED received:', payload);
+        setActiveSession(null);
+        setActiveJobCount((prev) => Math.max(0, prev - 1));
+      })
+      .subscribe((status) => {
+        console.log('[DoctorLayout] Session channel status:', channelName, status);
+      });
+
+    sessionChannelRef.current = ch;
+
+    return () => {
+      console.log('[DoctorLayout] Unsubscribing from session channel:', channelName);
+      supabase.removeChannel(ch);
+      sessionChannelRef.current = null;
+    };
+  }, [activeSession?.id]); // only re-subscribe when session ID changes
 
   // ── Queue → state sync ──
   useEffect(() => {
@@ -294,13 +387,17 @@ export default function DoctorLayout() {
       setConfirmedRequest(req);
       setDoctorScreenState('idle');
       setRequestQueue([]);
+
+      // Fetch the newly created session
+      console.log('[DoctorLayout] Fetching active session after accept');
+      await fetchActiveSession();
     } catch (e: any) {
       console.log('[DoctorLayout] Accept error:', e.message);
       Alert.alert('Error', e.message);
     } finally {
       setAccepting(false);
     }
-  }, [requestQueue, user, getToken, forceSync]);
+  }, [requestQueue, user, getToken, forceSync, fetchActiveSession]);
 
   // ── Decline ──
   const handleDecline = useCallback(async () => {
@@ -332,6 +429,9 @@ export default function DoctorLayout() {
 
   const cardPaddingBottom = insets.bottom + 24;
 
+  // 3-job cap: pill is disabled when activeJobCount >= 3
+  const isJobCapReached = activeJobCount >= 3;
+
   return (
     <DoctorDispatchContext.Provider value={{
       isOnline,
@@ -342,6 +442,10 @@ export default function DoctorLayout() {
       accepting,
       handleAccept,
       handleDecline,
+      activeSession,
+      setActiveSession,
+      activeJobCount,
+      setActiveJobCount,
     }}>
       <View style={{ flex: 1 }}>
         <Stack screenOptions={{ headerShown: false }}>

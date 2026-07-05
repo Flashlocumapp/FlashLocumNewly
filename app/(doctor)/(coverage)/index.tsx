@@ -17,38 +17,13 @@ import { Clock } from 'lucide-react-native';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/constants/Theme';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
 const SUPABASE_URL = 'https://juilousufwlsiqdcgllu.supabase.co';
-
-type CoverageSession = {
-  id: string;
-  request_id: string;
-  doctor_id: string;
-  requester_id: string;
-  hospital_name: string;
-  hospital_address: string;
-  shift_date: string;
-  shift_start: string;
-  shift_end: string;
-  shift_type: string;
-  coverage_type: string;
-  status: 'upcoming' | 'active' | 'paused' | 'completed' | 'cancelled';
-  started_at: string | null;
-  ended_at: string | null;
-  paused_at: string | null;
-  doctor_name: string;
-  doctor_mdcn: string;
-  doctor_rating: number;
-  doctor_reliability: number;
-  doctor_phone: string | null;
-  requester_name: string;
-  requester_phone: string | null;
-  created_at: string;
-};
 
 const TABS = ['Upcoming', 'History'] as const;
 type TabType = typeof TABS[number];
@@ -72,14 +47,6 @@ function formatTime(iso: string) {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
-  });
-}
-
-function formatDateChip(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
   });
 }
 
@@ -120,7 +87,10 @@ function DoctorCard({ session, onCall, onCancel, isHistory }: DoctorCardProps) {
   const dayLabel = session.shift_date
     ? new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short' })
     : '';
-  const shiftSummary = `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd}`;
+
+  const shiftSummary = session.status === 'paused'
+    ? `${session.shift_type} · Day ${session.current_day} of ${session.coverage_length} · ${shiftStart} – ${shiftEnd}`
+    : `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd}`;
 
   const initials = getDoctorInitials(session.doctor_name || 'Doctor');
   const ratingDisplay = Number(session.doctor_rating).toFixed(1);
@@ -137,7 +107,7 @@ function DoctorCard({ session, onCall, onCancel, isHistory }: DoctorCardProps) {
           opacity: isHistory ? 0.7 : 1,
         },
         Platform.OS === 'ios'
-          ? { boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }
+          ? { boxShadow: '0 2px 8px rgba(0,0,0,0.07)' } as any
           : { elevation: 3 },
       ]}
     >
@@ -207,6 +177,19 @@ function DoctorCard({ session, onCall, onCancel, isHistory }: DoctorCardProps) {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* Paused sessions — call only */}
+        {!isHistory && session.status === 'paused' && (
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+            <TouchableOpacity onPress={() => {
+              console.log('[DoctorCoverage] Call requester pressed (paused):', session.id);
+              onCall(session);
+            }} activeOpacity={0.8}
+              style={{ flex: 1, borderWidth: 1.5, borderColor: '#1C1C1E', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E', letterSpacing: 0.3 }}>CALL</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -237,7 +220,7 @@ export default function DoctorCoverageScreen() {
       }
 
       const [upcomingRes, historyRes] = await Promise.all([
-        fetch(`${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=upcoming`, {
+        fetch(`${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=upcoming,paused`, {
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         }),
         fetch(`${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=completed,cancelled`, {
@@ -323,7 +306,7 @@ export default function DoctorCoverageScreen() {
       channelsRef.current.push(ch);
     });
 
-    // Subscribe to doctor channel for new sessions
+    // Subscribe to doctor channel for new sessions and shift events
     const doctorCh = supabase
       .channel(`doctor:${userId}`)
       .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
@@ -332,6 +315,26 @@ export default function DoctorCoverageScreen() {
         if (newSession) {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
           setUpcomingSessions(prev => [newSession, ...prev]);
+        }
+      })
+      .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
+        console.log('[DoctorCoverage] Realtime SHIFT_PAUSED:', payload);
+        const updatedSession = payload?.payload?.session as CoverageSession;
+        if (updatedSession) {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setUpcomingSessions(prev => {
+            const exists = prev.find(s => s.id === updatedSession.id);
+            if (exists) return prev.map(s => s.id === updatedSession.id ? updatedSession : s);
+            return [updatedSession, ...prev];
+          });
+        }
+      })
+      .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
+        console.log('[DoctorCoverage] Realtime SHIFT_STARTED:', payload);
+        const sessionId = payload?.payload?.session?.id;
+        if (sessionId) {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setUpcomingSessions(prev => prev.filter(s => s.id !== sessionId));
         }
       })
       .subscribe();

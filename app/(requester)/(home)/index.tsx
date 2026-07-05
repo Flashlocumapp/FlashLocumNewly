@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
+  Linking,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-native';
@@ -28,6 +29,9 @@ import * as SecureStore from 'expo-secure-store';
 import { supabase } from '@/lib/supabase';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { useTabBarVisibility, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
+import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
+
+const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
 // ─── Pricing config ───────────────────────────────────────────────────────────
 type PricingConfig = {
@@ -513,6 +517,404 @@ function DragHandle({ panHandlers }: { panHandlers?: object }) {
   );
 }
 
+// ─── Session helpers ──────────────────────────────────────────────────────────
+
+function formatSessionTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function formatElapsedSession(startedAt: string): string {
+  const diffMs = Date.now() - new Date(startedAt).getTime();
+  const totalSec = Math.max(0, Math.floor(diffMs / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return [
+    String(h).padStart(2, '0'),
+    String(m).padStart(2, '0'),
+    String(s).padStart(2, '0'),
+  ].join(':');
+}
+
+function formatCountdown(deadlineAt: string): string {
+  const diffMs = new Date(deadlineAt).getTime() - Date.now();
+  if (diffMs <= 0) return '00:00';
+  const totalSec = Math.floor(diffMs / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function formatNaira(kobo: number): string {
+  const naira = Math.round(kobo / 100);
+  return `₦${naira.toLocaleString()}`;
+}
+
+function getSessionInitials(name: string): string {
+  const parts = name.replace(/^Dr\.?\s*/i, '').trim().split(' ');
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return parts[0]?.[0]?.toUpperCase() ?? '?';
+}
+
+function SessionEnvBadge({ environment }: { environment: string }) {
+  const isBusy = environment === 'Busy';
+  const bg = isBusy ? '#1A3A2A' : '#2C2C2E';
+  const color = isBusy ? '#34C759' : '#8E8E93';
+  return (
+    <View style={{ backgroundColor: bg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
+      <Text style={{ fontSize: 12, color, fontFamily: 'Inter_600SemiBold' }}>{environment}</Text>
+    </View>
+  );
+}
+
+// ─── Requester Upcoming Coverage Card ────────────────────────────────────────
+function RequesterUpcomingCard({
+  session,
+  onCancel,
+  onCall,
+  onStartShift,
+  onResumeShift,
+  onEndShift,
+  bottomPadding,
+}: {
+  session: CoverageSession;
+  onCancel: () => void;
+  onCall: () => void;
+  onStartShift: () => void;
+  onResumeShift: () => void;
+  onEndShift: () => void;
+  bottomPadding: number;
+}) {
+  const shiftStart = formatSessionTime(session.shift_start);
+  const shiftEnd = formatSessionTime(session.shift_end);
+  const dayLabel = session.shift_date
+    ? new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short' })
+    : '';
+  const isPaused = session.status === 'paused';
+  const shiftPillText = isPaused
+    ? `${session.shift_type} · Day ${session.current_day} of ${session.coverage_length} · ${shiftStart} – ${shiftEnd}`
+    : `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd}`;
+  const initials = getSessionInitials(session.doctor_name || 'Doctor');
+  const ratingDisplay = Number(session.doctor_rating).toFixed(1);
+  const reliabilityDisplay = Math.round(Number(session.doctor_reliability));
+
+  return (
+    <View style={{
+      position: 'absolute', bottom: 0, left: 0, right: 0,
+      backgroundColor: '#1C1C1E',
+      borderTopLeftRadius: 24, borderTopRightRadius: 24,
+      paddingTop: 16, paddingHorizontal: 16,
+      paddingBottom: bottomPadding,
+      shadowColor: '#000', shadowOffset: { width: 0, height: -3 },
+      shadowOpacity: 0.08, shadowRadius: 10, elevation: 10,
+    }}>
+      {/* Drag handle */}
+      <View style={{ alignItems: 'center', marginBottom: 16 }}>
+        <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
+      </View>
+
+      {/* Header */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold' }}>
+          UPCOMING COVERAGE
+        </Text>
+        <SessionEnvBadge environment={session.environment} />
+      </View>
+
+      {/* Doctor row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+        <View style={{
+          width: 52, height: 52, borderRadius: 26,
+          backgroundColor: '#2C2C2E',
+          alignItems: 'center', justifyContent: 'center', marginRight: 12,
+        }}>
+          <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>{initials}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }} numberOfLines={1}>
+            {session.doctor_name}
+          </Text>
+          <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 1 }}>
+            {session.doctor_mdcn || 'MDCN/R/—'}
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            <Text style={{ fontSize: 12, color: '#F4A261' }}>★</Text>
+            <Text style={{ fontSize: 12, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759' }} />
+            <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{reliabilityDisplay}%</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Shift pill */}
+      <View style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start', marginBottom: 14 }}>
+        <Text style={{ fontSize: 12, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }} numberOfLines={1}>{shiftPillText}</Text>
+      </View>
+
+      {/* Action buttons */}
+      {!isPaused ? (
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity onPress={() => { console.log('[RequesterHome] Cancel shift pressed:', session.id); onCancel(); }}
+            activeOpacity={0.8}
+            style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#DC2626' }}>CANCEL SHIFT</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed:', session.id); onCall(); }}
+            activeOpacity={0.8}
+            style={{ flex: 1, borderWidth: 1.5, borderColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>CALL</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => { console.log('[RequesterHome] Start shift pressed:', session.id); onStartShift(); }}
+            activeOpacity={0.8}
+            style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>START SHIFT</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed (paused):', session.id); onCall(); }}
+            activeOpacity={0.8}
+            style={{ flex: 1, borderWidth: 1.5, borderColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>CALL</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => { console.log('[RequesterHome] Resume shift pressed:', session.id); onResumeShift(); }}
+            activeOpacity={0.8}
+            style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>RESUME SHIFT</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => { console.log('[RequesterHome] End shift pressed (paused):', session.id); onEndShift(); }}
+            activeOpacity={0.8}
+            style={{ flex: 1, backgroundColor: '#FF3B30', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>END SHIFT</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Requester Active Coverage Card ──────────────────────────────────────────
+function RequesterActiveCard({
+  session,
+  onCall,
+  onPauseShift,
+  onEndShift,
+  bottomPadding,
+}: {
+  session: CoverageSession;
+  onCall: () => void;
+  onPauseShift: () => void;
+  onEndShift: () => void;
+  bottomPadding: number;
+}) {
+  const [elapsed, setElapsed] = useState('00:00:00');
+
+  const currentDayLog = session.day_logs?.[session.current_day - 1];
+  const startedAt = currentDayLog?.started_at ?? session.started_at;
+
+  useEffect(() => {
+    if (!startedAt) return;
+    const tick = () => setElapsed(formatElapsedSession(startedAt));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+
+  const shiftStart = formatSessionTime(session.shift_start);
+  const shiftEnd = formatSessionTime(session.shift_end);
+  const initials = getSessionInitials(session.doctor_name || 'Doctor');
+  const ratingDisplay = Number(session.doctor_rating).toFixed(1);
+  const reliabilityDisplay = Math.round(Number(session.doctor_reliability));
+  const shiftPillText = `${session.shift_type} · ${shiftStart} – ${shiftEnd}`;
+  const showDayPill = session.coverage_length > 1;
+  const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;
+  const isLastDay = session.current_day >= session.coverage_length;
+  const showPauseButton = session.coverage_length > 1 && !isLastDay;
+
+  return (
+    <View style={{
+      position: 'absolute', bottom: 0, left: 0, right: 0,
+      backgroundColor: '#1C1C1E',
+      borderTopLeftRadius: 24, borderTopRightRadius: 24,
+      paddingTop: 16, paddingHorizontal: 16,
+      paddingBottom: bottomPadding,
+      shadowColor: '#000', shadowOffset: { width: 0, height: -3 },
+      shadowOpacity: 0.08, shadowRadius: 10, elevation: 10,
+    }}>
+      {/* Drag handle */}
+      <View style={{ alignItems: 'center', marginBottom: 16 }}>
+        <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
+      </View>
+
+      {/* Header */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold' }}>
+          ACTIVE COVERAGE
+        </Text>
+        <SessionEnvBadge environment={session.environment} />
+      </View>
+
+      {/* Doctor row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+        <View style={{
+          width: 52, height: 52, borderRadius: 26,
+          backgroundColor: '#2C2C2E',
+          alignItems: 'center', justifyContent: 'center', marginRight: 12,
+        }}>
+          <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>{initials}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }} numberOfLines={1}>
+            {session.doctor_name}
+          </Text>
+          <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 1 }}>
+            {session.doctor_mdcn || 'MDCN/R/—'}
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            <Text style={{ fontSize: 12, color: '#F4A261' }}>★</Text>
+            <Text style={{ fontSize: 12, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759' }} />
+            <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{reliabilityDisplay}%</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Shift pill */}
+      <View style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start', marginBottom: 10 }}>
+        <Text style={{ fontSize: 12, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }} numberOfLines={1}>{shiftPillText}</Text>
+      </View>
+
+      {/* Timer row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={{ fontSize: 13, color: '#8E8E93' }}>⏱</Text>
+          <Text style={{ fontSize: 22, color: '#FFFFFF', fontFamily: 'Inter_700Bold', letterSpacing: 1 }}>{elapsed}</Text>
+        </View>
+        {showDayPill && (
+          <View style={{ backgroundColor: '#1A3A2A', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
+            <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{dayPillText}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Action buttons */}
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed (active):', session.id); onCall(); }}
+          activeOpacity={0.8}
+          style={{ flex: 1, borderWidth: 1.5, borderColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>CALL</Text>
+        </TouchableOpacity>
+        {showPauseButton && (
+          <TouchableOpacity onPress={() => { console.log('[RequesterHome] Pause shift pressed:', session.id); onPauseShift(); }}
+            activeOpacity={0.8}
+            style={{ flex: 1, backgroundColor: '#FF9500', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>PAUSE SHIFT</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity onPress={() => { console.log('[RequesterHome] End shift pressed:', session.id); onEndShift(); }}
+          activeOpacity={0.8}
+          style={{ flex: 1, backgroundColor: '#FF3B30', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>END SHIFT</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+// ─── Payment Screen ───────────────────────────────────────────────────────────
+function RequesterPaymentCard({
+  session,
+  bottomPadding,
+}: {
+  session: CoverageSession;
+  bottomPadding: number;
+}) {
+  const [countdown, setCountdown] = useState('--:--');
+  const [isExpired, setIsExpired] = useState(false);
+
+  useEffect(() => {
+    if (!session.payment_deadline_at) return;
+    const tick = () => {
+      const diffMs = new Date(session.payment_deadline_at!).getTime() - Date.now();
+      if (diffMs <= 0) {
+        setIsExpired(true);
+        setCountdown('00:00');
+      } else {
+        setIsExpired(false);
+        setCountdown(formatCountdown(session.payment_deadline_at!));
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [session.payment_deadline_at]);
+
+  const amountDisplay = formatNaira(session.price * 100);
+  const accountNumber = session.monnify_account_number ?? '—';
+  const bankName = session.monnify_bank_name ?? '—';
+  const accountName = session.monnify_account_name ?? '—';
+
+  return (
+    <View style={{
+      position: 'absolute', bottom: 0, left: 0, right: 0,
+      backgroundColor: '#1C1C1E',
+      borderTopLeftRadius: 24, borderTopRightRadius: 24,
+      paddingTop: 16, paddingHorizontal: 16,
+      paddingBottom: bottomPadding,
+      shadowColor: '#000', shadowOffset: { width: 0, height: -3 },
+      shadowOpacity: 0.08, shadowRadius: 10, elevation: 10,
+    }}>
+      {/* Drag handle (decorative only) */}
+      <View style={{ alignItems: 'center', marginBottom: 16 }}>
+        <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
+      </View>
+
+      <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 8 }}>
+        PAYMENT DUE
+      </Text>
+      <Text style={{ fontSize: 44, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 4 }}>
+        {amountDisplay}
+      </Text>
+
+      <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 12 }}>
+        Transfer to:
+      </Text>
+
+      <View style={{ backgroundColor: '#2C2C2E', borderRadius: 16, padding: 16, marginBottom: 16 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>{accountNumber}</Text>
+          <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>·</Text>
+          <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>{bankName}</Text>
+        </View>
+        <Text style={{ fontSize: 14, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>{accountName}</Text>
+      </View>
+
+      {/* Countdown */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <Text style={{ fontSize: 13, color: '#8E8E93' }}>⏱</Text>
+        {isExpired ? (
+          <Text style={{ fontSize: 15, color: '#FF9500', fontFamily: 'Inter_600SemiBold' }}>
+            Extending payment window...
+          </Text>
+        ) : (
+          <Text style={{ fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_700Bold' }}>
+            {countdown}
+            <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}> remaining</Text>
+          </Text>
+        )}
+      </View>
+
+      <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular', lineHeight: 18 }}>
+        Payment timer is server-controlled. This window will extend automatically if payment is not received in time.
+      </Text>
+    </View>
+  );
+}
+
 export default function RequesterHomeScreen() {
   const insets = useSafeAreaInsets();
   const { setTabBarVisible } = useTabBarVisibility();
@@ -575,6 +977,11 @@ export default function RequesterHomeScreen() {
 
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
 
+  // Active session state
+  const [activeSession, setActiveSession] = useState<CoverageSession | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
   // Realtime refs for matching
   const matchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const realtimeChannelRef = useRef<any>(null);
@@ -595,6 +1002,102 @@ export default function RequesterHomeScreen() {
       }
     });
   }, []);
+
+  // ─── Fetch active session helper ──────────────────────────────────────────────
+  const fetchActiveSession = useCallback(async () => {
+    console.log('[RequesterHome] Fetching active session for requester');
+    try {
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const token = authSession?.access_token;
+      if (!token) return;
+      const res = await fetch(`${EDGE_BASE}/get-active-session?role=requester`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      console.log('[RequesterHome] get-active-session response:', res.status);
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        console.log('[RequesterHome] get-active-session error:', errText);
+        return;
+      }
+      const data = await res.json();
+      const session: CoverageSession | null = data?.session ?? null;
+      console.log('[RequesterHome] Active session fetched:', session?.id ?? 'none', 'status:', session?.status ?? 'none');
+      setActiveSession(session);
+    } catch (e: any) {
+      console.log('[RequesterHome] fetchActiveSession error:', e.message);
+    } finally {
+      setSessionLoading(false);
+    }
+  }, []);
+
+  // ─── On mount — restore session state ────────────────────────────────────────
+  useEffect(() => {
+    fetchActiveSession();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Session realtime subscription ───────────────────────────────────────────
+  useEffect(() => {
+    if (!activeSession) {
+      if (sessionChannelRef.current) {
+        console.log('[RequesterHome] No active session — removing session channel');
+        supabase.removeChannel(sessionChannelRef.current);
+        sessionChannelRef.current = null;
+      }
+      return;
+    }
+
+    const channelName = `session:${activeSession.id}`;
+    console.log('[RequesterHome] Subscribing to session channel:', channelName);
+
+    if (sessionChannelRef.current) {
+      supabase.removeChannel(sessionChannelRef.current);
+      sessionChannelRef.current = null;
+    }
+
+    const ch = supabase.channel(channelName)
+      .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
+        console.log('[RequesterHome] SHIFT_STARTED received:', payload);
+        const updated = payload?.payload?.session as Partial<CoverageSession>;
+        setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      })
+      .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
+        console.log('[RequesterHome] SHIFT_PAUSED received:', payload);
+        const updated = payload?.payload?.session as Partial<CoverageSession>;
+        setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      })
+      .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
+        console.log('[RequesterHome] SHIFT_RESUMED received:', payload);
+        const updated = payload?.payload?.session as Partial<CoverageSession>;
+        setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      })
+      .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
+        console.log('[RequesterHome] SHIFT_ENDED received:', payload);
+        const updated = payload?.payload?.session as Partial<CoverageSession>;
+        setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      })
+      .on('broadcast', { event: 'PAYMENT_DEADLINE_EXTENDED' }, (payload) => {
+        console.log('[RequesterHome] PAYMENT_DEADLINE_EXTENDED received:', payload);
+        const newDeadline = payload?.payload?.payment_deadline_at as string;
+        if (newDeadline) {
+          setActiveSession((prev) => prev ? { ...prev, payment_deadline_at: newDeadline } : prev);
+        }
+      })
+      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+        console.log('[RequesterHome] PAYMENT_CONFIRMED received:', payload);
+        setActiveSession(null);
+      })
+      .subscribe((status) => {
+        console.log('[RequesterHome] Session channel status:', channelName, status);
+      });
+
+    sessionChannelRef.current = ch;
+
+    return () => {
+      console.log('[RequesterHome] Unsubscribing from session channel:', channelName);
+      supabase.removeChannel(ch);
+      sessionChannelRef.current = null;
+    };
+  }, [activeSession?.id]); // only re-subscribe when session ID changes
 
   // ─── Location on mount — animate map to user position + stream ───────────────
   useEffect(() => {
@@ -847,7 +1350,8 @@ export default function RequesterHomeScreen() {
             pollIntervalRef.current = null;
           }
           if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
-          console.log('[RequesterHome] MATCH_CONFIRMED — resetting to idle');
+          console.log('[RequesterHome] MATCH_CONFIRMED — fetching active session and resetting to idle');
+          fetchActiveSession();
           transitionTo('idle');
         })
         .on('broadcast', { event: 'REQUEST_EXPIRED' }, () => {
@@ -894,7 +1398,8 @@ export default function RequesterHomeScreen() {
               .single();
 
             if (session) {
-              console.log('[RequesterHome] Poll match confirmed — resetting to idle');
+              console.log('[RequesterHome] Poll match confirmed — fetching active session and resetting to idle');
+              fetchActiveSession();
               transitionTo('idle');
             }
             return; // stop polling
@@ -1174,6 +1679,119 @@ export default function RequesterHomeScreen() {
     handleReset();
   };
 
+  // ─── Session action handlers ──────────────────────────────────────────────────
+  const callSessionEdge = useCallback(async (fn: string, sessionId: string) => {
+    const { data: { session: authSession } } = await supabase.auth.getSession();
+    const token = authSession?.access_token;
+    if (!token) throw new Error('Not authenticated');
+    console.log('[RequesterHome] Calling session edge function:', fn, 'session:', sessionId);
+    const res = await fetch(`${EDGE_BASE}/${fn}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+    console.log('[RequesterHome]', fn, 'response:', res.status);
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(errText || `${fn} failed`);
+    }
+    return res.json();
+  }, []);
+
+  const handleStartShift = useCallback(async () => {
+    if (!activeSession) return;
+    console.log('[RequesterHome] Start shift pressed for session:', activeSession.id);
+    try {
+      const data = await callSessionEdge('start-shift', activeSession.id);
+      const updated = data?.session as Partial<CoverageSession>;
+      if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+    } catch (e: any) {
+      console.log('[RequesterHome] Start shift error:', e.message);
+      Alert.alert('Error', e.message);
+    }
+  }, [activeSession, callSessionEdge]);
+
+  const handleResumeShift = useCallback(async () => {
+    if (!activeSession) return;
+    console.log('[RequesterHome] Resume shift pressed for session:', activeSession.id);
+    try {
+      const data = await callSessionEdge('resume-shift', activeSession.id);
+      const updated = data?.session as Partial<CoverageSession>;
+      if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+    } catch (e: any) {
+      console.log('[RequesterHome] Resume shift error:', e.message);
+      Alert.alert('Error', e.message);
+    }
+  }, [activeSession, callSessionEdge]);
+
+  const handlePauseShift = useCallback(async () => {
+    if (!activeSession) return;
+    console.log('[RequesterHome] Pause shift pressed for session:', activeSession.id);
+    try {
+      const data = await callSessionEdge('pause-shift', activeSession.id);
+      const updated = data?.session as Partial<CoverageSession>;
+      if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+    } catch (e: any) {
+      console.log('[RequesterHome] Pause shift error:', e.message);
+      Alert.alert('Error', e.message);
+    }
+  }, [activeSession, callSessionEdge]);
+
+  const handleEndShift = useCallback(async () => {
+    if (!activeSession) return;
+    console.log('[RequesterHome] End shift pressed for session:', activeSession.id);
+    try {
+      const data = await callSessionEdge('end-shift', activeSession.id);
+      const updated = data?.session as Partial<CoverageSession>;
+      if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+    } catch (e: any) {
+      console.log('[RequesterHome] End shift error:', e.message);
+      Alert.alert('Error', e.message);
+    }
+  }, [activeSession, callSessionEdge]);
+
+  const handleCancelActiveShift = useCallback(() => {
+    if (!activeSession) return;
+    Alert.alert('Cancel Shift?', 'This will cancel the booking.', [
+      { text: 'Keep', style: 'cancel' },
+      {
+        text: 'Cancel Shift',
+        style: 'destructive',
+        onPress: async () => {
+          console.log('[RequesterHome] Cancel active shift confirmed:', activeSession.id);
+          try {
+            const { data: { session: authSession } } = await supabase.auth.getSession();
+            const token = authSession?.access_token;
+            if (!token) throw new Error('Not authenticated');
+            const res = await fetch(`${EDGE_BASE}/update-shift-status`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ session_id: activeSession.id, status: 'cancelled' }),
+            });
+            console.log('[RequesterHome] update-shift-status response:', res.status);
+            if (!res.ok) {
+              const errText = await res.text().catch(() => '');
+              throw new Error(errText || 'Cancel failed');
+            }
+            setActiveSession(null);
+          } catch (e: any) {
+            console.log('[RequesterHome] Cancel active shift error:', e.message);
+            Alert.alert('Error', e.message);
+          }
+        },
+      },
+    ]);
+  }, [activeSession]);
+
+  const handleCallDoctor = useCallback(() => {
+    if (!activeSession?.doctor_phone) {
+      Alert.alert('No phone number available');
+      return;
+    }
+    console.log('[RequesterHome] Call doctor pressed:', activeSession.doctor_phone);
+    Linking.openURL(`tel:${activeSession.doctor_phone}`);
+  }, [activeSession]);
+
   // ─── Derived display values ───────────────────────────────────────────────────
   const formattedDate = shiftDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const formattedDateShort = shiftDate.toLocaleDateString('en-US', { weekday: 'short' });
@@ -1202,11 +1820,11 @@ export default function RequesterHomeScreen() {
 
   // ─── Render ───────────────────────────────────────────────────────────────────
   console.log('[RequesterHome] RENDER — Platform:', Platform.OS, 'MapView type:', typeof MapView, 'MapView value:', MapView);
+  console.log('[RequesterHome] About to render MapView — provider:', PROVIDER_GOOGLE, 'ref:', !!mapRef);
   return (
     <View style={{ flex: 1, backgroundColor: '#F9F9F6' }}>
 
       {/* ── FULL-SCREEN MAP (always behind everything) ── */}
-      {console.log('[RequesterHome] About to render MapView — provider:', PROVIDER_GOOGLE, 'ref:', !!mapRef)}
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
@@ -1896,40 +2514,96 @@ export default function RequesterHomeScreen() {
 
       {/* ── IDLE BOTTOM CONTAINER (white card only — tab bar is in layout) ── */}
       {sheetState === 'idle' && (
-        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
-          {/* White search card */}
-          <View style={{
-            backgroundColor: '#1C1C1E',
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            paddingTop: 16,
-            paddingHorizontal: 16,
-            paddingBottom: whiteCardPaddingBottom,
-            minHeight: 220,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -3 },
-            shadowOpacity: 0.08,
-            shadowRadius: 10,
-            elevation: 10,
-          }}>
-            {/* Drag handle — swipe up to search */}
-            <View
-              {...idleDragResponder.panHandlers}
-              style={{ alignItems: 'center', marginBottom: 16, paddingVertical: 8 }}
-            >
-              <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
+        <>
+          {/* Loading state */}
+          {sessionLoading && (
+            <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
+              <View style={{
+                backgroundColor: '#1C1C1E',
+                borderTopLeftRadius: 24, borderTopRightRadius: 24,
+                paddingTop: 16, paddingHorizontal: 16,
+                paddingBottom: whiteCardPaddingBottom,
+                minHeight: 120,
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <ActivityIndicator size="large" color="#FFFFFF" />
+              </View>
             </View>
-            {/* Search capsule */}
-            <TouchableOpacity
-              onPress={handleSearchTap}
-              activeOpacity={0.8}
-              style={{ backgroundColor: '#2C2C2E', borderRadius: 28, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}
-            >
-              <Search size={18} color="#8E8E93" />
-              <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFFFFF' }}>Where is coverage needed?</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          )}
+
+          {/* Active session — upcoming or paused */}
+          {!sessionLoading && activeSession !== null &&
+            (activeSession.status === 'upcoming' || activeSession.status === 'paused') && (
+            <RequesterUpcomingCard
+              session={activeSession}
+              onCancel={handleCancelActiveShift}
+              onCall={handleCallDoctor}
+              onStartShift={handleStartShift}
+              onResumeShift={handleResumeShift}
+              onEndShift={handleEndShift}
+              bottomPadding={whiteCardPaddingBottom}
+            />
+          )}
+
+          {/* Active session — active */}
+          {!sessionLoading && activeSession !== null && activeSession.status === 'active' && (
+            <RequesterActiveCard
+              session={activeSession}
+              onCall={handleCallDoctor}
+              onPauseShift={handlePauseShift}
+              onEndShift={handleEndShift}
+              bottomPadding={whiteCardPaddingBottom}
+            />
+          )}
+
+          {/* Active session — payment pending */}
+          {!sessionLoading && activeSession !== null && activeSession.status === 'payment_pending' && (
+            <RequesterPaymentCard
+              session={activeSession}
+              bottomPadding={whiteCardPaddingBottom}
+            />
+          )}
+
+          {/* No active session — show search card */}
+          {!sessionLoading && (activeSession === null ||
+            activeSession.status === 'completed' ||
+            activeSession.status === 'cancelled') && (
+            <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
+              {/* White search card */}
+              <View style={{
+                backgroundColor: '#1C1C1E',
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                paddingTop: 16,
+                paddingHorizontal: 16,
+                paddingBottom: whiteCardPaddingBottom,
+                minHeight: 220,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -3 },
+                shadowOpacity: 0.08,
+                shadowRadius: 10,
+                elevation: 10,
+              }}>
+                {/* Drag handle — swipe up to search */}
+                <View
+                  {...idleDragResponder.panHandlers}
+                  style={{ alignItems: 'center', marginBottom: 16, paddingVertical: 8 }}
+                >
+                  <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
+                </View>
+                {/* Search capsule */}
+                <TouchableOpacity
+                  onPress={handleSearchTap}
+                  activeOpacity={0.8}
+                  style={{ backgroundColor: '#2C2C2E', borderRadius: 28, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                >
+                  <Search size={18} color="#8E8E93" />
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFFFFF' }}>Where is coverage needed?</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </>
       )}
 
       {/* Date picker modal — ITEM 5.2 maximumDate */}
