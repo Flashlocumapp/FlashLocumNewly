@@ -88,6 +88,15 @@ export default function DoctorLayout() {
   const isRealtimeHealthyRef = useRef(false);
 
   const getToken = useCallback(async (): Promise<string | null> => {
+    console.log('[getToken] Attempting to refresh session for fresh token');
+    // Try to get a fresh token first
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+    if (!refreshError && refreshData.session?.access_token) {
+      console.log('[getToken] Successfully refreshed session token');
+      return refreshData.session.access_token;
+    }
+    console.warn('[getToken] refreshSession failed, falling back to cached session:', refreshError?.message);
+    // Fall back to cached session
     const { data: { session } } = await supabase.auth.getSession();
     return session?.access_token ?? null;
   }, []);
