@@ -25,11 +25,15 @@ export default function DoctorBasicProfile() {
   const { user, profile } = useAuth();
   const { from } = useLocalSearchParams<{ from?: string }>();
 
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [gender, setGender] = useState<Gender>(null);
   const [genderModalVisible, setGenderModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const [firstNameError, setFirstNameError] = useState('');
+  const [lastNameError, setLastNameError] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [genderError, setGenderError] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -57,11 +61,24 @@ export default function DoctorBasicProfile() {
 
   const handleContinue = async () => {
     if (loading) return;
+    console.log('[DoctorBasicProfile] Continue pressed');
 
     let valid = true;
+    setFirstNameError('');
+    setLastNameError('');
     setPhoneError('');
     setGenderError('');
     setSubmitError('');
+
+    if (!firstName.trim()) {
+      setFirstNameError('First name is required');
+      valid = false;
+    }
+
+    if (!lastName.trim()) {
+      setLastNameError('Last name is required');
+      valid = false;
+    }
 
     const cleanedPhone = phone.replace(/\s/g, '');
     if (!validatePhone(cleanedPhone)) {
@@ -77,12 +94,15 @@ export default function DoctorBasicProfile() {
     if (!valid) return;
 
     setLoading(true);
+    console.log('[DoctorBasicProfile] Submitting profile upsert for user:', user?.id);
 
     try {
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert({
           id: user!.id,
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
           phone: cleanedPhone,
           gender,
         });
@@ -130,6 +150,46 @@ export default function DoctorBasicProfile() {
       >
         <Text style={styles.heading}>Basic profile</Text>
         <Text style={styles.subtitle}>Tell us a little about you.</Text>
+
+        {/* First name */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>First name</Text>
+          <View style={[styles.inputContainer, firstNameError ? styles.inputError : null]}>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Chidi"
+              placeholderTextColor="#ADADAD"
+              value={firstName}
+              onChangeText={text => {
+                setFirstName(text);
+                setFirstNameError('');
+              }}
+              autoCapitalize="words"
+              autoCorrect={false}
+            />
+          </View>
+          {firstNameError ? <Text style={styles.inlineError}>{firstNameError}</Text> : null}
+        </View>
+
+        {/* Last name */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Last name</Text>
+          <View style={[styles.inputContainer, lastNameError ? styles.inputError : null]}>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Okafor"
+              placeholderTextColor="#ADADAD"
+              value={lastName}
+              onChangeText={text => {
+                setLastName(text);
+                setLastNameError('');
+              }}
+              autoCapitalize="words"
+              autoCorrect={false}
+            />
+          </View>
+          {lastNameError ? <Text style={styles.inlineError}>{lastNameError}</Text> : null}
+        </View>
 
         {/* Phone number */}
         <View style={styles.fieldGroup}>

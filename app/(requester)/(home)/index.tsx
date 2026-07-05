@@ -597,7 +597,7 @@ function buildShiftPillText(session: CoverageSession): string {
     endDate.setDate(startDate.getDate() + session.coverage_length - 1);
     const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
     const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
-    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
+    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}${sep}Day ${session.current_day} of ${session.coverage_length}`;
   }
 
   const dayLabel = new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short' });

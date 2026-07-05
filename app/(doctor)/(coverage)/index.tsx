@@ -91,7 +91,9 @@ function DoctorCard({ session, onCall, onCancel, isHistory }: DoctorCardProps) {
 
   const shiftSummary = session.status === 'paused'
     ? `${session.shift_type} · Day ${session.current_day} of ${session.coverage_length} · ${shiftStart} – ${shiftEnd}`
-    : `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd}`;
+    : session.coverage_length > 1
+      ? `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd} · Day ${session.current_day} of ${session.coverage_length}`
+      : `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd}`;
 
   const initials = getDoctorInitials(session.doctor_name || 'Doctor');
   const ratingDisplay = Number(session.doctor_rating).toFixed(1);
