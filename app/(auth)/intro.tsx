@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Inter_600SemiBold, useFonts } from '@expo-google-fonts/inter';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
 const PHRASES = ["Let's request", "Let's accept", "Let's cover"];
 
@@ -12,8 +11,7 @@ const BG_TRANSITION_DURATION = 400;
 
 export default function IntroScreen() {
   const router = useRouter();
-
-  const [fontsLoaded] = useFonts({ Inter_600SemiBold });
+  const { dest } = useLocalSearchParams<{ dest?: string }>();
 
   const unmountedRef = useRef(false);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -33,7 +31,6 @@ export default function IntroScreen() {
   };
 
   useEffect(() => {
-    if (!fontsLoaded) return;
     unmountedRef.current = false;
 
     const runPhrase = (index: number) => {
@@ -71,14 +68,15 @@ export default function IntroScreen() {
             }).start(() => {
               if (unmountedRef.current) return;
               if (isLast) {
-                console.log('[IntroScreen] All phrases done, transitioning to role-select');
+                const destination = dest ? decodeURIComponent(dest) : '/(auth)/role-select';
+                console.log('[IntroScreen] All phrases done, transitioning to:', destination);
                 Animated.timing(bgColor, {
                   toValue: 1,
                   duration: BG_TRANSITION_DURATION,
                   useNativeDriver: false,
                 }).start(() => {
                   if (!unmountedRef.current) {
-                    router.replace('/(auth)/role-select');
+                    router.replace(destination as any);
                   }
                 });
               } else {
@@ -99,7 +97,7 @@ export default function IntroScreen() {
       timeoutsRef.current.forEach(clearTimeout);
       timeoutsRef.current = [];
     };
-  }, [fontsLoaded]);
+  }, []);
 
   const backgroundColor = bgColor.interpolate({
     inputRange: [0, 1],
@@ -107,10 +105,6 @@ export default function IntroScreen() {
   });
 
   const displayText = displayedTextRef.current;
-
-  if (!fontsLoaded) {
-    return <Animated.View style={[styles.container, { backgroundColor }]} />;
-  }
 
   return (
     <Animated.View style={[styles.container, { backgroundColor }]}>

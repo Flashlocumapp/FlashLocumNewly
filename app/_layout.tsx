@@ -42,6 +42,10 @@ function NavigationGuard() {
     if (hasRouted.current) return;
     if (profileLoading) return; // wait for profile fetch to complete
 
+    // Never interrupt the intro animation
+    const onIntro = segments[1] === 'intro'; // segments[0] = '(auth)', segments[1] = 'intro'
+    if (onIntro) return;
+
     hasRouted.current = true;
     SplashScreen.hideAsync();
     console.log('[NavigationGuard] Routing — session:', !!session, 'profile:', !!profile, 'lastPathway:', lastPathway);
@@ -103,7 +107,7 @@ function NavigationGuard() {
     SecureStore.setItemAsync(LAST_PATHWAY_KEY, pathway).catch(() => {});
     console.log('[NavigationGuard] Both complete → last pathway:', dest);
     router.replace(dest as any);
-  }, [isReady, lastPathway, session, profile, profileLoading]);
+  }, [isReady, lastPathway, session, profile, profileLoading, segments]);
 
   // Sign-out watcher — only reset after session AND profile are both gone
   useEffect(() => {

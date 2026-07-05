@@ -75,12 +75,11 @@ export default function VerifyScreen() {
       console.log('[Verify] OTP verification error:', verifyError.message);
       setError(verifyError.message || 'Invalid code. Please try again.');
     } else {
-      console.log('[Verify] OTP verification success, navigating to onboarding — role:', role);
-      if (role === 'doctor') {
-        router.replace('/(onboarding)/doctor/basic-profile');
-      } else {
-        router.replace('/(onboarding)/requester/basic-profile');
-      }
+      console.log('[Verify] OTP verification success, routing through intro — role:', role);
+      const dest = role === 'doctor'
+        ? '/(onboarding)/doctor/basic-profile'
+        : '/(onboarding)/requester/basic-profile';
+      router.replace(`/(auth)/intro?dest=${encodeURIComponent(dest)}` as any);
     }
   };
 

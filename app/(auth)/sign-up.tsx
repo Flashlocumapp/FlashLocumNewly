@@ -191,20 +191,13 @@ export default function SignUpScreen() {
         await SecureStore.setItemAsync('flashlocum_last_pathway', role);
         console.log('[SignUp] lastPathway written:', role);
 
-        // Route to the portal they signed in through
-        if (role === 'doctor') {
-          if (doctorComplete) {
-            router.replace('/(doctor)/(home)' as any);
-          } else {
-            router.replace('/(onboarding)/doctor/basic-profile' as any);
-          }
-        } else {
-          if (requesterComplete) {
-            router.replace('/(requester)/(home)' as any);
-          } else {
-            router.replace('/(onboarding)/requester/basic-profile' as any);
-          }
-        }
+        // Route through intro with destination encoded
+        const dest = role === 'doctor'
+          ? (doctorComplete ? '/(doctor)/(home)' : '/(onboarding)/doctor/basic-profile')
+          : (requesterComplete ? '/(requester)/(home)' : '/(onboarding)/requester/basic-profile');
+
+        console.log('[SignUp] Routing through intro to dest:', dest);
+        router.replace(`/(auth)/intro?dest=${encodeURIComponent(dest)}` as any);
       }
     }
   };
