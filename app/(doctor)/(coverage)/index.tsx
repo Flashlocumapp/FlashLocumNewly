@@ -85,15 +85,21 @@ function DoctorCard({ session, onCall, onCancel, isHistory }: DoctorCardProps) {
   const shiftStart = formatTime(session.shift_start);
   const shiftEnd = formatTime(session.shift_end);
 
-  const dayLabel = session.shift_date
-    ? new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short' })
-    : '';
+  const coverageLength = Math.max(1, session.coverage_length ?? 1);
+  const startDate = session.shift_date ? new Date(session.shift_date + 'T12:00:00') : null;
+  const dayLabel = startDate ? startDate.toLocaleDateString('en-US', { weekday: 'short' }) : '';
 
-  const shiftSummary = session.status === 'paused'
-    ? `${session.shift_type} · Day ${session.current_day} of ${session.coverage_length} · ${shiftStart} – ${shiftEnd}`
-    : session.coverage_length > 1
-      ? `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd} · Day ${session.current_day} of ${session.coverage_length}`
-      : `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd}`;
+  let shiftSummary: string;
+  if (session.status === 'paused') {
+    shiftSummary = `${session.shift_type} · Day ${session.current_day} of ${coverageLength} · ${shiftStart} – ${shiftEnd}`;
+  } else if (coverageLength > 1) {
+    const endDate = startDate ? new Date(startDate) : null;
+    if (endDate) endDate.setDate(endDate.getDate() + coverageLength - 1);
+    const endDay = endDate ? endDate.toLocaleDateString('en-US', { weekday: 'short' }) : '';
+    shiftSummary = `${session.shift_type} · ${dayLabel} - ${endDay} · ${shiftStart} – ${shiftEnd} · Day ${session.current_day} of ${coverageLength}`;
+  } else {
+    shiftSummary = `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd}`;
+  }
 
   const initials = getDoctorInitials(session.doctor_name || 'Doctor');
   const ratingDisplay = Number(session.doctor_rating).toFixed(1);

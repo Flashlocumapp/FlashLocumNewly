@@ -35,16 +35,49 @@ type DispatchRequest = {
   start_time: string;
   end_time: string;
   duration_hours: number;
+  coverage_length: number;
   environment: 'Normal' | 'Busy';
   note?: string | null;
   price: number;
   expiry_at?: string;
 };
 
+function formatHHMM(hhmm: string): string {
+  const [hStr, mStr] = hhmm.split(':');
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  const mPad = m === 0 ? '' : `:${String(m).padStart(2, '0')}`;
+  return `${h12}:${String(m).padStart(2, '0')}${period}`;
+}
+
 function formatShiftSummary(req: DispatchRequest): string {
-  const hours = req.duration_hours;
-  const hoursLabel = hours % 1 === 0 ? `${hours}hr.` : `${hours.toFixed(1)}hr.`;
-  return `${req.shift_type} • ${req.shift_date} • ${req.start_time} – ${req.end_time} • ${hoursLabel}`;
+  const sep = ' ● ';
+  const coverageLength = Math.max(1, req.coverage_length ?? 1);
+  const startDate = new Date(req.shift_date + 'T12:00:00');
+
+  // Parse per-day hours from start_time / end_time (HH:MM strings)
+  const [sh, sm] = req.start_time.split(':').map(Number);
+  const [eh, em] = req.end_time.split(':').map(Number);
+  const perDayHours = (eh * 60 + em - (sh * 60 + sm)) / 60;
+  const totalHours = perDayHours * coverageLength;
+  const hoursLabel = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
+
+  const startFormatted = formatHHMM(req.start_time);
+  const endFormatted = formatHHMM(req.end_time);
+  const priceDisplay = `₦${Number(req.price).toLocaleString()}`;
+
+  if (coverageLength > 1) {
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + coverageLength - 1);
+    const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
+    const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
+    return `${req.shift_type}${sep}${startDay} - ${endDay}${sep}${startFormatted} - ${endFormatted}${sep}${hoursLabel}${sep}${priceDisplay}${sep}Day 1 of ${coverageLength}`;
+  }
+
+  const dayLabel = startDate.toLocaleDateString('en-US', { weekday: 'short' });
+  return `${req.shift_type}${sep}${dayLabel}${sep}${startFormatted} - ${endFormatted}${sep}${hoursLabel}${sep}${priceDisplay}`;
 }
 
 function FeeRow({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
