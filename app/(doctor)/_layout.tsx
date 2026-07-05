@@ -244,14 +244,13 @@ export default function DoctorLayout() {
           console.log('[DoctorLayout] NEW_REQUEST already expired, ignoring:', req.id);
           return;
         }
-        console.log('[DoctorLayout] NEW_REQUEST received:', req.id);
+        console.log('[DoctorLayout] NEW_REQUEST received:', req.id, '— adding to queue unconditionally');
         setRequestQueue((prev) => {
           if (prev.some((r) => r.id === req.id)) return prev;
           return [...prev, req];
         });
-        if (isOnlineRef.current) {
-          setDoctorScreenState('incoming');
-        }
+        // Do NOT check isOnlineRef here — it can be stale.
+        // The Queue → state sync effect will transition to 'incoming' when isOnline is true.
       })
       .on('broadcast', { event: 'EVICT_REQUEST' }, (payload) => {
         const evictedId: string = payload.payload?.request_id;

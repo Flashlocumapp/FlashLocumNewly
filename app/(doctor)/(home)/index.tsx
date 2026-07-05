@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   Linking,
+  ScrollView,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -403,7 +404,7 @@ export default function DoctorHomeScreen() {
   const dotBg = isJobCapReached ? '#8E8E93' : isOnline ? '#FFFFFF' : '#8E8E93';
   const statusText = isJobCapReached ? '3 Jobs Active' : isOnline ? 'Online' : 'Offline';
   const pillTop = insets.top + 12;
-  const sheetPaddingBottom = insets.bottom + 80;
+  const sheetPaddingBottom = insets.bottom + 90;
 
   const showMarker = isOnline && userLocation !== null;
 
@@ -456,59 +457,65 @@ export default function DoctorHomeScreen() {
       </TouchableOpacity>
 
       {/* Bottom sheet */}
-      <View style={[styles.sheet, { paddingBottom: sheetPaddingBottom }]}>
-        {/* Decorative drag handle */}
-        <View style={styles.dragHandle} />
+      <View style={styles.sheet}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.sheetContent, { paddingBottom: sheetPaddingBottom }]}
+          bounces={false}
+        >
+          {/* Decorative drag handle */}
+          <View style={styles.dragHandle} />
 
-        {/* Coverage sub-card — conditional */}
-        {!hasActiveSession && (
-          <View style={styles.subCard}>
-            <Text style={styles.subCardLabel}>COVERAGE</Text>
-            <Text style={styles.subCardHeading}>No coverage yet</Text>
-            <Text style={styles.subCardBody}>
-              Stay online to start receiving dispatch requests.
-            </Text>
-          </View>
-        )}
-
-        {isUpcomingOrPaused && activeSession && (
-          <DoctorUpcomingCard
-            session={activeSession}
-            onCancel={handleCancelShift}
-            onCall={handleCallRequester}
-          />
-        )}
-
-        {isActive && activeSession && (
-          <DoctorActiveCard
-            session={activeSession}
-            onCall={handleCallRequester}
-          />
-        )}
-
-        {/* Stats row */}
-        <View style={styles.statsRow}>
-          {/* Ratings */}
-          <View style={styles.statCard}>
-            <View style={styles.statLabelRow}>
-              <Text style={styles.statLabel}>RATINGS</Text>
-              <Feather name="info" size={12} color="#8E8E93" />
+          {/* Coverage sub-card — conditional */}
+          {!hasActiveSession && (
+            <View style={styles.subCard}>
+              <Text style={styles.subCardLabel}>COVERAGE</Text>
+              <Text style={styles.subCardHeading}>No coverage yet</Text>
+              <Text style={styles.subCardBody}>
+                Stay online to start receiving dispatch requests.
+              </Text>
             </View>
-            <View style={styles.ratingValueRow}>
-              <Text style={styles.statValue}>4.7</Text>
-              <Text style={styles.starIcon}>★</Text>
-            </View>
-          </View>
+          )}
 
-          {/* Reliability */}
-          <View style={styles.statCard}>
-            <View style={styles.statLabelRow}>
-              <Text style={styles.statLabel}>RELIABILITY</Text>
-              <Feather name="info" size={12} color="#8E8E93" />
+          {isUpcomingOrPaused && activeSession && (
+            <DoctorUpcomingCard
+              session={activeSession}
+              onCancel={handleCancelShift}
+              onCall={handleCallRequester}
+            />
+          )}
+
+          {isActive && activeSession && (
+            <DoctorActiveCard
+              session={activeSession}
+              onCall={handleCallRequester}
+            />
+          )}
+
+          {/* Stats row */}
+          <View style={styles.statsRow}>
+            {/* Ratings */}
+            <View style={styles.statCard}>
+              <View style={styles.statLabelRow}>
+                <Text style={styles.statLabel}>RATINGS</Text>
+                <Feather name="info" size={12} color="#8E8E93" />
+              </View>
+              <View style={styles.ratingValueRow}>
+                <Text style={styles.statValue}>4.7</Text>
+                <Text style={styles.starIcon}>★</Text>
+              </View>
             </View>
-            <Text style={styles.statValue}>100%</Text>
+
+            {/* Reliability */}
+            <View style={styles.statCard}>
+              <View style={styles.statLabelRow}>
+                <Text style={styles.statLabel}>RELIABILITY</Text>
+                <Feather name="info" size={12} color="#8E8E93" />
+              </View>
+              <Text style={styles.statValue}>100%</Text>
+            </View>
           </View>
-        </View>
+        </ScrollView>
       </View>
     </View>
   );
@@ -585,10 +592,13 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: SHEET_HEIGHT,
+    maxHeight: SHEET_HEIGHT,
     backgroundColor: '#1C1C1E',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+  },
+  sheetContent: {
+    flexGrow: 1,
   },
   subCard: {
     backgroundColor: '#2C2C2E',
