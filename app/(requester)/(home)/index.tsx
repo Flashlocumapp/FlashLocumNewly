@@ -562,8 +562,8 @@ function getSessionInitials(name: string): string {
 
 function SessionEnvBadge({ environment }: { environment: string }) {
   const isBusy = environment === 'Busy';
-  const bg = isBusy ? '#1A3A2A' : '#2C2C2E';
-  const color = isBusy ? '#34C759' : '#8E8E93';
+  const bg = isBusy ? '#1A3A2A' : '#F5F5F0';
+  const color = isBusy ? '#34C759' : '#1C1C1E';
   return (
     <View style={{ backgroundColor: bg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
       <Text style={{ fontSize: 12, color, fontFamily: 'Inter_600SemiBold' }}>{environment}</Text>
@@ -598,9 +598,12 @@ function RequesterUpcomingCard({
   const shiftPillText = isPaused
     ? `${session.shift_type} · Day ${session.current_day} of ${session.coverage_length} · ${shiftStart} – ${shiftEnd}`
     : `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd}`;
-  const initials = getSessionInitials(session.doctor_name || 'Doctor');
-  const ratingDisplay = Number(session.doctor_rating).toFixed(1);
-  const reliabilityDisplay = Math.round(Number(session.doctor_reliability));
+  const doctorName = session.doctor_name || 'Doctor';
+  const initials = session.doctor_name ? getSessionInitials(session.doctor_name) : 'DR';
+  const ratingRaw = Number(session.doctor_rating);
+  const ratingDisplay = (!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '—' : ratingRaw.toFixed(1);
+  const reliabilityRaw = Number(session.doctor_reliability);
+  const reliabilityDisplay = (!session.doctor_reliability || isNaN(reliabilityRaw) || reliabilityRaw === 0) ? '—' : String(Math.round(reliabilityRaw));
 
   return (
     <View style={{
@@ -635,18 +638,26 @@ function RequesterUpcomingCard({
           <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>{initials}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }} numberOfLines={1}>
-            {session.doctor_name}
-          </Text>
-          <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 1 }}>
+          {/* Name + rating on same line */}
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', flexShrink: 1 }} numberOfLines={1}>
+              {doctorName}
+            </Text>
+            <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 5 }}>{'|'}</Text>
+            <Text style={{ fontSize: 12, color: '#F4A261' }}>{'★ '}</Text>
+            <Text style={{ fontSize: 12, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759', marginHorizontal: 5 }} />
+            <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>
+              {reliabilityDisplay === '—' ? '—' : reliabilityDisplay}
+            </Text>
+            {reliabilityDisplay !== '—' && (
+              <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{'%'}</Text>
+            )}
+          </View>
+          {/* MDCN below */}
+          <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 2 }}>
             {session.doctor_mdcn || 'MDCN/R/—'}
           </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-            <Text style={{ fontSize: 12, color: '#F4A261' }}>★</Text>
-            <Text style={{ fontSize: 12, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759' }} />
-            <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{reliabilityDisplay}%</Text>
-          </View>
         </View>
       </View>
 
@@ -726,9 +737,12 @@ function RequesterActiveCard({
 
   const shiftStart = formatSessionTime(session.shift_start);
   const shiftEnd = formatSessionTime(session.shift_end);
-  const initials = getSessionInitials(session.doctor_name || 'Doctor');
-  const ratingDisplay = Number(session.doctor_rating).toFixed(1);
-  const reliabilityDisplay = Math.round(Number(session.doctor_reliability));
+  const doctorName = session.doctor_name || 'Doctor';
+  const initials = session.doctor_name ? getSessionInitials(session.doctor_name) : 'DR';
+  const ratingRaw = Number(session.doctor_rating);
+  const ratingDisplay = (!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '—' : ratingRaw.toFixed(1);
+  const reliabilityRaw = Number(session.doctor_reliability);
+  const reliabilityDisplay = (!session.doctor_reliability || isNaN(reliabilityRaw) || reliabilityRaw === 0) ? '—' : String(Math.round(reliabilityRaw));
   const shiftPillText = `${session.shift_type} · ${shiftStart} – ${shiftEnd}`;
   const showDayPill = session.coverage_length > 1;
   const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;
@@ -768,18 +782,26 @@ function RequesterActiveCard({
           <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>{initials}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }} numberOfLines={1}>
-            {session.doctor_name}
-          </Text>
-          <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 1 }}>
+          {/* Name + rating on same line */}
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', flexShrink: 1 }} numberOfLines={1}>
+              {doctorName}
+            </Text>
+            <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 5 }}>{'|'}</Text>
+            <Text style={{ fontSize: 12, color: '#F4A261' }}>{'★ '}</Text>
+            <Text style={{ fontSize: 12, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759', marginHorizontal: 5 }} />
+            <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>
+              {reliabilityDisplay === '—' ? '—' : reliabilityDisplay}
+            </Text>
+            {reliabilityDisplay !== '—' && (
+              <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{'%'}</Text>
+            )}
+          </View>
+          {/* MDCN below */}
+          <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 2 }}>
             {session.doctor_mdcn || 'MDCN/R/—'}
           </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-            <Text style={{ fontSize: 12, color: '#F4A261' }}>★</Text>
-            <Text style={{ fontSize: 12, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759' }} />
-            <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{reliabilityDisplay}%</Text>
-          </View>
         </View>
       </View>
 

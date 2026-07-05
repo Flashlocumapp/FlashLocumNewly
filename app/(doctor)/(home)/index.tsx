@@ -59,8 +59,8 @@ function formatElapsed(startedAt: string): string {
 
 function EnvironmentBadge({ environment }: { environment: string }) {
   const isBusy = environment === 'Busy';
-  const bg = isBusy ? '#1A3A2A' : '#2C2C2E';
-  const color = isBusy ? '#34C759' : '#8E8E93';
+  const bg = isBusy ? '#1A3A2A' : '#F5F5F0';
+  const color = isBusy ? '#34C759' : '#1C1C1E';
   return (
     <View style={{ backgroundColor: bg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
       <Text style={{ fontSize: 12, color, fontFamily: 'Inter_600SemiBold' }}>{environment}</Text>
@@ -98,24 +98,19 @@ function DoctorUpcomingCard({
         <EnvironmentBadge environment={session.environment} />
       </View>
 
-      {/* Hospital name */}
-      <Text style={styles.subCardHeading} numberOfLines={1}>{session.hospital_name}</Text>
-
-      {/* Rating row */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-        <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_400Regular' }}>
-          {'★ '}
-          <Text style={{ color: '#FFFFFF' }}>{ratingDisplay}</Text>
-        </Text>
-        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759' }} />
-        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>
-          {reliabilityDisplay}
-          {'%'}
-        </Text>
+      {/* Hospital name + rating row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+        <Text style={[styles.subCardHeading, { flexShrink: 1 }]} numberOfLines={1}>{session.hospital_name}</Text>
+        <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 6 }}>{'|'}</Text>
+        <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_400Regular' }}>{'★ '}</Text>
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{ratingDisplay}</Text>
+        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759', marginHorizontal: 6 }} />
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{reliabilityDisplay}</Text>
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{'%'}</Text>
       </View>
 
       {/* Address */}
-      <Text style={[styles.subCardBody, { marginTop: 4 }]} numberOfLines={1}>{session.hospital_address}</Text>
+      <Text style={[styles.subCardBody, { marginTop: 0 }]} numberOfLines={1}>{session.hospital_address}</Text>
 
       {/* Shift pill */}
       <View style={styles.shiftPill}>
@@ -179,24 +174,19 @@ function DoctorActiveCard({ session }: { session: CoverageSession; onCall: () =>
         <EnvironmentBadge environment={session.environment} />
       </View>
 
-      {/* Hospital name */}
-      <Text style={styles.subCardHeading} numberOfLines={1}>{session.hospital_name}</Text>
-
-      {/* Rating row */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-        <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_400Regular' }}>
-          {'★ '}
-          <Text style={{ color: '#FFFFFF' }}>{ratingDisplay}</Text>
-        </Text>
-        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759' }} />
-        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>
-          {reliabilityDisplay}
-          {'%'}
-        </Text>
+      {/* Hospital name + rating row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+        <Text style={[styles.subCardHeading, { flexShrink: 1 }]} numberOfLines={1}>{session.hospital_name}</Text>
+        <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 6 }}>{'|'}</Text>
+        <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_400Regular' }}>{'★ '}</Text>
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{ratingDisplay}</Text>
+        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759', marginHorizontal: 6 }} />
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{reliabilityDisplay}</Text>
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{'%'}</Text>
       </View>
 
       {/* Address */}
-      <Text style={[styles.subCardBody, { marginTop: 4 }]} numberOfLines={1}>{session.hospital_address}</Text>
+      <Text style={[styles.subCardBody, { marginTop: 0 }]} numberOfLines={1}>{session.hospital_address}</Text>
 
       {/* Shift pill */}
       <View style={styles.shiftPill}>
