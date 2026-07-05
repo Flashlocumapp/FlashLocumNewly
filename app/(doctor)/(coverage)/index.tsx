@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,13 +12,16 @@ import {
   Platform,
   UIManager,
   Switch,
+  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, SHADOWS } from '@/constants/Theme';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { supabase, getValidToken } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
+import { useTabData } from '@/hooks/useTabData';
+import { invalidate } from '@/utils/tabCache';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -28,14 +31,6 @@ const SUPABASE_URL = 'https://juilousufwlsiqdcgllu.supabase.co';
 
 const TABS = ['Upcoming', 'History'] as const;
 type TabType = typeof TABS[number];
-
-const STATUS_PILL: Record<string, { bg: string; text: string }> = {
-  upcoming: { bg: '#E4E4E7', text: '#3F3F46' },
-  active: { bg: '#DCFCE7', text: '#15803D' },
-  paused: { bg: '#FEF3C7', text: '#92400E' },
-  completed: { bg: '#F4F4F5', text: '#71717A' },
-  cancelled: { bg: '#F4F4F5', text: '#71717A' },
-};
 
 function getDoctorInitials(name: string): string {
   const parts = name.replace(/^Dr\.?\s*/i, '').trim().split(' ');
@@ -71,6 +66,25 @@ function EmptyState({ message }: { message: string }) {
         {message}
       </Text>
     </View>
+  );
+}
+
+function SkeletonCard() {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.7, duration: 900, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 900, useNativeDriver: true }),
+      ]),
+    ).start();
+  }, [opacity]);
+  return (
+    <Animated.View style={{ opacity, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, marginBottom: 12 }}>
+      <View style={{ width: '60%', height: 16, borderRadius: 8, backgroundColor: '#E5E5E5', marginBottom: 8 }} />
+      <View style={{ width: '40%', height: 12, borderRadius: 6, backgroundColor: '#E5E5E5', marginBottom: 6 }} />
+      <View style={{ width: '80%', height: 12, borderRadius: 6, backgroundColor: '#E5E5E5' }} />
+    </Animated.View>
   );
 }
 
@@ -123,7 +137,6 @@ function DoctorCard({ session, onCall, onCancel, isHistory }: DoctorCardProps) {
       <View style={{ padding: 16 }}>
         {/* Avatar row */}
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {/* Avatar */}
           <View style={{ marginRight: 12 }}>
             <View style={{
               width: 52, height: 52, borderRadius: 26,
@@ -141,12 +154,10 @@ function DoctorCard({ session, onCall, onCancel, isHistory }: DoctorCardProps) {
             </View>
           </View>
 
-          {/* Text info */}
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }} numberOfLines={1}>
               {session.doctor_name}
             </Text>
-            {/* MDCN · ★ rating · ● reliability */}
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 6 }}>
               <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#71717A' }}>
                 {session.doctor_mdcn || 'MDCN/R/—'}
@@ -158,7 +169,6 @@ function DoctorCard({ session, onCall, onCancel, isHistory }: DoctorCardProps) {
               <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#2DC653' }} />
               <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#2DC653' }}>{reliabilityDisplay}%</Text>
             </View>
-            {/* Shift summary */}
             <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#71717A', marginTop: 3 }} numberOfLines={1}>
               {shiftSummary}
             </Text>
@@ -234,57 +244,84 @@ export default function DoctorCoverageScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('Upcoming');
-  const [upcomingSessions, setUpcomingSessions] = useState<CoverageSession[]>([]);
-  const [historySessions, setHistorySessions] = useState<CoverageSession[]>([]);
-  const [loading, setLoading] = useState(true);
   const channelsRef = useRef<ReturnType<typeof supabase.channel>[]>([]);
 
-  const getAccessToken = useCallback(async () => {
-    return getValidToken();
-  }, []);
+  const upcomingKey = `doctor-coverage-upcoming-${user?.id ?? 'anon'}`;
+  const historyKey = `doctor-coverage-history-${user?.id ?? 'anon'}`;
 
-  const fetchSessions = useCallback(async () => {
-    console.log('[DoctorCoverage] Fetching sessions');
-    setLoading(true);
-    try {
+  const getAccessToken = useCallback(async () => getValidToken(), []);
+
+  const {
+    data: upcomingData,
+    loading: upcomingLoading,
+    refreshing: upcomingRefreshing,
+    refresh: refreshUpcoming,
+  } = useTabData<CoverageSession[]>({
+    cacheKey: upcomingKey,
+    fetcher: async () => {
+      console.log('[DoctorCoverage] Fetching upcoming sessions');
       const token = await getAccessToken();
       if (!token) {
         console.log('[DoctorCoverage] No access token available');
-        return;
+        return [];
       }
-
-      const [upcomingRes, historyRes] = await Promise.all([
-        fetch(`${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=upcoming,paused,payment_pending,settled,payment_complete`, {
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        }),
-        fetch(`${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=completed,cancelled`, {
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        }),
-      ]);
-
-      if (upcomingRes.ok) {
-        const data = await upcomingRes.json();
-        console.log('[DoctorCoverage] Upcoming sessions fetched:', data?.sessions?.length ?? 0);
-        setUpcomingSessions(data?.sessions ?? []);
-      } else {
-        const errText = await upcomingRes.text();
-        console.log('[DoctorCoverage] Upcoming fetch error:', upcomingRes.status, errText);
+      const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=upcoming,paused,payment_pending,settled,payment_complete`,
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+      );
+      if (!res.ok) {
+        const errText = await res.text();
+        console.log('[DoctorCoverage] Upcoming fetch error:', res.status, errText);
+        throw new Error('Failed to load upcoming sessions');
       }
+      const data = await res.json();
+      console.log('[DoctorCoverage] Upcoming sessions fetched:', data?.sessions?.length ?? 0);
+      return data?.sessions ?? [];
+    },
+    alwaysRefresh: true,
+  });
 
-      if (historyRes.ok) {
-        const data = await historyRes.json();
-        console.log('[DoctorCoverage] History sessions fetched:', data?.sessions?.length ?? 0);
-        setHistorySessions(data?.sessions ?? []);
-      } else {
-        const errText = await historyRes.text();
-        console.log('[DoctorCoverage] History fetch error:', historyRes.status, errText);
+  const {
+    data: historyData,
+    loading: historyLoading,
+    refreshing: historyRefreshing,
+  } = useTabData<CoverageSession[]>({
+    cacheKey: historyKey,
+    fetcher: async () => {
+      console.log('[DoctorCoverage] Fetching history sessions');
+      const token = await getAccessToken();
+      if (!token) {
+        console.log('[DoctorCoverage] No access token available');
+        return [];
       }
-    } catch (err) {
-      console.log('[DoctorCoverage] Fetch error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [getAccessToken]);
+      const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=completed,cancelled`,
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+      );
+      if (!res.ok) {
+        const errText = await res.text();
+        console.log('[DoctorCoverage] History fetch error:', res.status, errText);
+        throw new Error('Failed to load history sessions');
+      }
+      const data = await res.json();
+      console.log('[DoctorCoverage] History sessions fetched:', data?.sessions?.length ?? 0);
+      return data?.sessions ?? [];
+    },
+    alwaysRefresh: true,
+  });
+
+  // Local mutable state for realtime updates on top of cached data
+  const [upcomingSessions, setUpcomingSessions] = useState<CoverageSession[]>([]);
+  const [historySessions, setHistorySessions] = useState<CoverageSession[]>([]);
+
+  // Sync fetched data into local state
+  useEffect(() => {
+    if (upcomingData) setUpcomingSessions(upcomingData);
+  }, [upcomingData]);
+
+  useEffect(() => {
+    if (historyData) setHistorySessions(historyData);
+  }, [historyData]);
 
   const updateSessionStatus = useCallback(async (sessionId: string, status: string) => {
     console.log('[DoctorCoverage] Updating session status:', sessionId, '->', status);
@@ -315,19 +352,20 @@ export default function DoctorCoverageScreen() {
         const found = prev.find(s => s.id === sessionId);
         if (found) {
           setHistorySessions(hist => [{ ...found, status: newStatus }, ...hist]);
+          // Invalidate cache so next visit re-fetches
+          invalidate(upcomingKey);
+          invalidate(historyKey);
           return removeFromList(prev);
         }
         return prev;
       });
     }
-  }, []);
+  }, [upcomingKey, historyKey]);
 
   const setupRealtimeSubscriptions = useCallback((sessions: CoverageSession[], userId: string) => {
-    // Clean up existing channels
     channelsRef.current.forEach(ch => supabase.removeChannel(ch));
     channelsRef.current = [];
 
-    // Subscribe to each upcoming session
     sessions.forEach(session => {
       const ch = supabase
         .channel(`coverage:${session.id}`)
@@ -340,7 +378,6 @@ export default function DoctorCoverageScreen() {
       channelsRef.current.push(ch);
     });
 
-    // Subscribe to doctor channel for new sessions and shift events
     const doctorCh = supabase
       .channel(`doctor:${userId}`)
       .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
@@ -349,6 +386,7 @@ export default function DoctorCoverageScreen() {
         if (newSession) {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
           setUpcomingSessions(prev => [newSession, ...prev]);
+          invalidate(upcomingKey);
         }
       })
       .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
@@ -397,11 +435,7 @@ export default function DoctorCoverageScreen() {
       })
       .subscribe();
     channelsRef.current.push(doctorCh);
-  }, [handleStatusChange]);
-
-  useEffect(() => {
-    fetchSessions();
-  }, [fetchSessions]);
+  }, [handleStatusChange, upcomingKey]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -442,6 +476,8 @@ export default function DoctorCoverageScreen() {
 
   const isHistoryTab = activeTab === 'History';
   const currentSessions = isHistoryTab ? historySessions : upcomingSessions;
+  const currentLoading = isHistoryTab ? historyLoading : upcomingLoading;
+  const currentRefreshing = isHistoryTab ? historyRefreshing : upcomingRefreshing;
   const emptyMessage = isHistoryTab
     ? 'No past coverage yet.'
     : 'No upcoming shifts. Stay online to receive requests.';
@@ -497,9 +533,21 @@ export default function DoctorCoverageScreen() {
         </Text>
       </View>
 
+      {/* Background refresh indicator */}
+      {currentRefreshing && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8, gap: 6 }}>
+          <ActivityIndicator size="small" color="#0066CC" />
+          <Text style={{ fontSize: 12, color: '#8E8E93' }}>Updating...</Text>
+        </View>
+      )}
+
       {/* Content */}
-      {loading ? (
-        <ActivityIndicator size="large" color="#0066CC" style={{ marginTop: SPACING.xxxl }} />
+      {currentLoading ? (
+        <>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </>
       ) : currentSessions.length === 0 ? (
         <EmptyState message={emptyMessage} />
       ) : (

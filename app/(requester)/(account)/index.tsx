@@ -73,7 +73,8 @@ export default function RequesterAccountScreen() {
       gender: authProfile.gender ?? null,
     };
   });
-  const [loading, setLoading] = useState(true);
+  // Only block render if we have no seed data at all
+  const [loading, setLoading] = useState(profile === null);
 
   const [phoneModalVisible, setPhoneModalVisible] = useState(false);
   const [editPhone, setEditPhone] = useState('');
@@ -174,7 +175,8 @@ export default function RequesterAccountScreen() {
     ]);
   };
 
-  if (loading) {
+  // Only show full-screen spinner if we have no data at all (no authProfile seed)
+  if (loading && profile === null) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#FFFFFF" />

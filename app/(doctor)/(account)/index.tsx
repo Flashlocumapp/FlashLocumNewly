@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -75,6 +76,24 @@ function ActionRow({ label, onPress, labelRed, chevronRed }: { label: string; on
   );
 }
 
+function SkeletonRow() {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.7, duration: 800, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+      ]),
+    ).start();
+  }, [opacity]);
+  return (
+    <View style={styles.cardRow}>
+      <Animated.View style={{ width: 100, height: 14, borderRadius: 7, backgroundColor: '#E5E5E5', opacity }} />
+      <Animated.View style={{ width: 140, height: 14, borderRadius: 7, backgroundColor: '#E5E5E5', opacity }} />
+    </View>
+  );
+}
+
 export default function DoctorAccountScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -95,7 +114,8 @@ export default function DoctorAccountScreen() {
       selfie_url: null,
     };
   });
-  const [loading, setLoading] = useState(true);
+  // Only show loading state if we have no profile at all (no authProfile seed)
+  const [loading, setLoading] = useState(profile === null);
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
 
   // Phone edit modal
@@ -234,7 +254,8 @@ export default function DoctorAccountScreen() {
     ]);
   };
 
-  if (loading) {
+  // If we have absolutely no profile data yet (no authProfile seed), show a minimal spinner
+  if (loading && profile === null) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#FFFFFF" />
@@ -271,13 +292,15 @@ export default function DoctorAccountScreen() {
         <Card>
           <EditableRow label="Phone Number" value={phoneValue} onPress={openPhoneModal} />
           <CardDivider />
-          <ReadOnlyRow label="MDCN Number" value={mdcnValue} />
+          {loading ? <SkeletonRow /> : <ReadOnlyRow label="MDCN Number" value={mdcnValue} />}
           <CardDivider />
           <EditableRow label="Gender" value={genderValue} onPress={() => { console.log('[DoctorAccount] Gender edit pressed'); setGenderModalVisible(true); }} />
           <CardDivider />
           <View style={styles.cardRow}>
             <Text style={styles.rowLabel}>Verification Status</Text>
-            {isVerified ? (
+            {loading ? (
+              <Animated.View style={{ width: 80, height: 26, borderRadius: 999, backgroundColor: '#E5E5E5' }} />
+            ) : isVerified ? (
               <View style={styles.verifiedBadge}><Text style={styles.verifiedText}>✓ Verified</Text></View>
             ) : (
               <View style={styles.pendingBadge}><Text style={styles.pendingText}>Pending</Text></View>
@@ -288,11 +311,23 @@ export default function DoctorAccountScreen() {
         {/* Section 2 — FINANCIALS */}
         <SectionHeader title="FINANCIALS" />
         <Card>
-          <ReadOnlyRow label="Bank Name" value={bankName} />
-          <CardDivider />
-          <ReadOnlyRow label="Account Number" value={accountNumber} />
-          <CardDivider />
-          <ReadOnlyRow label="Account Name" value={accountName} />
+          {loading ? (
+            <>
+              <SkeletonRow />
+              <CardDivider />
+              <SkeletonRow />
+              <CardDivider />
+              <SkeletonRow />
+            </>
+          ) : (
+            <>
+              <ReadOnlyRow label="Bank Name" value={bankName} />
+              <CardDivider />
+              <ReadOnlyRow label="Account Number" value={accountNumber} />
+              <CardDivider />
+              <ReadOnlyRow label="Account Name" value={accountName} />
+            </>
+          )}
         </Card>
 
         {/* Section 3 — SUPPORT */}

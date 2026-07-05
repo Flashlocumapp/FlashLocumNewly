@@ -1,17 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   ActivityIndicator,
+  Animated,
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
-import { supabase, getValidToken } from '@/lib/supabase';
+import { getValidToken } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
+import { useTabData } from '@/hooks/useTabData';
 
 const SUPABASE_URL = 'https://juilousufwlsiqdcgllu.supabase.co';
 
@@ -49,14 +51,6 @@ function formatTime(iso: string) {
   });
 }
 
-function getInitials(name: string): string {
-  const parts = name.replace(/^Dr\.?\s*/i, '').trim().split(' ');
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  }
-  return parts[0]?.[0]?.toUpperCase() ?? '?';
-}
-
 function EmptyState({ message }: { message: string }) {
   return (
     <View style={{ alignItems: 'center', marginTop: SPACING.xxxl }}>
@@ -77,6 +71,25 @@ function EmptyState({ message }: { message: string }) {
         {message}
       </Text>
     </View>
+  );
+}
+
+function SkeletonCard() {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.7, duration: 900, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.3, duration: 900, useNativeDriver: true }),
+      ]),
+    ).start();
+  }, [opacity]);
+  return (
+    <Animated.View style={{ opacity, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, marginBottom: 12 }}>
+      <View style={{ width: '60%', height: 16, borderRadius: 8, backgroundColor: '#E5E5E5', marginBottom: 8 }} />
+      <View style={{ width: '40%', height: 12, borderRadius: 6, backgroundColor: '#E5E5E5', marginBottom: 6 }} />
+      <View style={{ width: '80%', height: 12, borderRadius: 6, backgroundColor: '#E5E5E5' }} />
+    </Animated.View>
   );
 }
 
@@ -111,12 +124,10 @@ function RequesterCard({ session }: RequesterCardProps) {
       ]}
     >
       <View style={{ padding: 16 }}>
-        {/* Doctor info */}
         <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }} numberOfLines={1}>
           {session.doctor_name}
         </Text>
 
-        {/* MDCN · ★ rating · ● reliability */}
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3, gap: 6 }}>
           <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#71717A' }}>
             {session.doctor_mdcn || 'MDCN/R/—'}
@@ -129,12 +140,10 @@ function RequesterCard({ session }: RequesterCardProps) {
           <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#2DC653' }}>{reliabilityDisplay}%</Text>
         </View>
 
-        {/* Shift summary */}
         <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#71717A', marginTop: 3 }} numberOfLines={1}>
           {shiftSummary}
         </Text>
 
-        {/* Ended timestamp */}
         {session.ended_at && (
           <Text style={{ fontSize: 12, color: '#A1A1AA', marginTop: 8 }}>
             {'Ended: '}{new Date(session.ended_at).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
@@ -148,46 +157,35 @@ function RequesterCard({ session }: RequesterCardProps) {
 export default function RequesterCoverageScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const [historySessions, setHistorySessions] = useState<CoverageSession[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const getAccessToken = useCallback(async () => {
-    return getValidToken();
-  }, []);
+  const cacheKey = `requester-coverage-${user?.id ?? 'anon'}`;
 
-  const fetchSessions = useCallback(async () => {
-    console.log('[RequesterCoverage] Fetching history sessions');
-    setLoading(true);
-    try {
-      const token = await getAccessToken();
+  const { data: historySessions, loading, refreshing } = useTabData<CoverageSession[]>({
+    cacheKey,
+    fetcher: async () => {
+      console.log('[RequesterCoverage] Fetching history sessions');
+      const token = await getValidToken();
       if (!token) {
         console.log('[RequesterCoverage] No access token available');
-        return;
+        return [];
       }
-
-      const historyRes = await fetch(
+      const res = await fetch(
         `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=requester&status=completed,cancelled`,
-        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
       );
-
-      if (historyRes.ok) {
-        const data = await historyRes.json();
-        console.log('[RequesterCoverage] History sessions fetched:', data?.sessions?.length ?? 0);
-        setHistorySessions(data?.sessions ?? []);
-      } else {
-        const errText = await historyRes.text();
-        console.log('[RequesterCoverage] History fetch error:', historyRes.status, errText);
+      if (!res.ok) {
+        const errText = await res.text();
+        console.log('[RequesterCoverage] Fetch error:', res.status, errText);
+        throw new Error('Failed to load coverage history');
       }
-    } catch (err) {
-      console.log('[RequesterCoverage] Fetch error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [getAccessToken]);
+      const data = await res.json();
+      console.log('[RequesterCoverage] History sessions fetched:', data?.sessions?.length ?? 0);
+      return data?.sessions ?? [];
+    },
+    alwaysRefresh: true,
+  });
 
-  useEffect(() => {
-    fetchSessions();
-  }, [fetchSessions]);
+  const sessions = historySessions ?? [];
 
   return (
     <ScrollView
@@ -206,13 +204,25 @@ export default function RequesterCoverageScreen() {
         Your coverage continuity
       </Text>
 
+      {/* Background refresh indicator */}
+      {refreshing && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8, gap: 6 }}>
+          <ActivityIndicator size="small" color="#0066CC" />
+          <Text style={{ fontSize: 12, color: '#8E8E93' }}>Updating...</Text>
+        </View>
+      )}
+
       {/* Content */}
       {loading ? (
-        <ActivityIndicator size="large" color="#0066CC" style={{ marginTop: SPACING.xxxl }} />
-      ) : historySessions.length === 0 ? (
+        <>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </>
+      ) : sessions.length === 0 ? (
         <EmptyState message="No past coverage yet." />
       ) : (
-        historySessions.map(session => (
+        sessions.map(session => (
           <RequesterCard
             key={session.id}
             session={session}
