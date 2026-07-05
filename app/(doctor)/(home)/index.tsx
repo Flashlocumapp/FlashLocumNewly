@@ -155,7 +155,7 @@ function DoctorUpcomingCard({
           activeOpacity={0.8}
           style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
         >
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E', letterSpacing: 0.3 }}>CANCEL SHIFT</Text>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E', letterSpacing: 0.3 }}>CANCEL SHIFT</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => {
@@ -163,9 +163,9 @@ function DoctorUpcomingCard({
             onCall();
           }}
           activeOpacity={0.8}
-          style={{ flex: 1, backgroundColor: '#1C1C1E', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
+          style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
         >
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF', letterSpacing: 0.3 }}>CALL</Text>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', letterSpacing: 0.3 }}>CALL</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -404,7 +404,7 @@ export default function DoctorHomeScreen() {
   const dotBg = isJobCapReached ? '#8E8E93' : isOnline ? '#FFFFFF' : '#8E8E93';
   const statusText = isJobCapReached ? '3 Jobs Active' : isOnline ? 'Online' : 'Offline';
   const pillTop = insets.top + 12;
-  const sheetPaddingBottom = insets.bottom + 90;
+  const sheetPaddingBottom = insets.bottom + 120;
 
   const showMarker = isOnline && userLocation !== null;
 
@@ -459,6 +459,7 @@ export default function DoctorHomeScreen() {
       {/* Bottom sheet */}
       <View style={styles.sheet}>
         <ScrollView
+          scrollEnabled={true}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.sheetContent, { paddingBottom: sheetPaddingBottom }]}
           bounces={false}
@@ -493,7 +494,7 @@ export default function DoctorHomeScreen() {
           )}
 
           {/* Stats row */}
-          <View style={styles.statsRow}>
+          <View style={[styles.statsRow, { marginBottom: 8 }]}>
             {/* Ratings */}
             <View style={styles.statCard}>
               <View style={styles.statLabelRow}>

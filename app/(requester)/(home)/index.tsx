@@ -555,6 +555,12 @@ function formatNaira(kobo: number): string {
 }
 
 function getSessionInitials(name: string): string {
+  if (name.includes('@')) {
+    const username = name.split('@')[0];
+    const firstChar = username[0]?.toUpperCase() ?? 'D';
+    const secondChar = username[1]?.toUpperCase() ?? firstChar;
+    return firstChar + secondChar;
+  }
   const parts = name.replace(/^Dr\.?\s*/i, '').trim().split(' ');
   if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   return parts[0]?.[0]?.toUpperCase() ?? '?';
@@ -627,8 +633,9 @@ function RequesterUpcomingCard({
 }) {
   const isPaused = session.status === 'paused';
   const shiftPillText = buildShiftPillText(session);
-  const doctorName = session.doctor_name || 'Doctor';
-  const initials = session.doctor_name ? getSessionInitials(session.doctor_name) : 'DR';
+  const rawDoctorName = session.doctor_name || '';
+  const doctorName = rawDoctorName && !rawDoctorName.includes('@') ? rawDoctorName : 'Doctor';
+  const initials = rawDoctorName ? getSessionInitials(rawDoctorName) : 'DR';
   const ratingRaw = Number(session.doctor_rating);
   const ratingDisplay = (!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '—' : ratingRaw.toFixed(1);
   const reliabilityRaw = Number(session.doctor_reliability);
@@ -705,7 +712,7 @@ function RequesterUpcomingCard({
           </TouchableOpacity>
           <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed:', session.id); onCall(); }}
             activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#1C1C1E', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => { console.log('[RequesterHome] Start shift pressed:', session.id); onStartShift(); }}
@@ -718,7 +725,7 @@ function RequesterUpcomingCard({
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed (paused):', session.id); onCall(); }}
             activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#1C1C1E', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => { console.log('[RequesterHome] Resume shift pressed:', session.id); onResumeShift(); }}
@@ -764,8 +771,9 @@ function RequesterActiveCard({
     return () => clearInterval(id);
   }, [startedAt]);
 
-  const doctorName = session.doctor_name || 'Doctor';
-  const initials = session.doctor_name ? getSessionInitials(session.doctor_name) : 'DR';
+  const rawDoctorName = session.doctor_name || '';
+  const doctorName = rawDoctorName && !rawDoctorName.includes('@') ? rawDoctorName : 'Doctor';
+  const initials = rawDoctorName ? getSessionInitials(rawDoctorName) : 'DR';
   const ratingRaw = Number(session.doctor_rating);
   const ratingDisplay = (!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '—' : ratingRaw.toFixed(1);
   const reliabilityRaw = Number(session.doctor_reliability);
@@ -854,7 +862,7 @@ function RequesterActiveCard({
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed (active):', session.id); onCall(); }}
           activeOpacity={0.8}
-          style={{ flex: 1, backgroundColor: '#1C1C1E', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+          style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
           <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
         </TouchableOpacity>
         {showPauseButton && (

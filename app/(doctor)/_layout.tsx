@@ -83,6 +83,7 @@ export default function DoctorLayout() {
   const forceSyncRef = useRef<() => Promise<void>>(async () => {});
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const doctorChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const isOnlineRef = useRef(false);
   const isRealtimeHealthyRef = useRef(false);
 
@@ -330,6 +331,58 @@ export default function DoctorLayout() {
       sessionChannelRef.current = null;
     };
   }, [activeSession?.id]); // only re-subscribe when session ID changes
+
+  // ── Personal doctor channel (fallback for race condition on session channel) ──
+  useEffect(() => {
+    if (!user) return;
+    const channelName = `doctor:${user.id}`;
+    console.log('[DoctorLayout] Subscribing to personal doctor channel:', channelName);
+
+    if (doctorChannelRef.current) {
+      supabase.removeChannel(doctorChannelRef.current);
+      doctorChannelRef.current = null;
+    }
+
+    const ch = supabase.channel(channelName)
+      .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
+        console.log('[DoctorLayout] SHIFT_STARTED (doctor channel):', payload);
+        const updated = payload?.payload?.session as Partial<CoverageSession>;
+        if (updated) {
+          setActiveSession((prev) => prev ? { ...prev, ...updated, status: 'active' } : prev);
+        }
+      })
+      .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
+        console.log('[DoctorLayout] SHIFT_PAUSED (doctor channel):', payload);
+        const updated = payload?.payload?.session as Partial<CoverageSession>;
+        if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      })
+      .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
+        console.log('[DoctorLayout] SHIFT_RESUMED (doctor channel):', payload);
+        const updated = payload?.payload?.session as Partial<CoverageSession>;
+        if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated, status: 'active' } : prev);
+      })
+      .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
+        console.log('[DoctorLayout] SHIFT_ENDED (doctor channel):', payload);
+        const updated = payload?.payload?.session as Partial<CoverageSession>;
+        if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      })
+      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, () => {
+        console.log('[DoctorLayout] PAYMENT_CONFIRMED (doctor channel)');
+        setActiveSession(null);
+        setActiveJobCount((prev) => Math.max(0, prev - 1));
+      })
+      .subscribe((status) => {
+        console.log('[DoctorLayout] Doctor channel status:', channelName, status);
+      });
+
+    doctorChannelRef.current = ch;
+
+    return () => {
+      console.log('[DoctorLayout] Unsubscribing from doctor channel:', channelName);
+      supabase.removeChannel(ch);
+      doctorChannelRef.current = null;
+    };
+  }, [user]); // subscribe once when user is available
 
   // ── Queue → state sync ──
   useEffect(() => {
