@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
@@ -118,12 +119,17 @@ function DoctorCard({ session, onCall, onCancel, isHistory }: DoctorCardProps) {
           <View style={{ marginRight: 12 }}>
             <View style={{
               width: 52, height: 52, borderRadius: 26,
-              backgroundColor: '#1C1C1E',
+              backgroundColor: '#2C2C2E',
               alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden',
             }}>
-              <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>
-                {initials}
-              </Text>
+              {session.doctor_avatar ? (
+                <Image source={{ uri: session.doctor_avatar }} style={{ width: 52, height: 52, borderRadius: 26 }} />
+              ) : (
+                <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>
+                  {initials}
+                </Text>
+              )}
             </View>
           </View>
 

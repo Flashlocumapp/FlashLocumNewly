@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   ScrollView,
   TextInput,
@@ -29,6 +30,7 @@ import * as SecureStore from 'expo-secure-store';
 import { supabase } from '@/lib/supabase';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { useTabBarVisibility, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
+import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
@@ -666,12 +668,12 @@ function RequesterUpcomingCard({
 
       {/* Doctor row */}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-        <View style={{
-          width: 52, height: 52, borderRadius: 26,
-          backgroundColor: '#2C2C2E',
-          alignItems: 'center', justifyContent: 'center', marginRight: 12,
-        }}>
-          <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>{initials}</Text>
+        <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#2C2C2E', alignItems: 'center', justifyContent: 'center', marginRight: 12, overflow: 'hidden' }}>
+          {session.doctor_avatar ? (
+            <Image source={{ uri: session.doctor_avatar }} style={{ width: 52, height: 52, borderRadius: 26 }} />
+          ) : (
+            <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>{initials}</Text>
+          )}
         </View>
         <View style={{ flex: 1 }}>
           {/* Name + rating on same line */}
@@ -809,12 +811,12 @@ function RequesterActiveCard({
 
       {/* Doctor row */}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-        <View style={{
-          width: 52, height: 52, borderRadius: 26,
-          backgroundColor: '#2C2C2E',
-          alignItems: 'center', justifyContent: 'center', marginRight: 12,
-        }}>
-          <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>{initials}</Text>
+        <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#2C2C2E', alignItems: 'center', justifyContent: 'center', marginRight: 12, overflow: 'hidden' }}>
+          {session.doctor_avatar ? (
+            <Image source={{ uri: session.doctor_avatar }} style={{ width: 52, height: 52, borderRadius: 26 }} />
+          ) : (
+            <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>{initials}</Text>
+          )}
         </View>
         <View style={{ flex: 1 }}>
           {/* Name + rating on same line */}
@@ -975,6 +977,7 @@ function RequesterPaymentCard({
 export default function RequesterHomeScreen() {
   const insets = useSafeAreaInsets();
   const { setTabBarVisible } = useTabBarVisibility();
+  const { user } = useAuth();
   const pricingConfig = usePricingConfig();
 
   const mapRef = useRef<MapView>(null);
@@ -1038,6 +1041,7 @@ export default function RequesterHomeScreen() {
   const [activeSession, setActiveSession] = useState<CoverageSession | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
   const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const requesterChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Realtime refs for matching
   const matchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1143,6 +1147,10 @@ export default function RequesterHomeScreen() {
         console.log('[RequesterHome] PAYMENT_CONFIRMED received:', payload);
         setActiveSession(null);
       })
+      .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+        console.log('[RequesterHome] SHIFT_CANCELLED received:', payload);
+        setActiveSession(null);
+      })
       .subscribe((status) => {
         console.log('[RequesterHome] Session channel status:', channelName, status);
       });
@@ -1155,6 +1163,35 @@ export default function RequesterHomeScreen() {
       sessionChannelRef.current = null;
     };
   }, [activeSession?.id]); // only re-subscribe when session ID changes
+
+  // ─── Personal requester channel (fallback for SHIFT_CANCELLED) ───────────────
+  useEffect(() => {
+    if (!user) return;
+    const channelName = `requester:${user.id}`;
+    console.log('[RequesterHome] Subscribing to personal requester channel:', channelName);
+
+    if (requesterChannelRef.current) {
+      supabase.removeChannel(requesterChannelRef.current);
+      requesterChannelRef.current = null;
+    }
+
+    const ch = supabase.channel(channelName)
+      .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+        console.log('[RequesterHome] SHIFT_CANCELLED received (requester channel):', payload);
+        setActiveSession(null);
+      })
+      .subscribe((status) => {
+        console.log('[RequesterHome] Requester channel status:', channelName, status);
+      });
+
+    requesterChannelRef.current = ch;
+
+    return () => {
+      console.log('[RequesterHome] Unsubscribing from requester channel:', channelName);
+      supabase.removeChannel(ch);
+      requesterChannelRef.current = null;
+    };
+  }, [user]); // subscribe once when user is available
 
   // ─── Location on mount — animate map to user position + stream ───────────────
   useEffect(() => {

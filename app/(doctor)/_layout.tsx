@@ -319,6 +319,11 @@ export default function DoctorLayout() {
         setActiveSession(null);
         setActiveJobCount((prev) => Math.max(0, prev - 1));
       })
+      .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+        console.log('[DoctorLayout] SHIFT_CANCELLED received (session channel):', payload);
+        setActiveSession(null);
+        setActiveJobCount((prev) => Math.max(0, prev - 1));
+      })
       .subscribe((status) => {
         console.log('[DoctorLayout] Session channel status:', channelName, status);
       });
@@ -368,6 +373,11 @@ export default function DoctorLayout() {
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, () => {
         console.log('[DoctorLayout] PAYMENT_CONFIRMED (doctor channel)');
+        setActiveSession(null);
+        setActiveJobCount((prev) => Math.max(0, prev - 1));
+      })
+      .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+        console.log('[DoctorLayout] SHIFT_CANCELLED received (doctor channel):', payload);
         setActiveSession(null);
         setActiveJobCount((prev) => Math.max(0, prev - 1));
       })
