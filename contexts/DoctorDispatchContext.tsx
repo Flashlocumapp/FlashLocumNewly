@@ -43,7 +43,7 @@ export type CoverageSession = {
   hourly_rate_kobo: number;
   current_day: number;
   day_logs: DayLog[];
-  status: 'upcoming' | 'active' | 'paused' | 'payment_pending' | 'completed' | 'cancelled';
+  status: 'upcoming' | 'active' | 'paused' | 'payment_pending' | 'settled' | 'payment_complete' | 'completed' | 'cancelled' | 'history';
   started_at: string | null;
   ended_at: string | null;
   paused_at: string | null;
@@ -54,6 +54,10 @@ export type CoverageSession = {
   monnify_account_number: string | null;
   monnify_bank_name: string | null;
   monnify_account_name: string | null;
+  monnify_account_reference: string | null;
+  settled_at: string | null;
+  payment_complete_at: string | null;
+  late_fee_applied_at: string | null;
   doctor_name: string;
   doctor_mdcn: string;
   doctor_rating: number;

@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
+  AppStateStatus,
   StyleSheet,
 } from 'react-native';
 import { Stack, Href } from 'expo-router';
@@ -344,8 +345,11 @@ export default function DoctorLayout() {
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[DoctorLayout] PAYMENT_CONFIRMED received:', payload);
-        setActiveSession(null);
-        setActiveJobCount((prev) => Math.max(0, prev - 1));
+        setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
+      })
+      .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
+        console.log('[DoctorLayout] PAYMENT_COMPLETE received:', payload);
+        setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_CANCELLED received (session channel):', payload);
@@ -401,8 +405,11 @@ export default function DoctorLayout() {
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, () => {
         console.log('[DoctorLayout] PAYMENT_CONFIRMED (doctor channel)');
-        setActiveSession(null);
-        setActiveJobCount((prev) => Math.max(0, prev - 1));
+        setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
+      })
+      .on('broadcast', { event: 'PAYMENT_COMPLETE' }, () => {
+        console.log('[DoctorLayout] PAYMENT_COMPLETE (doctor channel)');
+        setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_CANCELLED received (doctor channel):', payload);
@@ -443,6 +450,18 @@ export default function DoctorLayout() {
     });
     return () => sub.remove();
   }, [isOnline, user, forceSync]);
+
+  // ── AppState session re-fetch ──
+  useEffect(() => {
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        console.log('[DoctorLayout] App foregrounded — re-fetching active session');
+        fetchActiveSession();
+      }
+    };
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+    return () => sub.remove();
+  }, [fetchActiveSession]);
 
   // ── Accept ──
   const handleAccept = useCallback(async () => {

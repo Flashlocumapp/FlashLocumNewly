@@ -213,6 +213,28 @@ export default function DoctorPayout() {
         });
       if (doctorProfileError) throw doctorProfileError;
 
+      // Fire-and-forget subaccount creation — don't block onboarding if it fails
+      try {
+        const token = await getValidToken();
+        console.log('[DoctorPayout] Calling create-subaccount for doctor:', userId);
+        if (token) {
+          await fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/create-subaccount', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({
+              doctor_id: userId,
+              bank_code: selectedBank!.code,
+              account_number: accountNumber,
+              account_name: accountName,
+              bank_name: selectedBank!.name,
+            }),
+          });
+          console.log('[DoctorPayout] create-subaccount request sent');
+        }
+      } catch (e) {
+        console.warn('[DoctorPayout] Subaccount creation failed (non-blocking):', e);
+      }
+
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert({ id: userId, onboarding_complete: true, doctor_onboarding_complete: true });

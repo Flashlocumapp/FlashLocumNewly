@@ -172,16 +172,48 @@ function DoctorCard({ session, onCall, onCancel, isHistory }: DoctorCardProps) {
           </Text>
         )}
 
+        {/* Payment pending status banner */}
+        {!isHistory && session.status === 'payment_pending' && (
+          <View style={{ backgroundColor: '#FFFBEB', borderRadius: 10, padding: 12, marginTop: 12 }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#D97706', fontFamily: 'Inter_600SemiBold' }}>{'⏳ Waiting for Payment'}</Text>
+            <Text style={{ fontSize: 12, color: '#71717A', marginTop: 4, fontFamily: 'Inter_400Regular' }}>
+              The requester has been sent a payment request. You will be notified once payment is confirmed.
+            </Text>
+          </View>
+        )}
+
+        {/* Settled status banner */}
+        {!isHistory && session.status === 'settled' && (
+          <View style={{ backgroundColor: '#F0FDF4', borderRadius: 10, padding: 12, marginTop: 12 }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#15803d', fontFamily: 'Inter_600SemiBold' }}>{'✓ Requester Paid'}</Text>
+            <Text style={{ fontSize: 12, color: '#71717A', marginTop: 4, fontFamily: 'Inter_400Regular' }}>
+              {'Payment of ₦'}{(session.price ?? 0).toLocaleString()}{' confirmed. Funds are being remitted to your account.'}
+            </Text>
+          </View>
+        )}
+
+        {/* Payment complete status banner */}
+        {!isHistory && session.status === 'payment_complete' && (
+          <View style={{ backgroundColor: '#F0FDF4', borderRadius: 10, padding: 12, marginTop: 12 }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#15803d', fontFamily: 'Inter_600SemiBold' }}>{'✓ Payment Received'}</Text>
+            <Text style={{ fontSize: 12, color: '#71717A', marginTop: 4, fontFamily: 'Inter_400Regular' }}>
+              {'₦'}{(session.price ?? 0).toLocaleString()}{' has been remitted to your bank account.'}
+            </Text>
+          </View>
+        )}
+
         {/* Action buttons — all non-history sessions */}
         {!isHistory && (
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
-            <TouchableOpacity onPress={() => {
-              console.log('[DoctorCoverage] Call requester pressed:', session.id, 'status:', session.status);
-              onCall(session);
-            }} activeOpacity={0.8}
-              style={{ flex: 1, borderWidth: 1.5, borderColor: '#1C1C1E', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
-              <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E', letterSpacing: 0.3 }}>CALL</Text>
-            </TouchableOpacity>
+            {(session.status === 'upcoming' || session.status === 'paused' || session.status === 'payment_pending') && (
+              <TouchableOpacity onPress={() => {
+                console.log('[DoctorCoverage] Call requester pressed:', session.id, 'status:', session.status);
+                onCall(session);
+              }} activeOpacity={0.8}
+                style={{ flex: 1, borderWidth: 1.5, borderColor: '#1C1C1E', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E', letterSpacing: 0.3 }}>CALL</Text>
+              </TouchableOpacity>
+            )}
             {session.status === 'upcoming' && (
               <TouchableOpacity onPress={() => {
                 console.log('[DoctorCoverage] Cancel shift pressed:', session.id);
@@ -222,7 +254,7 @@ export default function DoctorCoverageScreen() {
       }
 
       const [upcomingRes, historyRes] = await Promise.all([
-        fetch(`${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=upcoming,paused`, {
+        fetch(`${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=upcoming,paused,payment_pending,settled,payment_complete`, {
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         }),
         fetch(`${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=completed,cancelled`, {
@@ -337,6 +369,30 @@ export default function DoctorCoverageScreen() {
         if (sessionId) {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
           setUpcomingSessions(prev => prev.filter(s => s.id !== sessionId));
+        }
+      })
+      .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
+        console.log('[DoctorCoverage] Realtime SHIFT_ENDED:', payload);
+        const updatedSession = payload?.payload?.session as CoverageSession;
+        if (updatedSession) {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setUpcomingSessions(prev => prev.map(s => s.id === updatedSession.id ? { ...s, ...updatedSession } : s));
+        }
+      })
+      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+        console.log('[DoctorCoverage] Realtime PAYMENT_CONFIRMED:', payload);
+        const sessionId = payload?.payload?.session_id as string ?? payload?.payload?.session?.id as string;
+        if (sessionId) {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setUpcomingSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status: 'settled' as const } : s));
+        }
+      })
+      .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
+        console.log('[DoctorCoverage] Realtime PAYMENT_COMPLETE:', payload);
+        const sessionId = payload?.payload?.session_id as string ?? payload?.payload?.session?.id as string;
+        if (sessionId) {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setUpcomingSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status: 'payment_complete' as const } : s));
         }
       })
       .subscribe();

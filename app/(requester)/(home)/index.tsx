@@ -20,6 +20,8 @@ import {
   Modal,
   FlatList,
   Linking,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-native';
@@ -930,6 +932,18 @@ export default function RequesterHomeScreen() {
     fetchActiveSession();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── AppState reconnection safety net ────────────────────────────────────────
+  useEffect(() => {
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        console.log('[RequesterHome] App foregrounded — re-fetching active session');
+        fetchActiveSession();
+      }
+    };
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+    return () => sub.remove();
+  }, [fetchActiveSession]);
+
   // ─── Session realtime subscription ───────────────────────────────────────────
   useEffect(() => {
     if (!activeSession) {
@@ -973,13 +987,33 @@ export default function RequesterHomeScreen() {
       .on('broadcast', { event: 'PAYMENT_DEADLINE_EXTENDED' }, (payload) => {
         console.log('[RequesterHome] PAYMENT_DEADLINE_EXTENDED received:', payload);
         const newDeadline = payload?.payload?.payment_deadline_at as string;
+        const lateFee = payload?.payload?.late_fee as number;
+        const newTotal = payload?.payload?.new_total as number;
         if (newDeadline) {
-          setActiveSession((prev) => prev ? { ...prev, payment_deadline_at: newDeadline } : prev);
+          setActiveSession((prev) => prev ? {
+            ...prev,
+            payment_deadline_at: newDeadline,
+            price: newTotal ?? prev.price,
+            monnify_account_number: payload?.payload?.account_number ?? prev.monnify_account_number,
+            monnify_bank_name: payload?.payload?.bank_name ?? prev.monnify_bank_name,
+            monnify_account_name: payload?.payload?.account_name ?? prev.monnify_account_name,
+          } : prev);
+        }
+        if (lateFee) {
+          Alert.alert(
+            'Payment Session Expired',
+            `A late fee of ₦${lateFee.toLocaleString()} has been applied. New total: ₦${newTotal.toLocaleString()}.`,
+            [{ text: 'OK' }]
+          );
         }
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[RequesterHome] PAYMENT_CONFIRMED received:', payload);
         setActiveSession(null);
+      })
+      .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
+        console.log('[RequesterHome] PAYMENT_COMPLETE received:', payload);
+        setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         console.log('[RequesterHome] SHIFT_CANCELLED received:', payload);
@@ -2531,6 +2565,76 @@ export default function RequesterHomeScreen() {
               session={activeSession}
               bottomPadding={whiteCardPaddingBottom}
             />
+          )}
+
+          {/* Settled — payment received, awaiting doctor bank remittance */}
+          {!sessionLoading && activeSession !== null && activeSession.status === 'settled' && (
+            <View style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0,
+              backgroundColor: '#1C1C1E',
+              borderTopLeftRadius: 24, borderTopRightRadius: 24,
+              paddingTop: 16, paddingHorizontal: 16,
+              paddingBottom: whiteCardPaddingBottom,
+              shadowColor: '#000', shadowOffset: { width: 0, height: -3 },
+              shadowOpacity: 0.08, shadowRadius: 10, elevation: 10,
+            }}>
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#22c55e', marginRight: 8 }} />
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#22c55e', fontFamily: 'Inter_600SemiBold' }}>Payment Confirmed</Text>
+              </View>
+              <Text style={{ fontSize: 44, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 4 }}>
+                {'₦'}{(activeSession.price ?? 0).toLocaleString()}
+              </Text>
+              <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 16 }}>
+                {'Payment received. Funds are being remitted to '}
+                {activeSession.doctor_name ?? 'the doctor'}
+                {'.'}
+              </Text>
+              <View style={{ backgroundColor: '#1A3A2A', borderRadius: 10, padding: 14 }}>
+                <Text style={{ fontSize: 13, color: '#34C759', fontWeight: '500', fontFamily: 'Inter_600SemiBold' }}>{'✓ Settled'}</Text>
+                <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 4, fontFamily: 'Inter_400Regular' }}>
+                  The shift has been completed and payment confirmed.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Payment Complete — funds remitted to doctor */}
+          {!sessionLoading && activeSession !== null && activeSession.status === 'payment_complete' && (
+            <View style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0,
+              backgroundColor: '#1C1C1E',
+              borderTopLeftRadius: 24, borderTopRightRadius: 24,
+              paddingTop: 16, paddingHorizontal: 16,
+              paddingBottom: whiteCardPaddingBottom,
+              shadowColor: '#000', shadowOffset: { width: 0, height: -3 },
+              shadowOpacity: 0.08, shadowRadius: 10, elevation: 10,
+            }}>
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#22c55e', marginRight: 8 }} />
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#22c55e', fontFamily: 'Inter_600SemiBold' }}>Payment Complete</Text>
+              </View>
+              <Text style={{ fontSize: 44, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 4 }}>
+                {'₦'}{(activeSession.price ?? 0).toLocaleString()}
+              </Text>
+              <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 16 }}>
+                {'All done! Funds have been remitted to '}
+                {activeSession.doctor_name ?? 'the doctor'}
+                {"'s account."}
+              </Text>
+              <View style={{ backgroundColor: '#1A3A2A', borderRadius: 10, padding: 14 }}>
+                <Text style={{ fontSize: 13, color: '#34C759', fontWeight: '500', fontFamily: 'Inter_600SemiBold' }}>{'✓ Payment Complete'}</Text>
+                <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 4, fontFamily: 'Inter_400Regular' }}>
+                  This coverage session is fully closed.
+                </Text>
+              </View>
+            </View>
           )}
 
           {/* No active session — show search card */}
