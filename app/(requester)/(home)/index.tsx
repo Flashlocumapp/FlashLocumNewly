@@ -35,56 +35,7 @@ import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
-// ─── Pricing config ───────────────────────────────────────────────────────────
-type PricingConfig = {
-  home_care_rate: number;
-  day_rate_short: number;
-  day_rate_medium: number;
-  day_rate_long: number;
-  night_rate: number;
-  flat_24h_fee: number;
-  busy_multiplier: number;
-};
 
-const DEFAULT_PRICING: PricingConfig = {
-  home_care_rate: 15000,
-  day_rate_short: 3000,
-  day_rate_medium: 2500,
-  day_rate_long: 2000,
-  night_rate: 1500,
-  flat_24h_fee: 36000,
-  busy_multiplier: 1.3,
-};
-
-function usePricingConfig(): PricingConfig {
-  const [config, setConfig] = useState<PricingConfig>(DEFAULT_PRICING);
-  useEffect(() => {
-    supabase
-      .from('pricing_config')
-      .select('*')
-      .limit(1)
-      .single()
-      .then(({ data, error }) => {
-        if (error) {
-          console.log('[PricingConfig] fetch error:', error.message, '— using defaults');
-          return;
-        }
-        if (data) {
-          console.log('[PricingConfig] loaded from Supabase:', data);
-          setConfig({
-            home_care_rate: data.home_care_rate ?? DEFAULT_PRICING.home_care_rate,
-            day_rate_short: data.day_rate_short ?? DEFAULT_PRICING.day_rate_short,
-            day_rate_medium: data.day_rate_medium ?? DEFAULT_PRICING.day_rate_medium,
-            day_rate_long: data.day_rate_long ?? DEFAULT_PRICING.day_rate_long,
-            night_rate: data.night_rate ?? DEFAULT_PRICING.night_rate,
-            flat_24h_fee: data.flat_24h_fee ?? DEFAULT_PRICING.flat_24h_fee,
-            busy_multiplier: data.busy_multiplier ?? DEFAULT_PRICING.busy_multiplier,
-          });
-        }
-      });
-  }, []);
-  return config;
-}
 
 const ANDROID_KEY = 'AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU';
 const IOS_KEY = 'AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk';
@@ -387,129 +338,7 @@ function CustomTimePicker({
   );
 }
 
-// ─── Pricing Engine ───────────────────────────────────────────────────────────
 
-/**
- * Calculates total coverage price in Naira.
- * Rules:
- * - Home Care: flat ₦15,000/hr regardless of time/environment
- * - Standard:
- *   - Total continuous hours = (endTime - startTime in hours) × coverageLength
- *   - Full 24-hr blocks → ₦36,000 flat each
- *   - Remainder hours split into day (06:00–22:00) and night (22:00–06:00) windows
- *     using the actual start time to determine which window the remainder falls in
- *   - Day rate tiers (for non-remainder hours):
- *       < 4 hrs/day  → ₦3,000/hr
- *       4–6 hrs/day  → ₦2,500/hr
- *       > 6 hrs/day  → ₦2,000/hr
- *   - Remainder after 24-hr blocks always billed at ₦2,000/hr (long-duration rate)
- *   - Night rate: ₦1,500/hr
- *   - Busy surcharge: 30% on everything
- */
-function calculateCoveragePrice(
-  startTime: Date,
-  endTime: Date,
-  coverageLength: number,
-  coverageType: 'Standard' | 'Home Care',
-  environment: 'Normal' | 'Busy',
-  pricing: PricingConfig
-): { totalNaira: number; totalHours: number } {
-  // Duration of one shift in hours (fractional, 15-min precision)
-  const shiftMs = endTime.getTime() - startTime.getTime();
-  const shiftHours = Math.max(0, Math.round((shiftMs / (1000 * 60 * 60)) * 4) / 4); // round to nearest 0.25
-  const totalHours = shiftHours * coverageLength;
-
-  if (coverageType === 'Home Care') {
-    const base = totalHours * pricing.home_care_rate;
-    return { totalNaira: base, totalHours };
-  }
-
-  // Standard pricing
-  const busyMultiplier = environment === 'Busy' ? pricing.busy_multiplier : 1.0;
-
-  // Check if this is a straight continuous booking (coverageLength days back-to-back)
-  // A straight booking means the end of one day's shift is the start of the next,
-  // i.e. the shift spans the full 24 hours per day block.
-  // We treat it as straight if totalHours >= 24 and coverageLength > 1
-  // and the shift duration per day equals 24 hours (i.e. endTime - startTime = 24h exactly or more).
-  const isStraight = totalHours >= 24 && shiftHours >= 24;
-
-  if (isStraight) {
-    const fullBlocks = Math.floor(totalHours / 24);
-    const remainderHours = Math.round((totalHours - fullBlocks * 24) * 4) / 4;
-
-    const flatFee = fullBlocks * pricing.flat_24h_fee * busyMultiplier;
-    // Remainder billed at long-duration day rate, scaled by busy
-    const remainderFee = remainderHours * pricing.day_rate_long * busyMultiplier;
-
-    return { totalNaira: Math.round(flatFee + remainderFee), totalHours };
-  }
-
-  // Non-straight: evaluate each day's shift independently
-  // Determine how many hours of the shift fall in day window (06:00–22:00) vs night (22:00–06:00)
-  const startHour = startTime.getHours() + startTime.getMinutes() / 60;
-  const endHour = startHour + shiftHours;
-
-  // Day window: 6 to 22 (16 hours)
-  // Night window: 22 to 30 (i.e. 22:00 to 06:00 next day, represented as 22–30)
-  const DAY_START = 6;
-  const DAY_END = 22;
-
-  // Overlap with day window [6, 22]
-  const dayOverlapStart = Math.max(startHour, DAY_START);
-  const dayOverlapEnd = Math.min(endHour, DAY_END);
-  const dayHours = Math.max(0, Math.round((dayOverlapEnd - dayOverlapStart) * 4) / 4);
-
-  // Night hours = total - day hours
-  const nightHours = Math.max(0, Math.round((shiftHours - dayHours) * 4) / 4);
-
-  // Day rate tier based on total shift duration (not just day portion)
-  let dayRate: number;
-  if (shiftHours < 4) {
-    dayRate = pricing.day_rate_short;
-  } else if (shiftHours <= 6) {
-    dayRate = pricing.day_rate_medium;
-  } else {
-    dayRate = pricing.day_rate_long;
-  }
-
-  const nightRate = pricing.night_rate;
-
-  const dailyCost = (dayHours * dayRate + nightHours * nightRate) * busyMultiplier;
-  const totalNaira = Math.round(dailyCost * coverageLength);
-
-  return { totalNaira, totalHours };
-}
-
-/**
- * Returns the dynamic coverage label shown under the price on the summary screen.
- */
-function getCoverageLabel(
-  totalHours: number,
-  coverageLength: number,
-  coverageType: 'Standard' | 'Home Care'
-): string {
-  // Format hours: show as integer if whole, otherwise with decimal
-  const hoursDisplay = totalHours % 1 === 0 ? String(totalHours) : totalHours.toFixed(1);
-
-  if (coverageType === 'Home Care') {
-    return `${hoursDisplay}-hour Home Care Coverage`;
-  }
-
-  // Single-day: booking fits within one calendar day
-  if (coverageLength === 1) {
-    return `${hoursDisplay}-hour Single-Day Coverage`;
-  }
-
-  // Straight multi-day: total hours divisible by 24 with no remainder
-  const isStraight = totalHours >= 24 && totalHours % 24 === 0;
-  if (isStraight) {
-    return `${hoursDisplay}-hour Straight Multi-day Coverage`;
-  }
-
-  // Mixed multi-day
-  return `${hoursDisplay}-hr Multi-day Coverage`;
-}
 
 function DragHandle({ panHandlers }: { panHandlers?: object }) {
   return (
@@ -978,7 +807,6 @@ export default function RequesterHomeScreen() {
   const insets = useSafeAreaInsets();
   const { setTabBarVisible } = useTabBarVisibility();
   const { user } = useAuth();
-  const pricingConfig = usePricingConfig();
 
   const mapRef = useRef<MapView>(null);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -1022,6 +850,13 @@ export default function RequesterHomeScreen() {
   const [coverageLength, setCoverageLength] = useState(1);
   const [environment, setEnvironment] = useState<'Normal' | 'Busy'>('Normal');
   const [note, setNote] = useState('');
+
+  // Live price preview state
+  const [previewPrice, setPreviewPrice] = useState<number>(0);
+  const [previewHours, setPreviewHours] = useState<number>(0);
+  const [previewLabel, setPreviewLabel] = useState<string>('');
+  const [previewLoading, setPreviewLoading] = useState<boolean>(false);
+  const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // WAT now state
   const [watNow, setWatNow] = useState<Date>(() => new Date(Date.now() + 60 * 60 * 1000));
@@ -1542,6 +1377,48 @@ export default function RequesterHomeScreen() {
     setTabBarVisible(sheetState === 'idle');
   }, [sheetState]);
 
+  // ─── Debounced live price preview from calculate-price edge function ──────────
+  useEffect(() => {
+    if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
+    previewDebounceRef.current = setTimeout(async () => {
+      const startStr = startTime.toTimeString().slice(0, 5);
+      const endStr = endTime.toTimeString().slice(0, 5);
+      console.log('[RequesterHome] Fetching price preview — start:', startStr, 'end:', endStr, 'length:', coverageLength, 'type:', coverageType, 'env:', environment);
+      setPreviewLoading(true);
+      try {
+        const res = await fetch(`${EDGE_BASE}/calculate-price`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            start_time: startStr,
+            end_time: endStr,
+            coverage_length: coverageLength,
+            coverage_type: coverageType,
+            environment,
+          }),
+        });
+        console.log('[RequesterHome] calculate-price response status:', res.status);
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          console.log('[RequesterHome] calculate-price error:', errText);
+          return;
+        }
+        const data = await res.json();
+        console.log('[RequesterHome] calculate-price result:', data);
+        setPreviewPrice(data.price ?? 0);
+        setPreviewHours(data.duration_hours ?? 0);
+        setPreviewLabel(data.label ?? '');
+      } catch (e: any) {
+        console.log('[RequesterHome] calculate-price fetch error:', e.message);
+      } finally {
+        setPreviewLoading(false);
+      }
+    }, 300);
+    return () => {
+      if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
+    };
+  }, [startTime, endTime, coverageLength, coverageType, environment]);
+
   // ─── Drag handle PanResponder ─────────────────────────────────────────────────
   const handleResetRef = useRef<() => void>(() => {});
 
@@ -1600,9 +1477,6 @@ export default function RequesterHomeScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       console.log('[RequesterHome] Calling submit-request for place:', selectedPlace.name);
-      const { totalNaira: submitPrice, totalHours: submitDurationHours } = calculateCoveragePrice(
-        startTime, endTime, coverageLength, coverageType, environment, pricingConfig
-      );
 
       // Construct ISO datetime strings for start_date and end_date
       const shiftDateStr = shiftDate.toISOString().split('T')[0]; // YYYY-MM-DD
@@ -1638,10 +1512,8 @@ export default function RequesterHomeScreen() {
           start_date: startDateISO,
           end_date: endDateISO,
           coverage_length: coverageLength,
-          duration_hours: submitDurationHours,
           environment,
           note: note || null,
-          price: submitPrice,
         }),
       });
       console.log('[RequesterHome] submit-request response status:', res.status);
@@ -1891,11 +1763,8 @@ export default function RequesterHomeScreen() {
   const formattedDateShort = shiftDate.toLocaleDateString('en-US', { weekday: 'short' });
   const formattedStartTime = startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   const formattedEndTime = endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-  const { totalNaira: coveragePrice, totalHours: coverageTotalHours } = calculateCoveragePrice(
-    startTime, endTime, coverageLength, coverageType, environment, pricingConfig
-  );
-  const coveragePriceDisplay = `₦${coveragePrice.toLocaleString()}`;
-  const coverageSubtitle = getCoverageLabel(coverageTotalHours, coverageLength, coverageType);
+  const coveragePriceDisplay = `₦${previewPrice.toLocaleString()}`;
+  const coverageSubtitle = previewLabel;
   const summaryPillText = `${coverageType} · ${formattedDateShort} · ${formattedStartTime}`;
   const coverageLengthLabel = coverageLength === 1 ? '1 day' : `${coverageLength} days`;
   const coverageTypeDesc = coverageType === 'Standard'
@@ -2496,23 +2365,32 @@ export default function RequesterHomeScreen() {
               }}>
                 COVERAGE
               </Text>
-              <Text style={{
-                fontSize: 52,
-                fontWeight: '800',
-                color: '#FFFFFF',
-                lineHeight: 60,
-                letterSpacing: -1,
-                marginBottom: 6,
-              }}>
-                {coveragePriceDisplay}
-              </Text>
+              {previewLoading ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6, height: 60 }}>
+                  <ActivityIndicator size="small" color="#8E8E93" style={{ marginRight: 10 }} />
+                  <Text style={{ fontSize: 28, fontWeight: '800', color: '#8E8E93', letterSpacing: -1 }}>
+                    Calculating...
+                  </Text>
+                </View>
+              ) : (
+                <Text style={{
+                  fontSize: 52,
+                  fontWeight: '800',
+                  color: '#FFFFFF',
+                  lineHeight: 60,
+                  letterSpacing: -1,
+                  marginBottom: 6,
+                }}>
+                  {coveragePriceDisplay}
+                </Text>
+              )}
               <Text style={{
                 fontSize: 15,
                 fontWeight: '400',
-                color: '#8E8E93',
+                color: previewLoading ? '#555' : '#8E8E93',
                 marginBottom: 32,
               }}>
-                {coverageSubtitle}
+                {previewLoading ? '—' : coverageSubtitle}
               </Text>
               <TouchableOpacity
                 onPress={handleRequestCoverage}
