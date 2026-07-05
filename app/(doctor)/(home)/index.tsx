@@ -95,9 +95,8 @@ function buildShiftPillText(session: CoverageSession): string {
 }
 
 function EnvironmentBadge({ environment }: { environment: string }) {
-  const isBusy = environment === 'Busy';
-  const bg = isBusy ? '#1A3A2A' : '#F5F5F0';
-  const color = isBusy ? '#34C759' : '#1C1C1E';
+  const bg = '#F5F5F0';
+  const color = '#1C1C1E';
   return (
     <View style={{ backgroundColor: bg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
       <Text style={{ fontSize: 12, color, fontFamily: 'Inter_600SemiBold' }}>{environment}</Text>
@@ -172,7 +171,7 @@ function DoctorUpcomingCard({
   );
 }
 
-function DoctorActiveCard({ session }: { session: CoverageSession; onCall: () => void }) {
+function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCall: () => void }) {
   const [elapsed, setElapsed] = useState('00:00:00');
 
   const currentDayLog = session.day_logs?.[session.current_day - 1];
@@ -230,6 +229,17 @@ function DoctorActiveCard({ session }: { session: CoverageSession; onCall: () =>
             <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{dayPillText}</Text>
           </View>
         )}
+      </View>
+
+      {/* Call button */}
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+        <TouchableOpacity
+          onPress={() => { console.log('[DoctorHome] Call requester pressed (active):', session.id); onCall(); }}
+          activeOpacity={0.8}
+          style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
+        >
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', letterSpacing: 0.3 }}>CALL</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );

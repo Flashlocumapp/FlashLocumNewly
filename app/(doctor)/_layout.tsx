@@ -675,14 +675,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
   },
   envBadge: {
-    backgroundColor: '#2C2C2E',
+    backgroundColor: '#F5F5F0',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
   envText: {
     fontSize: 12,
-    color: '#FFFFFF',
+    color: '#1C1C1E',
     fontFamily: 'Inter_400Regular',
   },
   hospitalName: {

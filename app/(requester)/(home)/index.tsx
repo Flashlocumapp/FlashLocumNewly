@@ -606,9 +606,8 @@ function buildShiftPillText(session: CoverageSession): string {
 }
 
 function SessionEnvBadge({ environment }: { environment: string }) {
-  const isBusy = environment === 'Busy';
-  const bg = isBusy ? '#1A3A2A' : '#F5F5F0';
-  const color = isBusy ? '#34C759' : '#1C1C1E';
+  const bg = '#F5F5F0';
+  const color = '#1C1C1E';
   return (
     <View style={{ backgroundColor: bg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
       <Text style={{ fontSize: 12, color, fontFamily: 'Inter_600SemiBold' }}>{environment}</Text>
@@ -863,22 +862,22 @@ function RequesterActiveCard({
 
       {/* Action buttons */}
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed (active):', session.id); onCall(); }}
-          activeOpacity={0.8}
-          style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
-        </TouchableOpacity>
         {showPauseButton && (
           <TouchableOpacity onPress={() => { console.log('[RequesterHome] Pause shift pressed:', session.id); onPauseShift(); }}
             activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#FF9500', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>PAUSE SHIFT</Text>
+            style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>PAUSE SHIFT</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity onPress={() => { console.log('[RequesterHome] End shift pressed:', session.id); onEndShift(); }}
           activeOpacity={0.8}
           style={{ flex: 1, backgroundColor: '#FF3B30', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
           <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>END SHIFT</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed (active):', session.id); onCall(); }}
+          activeOpacity={0.8}
+          style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
         </TouchableOpacity>
       </View>
     </View>
