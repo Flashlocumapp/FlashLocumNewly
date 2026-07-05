@@ -560,6 +560,42 @@ function getSessionInitials(name: string): string {
   return parts[0]?.[0]?.toUpperCase() ?? '?';
 }
 
+function buildShiftPillText(session: CoverageSession): string {
+  const shiftMs = new Date(session.shift_end).getTime() - new Date(session.shift_start).getTime();
+  const shiftHours = shiftMs / (1000 * 60 * 60);
+  const totalHours = shiftHours * session.coverage_length;
+  const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
+  const priceDisplay = `₦${Number(session.price).toLocaleString()}`;
+  const shiftStart = formatSessionTime(session.shift_start);
+  const shiftEnd = formatSessionTime(session.shift_end);
+  const sep = ' ● ';
+
+  if (session.status === 'paused') {
+    return `${session.shift_type}${sep}Day ${session.current_day} of ${session.coverage_length}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
+  }
+
+  if (shiftHours >= 24) {
+    const startDate = new Date(session.shift_date);
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 1);
+    const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
+    const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
+    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
+  }
+
+  if (session.coverage_length > 1) {
+    const startDate = new Date(session.shift_date);
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + session.coverage_length - 1);
+    const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
+    const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
+    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
+  }
+
+  const dayLabel = new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short' });
+  return `${session.shift_type}${sep}${dayLabel}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
+}
+
 function SessionEnvBadge({ environment }: { environment: string }) {
   const isBusy = environment === 'Busy';
   const bg = isBusy ? '#1A3A2A' : '#F5F5F0';
@@ -589,15 +625,8 @@ function RequesterUpcomingCard({
   onEndShift: () => void;
   bottomPadding: number;
 }) {
-  const shiftStart = formatSessionTime(session.shift_start);
-  const shiftEnd = formatSessionTime(session.shift_end);
-  const dayLabel = session.shift_date
-    ? new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short' })
-    : '';
   const isPaused = session.status === 'paused';
-  const shiftPillText = isPaused
-    ? `${session.shift_type} · Day ${session.current_day} of ${session.coverage_length} · ${shiftStart} – ${shiftEnd}`
-    : `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd}`;
+  const shiftPillText = buildShiftPillText(session);
   const doctorName = session.doctor_name || 'Doctor';
   const initials = session.doctor_name ? getSessionInitials(session.doctor_name) : 'DR';
   const ratingRaw = Number(session.doctor_rating);
@@ -671,26 +700,26 @@ function RequesterUpcomingCard({
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity onPress={() => { console.log('[RequesterHome] Cancel shift pressed:', session.id); onCancel(); }}
             activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#DC2626' }}>CANCEL SHIFT</Text>
+            style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>CANCEL SHIFT</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed:', session.id); onCall(); }}
             activeOpacity={0.8}
-            style={{ flex: 1, borderWidth: 1.5, borderColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>CALL</Text>
+            style={{ flex: 1, backgroundColor: '#1C1C1E', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => { console.log('[RequesterHome] Start shift pressed:', session.id); onStartShift(); }}
             activeOpacity={0.8}
             style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>START SHIFT</Text>
+            <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>START SHIFT</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed (paused):', session.id); onCall(); }}
             activeOpacity={0.8}
-            style={{ flex: 1, borderWidth: 1.5, borderColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>CALL</Text>
+            style={{ flex: 1, backgroundColor: '#1C1C1E', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => { console.log('[RequesterHome] Resume shift pressed:', session.id); onResumeShift(); }}
             activeOpacity={0.8}
@@ -735,15 +764,13 @@ function RequesterActiveCard({
     return () => clearInterval(id);
   }, [startedAt]);
 
-  const shiftStart = formatSessionTime(session.shift_start);
-  const shiftEnd = formatSessionTime(session.shift_end);
   const doctorName = session.doctor_name || 'Doctor';
   const initials = session.doctor_name ? getSessionInitials(session.doctor_name) : 'DR';
   const ratingRaw = Number(session.doctor_rating);
   const ratingDisplay = (!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '—' : ratingRaw.toFixed(1);
   const reliabilityRaw = Number(session.doctor_reliability);
   const reliabilityDisplay = (!session.doctor_reliability || isNaN(reliabilityRaw) || reliabilityRaw === 0) ? '—' : String(Math.round(reliabilityRaw));
-  const shiftPillText = `${session.shift_type} · ${shiftStart} – ${shiftEnd}`;
+  const shiftPillText = buildShiftPillText(session);
   const showDayPill = session.coverage_length > 1;
   const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;
   const isLastDay = session.current_day >= session.coverage_length;
@@ -827,8 +854,8 @@ function RequesterActiveCard({
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed (active):', session.id); onCall(); }}
           activeOpacity={0.8}
-          style={{ flex: 1, borderWidth: 1.5, borderColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>CALL</Text>
+          style={{ flex: 1, backgroundColor: '#1C1C1E', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
         </TouchableOpacity>
         {showPauseButton && (
           <TouchableOpacity onPress={() => { console.log('[RequesterHome] Pause shift pressed:', session.id); onPauseShift(); }}

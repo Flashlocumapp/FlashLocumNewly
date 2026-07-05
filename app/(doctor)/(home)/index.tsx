@@ -57,6 +57,42 @@ function formatElapsed(startedAt: string): string {
   ].join(':');
 }
 
+function buildShiftPillText(session: CoverageSession): string {
+  const shiftMs = new Date(session.shift_end).getTime() - new Date(session.shift_start).getTime();
+  const shiftHours = shiftMs / (1000 * 60 * 60);
+  const totalHours = shiftHours * session.coverage_length;
+  const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
+  const priceDisplay = `₦${Number(session.price).toLocaleString()}`;
+  const shiftStart = formatTime(session.shift_start);
+  const shiftEnd = formatTime(session.shift_end);
+  const sep = ' ● ';
+
+  if (session.status === 'paused') {
+    return `${session.shift_type}${sep}Day ${session.current_day} of ${session.coverage_length}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
+  }
+
+  if (shiftHours >= 24) {
+    const startDate = new Date(session.shift_date);
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 1);
+    const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
+    const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
+    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
+  }
+
+  if (session.coverage_length > 1) {
+    const startDate = new Date(session.shift_date);
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + session.coverage_length - 1);
+    const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
+    const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
+    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
+  }
+
+  const dayLabel = new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short' });
+  return `${session.shift_type}${sep}${dayLabel}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
+}
+
 function EnvironmentBadge({ environment }: { environment: string }) {
   const isBusy = environment === 'Busy';
   const bg = isBusy ? '#1A3A2A' : '#F5F5F0';
@@ -77,18 +113,9 @@ function DoctorUpcomingCard({
   onCancel: () => void;
   onCall: () => void;
 }) {
-  const shiftStart = formatTime(session.shift_start);
-  const shiftEnd = formatTime(session.shift_end);
-  const dayLabel = session.shift_date
-    ? new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short' })
-    : '';
   const ratingDisplay = Number(session.doctor_rating).toFixed(1);
   const reliabilityDisplay = Math.round(Number(session.doctor_reliability));
-
-  const isPaused = session.status === 'paused';
-  const shiftPillText = isPaused
-    ? `${session.shift_type} · Day ${session.current_day} of ${session.coverage_length} · ${shiftStart} – ${shiftEnd}`
-    : `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd}`;
+  const shiftPillText = buildShiftPillText(session);
 
   return (
     <View style={styles.subCard}>
@@ -125,9 +152,9 @@ function DoctorUpcomingCard({
             onCancel();
           }}
           activeOpacity={0.8}
-          style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
+          style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
         >
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#DC2626', letterSpacing: 0.3 }}>CANCEL SHIFT</Text>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E', letterSpacing: 0.3 }}>CANCEL SHIFT</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => {
@@ -135,7 +162,7 @@ function DoctorUpcomingCard({
             onCall();
           }}
           activeOpacity={0.8}
-          style={{ flex: 1, borderWidth: 1.5, borderColor: '#FFFFFF', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
+          style={{ flex: 1, backgroundColor: '#1C1C1E', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
         >
           <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF', letterSpacing: 0.3 }}>CALL</Text>
         </TouchableOpacity>
@@ -158,11 +185,9 @@ function DoctorActiveCard({ session }: { session: CoverageSession; onCall: () =>
     return () => clearInterval(id);
   }, [startedAt]);
 
-  const shiftStart = formatTime(session.shift_start);
-  const shiftEnd = formatTime(session.shift_end);
   const ratingDisplay = Number(session.doctor_rating).toFixed(1);
   const reliabilityDisplay = Math.round(Number(session.doctor_reliability));
-  const shiftPillText = `${session.shift_type} · ${shiftStart} – ${shiftEnd}`;
+  const shiftPillText = buildShiftPillText(session);
   const showDayPill = session.coverage_length > 1;
   const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;
 
