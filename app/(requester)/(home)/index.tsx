@@ -1671,7 +1671,7 @@ export default function RequesterHomeScreen() {
       if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
     } catch (e: any) {
       console.log('[RequesterHome] Start shift error:', e.message);
-      Alert.alert('Error', e.message);
+      Alert.alert('Something went wrong', 'Please try again.');
     }
   }, [activeSession, callSessionEdge]);
 
@@ -1684,7 +1684,7 @@ export default function RequesterHomeScreen() {
       if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
     } catch (e: any) {
       console.log('[RequesterHome] Resume shift error:', e.message);
-      Alert.alert('Error', e.message);
+      Alert.alert('Something went wrong', 'Please try again.');
     }
   }, [activeSession, callSessionEdge]);
 
@@ -1697,7 +1697,7 @@ export default function RequesterHomeScreen() {
       if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
     } catch (e: any) {
       console.log('[RequesterHome] Pause shift error:', e.message);
-      Alert.alert('Error', e.message);
+      Alert.alert('Something went wrong', 'Please try again.');
     }
   }, [activeSession, callSessionEdge]);
 
@@ -1710,7 +1710,7 @@ export default function RequesterHomeScreen() {
       if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
     } catch (e: any) {
       console.log('[RequesterHome] End shift error:', e.message);
-      Alert.alert('Error', e.message);
+      Alert.alert('Something went wrong', 'Please try again.');
     }
   }, [activeSession, callSessionEdge]);
 

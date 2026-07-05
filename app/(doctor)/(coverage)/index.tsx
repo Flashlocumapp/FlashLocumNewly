@@ -172,36 +172,25 @@ function DoctorCard({ session, onCall, onCancel, isHistory }: DoctorCardProps) {
           </Text>
         )}
 
-        {/* Action buttons — upcoming only */}
-        {!isHistory && session.status === 'upcoming' && (
+        {/* Action buttons — all non-history sessions */}
+        {!isHistory && (
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
             <TouchableOpacity onPress={() => {
-              console.log('[DoctorCoverage] Call requester pressed:', session.id);
+              console.log('[DoctorCoverage] Call requester pressed:', session.id, 'status:', session.status);
               onCall(session);
             }} activeOpacity={0.8}
               style={{ flex: 1, borderWidth: 1.5, borderColor: '#1C1C1E', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
               <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E', letterSpacing: 0.3 }}>CALL</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => {
-              console.log('[DoctorCoverage] Cancel shift pressed:', session.id);
-              onCancel(session);
-            }} activeOpacity={0.8}
-              style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
-              <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#DC2626', letterSpacing: 0.3 }}>CANCEL</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Paused sessions — call only */}
-        {!isHistory && session.status === 'paused' && (
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
-            <TouchableOpacity onPress={() => {
-              console.log('[DoctorCoverage] Call requester pressed (paused):', session.id);
-              onCall(session);
-            }} activeOpacity={0.8}
-              style={{ flex: 1, borderWidth: 1.5, borderColor: '#1C1C1E', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
-              <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E', letterSpacing: 0.3 }}>CALL</Text>
-            </TouchableOpacity>
+            {session.status === 'upcoming' && (
+              <TouchableOpacity onPress={() => {
+                console.log('[DoctorCoverage] Cancel shift pressed:', session.id);
+                onCancel(session);
+              }} activeOpacity={0.8}
+                style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#DC2626', letterSpacing: 0.3 }}>CANCEL</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
