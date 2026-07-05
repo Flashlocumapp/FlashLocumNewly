@@ -467,8 +467,10 @@ function RequesterUpcomingCard({
   const isPaused = session.status === 'paused';
   const shiftPillText = buildShiftPillText(session);
   const rawDoctorName = session.doctor_name || '';
-  const doctorName = rawDoctorName && !rawDoctorName.includes('@') ? rawDoctorName : 'Doctor';
-  const initials = rawDoctorName ? getSessionInitials(rawDoctorName) : 'DR';
+  // Strip any existing Dr. prefix then re-apply exactly once
+  const cleanName = rawDoctorName.replace(/^dr\.?\s*/i, '').trim();
+  const doctorName = cleanName && !cleanName.includes('@') ? `Dr. ${cleanName}` : 'Doctor';
+  const initials = cleanName ? getSessionInitials(cleanName) : 'DR';
   const ratingRaw = Number(session.doctor_rating);
   const ratingDisplay = (!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '—' : ratingRaw.toFixed(1);
   const reliabilityRaw = Number(session.doctor_reliability);
@@ -605,8 +607,10 @@ function RequesterActiveCard({
   }, [startedAt]);
 
   const rawDoctorName = session.doctor_name || '';
-  const doctorName = rawDoctorName && !rawDoctorName.includes('@') ? rawDoctorName : 'Doctor';
-  const initials = rawDoctorName ? getSessionInitials(rawDoctorName) : 'DR';
+  // Strip any existing Dr. prefix then re-apply exactly once
+  const cleanName = rawDoctorName.replace(/^dr\.?\s*/i, '').trim();
+  const doctorName = cleanName && !cleanName.includes('@') ? `Dr. ${cleanName}` : 'Doctor';
+  const initials = cleanName ? getSessionInitials(cleanName) : 'DR';
   const ratingRaw = Number(session.doctor_rating);
   const ratingDisplay = (!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '—' : ratingRaw.toFixed(1);
   const reliabilityRaw = Number(session.doctor_reliability);
