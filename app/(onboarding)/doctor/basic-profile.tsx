@@ -22,18 +22,14 @@ type Gender = 'male' | 'female' | null;
 export default function DoctorBasicProfile() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { from } = useLocalSearchParams<{ from?: string }>();
 
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [gender, setGender] = useState<Gender>(null);
   const [genderModalVisible, setGenderModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const [firstNameError, setFirstNameError] = useState('');
-  const [lastNameError, setLastNameError] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [genderError, setGenderError] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -64,21 +60,9 @@ export default function DoctorBasicProfile() {
     console.log('[DoctorBasicProfile] Continue pressed');
 
     let valid = true;
-    setFirstNameError('');
-    setLastNameError('');
     setPhoneError('');
     setGenderError('');
     setSubmitError('');
-
-    if (!firstName.trim()) {
-      setFirstNameError('First name is required');
-      valid = false;
-    }
-
-    if (!lastName.trim()) {
-      setLastNameError('Last name is required');
-      valid = false;
-    }
 
     const cleanedPhone = phone.replace(/\s/g, '');
     if (!validatePhone(cleanedPhone)) {
@@ -97,18 +81,34 @@ export default function DoctorBasicProfile() {
     console.log('[DoctorBasicProfile] Submitting profile upsert for user:', user?.id);
 
     try {
+      // Split full_name from auth metadata into first/last
+      const fullName: string = user?.user_metadata?.full_name ?? '';
+      const spaceIdx = fullName.indexOf(' ');
+      const firstName = spaceIdx > -1 ? fullName.slice(0, spaceIdx).trim() : fullName.trim();
+      const lastName = spaceIdx > -1 ? fullName.slice(spaceIdx + 1).trim() : '';
+
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert({
           id: user!.id,
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
+          first_name: firstName,
+          last_name: lastName,
           phone: cleanedPhone,
           gender,
+          role: 'doctor',
+          onboarding_complete: true,
+          doctor_onboarding_complete: true,
         });
 
       if (profileError) throw profileError;
 
+      const { error: doctorProfileError } = await supabase
+        .from('doctor_profiles')
+        .upsert({ id: user!.id }, { onConflict: 'id' });
+
+      if (doctorProfileError) throw doctorProfileError;
+
+      await refreshProfile();
       router.push('/(onboarding)/doctor/credentials');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
@@ -150,46 +150,6 @@ export default function DoctorBasicProfile() {
       >
         <Text style={styles.heading}>Basic profile</Text>
         <Text style={styles.subtitle}>Tell us a little about you.</Text>
-
-        {/* First name */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>First name</Text>
-          <View style={[styles.inputContainer, firstNameError ? styles.inputError : null]}>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. Chidi"
-              placeholderTextColor="#ADADAD"
-              value={firstName}
-              onChangeText={text => {
-                setFirstName(text);
-                setFirstNameError('');
-              }}
-              autoCapitalize="words"
-              autoCorrect={false}
-            />
-          </View>
-          {firstNameError ? <Text style={styles.inlineError}>{firstNameError}</Text> : null}
-        </View>
-
-        {/* Last name */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Last name</Text>
-          <View style={[styles.inputContainer, lastNameError ? styles.inputError : null]}>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. Okafor"
-              placeholderTextColor="#ADADAD"
-              value={lastName}
-              onChangeText={text => {
-                setLastName(text);
-                setLastNameError('');
-              }}
-              autoCapitalize="words"
-              autoCorrect={false}
-            />
-          </View>
-          {lastNameError ? <Text style={styles.inlineError}>{lastNameError}</Text> : null}
-        </View>
 
         {/* Phone number */}
         <View style={styles.fieldGroup}>
