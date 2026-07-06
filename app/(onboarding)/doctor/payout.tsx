@@ -251,6 +251,32 @@ export default function DoctorPayout() {
         );
       }
 
+      // Step 2b: Provision Monnify reserved account for this doctor
+      setLoadingLabel('Setting up payment account...');
+      console.log('[DoctorPayout] Calling provision-reserved-account for doctor:', userId);
+      try {
+        const provisionResponse = await fetch(
+          'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/provision-reserved-account',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({}),
+          }
+        );
+        const provisionResult = await provisionResponse.json();
+        console.log('[DoctorPayout] provision-reserved-account response:', provisionResponse.status, provisionResult);
+        // Non-blocking: log error but don't fail onboarding if this step fails
+        // The end-shift function has an inline fallback for this case
+        if (!provisionResponse.ok) {
+          console.warn('[DoctorPayout] provision-reserved-account failed (non-fatal):', provisionResult?.error);
+        }
+      } catch (provErr) {
+        console.warn('[DoctorPayout] provision-reserved-account error (non-fatal):', provErr);
+      }
+
       // Step 3: Mark onboarding complete — only reached if subaccount succeeded
       setLoadingLabel('Almost done...');
       const { error: profileError } = await supabase
