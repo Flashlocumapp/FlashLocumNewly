@@ -197,7 +197,7 @@ export default function SignUpScreen() {
           : (requesterComplete ? '/(requester)/(home)' : '/(onboarding)/requester/basic-profile');
 
         console.log('[SignUp] Routing through intro to dest:', dest);
-        router.replace(`/(auth)/intro?dest=${encodeURIComponent(dest)}` as any);
+        router.replace(dest as any);
       }
     }
   };

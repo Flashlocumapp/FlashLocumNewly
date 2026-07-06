@@ -79,7 +79,7 @@ export default function VerifyScreen() {
       const dest = role === 'doctor'
         ? '/(onboarding)/doctor/basic-profile'
         : '/(onboarding)/requester/basic-profile';
-      router.replace(`/(auth)/intro?dest=${encodeURIComponent(dest)}` as any);
+      router.replace(dest as any);
     }
   };
 
