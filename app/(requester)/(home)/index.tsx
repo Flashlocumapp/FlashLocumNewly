@@ -1571,6 +1571,7 @@ export default function RequesterHomeScreen() {
             environment,
             duration_hours: durationHours,
             coverage_length: coverageLength,
+            start_hour: startTime.getHours(),
           }),
         });
         console.log('[RequesterHome] calculate-price response status:', res.status);
