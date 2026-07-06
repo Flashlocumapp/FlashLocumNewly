@@ -75,6 +75,7 @@ export default function DoctorPayout() {
   const [accountNameError, setAccountNameError] = useState('');
 
   const [loading, setLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState('Saving...');
   const [submitError, setSubmitError] = useState('');
 
   // Load banks from Monnify, fall back to hardcoded list
@@ -198,10 +199,12 @@ export default function DoctorPayout() {
     if (!valid) return;
 
     setLoading(true);
+    setLoadingLabel('Saving details...');
 
     try {
       const userId = user!.id;
 
+      // Step 1: Save bank details
       const { error: doctorProfileError } = await supabase
         .from('doctor_profiles')
         .upsert({
@@ -213,28 +216,42 @@ export default function DoctorPayout() {
         });
       if (doctorProfileError) throw doctorProfileError;
 
-      // Fire-and-forget subaccount creation — don't block onboarding if it fails
-      try {
-        const token = await getValidToken();
-        console.log('[DoctorPayout] Calling create-subaccount for doctor:', userId);
-        if (token) {
-          await fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/create-subaccount', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({
-              doctor_id: userId,
-              bank_code: selectedBank!.code,
-              account_number: accountNumber,
-              account_name: accountName,
-              bank_name: selectedBank!.name,
-            }),
-          });
-          console.log('[DoctorPayout] create-subaccount request sent');
+      // Step 2: Create Monnify subaccount — BLOCKING, must succeed
+      setLoadingLabel('Setting up payout account...');
+      const token = await getValidToken();
+      if (!token) throw new Error('Authentication error. Please sign in again.');
+
+      console.log('[DoctorPayout] Calling create-subaccount for doctor:', userId);
+      const subaccountResponse = await fetch(
+        'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/create-subaccount',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            doctor_id: userId,
+            bank_code: selectedBank!.code,
+            account_number: accountNumber,
+            account_name: accountName,
+            bank_name: selectedBank!.name,
+          }),
         }
-      } catch (e) {
-        console.warn('[DoctorPayout] Subaccount creation failed (non-blocking):', e);
+      );
+
+      const subaccountResult = await subaccountResponse.json();
+      console.log('[DoctorPayout] create-subaccount response:', subaccountResponse.status, subaccountResult);
+
+      if (!subaccountResponse.ok || subaccountResult.error) {
+        throw new Error(
+          subaccountResult.error ||
+          'Payout account setup failed. Please check your bank details and try again.'
+        );
       }
 
+      // Step 3: Mark onboarding complete — only reached if subaccount succeeded
+      setLoadingLabel('Almost done...');
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert({ id: userId, onboarding_complete: true, doctor_onboarding_complete: true });
@@ -247,6 +264,7 @@ export default function DoctorPayout() {
       setSubmitError(message);
     } finally {
       setLoading(false);
+      setLoadingLabel('Saving...');
     }
   };
 
@@ -352,7 +370,7 @@ export default function DoctorPayout() {
           {loading ? (
             <View style={styles.loadingRow}>
               <ActivityIndicator color="#FFFFFF" />
-              <Text style={styles.loadingLabel}>Saving...</Text>
+              <Text style={styles.loadingLabel}>{loadingLabel}</Text>
             </View>
           ) : (
             <Text style={styles.submitLabel}>Submit</Text>
