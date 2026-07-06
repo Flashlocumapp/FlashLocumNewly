@@ -1433,6 +1433,7 @@ export default function RequesterHomeScreen() {
             shift_type: shiftType,
             environment,
             duration_hours: durationHours,
+            coverage_length: coverageLength,
           }),
         });
         console.log('[RequesterHome] calculate-price response status:', res.status);
@@ -1455,7 +1456,7 @@ export default function RequesterHomeScreen() {
     return () => {
       if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
     };
-  }, [startTime, endTime, coverageType, environment]);
+  }, [startTime, endTime, coverageType, environment, coverageLength]);
 
   // ─── Drag handle PanResponder ─────────────────────────────────────────────────
   const handleResetRef = useRef<() => void>(() => {});
