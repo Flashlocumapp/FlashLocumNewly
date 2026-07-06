@@ -405,23 +405,31 @@ export default function DoctorLayout() {
     const ch = supabase.channel(channelName)
       .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_STARTED received:', payload);
-        const updated = payload?.payload?.session as Partial<CoverageSession>;
-        setActiveSession((prev) => prev ? { ...prev, ...updated, status: 'active' } : prev);
+        const updated = payload?.payload?.session as CoverageSession | undefined;
+        if (updated) {
+          setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
+        }
       })
       .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_PAUSED received:', payload);
-        const updated = payload?.payload?.session as Partial<CoverageSession>;
-        setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+        const updated = payload?.payload?.session as CoverageSession | undefined;
+        if (updated) {
+          setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
+        }
       })
       .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_RESUMED received:', payload);
-        const updated = payload?.payload?.session as Partial<CoverageSession>;
-        setActiveSession((prev) => prev ? { ...prev, ...updated, status: 'active' } : prev);
+        const updated = payload?.payload?.session as CoverageSession | undefined;
+        if (updated) {
+          setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
+        }
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_ENDED received:', payload);
-        const updated = payload?.payload?.session as Partial<CoverageSession>;
-        setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+        const updated = payload?.payload?.session as CoverageSession | undefined;
+        if (updated) {
+          setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
+        }
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[DoctorLayout] PAYMENT_CONFIRMED received (session channel):', payload);
@@ -477,25 +485,35 @@ export default function DoctorLayout() {
     const ch = supabase.channel(channelName)
       .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_STARTED (doctor channel):', payload);
-        const updated = payload?.payload?.session as Partial<CoverageSession>;
+        const updated = payload?.payload?.session as CoverageSession | undefined;
         if (updated) {
-          setActiveSession((prev) => prev ? { ...prev, ...updated, status: 'active' } : prev);
+          setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
+        } else {
+          fetchActiveSession();
         }
       })
       .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_PAUSED (doctor channel):', payload);
-        const updated = payload?.payload?.session as Partial<CoverageSession>;
-        if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+        const updated = payload?.payload?.session as CoverageSession | undefined;
+        if (updated) {
+          setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
+        } else {
+          fetchActiveSession();
+        }
       })
       .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_RESUMED (doctor channel):', payload);
-        const updated = payload?.payload?.session as Partial<CoverageSession>;
-        if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated, status: 'active' } : prev);
+        const updated = payload?.payload?.session as CoverageSession | undefined;
+        if (updated) {
+          setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
+        } else {
+          fetchActiveSession();
+        }
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_ENDED (doctor channel):', payload);
-        const updated = payload?.payload?.session as Partial<CoverageSession>;
-        if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+        const updated = payload?.payload?.session as CoverageSession | undefined;
+        if (updated) setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[DoctorLayout] PAYMENT_CONFIRMED (doctor channel):', payload);
