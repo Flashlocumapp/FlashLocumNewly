@@ -40,54 +40,66 @@ export default function IntroScreen() {
       const phrase = PHRASES[index];
       const isLast = index === PHRASES.length - 1;
 
-      // Reset state
-      displayedTextRef.current = '';
-      contentOpacity.setValue(1);
-      forceUpdate();
-
       console.log(`[IntroScreen] Starting phrase ${index + 1}/${PHRASES.length}: "${phrase}"`);
 
-      // Type characters one by one
-      let charIndex = 0;
-      const typeNext = () => {
+      // Step 1: Reset text, opacity is already 0 from previous fade-out (or initial state).
+      displayedTextRef.current = '';
+
+      // Step 2: Pre-load the first character so text is ready but invisible.
+      displayedTextRef.current = phrase.slice(0, 1);
+      forceUpdate();
+
+      // Step 3: Fade in to opacity 1 — text is already loaded so no blank frame.
+      Animated.timing(contentOpacity, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }).start(() => {
         if (unmountedRef.current) return;
-        charIndex += 1;
-        displayedTextRef.current = phrase.slice(0, charIndex);
-        forceUpdate();
 
-        if (charIndex < phrase.length) {
-          addTimeout(typeNext, CHAR_DELAY);
-        } else {
-          // Finished typing — hold then fade out
-          console.log(`[IntroScreen] Phrase complete: "${phrase}", holding for ${HOLD_FULL}ms`);
-          addTimeout(() => {
-            Animated.timing(contentOpacity, {
-              toValue: 0,
-              duration: FADE_OUT_DURATION,
-              useNativeDriver: true,
-            }).start(() => {
-              if (unmountedRef.current) return;
-              if (isLast) {
-                const destination = dest ? decodeURIComponent(dest) : '/(auth)/role-select';
-                console.log('[IntroScreen] All phrases done, transitioning to:', destination);
-                Animated.timing(bgColor, {
-                  toValue: 1,
-                  duration: BG_TRANSITION_DURATION,
-                  useNativeDriver: false,
-                }).start(() => {
-                  if (!unmountedRef.current) {
-                    router.replace(destination as any);
-                  }
-                });
-              } else {
-                runPhrase(index + 1);
-              }
-            });
-          }, HOLD_FULL);
-        }
-      };
+        // Step 4: Type remaining characters (index 1 onwards).
+        let charIndex = 1;
+        const typeNext = () => {
+          if (unmountedRef.current) return;
+          charIndex += 1;
+          displayedTextRef.current = phrase.slice(0, charIndex);
+          forceUpdate();
 
-      addTimeout(typeNext, CHAR_DELAY);
+          if (charIndex < phrase.length) {
+            addTimeout(typeNext, CHAR_DELAY);
+          } else {
+            // Step 5: Hold then fade out.
+            console.log(`[IntroScreen] Phrase complete: "${phrase}", holding for ${HOLD_FULL}ms`);
+            addTimeout(() => {
+              Animated.timing(contentOpacity, {
+                toValue: 0,
+                duration: FADE_OUT_DURATION,
+                useNativeDriver: true,
+              }).start(() => {
+                if (unmountedRef.current) return;
+                // Step 6: Navigate or advance to next phrase.
+                if (isLast) {
+                  const destination = dest ? decodeURIComponent(dest) : '/(auth)/role-select';
+                  console.log('[IntroScreen] All phrases done, transitioning to:', destination);
+                  Animated.timing(bgColor, {
+                    toValue: 1,
+                    duration: BG_TRANSITION_DURATION,
+                    useNativeDriver: false,
+                  }).start(() => {
+                    if (!unmountedRef.current) {
+                      router.replace(destination as any);
+                    }
+                  });
+                } else {
+                  runPhrase(index + 1);
+                }
+              });
+            }, HOLD_FULL);
+          }
+        };
+
+        addTimeout(typeNext, CHAR_DELAY);
+      });
     };
 
     runPhrase(0);
