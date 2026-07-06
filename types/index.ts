@@ -30,6 +30,27 @@ export interface Profile {
   updated_at: string;
 }
 
+export type DoctorEarning = {
+  session_id: string;
+  doctor_id: string;
+  requester_id: string;
+  session_status: string;
+  coverage_type: string;
+  coverage_length: number;
+  per_day_hours: number;
+  start_time: string;
+  end_time: string;
+  total_amount_naira: number;
+  platform_fee_naira: number;
+  net_payout_naira: number;
+  payment_status: string | null;
+  monnify_account_reference: string | null;
+  monnify_transaction_reference: string | null;
+  disbursement_reference: string | null;
+  disbursed_at: string | null;
+  paid_at: string | null;
+};
+
 export interface AuthContextType {
   session: import('@supabase/supabase-js').Session | null;
   user: import('@supabase/supabase-js').User | null;
