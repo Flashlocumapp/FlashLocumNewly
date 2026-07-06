@@ -60,7 +60,10 @@ function formatElapsed(startedAt: string): string {
 
 function buildShiftPillText(session: CoverageSession): string {
   const shiftMs = new Date(session.shift_end).getTime() - new Date(session.shift_start).getTime();
-  const shiftHours = shiftMs / (1000 * 60 * 60);
+  const msHours = shiftMs / (1000 * 60 * 60);
+  const shiftHours = (session.per_day_hours && Number(session.per_day_hours) > 0)
+    ? Number(session.per_day_hours)
+    : (msHours > 0 ? msHours : 24);
   const totalHours = shiftHours * session.coverage_length;
   const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
   const priceDisplay = `₦${Number(session.price).toLocaleString()}`;
@@ -116,6 +119,7 @@ function DoctorUpcomingCard({
   const ratingDisplay = Number(session.doctor_rating).toFixed(1);
   const reliabilityDisplay = Math.round(Number(session.doctor_reliability));
   const shiftPillText = buildShiftPillText(session);
+  const canCancel = session.status === 'upcoming' && session.current_day === 1;
 
   return (
     <View style={styles.subCard}>
@@ -146,16 +150,18 @@ function DoctorUpcomingCard({
 
       {/* Action buttons */}
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-        <TouchableOpacity
-          onPress={() => {
-            console.log('[DoctorHome] Cancel shift pressed for session:', session.id);
-            onCancel();
-          }}
-          activeOpacity={0.8}
-          style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
-        >
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E', letterSpacing: 0.3 }}>CANCEL SHIFT</Text>
-        </TouchableOpacity>
+        {canCancel && (
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[DoctorHome] Cancel shift pressed for session:', session.id);
+              onCancel();
+            }}
+            activeOpacity={0.8}
+            style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
+          >
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E', letterSpacing: 0.3 }}>CANCEL SHIFT</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           onPress={() => {
             console.log('[DoctorHome] Call requester pressed for session:', session.id);

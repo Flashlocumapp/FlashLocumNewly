@@ -38,6 +38,7 @@ export type CoverageSession = {
   shift_type: string;
   coverage_type: string;
   coverage_length: number;
+  per_day_hours: number | null;
   environment: string;
   price: number;
   hourly_rate_kobo: number;

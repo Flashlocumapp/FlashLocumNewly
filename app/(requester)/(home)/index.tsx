@@ -403,7 +403,10 @@ function getSessionInitials(name: string): string {
 
 function buildShiftPillText(session: CoverageSession): string {
   const shiftMs = new Date(session.shift_end).getTime() - new Date(session.shift_start).getTime();
-  const perDayHours = shiftMs / (1000 * 60 * 60);
+  const msHours = shiftMs / (1000 * 60 * 60);
+  const perDayHours = (session.per_day_hours && Number(session.per_day_hours) > 0)
+    ? Number(session.per_day_hours)
+    : (msHours > 0 ? msHours : 24);
   const coverageLength = Math.max(1, session.coverage_length ?? 1);
   const totalHours = perDayHours * coverageLength;
   const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
@@ -467,6 +470,7 @@ function RequesterUpcomingCard({
   bottomPadding: number;
 }) {
   const isPaused = session.status === 'paused';
+  const canCancel = session.status === 'upcoming' && session.current_day === 1;
   const shiftPillText = buildShiftPillText(session);
   const rawDoctorName = session.doctor_name || '';
   // Strip any existing Dr. prefix then re-apply exactly once
@@ -542,11 +546,13 @@ function RequesterUpcomingCard({
       {/* Action buttons */}
       {!isPaused ? (
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity onPress={() => { console.log('[RequesterHome] Cancel shift pressed:', session.id); onCancel(); }}
-            activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>CANCEL SHIFT</Text>
-          </TouchableOpacity>
+          {canCancel && (
+            <TouchableOpacity onPress={() => { console.log('[RequesterHome] Cancel shift pressed:', session.id); onCancel(); }}
+              activeOpacity={0.8}
+              style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>CANCEL SHIFT</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed:', session.id); onCall(); }}
             activeOpacity={0.8}
             style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
@@ -560,6 +566,11 @@ function RequesterUpcomingCard({
         </View>
       ) : (
         <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity onPress={() => { console.log('[RequesterHome] End shift pressed (paused):', session.id); onEndShift(); }}
+            activeOpacity={0.8}
+            style={{ flex: 1, backgroundColor: '#FF3B30', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>END SHIFT</Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed (paused):', session.id); onCall(); }}
             activeOpacity={0.8}
             style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
@@ -569,11 +580,6 @@ function RequesterUpcomingCard({
             activeOpacity={0.8}
             style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>RESUME SHIFT</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => { console.log('[RequesterHome] End shift pressed (paused):', session.id); onEndShift(); }}
-            activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#FF3B30', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>END SHIFT</Text>
           </TouchableOpacity>
         </View>
       )}
