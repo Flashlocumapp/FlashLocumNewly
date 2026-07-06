@@ -1636,7 +1636,7 @@ export default function RequesterHomeScreen() {
     const loop = Animated.loop(
       Animated.timing(matchProgressAnim, {
         toValue: 1,
-        duration: 15000,
+        duration: 8000,
         useNativeDriver: false,
       })
     );
@@ -2825,7 +2825,7 @@ export default function RequesterHomeScreen() {
               <Text style={[TYPOGRAPHY.label, { color: '#8E8E93', letterSpacing: 1.2, marginBottom: 6 }]}>
                 {selectedPlace ? selectedPlace.name.toUpperCase() : 'FACILITY'}
               </Text>
-              <Text style={[TYPOGRAPHY.h2, { color: '#FFFFFF', marginBottom: 4 }]}>Medical Officer Found</Text>
+              <Text style={[TYPOGRAPHY.h2, { color: '#FFFFFF', marginBottom: 4 }]}>Finding Medical Officer</Text>
               <Text style={[TYPOGRAPHY.body, { color: '#8E8E93', marginBottom: 24 }]}>Connecting to available doctors nearby</Text>
 
               {/* Progress bar with A/B labels */}
@@ -2839,8 +2839,8 @@ export default function RequesterHomeScreen() {
                   }} />
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-                  <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>A</Text>
-                  <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>B</Text>
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444' }} />
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#22C55E' }} />
                 </View>
               </View>
 
