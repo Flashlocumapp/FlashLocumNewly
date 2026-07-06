@@ -29,9 +29,11 @@ interface DoctorProfile {
   verification_status: string | null;
   mdcn_number: string | null;
   bank_name: string | null;
+  bank_code: string | null;
   account_number: string | null;
   account_name: string | null;
   selfie_url: string | null;
+  subaccount_code: string | null;
 }
 
 function SectionHeader({ title }: { title: string }) {
@@ -109,9 +111,11 @@ export default function DoctorAccountScreen() {
       verification_status: null,
       mdcn_number: null,
       bank_name: null,
+      bank_code: null,
       account_number: null,
       account_name: null,
       selfie_url: null,
+      subaccount_code: null,
     };
   });
   // Only show loading state if we have no profile at all (no authProfile seed)
@@ -128,6 +132,11 @@ export default function DoctorAccountScreen() {
   const [genderModalVisible, setGenderModalVisible] = useState(false);
   const [savingGender, setSavingGender] = useState(false);
 
+  // Retry subaccount
+  const [retryingSubaccount, setRetryingSubaccount] = useState(false);
+  const [retryError, setRetryError] = useState('');
+  const [retrySuccess, setRetrySuccess] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     const fetchProfile = async () => {
@@ -140,7 +149,7 @@ export default function DoctorAccountScreen() {
           .single(),
         supabase
           .from('doctor_profiles')
-          .select('mdcn_number, bank_name, account_number, account_name, selfie_url')
+          .select('mdcn_number, bank_name, bank_code, account_number, account_name, selfie_url, subaccount_code')
           .eq('id', user.id)
           .single(),
       ]);
@@ -154,9 +163,11 @@ export default function DoctorAccountScreen() {
         verification_status: profileRes.data?.verification_status ?? null,
         mdcn_number: doctorProfileRes.data?.mdcn_number ?? null,
         bank_name: doctorProfileRes.data?.bank_name ?? null,
+        bank_code: doctorProfileRes.data?.bank_code ?? null,
         account_number: doctorProfileRes.data?.account_number ?? null,
         account_name: doctorProfileRes.data?.account_name ?? null,
         selfie_url: doctorProfileRes.data?.selfie_url ?? null,
+        subaccount_code: doctorProfileRes.data?.subaccount_code ?? null,
       });
       const rawSelfieUrl = doctorProfileRes.data?.selfie_url ?? null;
       if (rawSelfieUrl) {
@@ -246,6 +257,53 @@ export default function DoctorAccountScreen() {
     ]);
   };
 
+  const handleRetrySubaccount = async () => {
+    console.log('[DoctorAccount] Retry Payout Setup pressed');
+    if (!profile?.bank_code || !profile?.account_number || !profile?.account_name || !profile?.bank_name) {
+      setRetryError('Bank details are incomplete. Please contact support.');
+      return;
+    }
+    setRetryingSubaccount(true);
+    setRetryError('');
+    setRetrySuccess(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Not authenticated');
+
+      console.log('[DoctorAccount] Calling create-subaccount for doctor:', user!.id);
+      const res = await fetch(
+        'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/create-subaccount',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            doctor_id: user!.id,
+            bank_code: profile.bank_code,
+            account_number: profile.account_number,
+            account_name: profile.account_name,
+            bank_name: profile.bank_name,
+          }),
+        }
+      );
+      const result = await res.json();
+      console.log('[DoctorAccount] create-subaccount response:', res.status, result);
+      if (!res.ok || result.error) {
+        throw new Error(result.error || 'Payout setup failed. Please try again.');
+      }
+      setRetrySuccess(true);
+      setProfile(prev => prev ? { ...prev, subaccount_code: result.subAccountCode } : prev);
+    } catch (err: unknown) {
+      console.log('[DoctorAccount] Retry subaccount error:', err instanceof Error ? err.message : err);
+      setRetryError(err instanceof Error ? err.message : 'Something went wrong.');
+    } finally {
+      setRetryingSubaccount(false);
+    }
+  };
+
   const handleDeleteAccount = () => {
     console.log('[DoctorAccount] Delete Account pressed');
     Alert.alert('Delete Account', 'This action is permanent and cannot be undone.', [
@@ -326,6 +384,46 @@ export default function DoctorAccountScreen() {
               <ReadOnlyRow label="Account Number" value={accountNumber} />
               <CardDivider />
               <ReadOnlyRow label="Account Name" value={accountName} />
+              {!profile?.subaccount_code && !retrySuccess && (
+                <>
+                  <CardDivider />
+                  <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+                    {retryError ? (
+                      <Text style={{ color: '#E63946', fontSize: 13, marginBottom: 8, textAlign: 'center' }}>
+                        {retryError}
+                      </Text>
+                    ) : null}
+                    <TouchableOpacity
+                      onPress={handleRetrySubaccount}
+                      disabled={retryingSubaccount}
+                      style={{
+                        backgroundColor: retryingSubaccount ? '#C7C7CC' : '#1C1C1E',
+                        borderRadius: 10,
+                        paddingVertical: 12,
+                        alignItems: 'center',
+                      }}
+                    >
+                      {retryingSubaccount ? (
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      ) : (
+                        <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>
+                          Retry Payout Setup
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+              {retrySuccess && (
+                <>
+                  <CardDivider />
+                  <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+                    <Text style={{ color: '#34C759', fontSize: 13, textAlign: 'center', fontWeight: '600' }}>
+                      ✓ Payout account set up successfully
+                    </Text>
+                  </View>
+                </>
+              )}
             </>
           )}
         </Card>
