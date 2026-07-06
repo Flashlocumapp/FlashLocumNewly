@@ -1771,9 +1771,11 @@ export default function RequesterHomeScreen() {
   useEffect(() => {
     if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
     previewDebounceRef.current = setTimeout(async () => {
-      let durationMs = endTime.getTime() - startTime.getTime();
-      if (durationMs <= 0) durationMs += 24 * 60 * 60 * 1000; // handle overnight
-      const durationHours = durationMs / (1000 * 60 * 60);
+      const startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
+      const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
+      let durationMinutes = endMinutes - startMinutes;
+      if (durationMinutes <= 0) durationMinutes += 24 * 60; // handle overnight
+      const durationHours = durationMinutes / 60;
       const shiftType = coverageType === 'Home Care' ? 'Home Care' : 'Standard';
       const toHHMM = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
       console.log('[RequesterHome] Fetching price preview — coverage_type:', coverageType, 'shift_type:', shiftType, 'environment:', environment, 'duration_hours:', durationHours);
@@ -3089,8 +3091,28 @@ export default function RequesterHomeScreen() {
                         const todayWAT = new Date(watNow);
                         todayWAT.setUTCHours(0, 0, 0, 0);
                         setShiftDate(todayWAT);
+                        setStartTime(prev => {
+                          const updated = new Date(todayWAT);
+                          updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                          return updated;
+                        });
+                        setEndTime(prev => {
+                          const updated = new Date(todayWAT);
+                          updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                          return updated;
+                        });
                       } else {
                         setShiftDate(date);
+                        setStartTime(prev => {
+                          const updated = new Date(date);
+                          updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                          return updated;
+                        });
+                        setEndTime(prev => {
+                          const updated = new Date(date);
+                          updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                          return updated;
+                        });
                       }
                     }
                   }}
