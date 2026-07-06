@@ -338,9 +338,11 @@ export default function DoctorLayout() {
         console.log('[DoctorLayout] Poll tick — Realtime healthy, syncing anyway as safety net');
       }
       forceSyncRef.current();
+      // Also re-fetch active session on every tick as a safety net
+      fetchActiveSession();
     }, POLL_INTERVAL);
     return () => clearInterval(id);
-  }, [isOnline, user]);
+  }, [isOnline, user, fetchActiveSession]);
 
   // ── Realtime subscription — dispatch channel ──
   useEffect(() => {
@@ -409,6 +411,8 @@ export default function DoctorLayout() {
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
         }
+        // Always re-fetch to confirm — optimistic update fires first, re-fetch corrects within ~300ms
+        fetchActiveSession();
       })
       .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_PAUSED received:', payload);
@@ -416,6 +420,8 @@ export default function DoctorLayout() {
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
         }
+        // Always re-fetch to confirm — optimistic update fires first, re-fetch corrects within ~300ms
+        fetchActiveSession();
       })
       .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_RESUMED received:', payload);
@@ -423,6 +429,8 @@ export default function DoctorLayout() {
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
         }
+        // Always re-fetch to confirm — optimistic update fires first, re-fetch corrects within ~300ms
+        fetchActiveSession();
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_ENDED received:', payload);
@@ -488,27 +496,27 @@ export default function DoctorLayout() {
         const updated = payload?.payload?.session as CoverageSession | undefined;
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
-        } else {
-          fetchActiveSession();
         }
+        // Always re-fetch to confirm — optimistic update fires first, re-fetch corrects within ~300ms
+        fetchActiveSession();
       })
       .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_PAUSED (doctor channel):', payload);
         const updated = payload?.payload?.session as CoverageSession | undefined;
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
-        } else {
-          fetchActiveSession();
         }
+        // Always re-fetch to confirm — optimistic update fires first, re-fetch corrects within ~300ms
+        fetchActiveSession();
       })
       .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_RESUMED (doctor channel):', payload);
         const updated = payload?.payload?.session as CoverageSession | undefined;
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
-        } else {
-          fetchActiveSession();
         }
+        // Always re-fetch to confirm — optimistic update fires first, re-fetch corrects within ~300ms
+        fetchActiveSession();
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_ENDED (doctor channel):', payload);
