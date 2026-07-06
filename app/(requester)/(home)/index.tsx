@@ -1559,6 +1559,7 @@ export default function RequesterHomeScreen() {
       if (durationMs <= 0) durationMs += 24 * 60 * 60 * 1000; // handle overnight
       const durationHours = durationMs / (1000 * 60 * 60);
       const shiftType = coverageType === 'Home Care' ? 'Home Care' : 'Standard';
+      const toHHMM = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
       console.log('[RequesterHome] Fetching price preview — coverage_type:', coverageType, 'shift_type:', shiftType, 'environment:', environment, 'duration_hours:', durationHours);
       setPreviewLoading(true);
       try {
@@ -1572,6 +1573,8 @@ export default function RequesterHomeScreen() {
             duration_hours: durationHours,
             coverage_length: coverageLength,
             start_hour: startTime.getHours(),
+            start_time: toHHMM(startTime),
+            end_time: toHHMM(endTime),
           }),
         });
         console.log('[RequesterHome] calculate-price response status:', res.status);

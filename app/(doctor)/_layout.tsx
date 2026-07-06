@@ -61,7 +61,8 @@ function formatShiftSummary(req: DispatchRequest): string {
   // Parse per-day hours from start_time / end_time (HH:MM strings)
   const [sh, sm] = req.start_time.split(':').map(Number);
   const [eh, em] = req.end_time.split(':').map(Number);
-  const perDayHours = (eh * 60 + em - (sh * 60 + sm)) / 60;
+  let perDayHours = (eh * 60 + em - (sh * 60 + sm)) / 60;
+  if (perDayHours <= 0) perDayHours = 24; // same-time = straight 24h per day
   const totalHours = perDayHours * coverageLength;
   const hoursLabel = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
 
@@ -79,6 +80,78 @@ function formatShiftSummary(req: DispatchRequest): string {
 
   const dayLabel = startDate.toLocaleDateString('en-US', { weekday: 'short' });
   return `${req.shift_type}${sep}${dayLabel}${sep}${startFormatted} - ${endFormatted}${sep}${hoursLabel}${sep}${priceDisplay}`;
+}
+
+function ShiftDetails({ request, note }: { request: DispatchRequest | null; note: string | null }) {
+  if (!request) return null;
+
+  const coverageLength = Math.max(1, request.coverage_length ?? 1);
+  const [sh, sm] = request.start_time.split(':').map(Number);
+  const [eh, em] = request.end_time.split(':').map(Number);
+  let perDayHours = (eh * 60 + em - (sh * 60 + sm)) / 60;
+  if (perDayHours <= 0) perDayHours = 24;
+  const totalHours = perDayHours * coverageLength;
+  const hoursLabel = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
+
+  const startDate = new Date(request.shift_date + 'T12:00:00');
+  const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
+  const startFormatted = formatHHMM(request.start_time);
+  const endFormatted = formatHHMM(request.end_time);
+  const priceDisplay = `₦${Number(request.price).toLocaleString()}`;
+
+  return (
+    <View style={{ marginTop: 8 }}>
+      {/* Row 1: Shift type • Day */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+        <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
+          {request.shift_type}
+        </Text>
+        <Text style={{ color: '#34C759', fontSize: 13 }}> ● </Text>
+        <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
+          {startDay}
+        </Text>
+      </View>
+
+      {/* Row 2: Time range • Duration • Price */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+        <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
+          {startFormatted}
+        </Text>
+        <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
+          –
+        </Text>
+        <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
+          {endFormatted}
+        </Text>
+        <Text style={{ color: '#34C759', fontSize: 13 }}> ● </Text>
+        <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
+          {hoursLabel}
+        </Text>
+        <Text style={{ color: '#34C759', fontSize: 13 }}> ● </Text>
+        <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
+          {priceDisplay}
+        </Text>
+      </View>
+
+      {/* Note section — only if present */}
+      {!!note && (
+        <View style={{
+          marginTop: 12,
+          backgroundColor: '#2C2C2E',
+          borderRadius: 10,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+        }}>
+          <Text style={{ color: '#8E8E93', fontSize: 11, fontFamily: 'Inter_600SemiBold', letterSpacing: 0.5, marginBottom: 3 }}>
+            NOTE
+          </Text>
+          <Text style={{ color: '#EBEBF5', fontSize: 13, fontFamily: 'Inter_400Regular', fontStyle: 'italic' }}>
+            {note}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
 }
 
 function FeeRow({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
@@ -599,12 +672,8 @@ export default function DoctorLayout() {
             <Text style={styles.hospitalName}>{currentHospitalName}</Text>
             {/* Address */}
             <Text style={styles.addressText}>{currentHospitalAddress}</Text>
-            {/* Shift summary */}
-            <Text style={styles.shiftSummaryText}>{currentShiftSummary}</Text>
-            {/* Note */}
-            {!!currentNote && (
-              <Text style={styles.noteText}>{currentNote}</Text>
-            )}
+            {/* Shift details */}
+            <ShiftDetails request={currentRequest} note={currentNote} />
 
             {/* Fee breakdown */}
             <View style={styles.feeCard}>
@@ -701,19 +770,6 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     fontFamily: 'Inter_400Regular',
     marginTop: 4,
-  },
-  shiftSummaryText: {
-    fontSize: 13,
-    color: '#8E8E93',
-    fontFamily: 'Inter_400Regular',
-    marginTop: 8,
-  },
-  noteText: {
-    fontSize: 13,
-    color: '#8E8E93',
-    fontFamily: 'Inter_400Regular',
-    marginTop: 6,
-    fontStyle: 'italic',
   },
   feeCard: {
     backgroundColor: '#2C2C2E',
