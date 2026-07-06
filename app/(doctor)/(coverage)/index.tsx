@@ -295,7 +295,7 @@ export default function DoctorCoverageScreen() {
         return [];
       }
       const res = await fetch(
-        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=completed,cancelled`,
+        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=completed,cancelled,requester_paid`,
         { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
       );
       if (!res.ok) {

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,16 +6,22 @@ import {
   ActivityIndicator,
   Animated,
   Platform,
+  Modal,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
-import { getValidToken } from '@/lib/supabase';
+import { supabase, getValidToken } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { useTabData } from '@/hooks/useTabData';
 
 const SUPABASE_URL = 'https://juilousufwlsiqdcgllu.supabase.co';
+const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
 type CoverageSession = {
   id: string;
@@ -29,7 +35,7 @@ type CoverageSession = {
   shift_end: string;
   shift_type: string;
   coverage_type: string;
-  status: 'upcoming' | 'active' | 'paused' | 'completed' | 'cancelled';
+  status: 'upcoming' | 'active' | 'paused' | 'completed' | 'cancelled' | 'requester_paid';
   started_at: string | null;
   ended_at: string | null;
   paused_at: string | null;
@@ -93,11 +99,182 @@ function SkeletonCard() {
   );
 }
 
-interface RequesterCardProps {
+// ─── RatingOverlay ────────────────────────────────────────────────────────────
+
+interface RatingOverlayProps {
+  visible: boolean;
   session: CoverageSession;
+  onClose: () => void;
+  onReviewed: (sessionId: string) => void;
 }
 
-function RequesterCard({ session }: RequesterCardProps) {
+function RatingOverlay({ visible, session, onClose, onReviewed }: RatingOverlayProps) {
+  const [stars, setStars] = useState(0);
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const doctorFirstName = (session.doctor_name ?? '').replace(/^Dr\.?\s*/i, '');
+
+  const handleSubmit = async () => {
+    if (stars === 0) {
+      setError('Please select a star rating');
+      return;
+    }
+    console.log('[RequesterCoverage] Submitting review for session:', session.id, 'stars:', stars);
+    setSubmitting(true);
+    setError('');
+    try {
+      const token = await getValidToken();
+      const res = await fetch(`${EDGE_BASE}/submit-review`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: session.id, stars, comment: comment || undefined }),
+      });
+      console.log('[RequesterCoverage] submit-review response:', res.status);
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error((errBody as any).error || 'Failed to submit review');
+      }
+      const data = await res.json();
+      console.log('[RequesterCoverage] Review submitted successfully:', data?.review?.id);
+      onReviewed(session.id);
+      onClose();
+    } catch (e: any) {
+      console.log('[RequesterCoverage] Review submission error:', e.message);
+      setError(e.message || 'Failed to submit review');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}>
+          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+              <View style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: 24,
+                padding: 28,
+                width: '100%',
+              }}>
+                {/* Header */}
+                <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#1C1C1E', marginBottom: 6, textAlign: 'center' }}>
+                  {'How was your experience with Dr. '}
+                  {doctorFirstName}
+                  {'?'}
+                </Text>
+                <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', textAlign: 'center', marginBottom: 24 }}>
+                  Share your feedback and help us improve.
+                </Text>
+
+                {/* Stars */}
+                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 20 }}>
+                  {[1, 2, 3, 4, 5].map((star) => {
+                    const filled = star <= stars;
+                    return (
+                      <TouchableOpacity
+                        key={star}
+                        onPress={() => {
+                          console.log('[RequesterCoverage] Star pressed:', star);
+                          setStars(star);
+                          setError('');
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ fontSize: 36, color: filled ? '#F4A261' : '#D4D4D8' }}>
+                          {filled ? '★' : '☆'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Error */}
+                {error !== '' && (
+                  <Text style={{ fontSize: 12, color: '#FF3B30', textAlign: 'center', marginBottom: 8, fontFamily: 'Inter_400Regular' }}>
+                    {error}
+                  </Text>
+                )}
+
+                {/* Comment */}
+                <TextInput
+                  value={comment}
+                  onChangeText={setComment}
+                  placeholder="Write a comment (optional)..."
+                  placeholderTextColor="#A1A1AA"
+                  multiline
+                  style={{
+                    backgroundColor: '#F7F7F5',
+                    borderRadius: 12,
+                    padding: 14,
+                    fontSize: 14,
+                    fontFamily: 'Inter_400Regular',
+                    color: '#1C1C1E',
+                    minHeight: 80,
+                    textAlignVertical: 'top',
+                    marginBottom: 20,
+                  }}
+                />
+
+                {/* Submit button */}
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log('[RequesterCoverage] Submit Review pressed, stars:', stars);
+                    handleSubmit();
+                  }}
+                  disabled={submitting}
+                  style={{
+                    backgroundColor: '#1C1C1E',
+                    borderRadius: 999,
+                    paddingVertical: 16,
+                    alignItems: 'center',
+                    marginBottom: 12,
+                    opacity: submitting ? 0.6 : 1,
+                  }}
+                >
+                  {submitting ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>Submit Review</Text>
+                  )}
+                </TouchableOpacity>
+
+                {/* Skip */}
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log('[RequesterCoverage] Skip rating pressed');
+                    onClose();
+                  }}
+                  style={{ alignItems: 'center', paddingVertical: 8 }}
+                >
+                  <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>Skip</Text>
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+}
+
+// ─── RequesterCard ────────────────────────────────────────────────────────────
+
+interface RequesterCardProps {
+  session: CoverageSession;
+  showRateNow: boolean;
+  onRateNow: () => void;
+}
+
+function RequesterCard({ session, showRateNow, onRateNow }: RequesterCardProps) {
   const shiftStart = formatTime(session.shift_start);
   const shiftEnd = formatTime(session.shift_end);
   const dayLabel = session.shift_date
@@ -149,14 +326,37 @@ function RequesterCard({ session }: RequesterCardProps) {
             {'Ended: '}{new Date(session.ended_at).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
           </Text>
         )}
+
+        {showRateNow && (
+          <TouchableOpacity
+            onPress={() => {
+              console.log('[RequesterCoverage] Rate Now pressed for session:', session.id);
+              onRateNow();
+            }}
+            style={{
+              marginTop: 14,
+              backgroundColor: '#2DC653',
+              borderRadius: 999,
+              paddingVertical: 12,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>Rate Now</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
 }
 
+// ─── Screen ───────────────────────────────────────────────────────────────────
+
 export default function RequesterCoverageScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+
+  const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
+  const [ratingSession, setRatingSession] = useState<CoverageSession | null>(null);
 
   const cacheKey = `requester-coverage-${user?.id ?? 'anon'}`;
 
@@ -170,7 +370,7 @@ export default function RequesterCoverageScreen() {
         return [];
       }
       const res = await fetch(
-        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=requester&status=completed,cancelled`,
+        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=requester&status=completed,cancelled,requester_paid`,
         { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
       );
       if (!res.ok) {
@@ -179,13 +379,42 @@ export default function RequesterCoverageScreen() {
         throw new Error('Failed to load coverage history');
       }
       const data = await res.json();
-      console.log('[RequesterCoverage] History sessions fetched:', data?.sessions?.length ?? 0);
-      return data?.sessions ?? [];
+      const sessions: CoverageSession[] = data?.sessions ?? [];
+      console.log('[RequesterCoverage] History sessions fetched:', sessions.length);
+
+      // Check which requester_paid sessions have already been reviewed
+      const paidIds = sessions
+        .filter((s) => s.status === 'requester_paid')
+        .map((s) => s.id);
+
+      if (paidIds.length > 0 && user?.id) {
+        console.log('[RequesterCoverage] Checking reviews for', paidIds.length, 'paid sessions');
+        const { data: reviews, error: reviewErr } = await supabase
+          .from('shift_reviews')
+          .select('session_id')
+          .eq('reviewer_id', user.id)
+          .in('session_id', paidIds);
+
+        if (reviewErr) {
+          console.log('[RequesterCoverage] Error fetching reviews:', reviewErr.message);
+        } else {
+          const ids = new Set<string>((reviews ?? []).map((r: { session_id: string }) => r.session_id));
+          console.log('[RequesterCoverage] Already reviewed sessions:', ids.size);
+          setReviewedIds(ids);
+        }
+      }
+
+      return sessions;
     },
     alwaysRefresh: true,
   });
 
   const sessions = historySessions ?? [];
+
+  const handleReviewed = useCallback((sessionId: string) => {
+    console.log('[RequesterCoverage] Marking session as reviewed:', sessionId);
+    setReviewedIds((prev) => new Set([...prev, sessionId]));
+  }, []);
 
   return (
     <ScrollView
@@ -222,12 +451,33 @@ export default function RequesterCoverageScreen() {
       ) : sessions.length === 0 ? (
         <EmptyState message="No past coverage yet." />
       ) : (
-        sessions.map(session => (
-          <RequesterCard
-            key={session.id}
-            session={session}
-          />
-        ))
+        sessions.map(session => {
+          const showRateNow = session.status === 'requester_paid' && !reviewedIds.has(session.id);
+          return (
+            <RequesterCard
+              key={session.id}
+              session={session}
+              showRateNow={showRateNow}
+              onRateNow={() => {
+                console.log('[RequesterCoverage] Opening rating overlay for session:', session.id);
+                setRatingSession(session);
+              }}
+            />
+          );
+        })
+      )}
+
+      {/* Rating overlay */}
+      {ratingSession && (
+        <RatingOverlay
+          visible={true}
+          session={ratingSession}
+          onClose={() => {
+            console.log('[RequesterCoverage] Rating overlay closed');
+            setRatingSession(null);
+          }}
+          onReviewed={handleReviewed}
+        />
       )}
     </ScrollView>
   );

@@ -6,6 +6,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
+  Modal,
+  TouchableWithoutFeedback,
+  TextInput,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,10 +18,11 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
-import { supabase } from '@/lib/supabase';
+import { supabase, getValidToken } from '@/lib/supabase';
 import type { CoverageSession, DayLog } from '@/contexts/DoctorDispatchContext';
 
 const PLATFORM_FEE_RATE = 0.15;
+const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
 function formatNaira(amount: number): string {
   return `₦${Number(amount).toLocaleString()}`;
@@ -84,6 +88,12 @@ export default function PaymentSummaryScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [showRatingOverlay, setShowRatingOverlay] = useState(false);
+  const [ratingStars, setRatingStars] = useState(0);
+  const [ratingComment, setRatingComment] = useState('');
+  const [submittingRating, setSubmittingRating] = useState(false);
+  const [ratingError, setRatingError] = useState('');
+
   const fetchData = useCallback(async () => {
     if (!session_id) {
       setError('No session ID provided.');
@@ -141,6 +151,42 @@ export default function PaymentSummaryScreen() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (!session) return;
+    const timer = setTimeout(() => {
+      console.log('[PaymentSummary] Auto-showing rating overlay for session:', session_id);
+      setShowRatingOverlay(true);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [session, session_id]);
+
+  const handleSubmitRating = async () => {
+    if (ratingStars === 0) {
+      setRatingError('Please select a star rating');
+      return;
+    }
+    console.log('[PaymentSummary] Submitting review — stars:', ratingStars, 'session_id:', session_id);
+    setSubmittingRating(true);
+    setRatingError('');
+    try {
+      const token = await getValidToken();
+      const res = await fetch(`${EDGE_BASE}/submit-review`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: session_id, stars: ratingStars, comment: ratingComment }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed to submit review');
+      console.log('[PaymentSummary] Review submitted successfully');
+      setShowRatingOverlay(false);
+    } catch (e: any) {
+      console.log('[PaymentSummary] Review submission error:', e.message);
+      setRatingError(e.message);
+    } finally {
+      setSubmittingRating(false);
+    }
+  };
 
   const handleDone = () => {
     console.log('[PaymentSummary] Done button pressed — navigating to doctor home');
@@ -307,6 +353,93 @@ export default function PaymentSummaryScreen() {
           <Text style={styles.doneButtonText}>Done</Text>
         </TouchableOpacity>
       </View>
+
+      {/* ── Rating Overlay ── */}
+      <Modal
+        visible={showRatingOverlay}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
+        <TouchableWithoutFeedback onPress={() => {
+          console.log('[PaymentSummary] Rating overlay dismissed via backdrop');
+          setShowRatingOverlay(false);
+        }}>
+          <View style={styles.ratingBackdrop}>
+            <TouchableWithoutFeedback>
+              <View style={styles.ratingCard}>
+                <Text style={styles.ratingHeader}>
+                  {`How was your experience with ${session?.hospital_name ?? 'the hospital'}?`}
+                </Text>
+                <Text style={styles.ratingSubheader}>
+                  Share your feedback and help us improve.
+                </Text>
+
+                {/* Stars */}
+                <View style={styles.starsRow}>
+                  {[1, 2, 3, 4, 5].map((star) => {
+                    const filled = star <= ratingStars;
+                    const starColor = filled ? '#F4A261' : '#D4D4D8';
+                    return (
+                      <TouchableOpacity
+                        key={star}
+                        onPress={() => {
+                          console.log('[PaymentSummary] Star selected:', star);
+                          setRatingStars(star);
+                          setRatingError('');
+                        }}
+                        activeOpacity={0.7}
+                        style={styles.starButton}
+                      >
+                        <Text style={[styles.starIcon, { color: starColor }]}>★</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {ratingError !== '' && (
+                  <Text style={styles.ratingErrorText}>{ratingError}</Text>
+                )}
+
+                <TextInput
+                  style={styles.ratingInput}
+                  placeholder="Write a comment (optional)..."
+                  placeholderTextColor="#A1A1AA"
+                  multiline
+                  value={ratingComment}
+                  onChangeText={setRatingComment}
+                  textAlignVertical="top"
+                />
+
+                <View style={styles.ratingButtonRow}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      console.log('[PaymentSummary] Rating skipped');
+                      setShowRatingOverlay(false);
+                    }}
+                    activeOpacity={0.8}
+                    style={styles.skipButton}
+                  >
+                    <Text style={styles.skipButtonText}>Skip</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleSubmitRating}
+                    activeOpacity={0.85}
+                    disabled={submittingRating}
+                    style={[styles.submitButton, submittingRating && { opacity: 0.5 }]}
+                  >
+                    {submittingRating ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.submitButtonText}>Submit Review</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
@@ -483,5 +616,93 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     textAlign: 'center',
     marginBottom: 24,
+  },
+  ratingBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  ratingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    marginHorizontal: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  ratingHeader: {
+    fontSize: 18,
+    fontFamily: 'Inter_700Bold',
+    color: '#1C1C1E',
+    lineHeight: 26,
+  },
+  ratingSubheader: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    color: '#71717A',
+    marginTop: 6,
+    lineHeight: 20,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 8,
+  },
+  starButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  starIcon: {
+    fontSize: 28,
+    lineHeight: 32,
+  },
+  ratingErrorText: {
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
+    color: '#DC2626',
+    marginTop: 8,
+  },
+  ratingInput: {
+    marginTop: 16,
+    minHeight: 80,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    borderRadius: 12,
+    padding: 12,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: '#1C1C1E',
+  },
+  ratingButtonRow: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 12,
+  },
+  skipButton: {
+    flex: 1,
+    backgroundColor: '#F4F4F5',
+    borderRadius: 99,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  skipButtonText: {
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#71717A',
+  },
+  submitButton: {
+    flex: 1,
+    backgroundColor: '#1C1C1E',
+    borderRadius: 99,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  submitButtonText: {
+    fontSize: 15,
+    fontFamily: 'Inter_600SemiBold',
+    color: '#FFFFFF',
   },
 });
