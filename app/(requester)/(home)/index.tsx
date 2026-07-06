@@ -1418,20 +1418,21 @@ export default function RequesterHomeScreen() {
   useEffect(() => {
     if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
     previewDebounceRef.current = setTimeout(async () => {
-      const startStr = startTime.toTimeString().slice(0, 5);
-      const endStr = endTime.toTimeString().slice(0, 5);
-      console.log('[RequesterHome] Fetching price preview — start:', startStr, 'end:', endStr, 'length:', coverageLength, 'type:', coverageType, 'env:', environment);
+      let durationMs = endTime.getTime() - startTime.getTime();
+      if (durationMs <= 0) durationMs += 24 * 60 * 60 * 1000; // handle overnight
+      const durationHours = durationMs / (1000 * 60 * 60);
+      const shiftType = coverageType === 'Home Care' ? 'Home Care' : 'Standard';
+      console.log('[RequesterHome] Fetching price preview — coverage_type:', coverageType, 'shift_type:', shiftType, 'environment:', environment, 'duration_hours:', durationHours);
       setPreviewLoading(true);
       try {
         const res = await fetch(`${EDGE_BASE}/calculate-price`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            start_time: startStr,
-            end_time: endStr,
-            coverage_length: coverageLength,
             coverage_type: coverageType,
+            shift_type: shiftType,
             environment,
+            duration_hours: durationHours,
           }),
         });
         console.log('[RequesterHome] calculate-price response status:', res.status);
@@ -1454,7 +1455,7 @@ export default function RequesterHomeScreen() {
     return () => {
       if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
     };
-  }, [startTime, endTime, coverageLength, coverageType, environment]);
+  }, [startTime, endTime, coverageType, environment]);
 
   // ─── Drag handle PanResponder ─────────────────────────────────────────────────
   const handleResetRef = useRef<() => void>(() => {});
