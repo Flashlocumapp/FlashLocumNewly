@@ -1,5 +1,19 @@
 import { Session, User } from '@supabase/supabase-js';
 
+export type PaymentIntent = {
+  id: string;
+  session_id: string;
+  amount_naira: number;
+  monnify_account_number: string | null;
+  monnify_bank_name: string | null;
+  monnify_account_reference: string | null;
+  monnify_transaction_reference: string | null;
+  status: 'pending' | 'expired' | 'paid';
+  expiry_at: string; // ISO 8601
+  created_at: string;
+  updated_at: string;
+};
+
 export type { Session, User };
 
 export interface Profile {

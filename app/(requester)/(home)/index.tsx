@@ -731,34 +731,31 @@ function RequesterActiveCard({
 function RequesterPaymentCard({
   session,
   bottomPadding,
+  onPaymentConfirmed,
 }: {
   session: CoverageSession;
   bottomPadding: number;
+  onPaymentConfirmed: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const [countdown, setCountdown] = useState('--:--');
-  const [isExpired, setIsExpired] = useState(false);
+  const { user } = useAuth();
+
+  // Payment intent state — always sourced from backend
+  const [paymentIntent, setPaymentIntent] = useState<import('@/types').PaymentIntent | null>(null);
+  const [loadingIntent, setLoadingIntent] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+
+  // Countdown state — recalculated from expiry_at, never persisted
+  const [countdown, setCountdown] = useState('--:--');
+  const [countdownColor, setCountdownColor] = useState('#000000');
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const expiryRef = useRef<string | null>(null);
+
   const skeletonAnim = useRef(new Animated.Value(0.4)).current;
 
-  useEffect(() => {
-    if (!session.payment_deadline_at) return;
-    const tick = () => {
-      const diffMs = new Date(session.payment_deadline_at!).getTime() - Date.now();
-      if (diffMs <= 0) {
-        setIsExpired(true);
-        setCountdown('00:00');
-      } else {
-        setIsExpired(false);
-        setCountdown(formatCountdown(session.payment_deadline_at!));
-      }
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [session.payment_deadline_at]);
-
-  // Skeleton pulse animation
+  // ─── Skeleton pulse ───────────────────────────────────────────────────────
   useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
@@ -770,11 +767,206 @@ function RequesterPaymentCard({
     return () => pulse.stop();
   }, [skeletonAnim]);
 
-  const amountDisplay = formatNaira(session.price * 100);
-  const hasAccountDetails = !!(session.monnify_account_number);
-  const accountNumber = session.monnify_account_number ?? '';
-  const bankName = session.monnify_bank_name ?? '';
-  const accountName = session.monnify_account_name ?? '';
+  // ─── Start countdown from expiry_at ──────────────────────────────────────
+  const startCountdown = useCallback((expiryAt: string) => {
+    expiryRef.current = expiryAt;
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    const tick = () => {
+      const diffMs = new Date(expiryRef.current!).getTime() - Date.now();
+      if (diffMs <= 0) {
+        setCountdown('00:00');
+        setCountdownColor('#FF3B30');
+        if (timerRef.current) clearInterval(timerRef.current);
+        // Auto-refresh when timer hits zero
+        handleRefreshPayment();
+        return;
+      }
+      const totalSec = Math.floor(diffMs / 1000);
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      const formatted = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      setCountdown(formatted);
+      // Color shifts: orange < 3min, red < 1min
+      if (totalSec < 60) {
+        setCountdownColor('#FF3B30');
+      } else if (totalSec < 180) {
+        setCountdownColor('#FF9500');
+      } else {
+        setCountdownColor('#000000');
+      }
+    };
+
+    tick();
+    timerRef.current = setInterval(tick, 1000);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Fetch payment intent from Supabase ──────────────────────────────────
+  const fetchPaymentIntent = useCallback(async () => {
+    console.log('[RequesterPaymentCard] Fetching payment intent for session:', session.id);
+    setLoadingIntent(true);
+    try {
+      const { data, error } = await supabase
+        .from('payment_intents')
+        .select('*')
+        .eq('session_id', session.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error) {
+        console.log('[RequesterPaymentCard] payment_intents query error:', error.message);
+        setPaymentIntent(null);
+      } else if (data) {
+        console.log('[RequesterPaymentCard] Payment intent fetched:', data.id, 'expiry_at:', data.expiry_at);
+        setPaymentIntent(data as import('@/types').PaymentIntent);
+        startCountdown(data.expiry_at);
+      }
+    } catch (e: any) {
+      console.log('[RequesterPaymentCard] fetchPaymentIntent exception:', e.message);
+    } finally {
+      setLoadingIntent(false);
+    }
+  }, [session.id, startCountdown]);
+
+  // ─── Refresh payment via edge function ───────────────────────────────────
+  const handleRefreshPayment = useCallback(async () => {
+    if (refreshing) return;
+    console.log('[RequesterPaymentCard] Calling refresh-payment edge function for session:', session.id);
+    setRefreshing(true);
+    try {
+      const token = await getValidToken();
+      if (!token) throw new Error('Not authenticated');
+      const res = await fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/refresh-payment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ session_id: session.id }),
+      });
+      console.log('[RequesterPaymentCard] refresh-payment response status:', res.status);
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        console.log('[RequesterPaymentCard] refresh-payment error:', errText);
+        return;
+      }
+      const data = await res.json();
+      const payment = data?.payment;
+      console.log('[RequesterPaymentCard] refresh-payment success:', payment?.id, 'new expiry:', payment?.expiry_at);
+      if (payment) {
+        setPaymentIntent((prev) => prev ? {
+          ...prev,
+          id: payment.id ?? prev.id,
+          amount_naira: payment.amount_naira ?? prev.amount_naira,
+          monnify_account_number: payment.account_number ?? prev.monnify_account_number,
+          monnify_bank_name: payment.bank_name ?? prev.monnify_bank_name,
+          monnify_account_reference: payment.account_reference ?? prev.monnify_account_reference,
+          expiry_at: payment.expiry_at ?? prev.expiry_at,
+        } : prev);
+        if (payment.expiry_at) {
+          startCountdown(payment.expiry_at);
+        }
+      }
+    } catch (e: any) {
+      console.log('[RequesterPaymentCard] handleRefreshPayment exception:', e.message);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [session.id, refreshing, startCountdown]);
+
+  // ─── On mount: fetch intent + AppState foreground re-fetch ───────────────
+  useEffect(() => {
+    fetchPaymentIntent();
+
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        console.log('[RequesterPaymentCard] App foregrounded — re-fetching payment intent');
+        fetchPaymentIntent();
+      }
+    };
+    const sub = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      sub.remove();
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [fetchPaymentIntent]);
+
+  // ─── Realtime: session:<sessionId> ───────────────────────────────────────
+  useEffect(() => {
+    const channelName = `session:${session.id}`;
+    console.log('[RequesterPaymentCard] Subscribing to Realtime channel:', channelName);
+
+    const ch = supabase.channel(channelName)
+      .on('broadcast', { event: 'payment_refreshed' }, (payload) => {
+        console.log('[RequesterPaymentCard] payment_refreshed received:', payload);
+        const payment = payload?.payload?.payment;
+        if (payment) {
+          setPaymentIntent((prev) => prev ? {
+            ...prev,
+            id: payment.id ?? prev.id,
+            amount_naira: payment.amount_naira ?? prev.amount_naira,
+            monnify_account_number: payment.account_number ?? prev.monnify_account_number,
+            monnify_bank_name: payment.bank_name ?? prev.monnify_bank_name,
+            monnify_account_reference: payment.account_reference ?? prev.monnify_account_reference,
+            expiry_at: payment.expiry_at ?? prev.expiry_at,
+          } : prev);
+          if (payment.expiry_at) {
+            startCountdown(payment.expiry_at);
+          }
+        }
+      })
+      .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+        console.log('[RequesterPaymentCard] payment_confirmed received (session channel):', payload);
+        if (timerRef.current) clearInterval(timerRef.current);
+        setPaymentConfirmed(true);
+        onPaymentConfirmed();
+      })
+      .subscribe((status) => {
+        console.log('[RequesterPaymentCard] Realtime channel status:', channelName, status);
+      });
+
+    return () => {
+      console.log('[RequesterPaymentCard] Unsubscribing from channel:', channelName);
+      supabase.removeChannel(ch);
+    };
+  }, [session.id, startCountdown, onPaymentConfirmed]);
+
+  // ─── Realtime: user:<userId> ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    const channelName = `user:${user.id}`;
+    console.log('[RequesterPaymentCard] Subscribing to user Realtime channel:', channelName);
+
+    const ch = supabase.channel(channelName)
+      .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+        console.log('[RequesterPaymentCard] payment_confirmed received (user channel):', payload);
+        if (timerRef.current) clearInterval(timerRef.current);
+        setPaymentConfirmed(true);
+        onPaymentConfirmed();
+      })
+      .subscribe((status) => {
+        console.log('[RequesterPaymentCard] User channel status:', channelName, status);
+      });
+
+    return () => {
+      console.log('[RequesterPaymentCard] Unsubscribing from user channel:', channelName);
+      supabase.removeChannel(ch);
+    };
+  }, [user, onPaymentConfirmed]);
+
+  // ─── Derived display values ───────────────────────────────────────────────
+  const amountNaira = paymentIntent?.amount_naira ?? session.price;
+  const amountDisplay = `₦${Number(amountNaira).toLocaleString()}`;
+  const hasAccountDetails = !!(paymentIntent?.monnify_account_number);
+  const accountNumber = paymentIntent?.monnify_account_number ?? '';
+  const bankName = paymentIntent?.monnify_bank_name ?? '';
+  const copyLabel = copied ? 'Copied!' : 'Copy';
+
+  const countdownDisplay = refreshing ? 'Refreshing...' : countdown;
+  const isLoading = loadingIntent && !paymentIntent;
 
   const handleCopy = async () => {
     console.log('[RequesterPaymentCard] Copy account number pressed:', accountNumber);
@@ -783,13 +975,9 @@ function RequesterPaymentCard({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const copyLabel = copied ? 'Copied!' : 'Copy';
-
-  const countdownDisplay = isExpired ? 'Extending...' : countdown;
-
   return (
     <Modal
-      visible={session.status === 'payment_pending'}
+      visible={session.status === 'payment_pending' && !paymentConfirmed}
       animationType="slide"
       presentationStyle="fullScreen"
     >
@@ -822,16 +1010,38 @@ function RequesterPaymentCard({
             Transfer Exactly
           </Text>
 
-          {/* Amount */}
-          <Text style={{
-            fontSize: 56,
-            fontFamily: 'Inter_700Bold',
-            color: '#000000',
-            marginBottom: 28,
-            letterSpacing: -1,
-          }}>
-            {amountDisplay}
-          </Text>
+          {/* Amount — always from backend */}
+          {isLoading ? (
+            <Animated.View style={{ opacity: skeletonAnim, backgroundColor: '#E5E5EA', borderRadius: 8, height: 64, width: 200, marginBottom: 28 }} />
+          ) : (
+            <Text style={{
+              fontSize: 56,
+              fontFamily: 'Inter_700Bold',
+              color: '#000000',
+              marginBottom: 28,
+              letterSpacing: -1,
+            }}>
+              {amountDisplay}
+            </Text>
+          )}
+
+          {/* Refreshing overlay */}
+          {refreshing && (
+            <View style={{
+              backgroundColor: '#FFF9E6',
+              borderRadius: 12,
+              padding: 14,
+              marginBottom: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+            }}>
+              <ActivityIndicator size="small" color="#FF9500" />
+              <Text style={{ fontSize: 14, color: '#FF9500', fontFamily: 'Inter_600SemiBold' }}>
+                Refreshing payment details...
+              </Text>
+            </View>
+          )}
 
           {/* Account Card */}
           <View style={{
@@ -901,14 +1111,14 @@ function RequesterPaymentCard({
             </Text>
             {hasAccountDetails ? (
               <Text style={{ fontSize: 17, fontFamily: 'Inter_600SemiBold', color: '#000000' }}>
-                {accountName}
+                {session.monnify_account_name ?? '—'}
               </Text>
             ) : (
               <Animated.View style={{ opacity: skeletonAnim, backgroundColor: '#E5E5EA', borderRadius: 6, height: 20, width: 200 }} />
             )}
           </View>
 
-          {/* Price Held Card */}
+          {/* Countdown Card */}
           <View style={{
             backgroundColor: '#FFFFFF',
             borderRadius: 16,
@@ -931,7 +1141,7 @@ function RequesterPaymentCard({
                 Amount may increase if payment isn't made in time.
               </Text>
             </View>
-            <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: '#000000', letterSpacing: 0.5 }}>
+            <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: countdownColor, letterSpacing: 0.5 }}>
               {countdownDisplay}
             </Text>
           </View>
@@ -2717,6 +2927,10 @@ export default function RequesterHomeScreen() {
             <RequesterPaymentCard
               session={activeSession}
               bottomPadding={whiteCardPaddingBottom}
+              onPaymentConfirmed={() => {
+                console.log('[RequesterHome] Payment confirmed — clearing active session');
+                setActiveSession(null);
+              }}
             />
           )}
 

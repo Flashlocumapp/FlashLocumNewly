@@ -9,7 +9,7 @@ import {
   AppStateStatus,
   StyleSheet,
 } from 'react-native';
-import { Stack, Href } from 'expo-router';
+import { Stack, Href, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   useFonts,
@@ -164,6 +164,7 @@ const TABS: DoctorTabItem[] = [
 export default function DoctorLayout() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const router = useRouter();
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
 
   const [isOnline, setIsOnline] = useState(false);
@@ -408,8 +409,22 @@ export default function DoctorLayout() {
         setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        console.log('[DoctorLayout] PAYMENT_CONFIRMED received:', payload);
+        console.log('[DoctorLayout] PAYMENT_CONFIRMED received (session channel):', payload);
+        const sessionId = payload?.payload?.session_id ?? activeSession?.id;
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
+        if (sessionId) {
+          console.log('[DoctorLayout] Navigating to payment-summary for session:', sessionId);
+          router.push(`/(doctor)/(home)/payment-summary?session_id=${sessionId}`);
+        }
+      })
+      .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+        console.log('[DoctorLayout] payment_confirmed received (session channel):', payload);
+        const sessionId = payload?.payload?.session_id ?? activeSession?.id;
+        setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
+        if (sessionId) {
+          console.log('[DoctorLayout] Navigating to payment-summary for session:', sessionId);
+          router.push(`/(doctor)/(home)/payment-summary?session_id=${sessionId}`);
+        }
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
         console.log('[DoctorLayout] PAYMENT_COMPLETE received:', payload);
@@ -467,9 +482,23 @@ export default function DoctorLayout() {
         const updated = payload?.payload?.session as Partial<CoverageSession>;
         if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
       })
-      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, () => {
-        console.log('[DoctorLayout] PAYMENT_CONFIRMED (doctor channel)');
+      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+        console.log('[DoctorLayout] PAYMENT_CONFIRMED (doctor channel):', payload);
+        const sessionId = payload?.payload?.session_id ?? activeSession?.id;
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
+        if (sessionId) {
+          console.log('[DoctorLayout] Navigating to payment-summary (doctor channel) for session:', sessionId);
+          router.push(`/(doctor)/(home)/payment-summary?session_id=${sessionId}`);
+        }
+      })
+      .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+        console.log('[DoctorLayout] payment_confirmed (doctor channel):', payload);
+        const sessionId = payload?.payload?.session_id ?? activeSession?.id;
+        setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
+        if (sessionId) {
+          console.log('[DoctorLayout] Navigating to payment-summary (doctor channel) for session:', sessionId);
+          router.push(`/(doctor)/(home)/payment-summary?session_id=${sessionId}`);
+        }
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, () => {
         console.log('[DoctorLayout] PAYMENT_COMPLETE (doctor channel)');
