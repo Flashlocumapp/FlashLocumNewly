@@ -25,9 +25,11 @@ import {
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
+import * as Clipboard from 'expo-clipboard';
 import * as SecureStore from 'expo-secure-store';
 import { supabase, getValidToken } from '@/lib/supabase';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
@@ -727,8 +729,11 @@ function RequesterPaymentCard({
   session: CoverageSession;
   bottomPadding: number;
 }) {
+  const insets = useSafeAreaInsets();
   const [countdown, setCountdown] = useState('--:--');
   const [isExpired, setIsExpired] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const skeletonAnim = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
     if (!session.payment_deadline_at) return;
@@ -747,65 +752,197 @@ function RequesterPaymentCard({
     return () => clearInterval(id);
   }, [session.payment_deadline_at]);
 
+  // Skeleton pulse animation
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(skeletonAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(skeletonAnim, { toValue: 0.4, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [skeletonAnim]);
+
   const amountDisplay = formatNaira(session.price * 100);
-  const accountNumber = session.monnify_account_number ?? '—';
-  const bankName = session.monnify_bank_name ?? '—';
-  const accountName = session.monnify_account_name ?? '—';
+  const hasAccountDetails = !!(session.monnify_account_number);
+  const accountNumber = session.monnify_account_number ?? '';
+  const bankName = session.monnify_bank_name ?? '';
+  const accountName = session.monnify_account_name ?? '';
+
+  const handleCopy = async () => {
+    console.log('[RequesterPaymentCard] Copy account number pressed:', accountNumber);
+    await Clipboard.setStringAsync(accountNumber);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copyLabel = copied ? 'Copied!' : 'Copy';
+
+  const countdownDisplay = isExpired ? 'Extending...' : countdown;
 
   return (
-    <View style={{
-      position: 'absolute', bottom: 0, left: 0, right: 0,
-      backgroundColor: '#1C1C1E',
-      borderTopLeftRadius: 24, borderTopRightRadius: 24,
-      paddingTop: 16, paddingHorizontal: 16,
-      paddingBottom: bottomPadding,
-      shadowColor: '#000', shadowOffset: { width: 0, height: -3 },
-      shadowOpacity: 0.08, shadowRadius: 10, elevation: 10,
-    }}>
-      {/* Drag handle (decorative only) */}
-      <View style={{ alignItems: 'center', marginBottom: 16 }}>
-        <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
-      </View>
-
-      <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 8 }}>
-        PAYMENT DUE
-      </Text>
-      <Text style={{ fontSize: 44, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 4 }}>
-        {amountDisplay}
-      </Text>
-
-      <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 12 }}>
-        Transfer to:
-      </Text>
-
-      <View style={{ backgroundColor: '#2C2C2E', borderRadius: 16, padding: 16, marginBottom: 16 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>{accountNumber}</Text>
-          <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>·</Text>
-          <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>{bankName}</Text>
-        </View>
-        <Text style={{ fontSize: 14, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>{accountName}</Text>
-      </View>
-
-      {/* Countdown */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <Text style={{ fontSize: 13, color: '#8E8E93' }}>⏱</Text>
-        {isExpired ? (
-          <Text style={{ fontSize: 15, color: '#FF9500', fontFamily: 'Inter_600SemiBold' }}>
-            Extending payment window...
+    <Modal
+      visible={session.status === 'payment_pending'}
+      animationType="slide"
+      presentationStyle="fullScreen"
+    >
+      <View style={{ flex: 1, backgroundColor: '#F2F2F7' }}>
+        <ScrollView
+          contentContainerStyle={{
+            paddingTop: insets.top + 32,
+            paddingHorizontal: 20,
+            paddingBottom: insets.bottom + 32,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <Text style={{
+            fontSize: 11,
+            letterSpacing: 1.4,
+            color: '#8E8E93',
+            fontFamily: 'Inter_600SemiBold',
+            marginBottom: 6,
+            textTransform: 'uppercase',
+          }}>
+            COMPLETE COVERAGE
           </Text>
-        ) : (
-          <Text style={{ fontSize: 15, color: '#FFFFFF', fontFamily: 'Inter_700Bold' }}>
-            {countdown}
-            <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}> remaining</Text>
+          <Text style={{
+            fontSize: 16,
+            color: '#8E8E93',
+            fontFamily: 'Inter_400Regular',
+            marginBottom: 8,
+          }}>
+            Transfer Exactly
           </Text>
-        )}
-      </View>
 
-      <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular', lineHeight: 18 }}>
-        Payment timer is server-controlled. This window will extend automatically if payment is not received in time.
-      </Text>
-    </View>
+          {/* Amount */}
+          <Text style={{
+            fontSize: 56,
+            fontFamily: 'Inter_700Bold',
+            color: '#000000',
+            marginBottom: 28,
+            letterSpacing: -1,
+          }}>
+            {amountDisplay}
+          </Text>
+
+          {/* Account Card */}
+          <View style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 16,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.06,
+            shadowRadius: 8,
+            elevation: 2,
+          }}>
+            {/* Bank Row */}
+            <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 6 }}>
+              BANK
+            </Text>
+            {hasAccountDetails ? (
+              <Text style={{ fontSize: 17, fontFamily: 'Inter_600SemiBold', color: '#000000', marginBottom: 16 }}>
+                {bankName}
+              </Text>
+            ) : (
+              <Animated.View style={{ opacity: skeletonAnim, backgroundColor: '#E5E5EA', borderRadius: 6, height: 20, width: 140, marginBottom: 16 }} />
+            )}
+
+            <View style={{ height: 1, backgroundColor: '#F2F2F7', marginBottom: 16 }} />
+
+            {/* Account Number Row */}
+            <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 6 }}>
+              ACCOUNT NUMBER
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              {hasAccountDetails ? (
+                <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: '#000000', letterSpacing: 1 }}>
+                  {accountNumber}
+                </Text>
+              ) : (
+                <Animated.View style={{ opacity: skeletonAnim, backgroundColor: '#E5E5EA', borderRadius: 6, height: 32, width: 180 }} />
+              )}
+              {hasAccountDetails && (
+                <TouchableOpacity
+                  onPress={handleCopy}
+                  activeOpacity={0.7}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#E5E5EA',
+                    borderRadius: 999,
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    gap: 6,
+                  }}
+                >
+                  <Ionicons name="copy-outline" size={14} color="#3C3C43" />
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#3C3C43' }}>
+                    {copyLabel}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={{ height: 1, backgroundColor: '#F2F2F7', marginBottom: 16 }} />
+
+            {/* Account Name Row */}
+            <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 6 }}>
+              ACCOUNT NAME
+            </Text>
+            {hasAccountDetails ? (
+              <Text style={{ fontSize: 17, fontFamily: 'Inter_600SemiBold', color: '#000000' }}>
+                {accountName}
+              </Text>
+            ) : (
+              <Animated.View style={{ opacity: skeletonAnim, backgroundColor: '#E5E5EA', borderRadius: 6, height: 20, width: 200 }} />
+            )}
+          </View>
+
+          {/* Price Held Card */}
+          <View style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 28,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.06,
+            shadowRadius: 8,
+            elevation: 2,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <View style={{ flex: 1, marginRight: 16 }}>
+              <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 6 }}>
+                PRICE HELD FOR
+              </Text>
+              <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', lineHeight: 18 }}>
+                Amount may increase if payment isn't made in time.
+              </Text>
+            </View>
+            <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: '#000000', letterSpacing: 0.5 }}>
+              {countdownDisplay}
+            </Text>
+          </View>
+
+          {/* Footer Note */}
+          <Text style={{
+            fontSize: 13,
+            color: '#8E8E93',
+            fontFamily: 'Inter_400Regular',
+            lineHeight: 20,
+            textAlign: 'center',
+          }}>
+            Send the exact amount above from any Nigerian bank app. This page updates automatically once payment is received.
+          </Text>
+        </ScrollView>
+      </View>
+    </Modal>
   );
 }
 
