@@ -24,6 +24,11 @@ import { DoctorDispatchContext, CoverageSession } from '@/contexts/DoctorDispatc
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
+// POLL_INTERVAL: 8s in dev (Expo Go WebSocket unreliable), 30s in production.
+// Cost at 30s: 2 req/min per online doctor. At 1,000 concurrent doctors = 2,000 req/min —
+// well within Supabase Edge Function limits. Realtime is the primary delivery path (zero cost).
+const POLL_INTERVAL = __DEV__ ? 8000 : 30000;
+
 type DoctorScreenState = 'idle' | 'incoming' | 'confirmed';
 
 type DispatchRequest = {
@@ -288,6 +293,15 @@ export default function DoctorLayout() {
           } else {
             console.log('[DoctorLayout] Went online — force-syncing queue');
             await forceSyncRef.current();
+            // Explicitly trigger the card if the sync found requests.
+            // Don't rely on the async React re-render cycle — read the ref directly.
+            setRequestQueue((current) => {
+              if (current.length > 0) {
+                console.log('[DoctorLayout] go-online: queue has items after sync, setting incoming');
+                setDoctorScreenState('incoming');
+              }
+              return current; // no change to queue itself
+            });
           }
         } else {
           console.log('[DoctorLayout] Went offline — clearing queue');
@@ -313,17 +327,18 @@ export default function DoctorLayout() {
     return () => clearInterval(id);
   }, [isOnline, user, callEdge]);
 
-  // ── 15-second polling fallback ──
+  // ── Polling fallback ──
   useEffect(() => {
     if (!isOnline || !user) return;
     const id = setInterval(() => {
+      // Always sync — Realtime health only affects logging, not whether we sync.
       if (!isRealtimeHealthyRef.current) {
         console.log('[DoctorLayout] Poll tick — Realtime unhealthy, force-syncing');
-        forceSyncRef.current();
       } else {
-        console.log('[DoctorLayout] Poll tick — Realtime healthy, skipping');
+        console.log('[DoctorLayout] Poll tick — Realtime healthy, syncing anyway as safety net');
       }
-    }, 15000);
+      forceSyncRef.current();
+    }, POLL_INTERVAL);
     return () => clearInterval(id);
   }, [isOnline, user]);
 
@@ -524,14 +539,14 @@ export default function DoctorLayout() {
 
   // ── Queue → state sync ──
   useEffect(() => {
-    if (requestQueue.length > 0 && doctorScreenState === 'idle' && isOnline) {
+    if (requestQueue.length > 0 && doctorScreenState === 'idle' && isOnlineRef.current) {
       console.log('[DoctorLayout] Queue has items, transitioning to incoming');
       setDoctorScreenState('incoming');
     } else if (requestQueue.length === 0 && doctorScreenState === 'incoming') {
       console.log('[DoctorLayout] Queue empty, transitioning to idle');
       setDoctorScreenState('idle');
     }
-  }, [requestQueue, isOnline, doctorScreenState]);
+  }, [requestQueue, doctorScreenState]); // isOnline removed — use ref for live value
 
   // ── AppState force-sync ──
   useEffect(() => {
