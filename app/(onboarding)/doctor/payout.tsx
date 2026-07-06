@@ -162,7 +162,8 @@ export default function DoctorPayout() {
       setAccountName('');
       setAccountNameError('');
     }
-  }, [selectedBank, accountNumber, lookupAccountName]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBank, accountNumber]);
 
   const handleBack = () => {
     console.log('[DoctorPayout] Back button pressed, onboarding_complete:', profile?.onboarding_complete);

@@ -101,33 +101,24 @@ function ShiftDetails({ request, note }: { request: DispatchRequest | null; note
 
   return (
     <View style={{ marginTop: 8 }}>
-      {/* Row 1: Shift type • Day */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+      {/* Single row: shift type • day • time range • duration • price */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
         <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
           {request.shift_type}
         </Text>
-        <Text style={{ color: '#34C759', fontSize: 13 }}> ● </Text>
+        <Text style={{ color: '#FFFFFF', fontSize: 13 }}> ● </Text>
         <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
           {startDay}
         </Text>
-      </View>
-
-      {/* Row 2: Time range • Duration • Price */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+        <Text style={{ color: '#FFFFFF', fontSize: 13 }}> ● </Text>
         <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
-          {startFormatted}
+          {startFormatted} – {endFormatted}
         </Text>
-        <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
-          –
-        </Text>
-        <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
-          {endFormatted}
-        </Text>
-        <Text style={{ color: '#34C759', fontSize: 13 }}> ● </Text>
+        <Text style={{ color: '#FFFFFF', fontSize: 13 }}> ● </Text>
         <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
           {hoursLabel}
         </Text>
-        <Text style={{ color: '#34C759', fontSize: 13 }}> ● </Text>
+        <Text style={{ color: '#FFFFFF', fontSize: 13 }}> ● </Text>
         <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
           {priceDisplay}
         </Text>
