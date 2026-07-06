@@ -42,10 +42,6 @@ const FALLBACK_BANKS = [
   { name: 'Unity Bank', code: '215' },
   { name: 'Wema Bank', code: '035' },
   { name: 'Zenith Bank', code: '057' },
-  { name: 'Kuda Bank', code: '50211' },
-  { name: 'Opay', code: '100004' },
-  { name: 'Palmpay', code: '100033' },
-  { name: 'Moniepoint', code: '50515' },
 ];
 
 interface Bank {
