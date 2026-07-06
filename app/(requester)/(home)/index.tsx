@@ -2053,8 +2053,14 @@ export default function RequesterHomeScreen() {
     });
     console.log('[RequesterHome]', fn, 'response:', res.status);
     if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      throw new Error(errText || `${fn} failed`);
+      let errMsg = `HTTP ${res.status}`;
+      try {
+        const errBody = await res.json();
+        errMsg = errBody.error || errBody.message || errMsg;
+      } catch {
+        try { errMsg = (await res.text()) || errMsg; } catch {}
+      }
+      throw new Error(errMsg);
     }
     return res.json();
   }, []);
@@ -2094,7 +2100,7 @@ export default function RequesterHomeScreen() {
       if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
     } catch (e: any) {
       console.log('[RequesterHome] Pause shift error:', e.message);
-      Alert.alert('Something went wrong', 'Please try again.');
+      Alert.alert('Pause Shift Failed', e.message || 'Something went wrong. Please try again.');
     }
   }, [activeSession, callSessionEdge]);
 
@@ -2107,7 +2113,7 @@ export default function RequesterHomeScreen() {
       if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
     } catch (e: any) {
       console.log('[RequesterHome] End shift error:', e.message);
-      Alert.alert('Something went wrong', 'Please try again.');
+      Alert.alert('End Shift Failed', e.message || 'Something went wrong. Please try again.');
     }
   }, [activeSession, callSessionEdge]);
 
