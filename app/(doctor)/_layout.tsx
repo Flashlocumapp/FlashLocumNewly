@@ -194,6 +194,7 @@ export default function DoctorLayout() {
   const [submittingDoctorRating, setSubmittingDoctorRating] = useState(false);
   const [doctorRatingError, setDoctorRatingError] = useState('');
 
+  const hasShownRatingRef = useRef(false);
   const prevIsOnlineRef = useRef<boolean | undefined>(undefined);
   const callEdgeRef = useRef<(fn: string, body?: object) => Promise<Response | null>>(async () => null);
   const forceSyncRef = useRef<() => Promise<void>>(async () => {});
@@ -266,6 +267,22 @@ export default function DoctorLayout() {
       console.log('[DoctorLayout] Active session fetched:', session?.id ?? 'none', 'job count:', jobCount);
       setActiveSession(session);
       setActiveJobCount(jobCount);
+      // If session is already paid and rating overlay not yet shown, trigger it
+      // (handles app-was-backgrounded case)
+      if (
+        session &&
+        (session.status === 'requester_paid' || session.status === 'settled') &&
+        !hasShownRatingRef.current
+      ) {
+        console.log('[DoctorLayout] fetchActiveSession: session already paid, showing rating overlay for:', session.id);
+        hasShownRatingRef.current = true;
+        setDoctorRatingSessionId(session.id);
+        setDoctorRatingHospitalName(session.hospital_name ?? '');
+        setDoctorRatingStars(0);
+        setDoctorRatingComment('');
+        setDoctorRatingError('');
+        setShowDoctorRating(true);
+      }
     } catch (e: any) {
       console.log('[DoctorLayout] fetchActiveSession error:', e.message);
     }
@@ -454,7 +471,7 @@ export default function DoctorLayout() {
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[DoctorLayout] PAYMENT_CONFIRMED received (session channel):', payload);
         const sessionId = payload?.payload?.session_id ?? activeSession?.id;
-        const hospitalName = activeSession?.hospital_name ?? payload?.payload?.hospital_name ?? '';
+        const hospitalName = payload?.payload?.hospital_name ?? activeSession?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         if (sessionId) {
           console.log('[DoctorLayout] Opening doctor rating overlay for session:', sessionId);
@@ -464,12 +481,14 @@ export default function DoctorLayout() {
           setDoctorRatingComment('');
           setDoctorRatingError('');
           setShowDoctorRating(true);
+          // Refresh session state to get latest data (hospital_name etc.)
+          fetchActiveSession();
         }
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[DoctorLayout] payment_confirmed received (session channel):', payload);
         const sessionId = payload?.payload?.session_id ?? activeSession?.id;
-        const hospitalName = activeSession?.hospital_name ?? payload?.payload?.hospital_name ?? '';
+        const hospitalName = payload?.payload?.hospital_name ?? activeSession?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         if (sessionId) {
           console.log('[DoctorLayout] Opening doctor rating overlay for session:', sessionId);
@@ -479,6 +498,8 @@ export default function DoctorLayout() {
           setDoctorRatingComment('');
           setDoctorRatingError('');
           setShowDoctorRating(true);
+          // Refresh session state to get latest data (hospital_name etc.)
+          fetchActiveSession();
         }
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
@@ -550,7 +571,7 @@ export default function DoctorLayout() {
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[DoctorLayout] PAYMENT_CONFIRMED (doctor channel):', payload);
         const sessionId = payload?.payload?.session_id ?? activeSession?.id;
-        const hospitalName = activeSession?.hospital_name ?? payload?.payload?.hospital_name ?? '';
+        const hospitalName = payload?.payload?.hospital_name ?? activeSession?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         if (sessionId) {
           console.log('[DoctorLayout] Opening doctor rating overlay (doctor channel) for session:', sessionId);
@@ -560,12 +581,14 @@ export default function DoctorLayout() {
           setDoctorRatingComment('');
           setDoctorRatingError('');
           setShowDoctorRating(true);
+          // Refresh session state to get latest data (hospital_name etc.)
+          fetchActiveSession();
         }
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[DoctorLayout] payment_confirmed (doctor channel):', payload);
         const sessionId = payload?.payload?.session_id ?? activeSession?.id;
-        const hospitalName = activeSession?.hospital_name ?? payload?.payload?.hospital_name ?? '';
+        const hospitalName = payload?.payload?.hospital_name ?? activeSession?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         if (sessionId) {
           console.log('[DoctorLayout] Opening doctor rating overlay (doctor channel) for session:', sessionId);
@@ -575,6 +598,8 @@ export default function DoctorLayout() {
           setDoctorRatingComment('');
           setDoctorRatingError('');
           setShowDoctorRating(true);
+          // Refresh session state to get latest data (hospital_name etc.)
+          fetchActiveSession();
         }
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, () => {
@@ -693,6 +718,7 @@ export default function DoctorLayout() {
   const handleDoctorRatingDone = useCallback(() => {
     console.log('[DoctorLayout] Doctor rating overlay dismissed, navigating to payment-summary');
     const sid = doctorRatingSessionId;
+    hasShownRatingRef.current = false;
     setShowDoctorRating(false);
     setDoctorRatingSessionId(null);
     if (sid) {

@@ -1602,6 +1602,18 @@ export default function RequesterHomeScreen() {
       const session: CoverageSession | null = data?.session ?? null;
       console.log('[RequesterHome] Active session fetched:', session?.id ?? 'none', 'status:', session?.status ?? 'none');
       setActiveSession(session);
+      // If session is already paid and we haven't shown the modal yet, show it now
+      // (handles the case where the app was backgrounded during payment)
+      if (session && session.status === 'requester_paid') {
+        setConfirmedSession((prev) => {
+          if (!prev) {
+            // Only show if not already showing
+            setShowPaymentSuccess(true);
+            return session;
+          }
+          return prev;
+        });
+      }
     } catch (e: any) {
       console.log('[RequesterHome] fetchActiveSession error:', e.message);
     } finally {
@@ -1699,6 +1711,16 @@ export default function RequesterHomeScreen() {
           return null;
         });
       })
+      .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+        console.log('[RequesterHome] payment_confirmed received (session channel):', payload);
+        setActiveSession((prev) => {
+          if (prev) {
+            setConfirmedSession(prev);
+            setShowPaymentSuccess(true);
+          }
+          return null;
+        });
+      })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
         console.log('[RequesterHome] PAYMENT_COMPLETE received:', payload);
         setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
@@ -1719,6 +1741,42 @@ export default function RequesterHomeScreen() {
       sessionChannelRef.current = null;
     };
   }, [activeSession?.id]); // only re-subscribe when session ID changes
+
+  // ── Realtime: user channel for payment_confirmed backstop ──────────────────
+  useEffect(() => {
+    if (!user) return;
+    const channelName = `user:${user.id}`;
+    console.log('[RequesterHome] Subscribing to user channel:', channelName);
+
+    const ch = supabase.channel(`requester-home-user:${user.id}`)
+      .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+        console.log('[RequesterHome] payment_confirmed received (user channel):', payload);
+        setActiveSession((prev) => {
+          if (prev) {
+            setConfirmedSession(prev);
+            setShowPaymentSuccess(true);
+          }
+          return null;
+        });
+      })
+      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+        console.log('[RequesterHome] PAYMENT_CONFIRMED received (user channel):', payload);
+        setActiveSession((prev) => {
+          if (prev) {
+            setConfirmedSession(prev);
+            setShowPaymentSuccess(true);
+          }
+          return null;
+        });
+      })
+      .subscribe((status) => {
+        console.log('[RequesterHome] User channel status:', channelName, status);
+      });
+
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [user]);
 
   // ─── Personal requester channel (fallback for SHIFT_CANCELLED) ───────────────
   useEffect(() => {
