@@ -33,8 +33,8 @@ const SHEET_HEIGHT = screenHeight * 0.45;
 const LAGOS_REGION = {
   latitude: 6.5244,
   longitude: 3.3792,
-  latitudeDelta: 0.05,
-  longitudeDelta: 0.05,
+  latitudeDelta: 0.12,
+  longitudeDelta: 0.12,
 };
 
 function formatTime(iso: string) {
@@ -355,7 +355,7 @@ export default function DoctorHomeScreen() {
         if (!hasAnimatedToUser.current && mapRef.current) {
           hasAnimatedToUser.current = true;
           console.log('[DoctorHome] Animating map to immediate fix');
-          mapRef.current.animateToRegion({ ...coords, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 800);
+          mapRef.current.animateToRegion({ ...coords, latitudeDelta: 0.12, longitudeDelta: 0.12 }, 800);
         }
       }
       console.log('[DoctorHome] Starting watch stream');
@@ -373,7 +373,7 @@ export default function DoctorHomeScreen() {
           if (!hasAnimatedToUser.current && mapRef.current) {
             hasAnimatedToUser.current = true;
             mapRef.current.animateToRegion(
-              { ...coords, latitudeDelta: 0.01, longitudeDelta: 0.01 },
+              { ...coords, latitudeDelta: 0.12, longitudeDelta: 0.12 },
               800,
             );
           }
@@ -467,7 +467,7 @@ export default function DoctorHomeScreen() {
   const dotBg = isJobCapReached ? '#8E8E93' : isOnline ? '#FFFFFF' : '#8E8E93';
   const statusText = isJobCapReached ? '3 Jobs Active' : isOnline ? 'Online' : 'Offline';
   const pillTop = insets.top + 12;
-  const sheetPaddingBottom = insets.bottom + 4;
+  const sheetPaddingBottom = 80 + 16;
 
   // Determine which sub-card to show
   const hasActiveSession = activeSession !== null;
