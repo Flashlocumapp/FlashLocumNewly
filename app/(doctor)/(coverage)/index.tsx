@@ -16,6 +16,7 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
+  PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
@@ -305,6 +306,19 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 50) {
+          console.log('[DoctorCoverage] Drag-down gesture closed HistoryDetailSheet');
+          onClose();
+        }
+      },
+    })
+  ).current;
+
   useEffect(() => {
     if (visible) { setStars(0); setComment(''); setError(''); }
   }, [visible, session?.id]);
@@ -377,9 +391,12 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
         <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={{ backgroundColor: '#2C2C2E', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40 }}>
-              {/* Drag handle — tapping it also closes */}
+              {/* Drag handle — tapping or dragging down closes */}
               <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
-                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#636366' }} />
+                <View
+                  {...panResponder.panHandlers}
+                  style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#636366' }}
+                />
               </TouchableOpacity>
 
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 24, paddingTop: 8 }}>

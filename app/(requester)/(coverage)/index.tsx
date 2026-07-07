@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   TextInput,
   KeyboardAvoidingView,
+  PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
@@ -56,6 +57,11 @@ function formatTime(iso: string) {
     minute: '2-digit',
     hour12: true,
   });
+}
+
+function ensureDrTitle(name: string): string {
+  if (!name) return name;
+  return /^dr\.?\s/i.test(name) ? name : `Dr. ${name}`;
 }
 
 function EmptyState({ message }: { message: string }) {
@@ -147,7 +153,7 @@ function HistoryCard({ session, onPress }: {
       {/* Doctor name + rating inline */}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, flexWrap: 'nowrap' }}>
         <Text style={{ fontSize: 17, fontFamily: 'Inter_700Bold', color: '#FFFFFF', flexShrink: 1 }} numberOfLines={1}>
-          {session.doctor_name}
+          {ensureDrTitle(session.doctor_name)}
         </Text>
         <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 8 }}>{'|'}</Text>
         <Text style={{ fontSize: 13, color: '#F4A261' }}>{'★ '}</Text>
@@ -189,6 +195,16 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
     if (visible) { setStars(0); setComment(''); setError(''); }
   }, [visible, session?.id]);
 
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 50) onClose();
+      },
+    })
+  ).current;
+
   if (!session) return null;
 
   const ratingDisplay = Number(session.doctor_rating ?? 0).toFixed(1);
@@ -200,7 +216,8 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const dayLabel = session.shift_date
     ? new Date(session.shift_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' })
     : '';
-  const shiftSummaryLine = `${session.shift_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd}`;
+  const bookedPrice = session.price ? `₦${Number(session.price).toLocaleString()}` : '';
+  const shiftSummaryLine = `${session.shift_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd}${bookedPrice ? ` · ${bookedPrice}` : ''}`;
 
   const settlementStatus = session.status === 'requester_paid' || session.status === 'completed' ? 'Paid' : 'Pending';
 
@@ -261,9 +278,12 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
         <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={{ backgroundColor: '#2C2C2E', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40 }}>
-              {/* Drag handle — tapping it also closes */}
+              {/* Drag handle — tapping or dragging down closes */}
               <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
-                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#636366' }} />
+                <View
+                  {...panResponder.panHandlers}
+                  style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#636366' }}
+                />
               </TouchableOpacity>
 
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 24, paddingTop: 8 }}>
@@ -275,7 +295,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
                 {/* Doctor name + rating inline */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
                   <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#FFFFFF', flexShrink: 1 }} numberOfLines={1}>
-                    {session.doctor_name}
+                    {ensureDrTitle(session.doctor_name)}
                   </Text>
                   <Text style={{ fontSize: 14, color: '#8E8E93', marginHorizontal: 8 }}>{'|'}</Text>
                   <Text style={{ fontSize: 14, color: '#F4A261' }}>{'★ '}</Text>
