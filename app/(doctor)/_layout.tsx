@@ -527,6 +527,7 @@ export default function DoctorLayout() {
     const ch = supabase.channel(channelName)
       .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
         console.log('[DoctorLayout] SHIFT_STARTED received:', payload);
+        hasShownRatingRef.current = false; // reset so rating overlay can show for this new session
         const updated = payload?.payload?.session as CoverageSession | undefined;
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
@@ -561,6 +562,8 @@ export default function DoctorLayout() {
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[DoctorLayout] PAYMENT_CONFIRMED received (session channel):', payload);
+        if (hasShownRatingRef.current) return; // deduplicate — user channel may fire first
+        hasShownRatingRef.current = true;
         // Use activeSessionId (stable ref captured at subscription time) as fallback
         const sessionId = payload?.payload?.session_id ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
@@ -579,6 +582,8 @@ export default function DoctorLayout() {
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[DoctorLayout] payment_confirmed received (session channel):', payload);
+        if (hasShownRatingRef.current) return; // deduplicate — user channel may fire first
+        hasShownRatingRef.current = true;
         const sessionId = payload?.payload?.session_id ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
@@ -616,14 +621,14 @@ export default function DoctorLayout() {
     };
   }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Merged doctor-user channel: scores (RATING_UPDATED, RELIABILITY_UPDATED) ──
-  // Channel 4 (user:{user.id}) was fully redundant with channel 2 (session:{activeSessionId})
-  // for all shift/payment events, so it has been removed. This single channel replaces
-  // both the old doctor-layout-scores channel and the old user:{user.id} channel.
+  // ── Merged doctor-user channel: scores + payment confirmation via user:{user.id} ──
+  // The backend broadcasts PAYMENT_CONFIRMED to user:{doctor_id} (not doctor-user:{id}),
+  // so we subscribe to user:{user.id} here as a reliable fallback alongside the session channel.
+  // Dependency on activeSessionId ensures the handler captures the latest session ID in its closure.
   useEffect(() => {
     if (!user) return;
-    console.log('[DoctorLayout] Subscribing to doctor-user channel for user:', user.id);
-    const ch = supabase.channel(`doctor-user:${user.id}`)
+    console.log('[DoctorLayout] Subscribing to doctor-user channel for user:', user.id, 'activeSessionId:', activeSessionId);
+    const ch = supabase.channel(`user:${user.id}`)
       .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
         console.log('[DoctorLayout] RATING_UPDATED received:', JSON.stringify(payload));
         if (payload?.payload?.reviewer_role === 'requester') {
@@ -642,11 +647,45 @@ export default function DoctorLayout() {
           setDoctorReliabilityScore(Number(newReliability));
         }
       })
+      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+        console.log('[DoctorLayout] PAYMENT_CONFIRMED received (user channel):', payload);
+        if (hasShownRatingRef.current) return; // deduplicate — session channel may fire first
+        hasShownRatingRef.current = true;
+        const sessionId = payload?.payload?.session_id ?? activeSessionId;
+        const hospitalName = payload?.payload?.hospital_name ?? '';
+        setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
+        if (sessionId) {
+          setDoctorRatingSessionId(sessionId);
+          setDoctorRatingHospitalName(hospitalName);
+          setDoctorRatingStars(0);
+          setDoctorRatingComment('');
+          setDoctorRatingError('');
+          setShowDoctorRating(true);
+          fetchActiveSession();
+        }
+      })
+      .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+        console.log('[DoctorLayout] payment_confirmed received (user channel):', payload);
+        if (hasShownRatingRef.current) return; // deduplicate — session channel may fire first
+        hasShownRatingRef.current = true;
+        const sessionId = payload?.payload?.session_id ?? activeSessionId;
+        const hospitalName = payload?.payload?.hospital_name ?? '';
+        setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
+        if (sessionId) {
+          setDoctorRatingSessionId(sessionId);
+          setDoctorRatingHospitalName(hospitalName);
+          setDoctorRatingStars(0);
+          setDoctorRatingComment('');
+          setDoctorRatingError('');
+          setShowDoctorRating(true);
+          fetchActiveSession();
+        }
+      })
       .subscribe((status) => {
-        console.log('[DoctorLayout] doctor-user channel status:', status);
+        console.log('[DoctorLayout] user channel status:', status);
       });
     return () => { supabase.removeChannel(ch); };
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Queue → state sync ──
   useEffect(() => {
