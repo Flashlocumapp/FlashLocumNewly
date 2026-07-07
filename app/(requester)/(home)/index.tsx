@@ -1608,6 +1608,11 @@ export default function RequesterHomeScreen() {
   const realtimeChannelRef = useRef<any>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shouldPollRef = useRef(false);
+  const isRealtimeHealthyRef = useRef(false);
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  const fetchActiveSessionRef = useRef<() => void>(() => {});
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  const transitionToRef = useRef<(state: SheetState) => void>(() => {});
 
   // ─── Load recent place on mount ───────────────────────────────────────────────
   useEffect(() => {
@@ -1944,6 +1949,10 @@ export default function RequesterHomeScreen() {
     animateSheet(state);
   }, [sheetState, animateSheet]);
 
+  // ─── Keep stable refs in sync with latest callbacks ──────────────────────────
+  useEffect(() => { fetchActiveSessionRef.current = fetchActiveSession; }, [fetchActiveSession]);
+  useEffect(() => { transitionToRef.current = transitionTo; }, [transitionTo]);
+
   // ─── Clean up search state when leaving searching ─────────────────────────────
   useEffect(() => {
     if (sheetState !== 'searching') {
@@ -2092,7 +2101,7 @@ export default function RequesterHomeScreen() {
       realtimeChannelRef.current = supabase.channel(channelName)
         .on('broadcast', { event: 'MATCH_CONFIRMED' }, (payload) => {
           console.log('[RequesterHome] MATCH_CONFIRMED received:', JSON.stringify(payload));
-          shouldPollRef.current = false; // stop poll
+          shouldPollRef.current = false;
           if (pollIntervalRef.current) {
             console.log('[RequesterHome] MATCH_CONFIRMED — clearing poll timeout');
             clearTimeout(pollIntervalRef.current);
@@ -2100,8 +2109,8 @@ export default function RequesterHomeScreen() {
           }
           if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
           console.log('[RequesterHome] MATCH_CONFIRMED — fetching active session and resetting to idle');
-          fetchActiveSession();
-          transitionTo('idle');
+          fetchActiveSessionRef.current();
+          transitionToRef.current('idle');
         })
         .on('broadcast', { event: 'REQUEST_EXPIRED' }, () => {
           console.log('[RequesterHome] REQUEST_EXPIRED received');
@@ -2112,17 +2121,45 @@ export default function RequesterHomeScreen() {
           }
           if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
           Alert.alert('Request Expired', 'Your request expired. Please try again.');
-          transitionTo('summary');
+          transitionToRef.current('summary');
         })
         .subscribe((status) => {
           console.log('[RequesterHome] Realtime channel status:', channelName, status);
+          isRealtimeHealthyRef.current = status === 'SUBSCRIBED';
         });
+
+      // One-time mount check — catches match that happened while app was backgrounded
+      (async () => {
+        try {
+          const { data } = await supabase
+            .from('coverage_requests')
+            .select('status, matched_doctor_id')
+            .eq('id', activeRequestId)
+            .single();
+          if (data?.status === 'matched' && data?.matched_doctor_id) {
+            console.log('[RequesterHome] Mount check: already matched, transitioning to idle');
+            shouldPollRef.current = false;
+            if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+            fetchActiveSessionRef.current();
+            transitionToRef.current('idle');
+          }
+        } catch (e: any) {
+          console.log('[RequesterHome] Mount check error:', e.message);
+        }
+      })();
 
       // Poll as fallback in case MATCH_CONFIRMED broadcast was missed
       // Uses recursive setTimeout + shouldPollRef to survive StrictMode double-invocation
       shouldPollRef.current = true;
 
       const doPoll = async () => {
+        if (!__DEV__ && isRealtimeHealthyRef.current) {
+          // Realtime is healthy in production — skip this poll tick
+          if (shouldPollRef.current) {
+            pollIntervalRef.current = setTimeout(doPoll, 5000) as any;
+          }
+          return;
+        }
         if (!shouldPollRef.current) return;
         console.log('[RequesterHome] Polling for match status:', activeRequestId);
 
@@ -2148,8 +2185,8 @@ export default function RequesterHomeScreen() {
 
             if (session) {
               console.log('[RequesterHome] Poll match confirmed — fetching active session and resetting to idle');
-              fetchActiveSession();
-              transitionTo('idle');
+              fetchActiveSessionRef.current();
+              transitionToRef.current('idle');
             }
             return; // stop polling
           } else if (

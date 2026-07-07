@@ -360,15 +360,19 @@ export default function DoctorLayout() {
   useEffect(() => {
     if (!isOnline || !user) return;
     const id = setInterval(() => {
-      // Always sync — Realtime health only affects logging, not whether we sync.
-      if (!isRealtimeHealthyRef.current) {
-        console.log('[DoctorLayout] Poll tick — Realtime unhealthy, force-syncing');
+      if (__DEV__ || !isRealtimeHealthyRef.current) {
+        // DEV: always poll (Expo Go / Newly preview WebSocket is unreliable)
+        // PROD: only poll when Realtime is actually down
+        if (!isRealtimeHealthyRef.current) {
+          console.log('[DoctorLayout] Poll tick — Realtime unhealthy, force-syncing');
+        } else {
+          console.log('[DoctorLayout] Poll tick — DEV mode, syncing as safety net');
+        }
+        forceSyncRef.current();
+        fetchActiveSession();
       } else {
-        console.log('[DoctorLayout] Poll tick — Realtime healthy, syncing anyway as safety net');
+        console.log('[DoctorLayout] Poll tick — Realtime healthy in production, skipping DB reads');
       }
-      forceSyncRef.current();
-      // Also re-fetch active session on every tick as a safety net
-      fetchActiveSession();
     }, POLL_INTERVAL);
     return () => clearInterval(id);
   }, [isOnline, user, fetchActiveSession]);
