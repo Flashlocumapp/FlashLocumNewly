@@ -495,7 +495,7 @@ export default function DoctorHomeScreen() {
           >
             <View style={styles.markerContainer}>
               <View style={styles.stethoscopeCircle}>
-                <MaterialCommunityIcons name="stethoscope" size={28} color="#FFFFFF" />
+                <MaterialCommunityIcons name="stethoscope" size={17} color="#FFFFFF" />
               </View>
             </View>
           </Marker>
@@ -585,15 +585,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   markerContainer: {
-    width: 80,
-    height: 80,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stethoscopeCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#1C1C1E',
     alignItems: 'center',
     justifyContent: 'center',

@@ -25,7 +25,7 @@ import {
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
@@ -1618,9 +1618,62 @@ export default function RequesterHomeScreen() {
 
   const mapRef = useRef<MapView>(null);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const [onlineDoctors, setOnlineDoctors] = useState<{ id: string; lat: number; lng: number }[]>([]);
+
   const locationSub = useRef<Location.LocationSubscription | null>(null);
   const hasInitialFix = useRef(false);
+
+  // ── Online doctors realtime ──
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchOnlineDoctors = async () => {
+      const { data, error } = await supabase
+        .from('doctor_profiles')
+        .select('id, lat, lng')
+        .eq('is_online', true)
+        .not('lat', 'is', null)
+        .not('lng', 'is', null);
+      if (error) {
+        console.log('[RequesterHome] fetchOnlineDoctors error:', error.message);
+        return;
+      }
+      console.log('[RequesterHome] Online doctors fetched:', data?.length ?? 0);
+      setOnlineDoctors((data ?? []) as { id: string; lat: number; lng: number }[]);
+    };
+
+    fetchOnlineDoctors();
+
+    const ch = supabase
+      .channel('online-doctors')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'doctor_profiles' },
+        (payload) => {
+          console.log('[RequesterHome] doctor_profiles change:', payload.eventType, payload.new);
+          const row = payload.new as { id: string; lat?: number; lng?: number; is_online?: boolean } | null;
+          if (!row) {
+            if (payload.old) {
+              setOnlineDoctors((prev) => prev.filter((d) => d.id !== (payload.old as any).id));
+            }
+            return;
+          }
+          if (row.is_online && row.lat != null && row.lng != null) {
+            setOnlineDoctors((prev) => {
+              const filtered = prev.filter((d) => d.id !== row.id);
+              return [...filtered, { id: row.id, lat: row.lat!, lng: row.lng! }];
+            });
+          } else {
+            setOnlineDoctors((prev) => prev.filter((d) => d.id !== row.id));
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[RequesterHome] online-doctors channel status:', status);
+      });
+
+    return () => { supabase.removeChannel(ch); };
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sheet state
   const [sheetState, setSheetState] = useState<SheetState>('idle');
@@ -2026,17 +2079,7 @@ export default function RequesterHomeScreen() {
     return () => { locationSub.current?.remove(); };
   }, []);
 
-  // ─── Pulse animation loop ─────────────────────────────────────────────────────
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.6, duration: 1200, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1.0, duration: 600, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulseAnim]);
+
 
   // ─── GPS diagnostic watcher ───────────────────────────────────────────────────
   useEffect(() => {
@@ -2789,18 +2832,25 @@ export default function RequesterHomeScreen() {
       >
         {userCoords && (
           <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
-            <View style={{ width: 100, height: 100, alignItems: 'center', justifyContent: 'center' }}>
-              <Animated.View style={{
-                position: 'absolute', width: 100, height: 100, borderRadius: 50,
-                backgroundColor: 'rgba(37,99,235,0.12)',
-                transform: [{ scale: pulseAnim }],
-                opacity: pulseAnim.interpolate({ inputRange: [1, 1.6], outputRange: [0.9, 0], extrapolate: 'clamp' }),
-              }} />
-              <View style={{ position: 'absolute', width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(37,99,235,0.22)' }} />
-              <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#2563EB', borderWidth: 2.5, borderColor: '#FFFFFF', shadowColor: '#2563EB', shadowOpacity: 0.5, shadowRadius: 4, elevation: 4 }} />
-            </View>
+            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#1C1C1E', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
           </Marker>
         )}
+        {onlineDoctors.map((doc) => (
+          <Marker
+            key={doc.id}
+            coordinate={{ latitude: doc.lat, longitude: doc.lng }}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={false}
+          >
+            <View style={{
+              width: 32, height: 32, borderRadius: 16,
+              backgroundColor: '#1C1C1E',
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <MaterialCommunityIcons name="stethoscope" size={17} color="#FFFFFF" />
+            </View>
+          </Marker>
+        ))}
       </MapView>
 
 

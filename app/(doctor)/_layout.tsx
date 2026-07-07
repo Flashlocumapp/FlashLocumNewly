@@ -13,6 +13,7 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { Stack, Href, useRouter } from 'expo-router';
+import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   useFonts,
@@ -235,6 +236,7 @@ export default function DoctorLayout() {
   const doctorChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const isOnlineRef = useRef(false);
   const isRealtimeHealthyRef = useRef(false);
+  const lastLocationRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const callEdge = useCallback(async (fn: string, body?: object) => {
     const token = await getValidToken();
@@ -386,12 +388,34 @@ export default function DoctorLayout() {
     toggle();
   }, [isOnline, user]);
 
+  // ── Location watcher while online ──
+  useEffect(() => {
+    if (!isOnline || !user) return;
+    let sub: Location.LocationSubscription | null = null;
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('[DoctorLayout] Location permission not granted');
+        return;
+      }
+      sub = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Balanced, timeInterval: 30000, distanceInterval: 50 },
+        (loc) => {
+          lastLocationRef.current = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+          console.log('[DoctorLayout] Location updated:', lastLocationRef.current);
+        }
+      );
+    })();
+    return () => { sub?.remove(); };
+  }, [isOnline, user]);
+
   // ── Heartbeat every 60s while online ──
   useEffect(() => {
     if (!isOnline || !user) return;
     const send = async () => {
       console.log('[DoctorLayout] Sending heartbeat');
-      await callEdge('heartbeat');
+      const locPayload = lastLocationRef.current ? { lat: lastLocationRef.current.lat, lng: lastLocationRef.current.lng } : {};
+      await callEdge('heartbeat', locPayload);
     };
     send();
     const id = setInterval(send, 60000);
