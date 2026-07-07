@@ -51,12 +51,6 @@
       "bundler": "metro"
     },
     "plugins": [
-      [
-        "onesignal-expo-plugin",
-        {
-          "mode": "production"
-        }
-      ],
       "expo-font",
       "expo-router",
       "expo-web-browser",
@@ -70,7 +64,8 @@
     "extra": {
       "router": {},
       "backendUrl": "https://bm7mn4rkap7zw8ax5ddfbmfaz9q8m3ru.app.specular.dev",
-      "oneSignalAppId": "e865db07-c6ae-412a-ba03-d139e934eeb0"
+      "oneSignalAppId": "e865db07-c6ae-412a-ba03-d139e934eeb0",
+      "_onesignal_disabled": "Re-add onesignal-expo-plugin to plugins and restore NotificationContext.native.tsx when Apple Developer account is approved"
     }
   }
 }
