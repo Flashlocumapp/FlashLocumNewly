@@ -1085,20 +1085,16 @@ function RequesterPaymentCard({
             Transfer Exactly
           </Text>
 
-          {/* Amount — always from backend */}
-          {isLoading ? (
-            <Animated.View style={{ opacity: skeletonAnim, backgroundColor: '#E5E5EA', borderRadius: 8, height: 64, width: 200, marginBottom: 28 }} />
-          ) : (
-            <Text style={{
-              fontSize: 56,
-              fontFamily: 'Inter_700Bold',
-              color: '#000000',
-              marginBottom: 28,
-              letterSpacing: -1,
-            }}>
-              {amountDisplay}
-            </Text>
-          )}
+          {/* Amount — falls back to session.price immediately, updates when paymentIntent loads */}
+          <Text style={{
+            fontSize: 56,
+            fontFamily: 'Inter_700Bold',
+            color: '#000000',
+            marginBottom: 28,
+            letterSpacing: -1,
+          }}>
+            {amountDisplay}
+          </Text>
 
           {/* Refreshing overlay */}
           {refreshing && (
@@ -1134,13 +1130,9 @@ function RequesterPaymentCard({
             <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 6 }}>
               BANK
             </Text>
-            {hasAccountDetails ? (
-              <Text style={{ fontSize: 17, fontFamily: 'Inter_600SemiBold', color: '#000000', marginBottom: 16 }}>
-                {bankName}
-              </Text>
-            ) : (
-              <Animated.View style={{ opacity: skeletonAnim, backgroundColor: '#E5E5EA', borderRadius: 6, height: 20, width: 140, marginBottom: 16 }} />
-            )}
+            <Text style={{ fontSize: 17, fontFamily: 'Inter_600SemiBold', color: loadingIntent ? '#8E8E93' : '#000000', marginBottom: 16 }}>
+              {loadingIntent ? 'Loading...' : (bankName || '—')}
+            </Text>
 
             <View style={{ height: 1, backgroundColor: '#F2F2F7', marginBottom: 16 }} />
 
@@ -1149,14 +1141,10 @@ function RequesterPaymentCard({
               ACCOUNT NUMBER
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              {hasAccountDetails ? (
-                <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: '#000000', letterSpacing: 1 }}>
-                  {accountNumber}
-                </Text>
-              ) : (
-                <Animated.View style={{ opacity: skeletonAnim, backgroundColor: '#E5E5EA', borderRadius: 6, height: 32, width: 180 }} />
-              )}
-              {hasAccountDetails && (
+              <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: loadingIntent ? '#8E8E93' : '#000000', letterSpacing: 1 }}>
+                {loadingIntent ? '— — — —' : (accountNumber || '— — — —')}
+              </Text>
+              {!loadingIntent && !!accountNumber && (
                 <TouchableOpacity
                   onPress={handleCopy}
                   activeOpacity={0.7}
@@ -1184,13 +1172,9 @@ function RequesterPaymentCard({
             <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 6 }}>
               ACCOUNT NAME
             </Text>
-            {hasAccountDetails ? (
-              <Text style={{ fontSize: 17, fontFamily: 'Inter_600SemiBold', color: '#000000' }}>
-                {session.monnify_account_name ?? '—'}
-              </Text>
-            ) : (
-              <Animated.View style={{ opacity: skeletonAnim, backgroundColor: '#E5E5EA', borderRadius: 6, height: 20, width: 200 }} />
-            )}
+            <Text style={{ fontSize: 17, fontFamily: 'Inter_600SemiBold', color: loadingIntent ? '#8E8E93' : '#000000' }}>
+              {loadingIntent ? 'Loading...' : (session.monnify_account_name ?? '—')}
+            </Text>
           </View>
 
           {/* Countdown Card */}
@@ -1735,7 +1719,8 @@ export default function RequesterHomeScreen() {
 
   // Active session state
   const [activeSession, setActiveSession] = useState<CoverageSession | null>(null);
-  const [sessionLoading, setSessionLoading] = useState(true);
+  const isFirstLoadRef = useRef(true);
+  const [sessionLoading, setSessionLoading] = useState(false); // kept for any remaining uses but never set true again after first load
   // Stable session ID — only set when a real ID arrives, never cleared when session becomes null.
   // This prevents the session channel from re-subscribing to 'session:undefined' after payment_confirmed.
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -1811,6 +1796,7 @@ export default function RequesterHomeScreen() {
     } catch (e: any) {
       console.log('[RequesterHome] fetchActiveSession error:', e.message);
     } finally {
+      isFirstLoadRef.current = false;
       setSessionLoading(false);
     }
   }, []);
@@ -3497,24 +3483,8 @@ export default function RequesterHomeScreen() {
       {/* ── IDLE BOTTOM CONTAINER (white card only — tab bar is in layout) ── */}
       {sheetState === 'idle' && (
         <>
-          {/* Loading state */}
-          {sessionLoading && (
-            <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
-              <View style={{
-                backgroundColor: '#1C1C1E',
-                borderTopLeftRadius: 24, borderTopRightRadius: 24,
-                paddingTop: 16, paddingHorizontal: 16,
-                paddingBottom: whiteCardPaddingBottom,
-                minHeight: 120,
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                <ActivityIndicator size="large" color="#FFFFFF" />
-              </View>
-            </View>
-          )}
-
           {/* Active session — upcoming or paused */}
-          {!sessionLoading && activeSession !== null &&
+          {activeSession !== null &&
             (activeSession.status === 'upcoming' || activeSession.status === 'paused') && (
             <RequesterUpcomingCard
               session={activeSession}
@@ -3528,7 +3498,7 @@ export default function RequesterHomeScreen() {
           )}
 
           {/* Active session — active */}
-          {!sessionLoading && activeSession !== null && activeSession.status === 'active' && (
+          {activeSession !== null && activeSession.status === 'active' && (
             <RequesterActiveCard
               session={activeSession}
               onCall={handleCallDoctor}
@@ -3539,7 +3509,7 @@ export default function RequesterHomeScreen() {
           )}
 
           {/* Active session — payment pending */}
-          {!sessionLoading && activeSession !== null && activeSession.status === 'payment_pending' && (
+          {activeSession !== null && activeSession.status === 'payment_pending' && (
             <RequesterPaymentCard
               session={activeSession}
               bottomPadding={whiteCardPaddingBottom}
@@ -3548,7 +3518,7 @@ export default function RequesterHomeScreen() {
           )}
 
           {/* Settled — payment received, awaiting doctor bank remittance */}
-          {!sessionLoading && activeSession !== null && activeSession.status === 'settled' && (
+          {activeSession !== null && activeSession.status === 'settled' && (
             <View style={{
               position: 'absolute', bottom: 0, left: 0, right: 0,
               backgroundColor: '#1C1C1E',
@@ -3583,7 +3553,7 @@ export default function RequesterHomeScreen() {
           )}
 
           {/* Payment Complete — funds remitted to doctor */}
-          {!sessionLoading && activeSession !== null && activeSession.status === 'payment_complete' && (
+          {activeSession !== null && activeSession.status === 'payment_complete' && (
             <View style={{
               position: 'absolute', bottom: 0, left: 0, right: 0,
               backgroundColor: '#1C1C1E',
@@ -3618,7 +3588,7 @@ export default function RequesterHomeScreen() {
           )}
 
           {/* No active session — show search card */}
-          {!sessionLoading && (activeSession === null ||
+          {(activeSession === null ||
             activeSession.status === 'completed' ||
             activeSession.status === 'cancelled') && (
             <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
