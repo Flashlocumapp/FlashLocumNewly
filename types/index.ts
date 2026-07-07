@@ -49,6 +49,7 @@ export type DoctorEarning = {
   disbursement_reference: string | null;
   disbursed_at: string | null;
   paid_at: string | null;
+  hospital_name?: string;
 };
 
 export interface AuthContextType {
