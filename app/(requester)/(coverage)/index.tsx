@@ -135,11 +135,11 @@ function HistoryCard({ session, onPress }: {
       }}
       activeOpacity={0.85}
       style={{
-        backgroundColor: '#2C2C2E',
+        backgroundColor: '#FFFFFF',
         borderRadius: 20,
         padding: 16,
         marginBottom: 12,
-        ...(Platform.OS === 'ios' ? { boxShadow: '0 2px 8px rgba(0,0,0,0.18)' } as any : { elevation: 4 }),
+        ...(Platform.OS === 'ios' ? { boxShadow: '0 2px 8px rgba(0,0,0,0.08)' } as any : { elevation: 4 }),
       }}
     >
       {/* Header row */}
@@ -152,14 +152,14 @@ function HistoryCard({ session, onPress }: {
 
       {/* Doctor name + rating inline */}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, flexWrap: 'nowrap' }}>
-        <Text style={{ fontSize: 17, fontFamily: 'Inter_700Bold', color: '#FFFFFF', flexShrink: 1 }} numberOfLines={1}>
+        <Text style={{ fontSize: 17, fontFamily: 'Inter_700Bold', color: '#1C1C1E', flexShrink: 1 }} numberOfLines={1}>
           {ensureDrTitle(session.doctor_name)}
         </Text>
         <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 8 }}>{'|'}</Text>
         <Text style={{ fontSize: 13, color: '#F4A261' }}>{'★ '}</Text>
-        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
+        <Text style={{ fontSize: 13, color: '#1C1C1E', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
         <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759', marginHorizontal: 5 }} />
-        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>{reliabilityDisplay}{'%'}</Text>
+        <Text style={{ fontSize: 13, color: '#1C1C1E', fontFamily: 'Inter_600SemiBold' }}>{reliabilityDisplay}{'%'}</Text>
       </View>
 
       {/* MDCN */}
@@ -168,8 +168,8 @@ function HistoryCard({ session, onPress }: {
       </Text>
 
       {/* Shift pill */}
-      <View style={{ backgroundColor: '#3A3A3C', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' }}>
-        <Text style={{ fontSize: 12, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }} numberOfLines={1}>
+      <View style={{ backgroundColor: '#F0F0F0', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' }}>
+        <Text style={{ fontSize: 12, color: '#1C1C1E', fontFamily: 'Inter_400Regular' }} numberOfLines={1}>
           {shiftPill}
         </Text>
       </View>

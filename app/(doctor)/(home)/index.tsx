@@ -258,7 +258,7 @@ export default function DoctorHomeScreen() {
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
   const { user } = useAuth();
 
-  const { isOnline, setIsOnline, activeSession, setActiveSession, activeJobCount } = useDoctorDispatch();
+  const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount } = useDoctorDispatch();
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCancelReasons, setShowCancelReasons] = useState(false);
@@ -390,7 +390,15 @@ export default function DoctorHomeScreen() {
     if (isJobCapReached) return;
     const next = !isOnline;
     console.log('[DoctorHome] Status pill pressed — toggling to:', next ? 'Online' : 'Offline');
-    setIsOnline(next);
+    if (next) {
+      const coords = userLocation
+        ? { lat: userLocation.latitude, lng: userLocation.longitude }
+        : undefined;
+      console.log('[DoctorHome] Going online with coords:', coords ?? 'none (userLocation is null)');
+      goOnline(coords);
+    } else {
+      setIsOnline(false);
+    }
   };
 
   // ─── Cancel shift ────────────────────────────────────────────────────────────
@@ -474,7 +482,7 @@ export default function DoctorHomeScreen() {
           >
             <View style={styles.markerContainer}>
               <View style={styles.stethoscopeCircle}>
-                <MaterialCommunityIcons name="stethoscope" size={17} color="#FFFFFF" />
+                <MaterialCommunityIcons name="stethoscope" size={12} color="#FFFFFF" />
               </View>
             </View>
           </Marker>
@@ -639,15 +647,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   markerContainer: {
-    width: 48,
-    height: 48,
+    width: 32,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stethoscopeCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: '#1C1C1E',
     alignItems: 'center',
     justifyContent: 'center',

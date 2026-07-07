@@ -73,6 +73,7 @@ export type CoverageSession = {
 type DoctorDispatchCtx = {
   isOnline: boolean;
   setIsOnline: (v: boolean) => void;
+  goOnline: (coords?: { lat: number; lng: number }) => void;
   doctorScreenState: DoctorScreenState;
   currentRequest: DispatchRequest | null;
   confirmedRequest: DispatchRequest | null;
@@ -88,6 +89,7 @@ type DoctorDispatchCtx = {
 export const DoctorDispatchContext = createContext<DoctorDispatchCtx>({
   isOnline: false,
   setIsOnline: () => {},
+  goOnline: () => {},
   doctorScreenState: 'idle',
   currentRequest: null,
   confirmedRequest: null,

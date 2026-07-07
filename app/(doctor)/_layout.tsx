@@ -237,6 +237,8 @@ export default function DoctorLayout() {
   const isOnlineRef = useRef(false);
   const isRealtimeHealthyRef = useRef(false);
   const lastLocationRef = useRef<{ lat: number; lng: number } | null>(null);
+  // Coords passed from home screen when going online
+  const pendingGoOnlineCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const callEdge = useCallback(async (fn: string, body?: object) => {
     const token = await getValidToken();
@@ -327,6 +329,15 @@ export default function DoctorLayout() {
   useEffect(() => { forceSyncRef.current = forceSync; }, [forceSync]);
   useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
 
+  // Go online with optional GPS coords from the home screen
+  const goOnline = useCallback((coords?: { lat: number; lng: number }) => {
+    console.log('[DoctorLayout] goOnline called with coords:', coords ?? 'none');
+    if (coords) {
+      pendingGoOnlineCoordsRef.current = coords;
+    }
+    setIsOnline(true);
+  }, []);
+
   // ─── Keep activeSessionId in sync — only set, never clear ───────────────────
   useEffect(() => {
     if (activeSession?.id) {
@@ -354,7 +365,14 @@ export default function DoctorLayout() {
       const fn = isOnline ? 'go-online' : 'go-offline';
       console.log('[DoctorLayout] Toggling status:', fn);
       try {
-        const res = await callEdgeRef.current(fn);
+        const goOnlineBody = isOnline && pendingGoOnlineCoordsRef.current
+          ? { lat: pendingGoOnlineCoordsRef.current.lat, lng: pendingGoOnlineCoordsRef.current.lng }
+          : undefined;
+        if (isOnline) {
+          console.log('[DoctorLayout] go-online coords:', goOnlineBody ?? 'none');
+        }
+        pendingGoOnlineCoordsRef.current = null;
+        const res = await callEdgeRef.current(fn, goOnlineBody);
         if (isOnline) {
           if (!res || !res.ok) {
             let body = '';
@@ -793,6 +811,7 @@ export default function DoctorLayout() {
     <DoctorDispatchContext.Provider value={{
       isOnline,
       setIsOnline,
+      goOnline,
       doctorScreenState,
       currentRequest,
       confirmedRequest,
