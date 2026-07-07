@@ -47,7 +47,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+        // Session is already updated in the Supabase client's internal cache.
+        // No action needed — just log for debugging.
+        console.log('[AuthContext] Auth event:', event, 'session expires_at:', session?.expires_at);
+      }
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {

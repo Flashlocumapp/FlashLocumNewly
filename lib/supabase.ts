@@ -34,21 +34,59 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
+// Module-level in-flight dedup: only one refresh call at a time
+let _refreshPromise: Promise<string | null> | null = null;
+
 /**
- * Always returns a valid access token.
- * Tries refreshSession() first to get a fresh JWT.
- * Falls back to getSession() if refresh fails (e.g. no network).
- * Returns null only if the user is not logged in at all.
+ * Always returns a valid access token for the logged-in user.
+ * - Returns the cached token immediately if it expires >60 s from now (no network).
+ * - Refreshes only when the token is expiring soon or missing.
+ * - Deduplicates concurrent callers — only one refreshSession() call goes out at a time.
+ * - Retries once on failure with a 1-second delay.
+ * - Never throws; returns null only if the user is genuinely not logged in.
  */
 export async function getValidToken(): Promise<string | null> {
+  // Fast path: return cached token if still fresh
   try {
-    const { data, error } = await supabase.auth.refreshSession();
-    if (!error && data.session?.access_token) {
-      return data.session.access_token;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      const expiresAt = session.expires_at ?? 0; // unix seconds
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      if (expiresAt - nowSeconds > 60) {
+        return session.access_token;
+      }
     }
   } catch {
-    // network error — fall through to cached session
+    // fall through to refresh
   }
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
+
+  // Slow path: refresh, deduplicating concurrent callers
+  if (!_refreshPromise) {
+    _refreshPromise = (async (): Promise<string | null> => {
+      try {
+        const { data, error } = await supabase.auth.refreshSession();
+        if (!error && data.session?.access_token) {
+          return data.session.access_token;
+        }
+      } catch {
+        // first attempt failed — wait 1s and retry once
+      }
+      await new Promise(r => setTimeout(r, 1000));
+      try {
+        const { data, error } = await supabase.auth.refreshSession();
+        if (!error && data.session?.access_token) {
+          return data.session.access_token;
+        }
+      } catch {
+        // both attempts failed
+      }
+      // Last resort: return whatever is cached
+      const { data: { session } } = await supabase.auth.getSession();
+      return session?.access_token ?? null;
+    })().finally(() => {
+      _refreshPromise = null;
+    });
+  }
+
+  return _refreshPromise;
 }
