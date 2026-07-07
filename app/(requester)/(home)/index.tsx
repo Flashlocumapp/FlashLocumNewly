@@ -478,9 +478,9 @@ function RequesterUpcomingCard({
   const doctorName = cleanName && !cleanName.includes('@') ? `Dr. ${cleanName}` : 'Doctor';
   const initials = cleanName ? getSessionInitials(cleanName) : 'DR';
   const ratingRaw = Number(session.doctor_rating);
-  const ratingDisplay = (!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '—' : ratingRaw.toFixed(1);
+  const ratingDisplay = (!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '5.0' : ratingRaw.toFixed(1);
   const reliabilityRaw = Number(session.doctor_reliability);
-  const reliabilityDisplay = (!session.doctor_reliability || isNaN(reliabilityRaw) || reliabilityRaw === 0) ? '—' : String(Math.round(reliabilityRaw));
+  const reliabilityDisplay = (!session.doctor_reliability || isNaN(reliabilityRaw) || reliabilityRaw === 0) ? '100' : String(Math.round(reliabilityRaw));
 
   return (
     <View style={{
@@ -525,11 +525,9 @@ function RequesterUpcomingCard({
             <Text style={{ fontSize: 12, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759', marginHorizontal: 5 }} />
             <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>
-              {reliabilityDisplay === '—' ? '—' : reliabilityDisplay}
+              {reliabilityDisplay}
             </Text>
-            {reliabilityDisplay !== '—' && (
-              <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{'%'}</Text>
-            )}
+            <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{'%'}</Text>
           </View>
           {/* MDCN below */}
           <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 2 }}>
@@ -620,9 +618,9 @@ function RequesterActiveCard({
   const doctorName = cleanName && !cleanName.includes('@') ? `Dr. ${cleanName}` : 'Doctor';
   const initials = cleanName ? getSessionInitials(cleanName) : 'DR';
   const ratingRaw = Number(session.doctor_rating);
-  const ratingDisplay = (!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '—' : ratingRaw.toFixed(1);
+  const ratingDisplay = (!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '5.0' : ratingRaw.toFixed(1);
   const reliabilityRaw = Number(session.doctor_reliability);
-  const reliabilityDisplay = (!session.doctor_reliability || isNaN(reliabilityRaw) || reliabilityRaw === 0) ? '—' : String(Math.round(reliabilityRaw));
+  const reliabilityDisplay = (!session.doctor_reliability || isNaN(reliabilityRaw) || reliabilityRaw === 0) ? '100' : String(Math.round(reliabilityRaw));
   const shiftPillText = buildShiftPillText(session);
   const showDayPill = session.coverage_length > 1;
   const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;
@@ -672,11 +670,9 @@ function RequesterActiveCard({
             <Text style={{ fontSize: 12, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
             <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759', marginHorizontal: 5 }} />
             <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>
-              {reliabilityDisplay === '—' ? '—' : reliabilityDisplay}
+              {reliabilityDisplay}
             </Text>
-            {reliabilityDisplay !== '—' && (
-              <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{'%'}</Text>
-            )}
+            <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{'%'}</Text>
           </View>
           {/* MDCN below */}
           <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 2 }}>
@@ -3575,7 +3571,7 @@ export default function RequesterHomeScreen() {
             const res = await fetch(`${EDGE_BASE}/submit-review`, {
               method: 'POST',
               headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ session_id: confirmedSession.id, stars: ratingStars, comment: ratingComment || undefined }),
+              body: JSON.stringify({ session_id: confirmedSession.id, stars: ratingStars, comment: ratingComment || undefined, reviewer_role: 'requester' }),
             });
             console.log('[RequesterHome] submit-review response:', res.status);
             if (!res.ok) {

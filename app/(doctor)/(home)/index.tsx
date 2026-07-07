@@ -23,6 +23,7 @@ import {
 } from '@expo-google-fonts/inter';
 import { useDoctorDispatch } from '@/contexts/DoctorDispatchContext';
 import { supabase, getValidToken } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
@@ -254,8 +255,37 @@ function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCal
 export default function DoctorHomeScreen() {
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
+  const { user } = useAuth();
 
   const { isOnline, setIsOnline, activeSession, setActiveSession, activeJobCount } = useDoctorDispatch();
+
+  // Live rating/reliability state — baseline is 5.0 / 100%
+  const [doctorRating, setDoctorRating] = useState<number>(5.0);
+  const [doctorReliability, setDoctorReliability] = useState<number>(100);
+
+  // ─── Realtime: live rating/reliability updates ───────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    const ch = supabase.channel(`doctor-scores:${user.id}`)
+      .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
+        console.log('[DoctorHome] RATING_UPDATED received:', payload);
+        const newRating = payload?.payload?.new_rating;
+        if (newRating !== undefined) {
+          setDoctorRating(Number(newRating));
+        }
+      })
+      .on('broadcast', { event: 'RELIABILITY_UPDATED' }, (payload) => {
+        console.log('[DoctorHome] RELIABILITY_UPDATED received:', payload);
+        const newReliability = payload?.payload?.new_reliability;
+        if (newReliability !== undefined) {
+          setDoctorReliability(Number(newReliability));
+        }
+      })
+      .subscribe((status) => {
+        console.log('[DoctorHome] Scores channel status:', status);
+      });
+    return () => { supabase.removeChannel(ch); };
+  }, [user]);
 
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
@@ -517,7 +547,7 @@ export default function DoctorHomeScreen() {
                 <Feather name="info" size={12} color="#8E8E93" />
               </View>
               <View style={styles.ratingValueRow}>
-                <Text style={styles.statValue}>4.7</Text>
+                <Text style={styles.statValue}>{doctorRating.toFixed(1)}</Text>
                 <Text style={styles.starIcon}>★</Text>
               </View>
             </View>
@@ -528,7 +558,7 @@ export default function DoctorHomeScreen() {
                 <Text style={styles.statLabel}>RELIABILITY</Text>
                 <Feather name="info" size={12} color="#8E8E93" />
               </View>
-              <Text style={styles.statValue}>100%</Text>
+              <Text style={styles.statValue}>{Math.round(doctorReliability)}{'%'}</Text>
             </View>
           </View>
         </ScrollView>

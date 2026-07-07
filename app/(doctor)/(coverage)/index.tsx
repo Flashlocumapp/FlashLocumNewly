@@ -358,7 +358,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
       const res = await fetch(`${SUPABASE_URL}/functions/v1/submit-review`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: session.id, stars, comment: comment.trim() || null }),
+        body: JSON.stringify({ session_id: session.id, stars, comment: comment.trim() || null, reviewer_role: 'doctor' }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to submit rating');

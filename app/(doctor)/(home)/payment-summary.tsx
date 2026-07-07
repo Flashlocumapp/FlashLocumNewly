@@ -174,7 +174,7 @@ export default function PaymentSummaryScreen() {
       const res = await fetch(`${EDGE_BASE}/submit-review`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: session_id, stars: ratingStars, comment: ratingComment }),
+        body: JSON.stringify({ session_id: session_id, stars: ratingStars, comment: ratingComment, reviewer_role: 'requester' }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to submit review');

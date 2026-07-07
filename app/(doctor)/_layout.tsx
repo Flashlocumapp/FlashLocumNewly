@@ -194,6 +194,10 @@ export default function DoctorLayout() {
   const [submittingDoctorRating, setSubmittingDoctorRating] = useState(false);
   const [doctorRatingError, setDoctorRatingError] = useState('');
 
+  // Live doctor scores — baseline 5.0 / 100%
+  const [doctorRatingScore, setDoctorRatingScore] = useState<number>(5.0);
+  const [doctorReliabilityScore, setDoctorReliabilityScore] = useState<number>(100);
+
   const hasShownRatingRef = useRef(false);
   const prevIsOnlineRef = useRef<boolean | undefined>(undefined);
   const callEdgeRef = useRef<(fn: string, body?: object) => Promise<Response | null>>(async () => null);
@@ -528,6 +532,30 @@ export default function DoctorLayout() {
     };
   }, [activeSession?.id]); // only re-subscribe when session ID changes
 
+  // ── Live rating/reliability updates ──
+  useEffect(() => {
+    if (!user) return;
+    const ch = supabase.channel(`doctor-layout-scores:${user.id}`)
+      .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
+        console.log('[DoctorLayout] RATING_UPDATED received:', payload);
+        const newRating = payload?.payload?.new_rating;
+        if (newRating !== undefined) {
+          setDoctorRatingScore(Number(newRating));
+        }
+      })
+      .on('broadcast', { event: 'RELIABILITY_UPDATED' }, (payload) => {
+        console.log('[DoctorLayout] RELIABILITY_UPDATED received:', payload);
+        const newReliability = payload?.payload?.new_reliability;
+        if (newReliability !== undefined) {
+          setDoctorReliabilityScore(Number(newReliability));
+        }
+      })
+      .subscribe((status) => {
+        console.log('[DoctorLayout] Scores channel status:', status);
+      });
+    return () => { supabase.removeChannel(ch); };
+  }, [user]);
+
   // ── Personal doctor channel (fallback for race condition on session channel) ──
   useEffect(() => {
     if (!user) return;
@@ -749,6 +777,7 @@ export default function DoctorLayout() {
           session_id: doctorRatingSessionId,
           stars: doctorRatingStars,
           comment: doctorRatingComment.trim() || undefined,
+          reviewer_role: 'doctor',
         }),
       });
       console.log('[DoctorLayout] submit-review response status:', res.status);

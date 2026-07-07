@@ -241,7 +241,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
       const res = await fetch(`${EDGE_BASE}/submit-review`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: session.id, stars, comment: comment.trim() || undefined }),
+        body: JSON.stringify({ session_id: session.id, stars, comment: comment.trim() || undefined, reviewer_role: 'requester' }),
       });
       console.log('[RequesterCoverage] submit-review response:', res.status);
       const data = await res.json();
