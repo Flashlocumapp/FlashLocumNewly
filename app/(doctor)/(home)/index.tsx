@@ -8,6 +8,8 @@ import {
   Alert,
   Linking,
   ScrollView,
+  Modal,
+  Pressable,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -258,6 +260,9 @@ export default function DoctorHomeScreen() {
 
   const { isOnline, setIsOnline, activeSession, setActiveSession, activeJobCount } = useDoctorDispatch();
 
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showCancelReasons, setShowCancelReasons] = useState(false);
+
   // Live rating/reliability state — baseline is 5.0 / 100%
   const [doctorRating, setDoctorRating] = useState<number>(5.0);
   const [doctorReliability, setDoctorReliability] = useState<number>(100);
@@ -420,35 +425,38 @@ export default function DoctorHomeScreen() {
   // ─── Cancel shift ────────────────────────────────────────────────────────────
   const handleCancelShift = useCallback(() => {
     if (!activeSession) return;
-    Alert.alert('Cancel Shift?', 'This will cancel the booking.', [
-      { text: 'Keep', style: 'cancel' },
-      {
-        text: 'Cancel Shift',
-        style: 'destructive',
-        onPress: async () => {
-          console.log('[DoctorHome] Cancel shift confirmed for session:', activeSession.id);
-          try {
-            const token = await getValidToken();
-            if (!token) throw new Error('Not authenticated');
-            const res = await fetch(`${EDGE_BASE}/update-shift-status`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ session_id: activeSession.id, status: 'cancelled' }),
-            });
-            console.log('[DoctorHome] update-shift-status response:', res.status);
-            if (!res.ok) {
-              const errText = await res.text().catch(() => '');
-              throw new Error(errText || 'Cancel failed');
-            }
-            setActiveSession(null);
-          } catch (e: any) {
-            console.log('[DoctorHome] Cancel shift error:', e.message);
-            Alert.alert('Error', e.message);
-          }
-        },
-      },
-    ]);
-  }, [activeSession, setActiveSession]);
+    console.log('[DoctorHome] Cancel shift — showing confirmation modal');
+    setShowCancelModal(true);
+  }, [activeSession]);
+
+  const handleConfirmCancelShift = () => {
+    setShowCancelModal(false);
+    setShowCancelReasons(true);
+  };
+
+  const handleCancelReasonSelected = async (reason: string) => {
+    if (!activeSession) return;
+    console.log('[DoctorHome] Cancel shift reason selected:', reason, 'session:', activeSession.id);
+    setShowCancelReasons(false);
+    try {
+      const token = await getValidToken();
+      if (!token) throw new Error('Not authenticated');
+      const res = await fetch(`${EDGE_BASE}/update-shift-status`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: activeSession.id, status: 'cancelled', cancellation_reason: reason }),
+      });
+      console.log('[DoctorHome] Cancel shift response:', res.status);
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(errText || 'Cancel failed');
+      }
+      setActiveSession(null);
+    } catch (e: any) {
+      console.log('[DoctorHome] Cancel shift error:', e.message);
+      Alert.alert('Error', e.message);
+    }
+  };
 
   // ─── Call requester ──────────────────────────────────────────────────────────
   const handleCallRequester = useCallback(() => {
@@ -575,6 +583,81 @@ export default function DoctorHomeScreen() {
           </View>
         </ScrollView>
       </View>
+
+      {/* ── CANCEL SHIFT CONFIRMATION MODAL ── */}
+      <Modal
+        visible={showCancelModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCancelModal(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}
+          onPress={() => setShowCancelModal(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{ backgroundColor: '#1C1C1E', borderRadius: 24, padding: 28, width: '100%' }}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
+                Cancel Shift?
+              </Text>
+              <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
+                You have already accepted this shift. Cancelling will affect your reliability score.
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowCancelModal(false)}
+                style={{ backgroundColor: '#F9F9F6', borderRadius: 999, paddingVertical: 16, alignItems: 'center', marginBottom: 12 }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Keep Shift</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleConfirmCancelShift}
+                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>Cancel Shift</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── CANCEL SHIFT REASON MODAL ── */}
+      <Modal
+        visible={showCancelReasons}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCancelReasons(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+          <View style={{
+            backgroundColor: '#1C1C1E',
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+            paddingTop: 12,
+            paddingBottom: insets.bottom + 24,
+            paddingHorizontal: 24,
+          }}>
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              <View style={{ width: 36, height: 4, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
+            </View>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 6 }}>
+              Reason for Cancellation
+            </Text>
+            <Text style={{ fontSize: 14, color: '#8E8E93', marginBottom: 24 }}>
+              Help us improve by letting us know why you cancelled.
+            </Text>
+            {['Personal emergency', 'Medical emergency', 'Transport issue', 'Double booking', 'Other'].map((reason) => (
+              <TouchableOpacity
+                key={reason}
+                onPress={() => handleCancelReasonSelected(reason)}
+                style={{ backgroundColor: '#2C2C2E', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 20, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+              >
+                <Text style={{ fontSize: 15, color: '#FFFFFF', fontWeight: '500' }}>{reason}</Text>
+                <Text style={{ fontSize: 18, color: '#8E8E93' }}>›</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

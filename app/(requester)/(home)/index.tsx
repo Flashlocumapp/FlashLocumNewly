@@ -2582,6 +2582,10 @@ export default function RequesterHomeScreen() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCancelReasons, setShowCancelReasons] = useState(false);
   const [cancelWithdrawn, setCancelWithdrawn] = useState(false);
+  const [showCancelActiveModal, setShowCancelActiveModal] = useState(false);
+  const [showCancelActiveReasons, setShowCancelActiveReasons] = useState(false);
+  const [showEndShiftModal, setShowEndShiftModal] = useState(false);
+  const [showPauseShiftModal, setShowPauseShiftModal] = useState(false);
 
   const handleCancelRequest = async () => {
     console.log('[RequesterHome] Cancel tapped — showing modal and withdrawing in background');
@@ -2711,7 +2715,14 @@ export default function RequesterHomeScreen() {
 
   const handlePauseShift = useCallback(async () => {
     if (!activeSession) return;
-    console.log('[RequesterHome] Pause shift pressed for session:', activeSession.id);
+    console.log('[RequesterHome] Pause shift — showing confirmation modal');
+    setShowPauseShiftModal(true);
+  }, [activeSession]);
+
+  const handleConfirmPauseShift = async () => {
+    if (!activeSession) return;
+    setShowPauseShiftModal(false);
+    console.log('[RequesterHome] Pause shift confirmed for session:', activeSession.id);
     try {
       const data = await callSessionEdge('pause-shift', activeSession.id);
       const updated = data?.session as Partial<CoverageSession>;
@@ -2720,11 +2731,18 @@ export default function RequesterHomeScreen() {
       console.log('[RequesterHome] Pause shift error:', e.message);
       Alert.alert('Pause Shift Failed', e.message || 'Something went wrong. Please try again.');
     }
-  }, [activeSession, callSessionEdge]);
+  };
 
   const handleEndShift = useCallback(async () => {
     if (!activeSession) return;
-    console.log('[RequesterHome] End shift pressed for session:', activeSession.id);
+    console.log('[RequesterHome] End shift — showing confirmation modal');
+    setShowEndShiftModal(true);
+  }, [activeSession]);
+
+  const handleConfirmEndShift = async () => {
+    if (!activeSession) return;
+    setShowEndShiftModal(false);
+    console.log('[RequesterHome] End shift confirmed for session:', activeSession.id);
     try {
       const data = await callSessionEdge('end-shift', activeSession.id);
       const updated = data?.session as Partial<CoverageSession>;
@@ -2733,39 +2751,42 @@ export default function RequesterHomeScreen() {
       console.log('[RequesterHome] End shift error:', e.message);
       Alert.alert('End Shift Failed', e.message || 'Something went wrong. Please try again.');
     }
-  }, [activeSession, callSessionEdge]);
+  };
 
   const handleCancelActiveShift = useCallback(() => {
     if (!activeSession) return;
-    Alert.alert('Cancel Shift?', 'This will cancel the booking.', [
-      { text: 'Keep', style: 'cancel' },
-      {
-        text: 'Cancel Shift',
-        style: 'destructive',
-        onPress: async () => {
-          console.log('[RequesterHome] Cancel active shift confirmed:', activeSession.id);
-          try {
-            const token = await getValidToken();
-            if (!token) throw new Error('Not authenticated');
-            const res = await fetch(`${EDGE_BASE}/update-shift-status`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ session_id: activeSession.id, status: 'cancelled' }),
-            });
-            console.log('[RequesterHome] update-shift-status response:', res.status);
-            if (!res.ok) {
-              const errText = await res.text().catch(() => '');
-              throw new Error(errText || 'Cancel failed');
-            }
-            setActiveSession(null);
-          } catch (e: any) {
-            console.log('[RequesterHome] Cancel active shift error:', e.message);
-            Alert.alert('Error', e.message);
-          }
-        },
-      },
-    ]);
+    console.log('[RequesterHome] Cancel active shift — showing confirmation modal');
+    setShowCancelActiveModal(true);
   }, [activeSession]);
+
+  const handleConfirmCancelActive = () => {
+    setShowCancelActiveModal(false);
+    setShowCancelActiveReasons(true);
+  };
+
+  const handleCancelActiveReasonSelected = async (reason: string) => {
+    if (!activeSession) return;
+    console.log('[RequesterHome] Cancel active shift reason selected:', reason);
+    setShowCancelActiveReasons(false);
+    try {
+      const token = await getValidToken();
+      if (!token) throw new Error('Not authenticated');
+      const res = await fetch(`${EDGE_BASE}/update-shift-status`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: activeSession.id, status: 'cancelled', cancellation_reason: reason }),
+      });
+      console.log('[RequesterHome] Cancel active shift response:', res.status);
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(errText || 'Cancel failed');
+      }
+      setActiveSession(null);
+    } catch (e: any) {
+      console.log('[RequesterHome] Cancel active shift error:', e.message);
+      Alert.alert('Error', e.message);
+    }
+  };
 
   const handleCallDoctor = useCallback(() => {
     if (!activeSession?.doctor_phone) {
@@ -3922,6 +3943,146 @@ export default function RequesterHomeScreen() {
             ))}
           </View>
         </View>
+      </Modal>
+
+      {/* ── CANCEL ACTIVE SHIFT CONFIRMATION MODAL ── */}
+      <Modal
+        visible={showCancelActiveModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCancelActiveModal(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}
+          onPress={() => setShowCancelActiveModal(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{ backgroundColor: '#1C1C1E', borderRadius: 24, padding: 28, width: '100%' }}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
+                Cancel Shift?
+              </Text>
+              <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
+                A doctor has already accepted this shift. Cancelling will affect your reliability score.
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowCancelActiveModal(false)}
+                style={{ backgroundColor: '#F9F9F6', borderRadius: 999, paddingVertical: 16, alignItems: 'center', marginBottom: 12 }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Keep Shift</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleConfirmCancelActive}
+                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>Cancel Shift</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── CANCEL ACTIVE SHIFT REASON MODAL ── */}
+      <Modal
+        visible={showCancelActiveReasons}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCancelActiveReasons(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#1C1C1E', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingTop: 12, paddingBottom: insets.bottom + 24, paddingHorizontal: 24 }}>
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              <View style={{ width: 36, height: 4, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
+            </View>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 6 }}>
+              Reason for Cancellation
+            </Text>
+            <Text style={{ fontSize: 14, color: '#8E8E93', marginBottom: 24 }}>
+              Help us improve by letting us know why you cancelled.
+            </Text>
+            {['Found a doctor elsewhere', 'No longer needed', 'Emergency', 'Wrong details entered', 'Other'].map((reason) => (
+              <TouchableOpacity
+                key={reason}
+                onPress={() => handleCancelActiveReasonSelected(reason)}
+                style={{ backgroundColor: '#2C2C2E', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 20, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+              >
+                <Text style={{ fontSize: 15, color: '#FFFFFF', fontWeight: '500' }}>{reason}</Text>
+                <Text style={{ fontSize: 18, color: '#8E8E93' }}>›</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── END SHIFT CONFIRMATION MODAL ── */}
+      <Modal
+        visible={showEndShiftModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowEndShiftModal(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}
+          onPress={() => setShowEndShiftModal(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{ backgroundColor: '#1C1C1E', borderRadius: 24, padding: 28, width: '100%' }}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
+                End Shift?
+              </Text>
+              <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
+                This will end the current shift and trigger the payment process.
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowEndShiftModal(false)}
+                style={{ backgroundColor: '#F9F9F6', borderRadius: 999, paddingVertical: 16, alignItems: 'center', marginBottom: 12 }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Continue Shift</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleConfirmEndShift}
+                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>End Shift</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── PAUSE SHIFT CONFIRMATION MODAL ── */}
+      <Modal
+        visible={showPauseShiftModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPauseShiftModal(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}
+          onPress={() => setShowPauseShiftModal(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{ backgroundColor: '#1C1C1E', borderRadius: 24, padding: 28, width: '100%' }}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
+                Pause Shift?
+              </Text>
+              <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
+                The shift timer will be paused. You can resume it at any time.
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowPauseShiftModal(false)}
+                style={{ backgroundColor: '#F9F9F6', borderRadius: 999, paddingVertical: 16, alignItems: 'center', marginBottom: 12 }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Keep Going</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleConfirmPauseShift}
+                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF9500' }}>Pause Shift</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </View>
   );
