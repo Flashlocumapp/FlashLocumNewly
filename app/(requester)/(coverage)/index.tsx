@@ -8,7 +8,6 @@ import {
   Platform,
   Modal,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   TextInput,
   KeyboardAvoidingView,
 } from 'react-native';
@@ -99,253 +98,280 @@ function SkeletonCard() {
   );
 }
 
-// ─── RatingOverlay ────────────────────────────────────────────────────────────
+// ─── HistoryCard ──────────────────────────────────────────────────────────────
 
-interface RatingOverlayProps {
-  visible: boolean;
+function HistoryCard({ session, onPress }: {
   session: CoverageSession;
-  onClose: () => void;
-  onReviewed: (sessionId: string) => void;
+  onPress: (session: CoverageSession) => void;
+}) {
+  const ratingDisplay = Number(session.doctor_rating ?? 0).toFixed(1);
+  const reliabilityDisplay = Math.round(Number(session.doctor_reliability ?? 100));
+
+  const shiftStart = formatTime(session.shift_start);
+  const shiftEnd = formatTime(session.shift_end);
+  const dayLabel = session.shift_date
+    ? new Date(session.shift_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' })
+    : '';
+  const shiftPill = `${session.shift_type} ● ${dayLabel} ● ${shiftStart} - ${shiftEnd}`;
+
+  const statusLabel = session.status === 'cancelled' ? 'CANCELLED' :
+    session.status === 'requester_paid' ? 'PAID' : 'COMPLETED';
+  const statusColor = session.status === 'cancelled' ? '#EF4444' :
+    session.status === 'requester_paid' ? '#34C759' : '#8E8E93';
+
+  return (
+    <TouchableOpacity
+      onPress={() => {
+        console.log('[RequesterCoverage] HistoryCard pressed for session:', session.id);
+        onPress(session);
+      }}
+      activeOpacity={0.85}
+      style={{
+        backgroundColor: '#2C2C2E',
+        borderRadius: 20,
+        padding: 16,
+        marginBottom: 12,
+        ...(Platform.OS === 'ios' ? { boxShadow: '0 2px 8px rgba(0,0,0,0.18)' } as any : { elevation: 4 }),
+      }}
+    >
+      {/* Header row */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <Text style={{ fontSize: 11, letterSpacing: 1.2, color: statusColor, fontFamily: 'Inter_600SemiBold' }}>
+          {statusLabel}
+        </Text>
+        <Text style={{ fontSize: 11, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>{'Tap for details ›'}</Text>
+      </View>
+
+      {/* Doctor name */}
+      <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 2 }} numberOfLines={1}>
+        {session.doctor_name}
+      </Text>
+
+      {/* MDCN */}
+      <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 6 }}>
+        {session.doctor_mdcn || 'MDCN/R/—'}
+      </Text>
+
+      {/* Rating + reliability row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <Text style={{ fontSize: 13, color: '#F4A261' }}>{'★'}</Text>
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
+        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759' }} />
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>{reliabilityDisplay}{'%'}</Text>
+      </View>
+
+      {/* Shift pill */}
+      <View style={{ backgroundColor: '#3A3A3C', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' }}>
+        <Text style={{ fontSize: 12, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }} numberOfLines={1}>
+          {shiftPill}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
 }
 
-function RatingOverlay({ visible, session, onClose, onReviewed }: RatingOverlayProps) {
+// ─── HistoryDetailSheet ───────────────────────────────────────────────────────
+
+function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onReviewSubmitted }: {
+  session: CoverageSession | null;
+  visible: boolean;
+  onClose: () => void;
+  alreadyReviewed: boolean;
+  onReviewSubmitted: (sessionId: string) => void;
+}) {
   const [stars, setStars] = useState(0);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const doctorFirstName = (session.doctor_name ?? '').replace(/^Dr\.?\s*/i, '');
+  useEffect(() => {
+    if (visible) { setStars(0); setComment(''); setError(''); }
+  }, [visible, session?.id]);
+
+  if (!session) return null;
+
+  const ratingDisplay = Number(session.doctor_rating ?? 0).toFixed(1);
+  const reliabilityDisplay = Math.round(Number(session.doctor_reliability ?? 100));
+  const doctorFirstName = (session.doctor_name ?? '').replace(/^Dr\.?\s*/i, '').split(' ')[0];
+
+  const shiftStart = formatTime(session.shift_start);
+  const shiftEnd = formatTime(session.shift_end);
+  const dayLabel = session.shift_date
+    ? new Date(session.shift_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' })
+    : '';
+  const shiftSummaryLine = `${session.shift_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd}`;
+
+  const settlementStatus = session.status === 'requester_paid' || session.status === 'completed' ? 'Paid' : 'Pending';
+
+  const formatDateTime = (iso: string | null | undefined) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }) +
+      ' at ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  };
+  const formatDate = (iso: string | null | undefined) => {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+  };
 
   const handleSubmit = async () => {
-    if (stars === 0) {
-      setError('Please select a star rating');
-      return;
-    }
+    if (stars === 0) { setError('Please select a star rating.'); return; }
     console.log('[RequesterCoverage] Submitting review for session:', session.id, 'stars:', stars);
-    setSubmitting(true);
-    setError('');
+    setSubmitting(true); setError('');
     try {
       const token = await getValidToken();
       const res = await fetch(`${EDGE_BASE}/submit-review`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: session.id, stars, comment: comment || undefined }),
+        body: JSON.stringify({ session_id: session.id, stars, comment: comment.trim() || undefined }),
       });
       console.log('[RequesterCoverage] submit-review response:', res.status);
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error((errBody as any).error || 'Failed to submit review');
-      }
       const data = await res.json();
-      console.log('[RequesterCoverage] Review submitted successfully:', data?.review?.id);
-      onReviewed(session.id);
-      onClose();
+      if (!res.ok) throw new Error((data as any).error ?? 'Failed to submit review');
+      console.log('[RequesterCoverage] Review submitted successfully:', (data as any)?.review?.id);
+      onReviewSubmitted(session.id);
     } catch (e: any) {
       console.log('[RequesterCoverage] Review submission error:', e.message);
-      setError(e.message || 'Failed to submit review');
+      setError(e.message);
     } finally {
       setSubmitting(false);
     }
   };
 
+  const shiftLabel = session.status === 'cancelled' ? 'CANCELLED SHIFT' : 'COMPLETED SHIFT';
+
+  const detailRows = [
+    { label: 'Payment Status', value: settlementStatus },
+    { label: 'Started', value: formatDateTime(session.started_at) },
+    { label: 'Ended', value: formatDateTime(session.ended_at) },
+    { label: 'Completed', value: formatDate(session.ended_at) },
+  ];
+
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}>
-          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-              <View style={{
-                backgroundColor: '#FFFFFF',
-                borderRadius: 24,
-                padding: 28,
-                width: '100%',
-              }}>
-                {/* Header */}
-                <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#1C1C1E', marginBottom: 6, textAlign: 'center' }}>
-                  {'How was your experience with Dr. '}
-                  {doctorFirstName}
-                  {'?'}
-                </Text>
-                <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', textAlign: 'center', marginBottom: 24 }}>
-                  Share your feedback and help us improve.
-                </Text>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40 }}>
+            {/* Drag handle */}
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#D1D1D6', alignSelf: 'center', marginTop: 12, marginBottom: 4 }} />
 
-                {/* Stars */}
-                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 20 }}>
-                  {[1, 2, 3, 4, 5].map((star) => {
-                    const filled = star <= stars;
-                    return (
-                      <TouchableOpacity
-                        key={star}
-                        onPress={() => {
-                          console.log('[RequesterCoverage] Star pressed:', star);
-                          setStars(star);
-                          setError('');
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{ fontSize: 36, color: filled ? '#F4A261' : '#D4D4D8' }}>
-                          {filled ? '★' : '☆'}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 24, paddingTop: 8 }}>
+              {/* Close button */}
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[RequesterCoverage] HistoryDetailSheet closed');
+                  onClose();
+                }}
+                style={{ alignSelf: 'flex-end', padding: 4, marginBottom: 8 }}
+              >
+                <Text style={{ fontSize: 20, color: '#8E8E93' }}>{'✕'}</Text>
+              </TouchableOpacity>
 
-                {/* Error */}
-                {error !== '' && (
-                  <Text style={{ fontSize: 12, color: '#FF3B30', textAlign: 'center', marginBottom: 8, fontFamily: 'Inter_400Regular' }}>
-                    {error}
-                  </Text>
-                )}
+              {/* Label */}
+              <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 8 }}>
+                {shiftLabel}
+              </Text>
 
-                {/* Comment */}
-                <TextInput
-                  value={comment}
-                  onChangeText={setComment}
-                  placeholder="Write a comment (optional)..."
-                  placeholderTextColor="#A1A1AA"
-                  multiline
-                  style={{
-                    backgroundColor: '#F7F7F5',
-                    borderRadius: 12,
-                    padding: 14,
-                    fontSize: 14,
-                    fontFamily: 'Inter_400Regular',
-                    color: '#1C1C1E',
-                    minHeight: 80,
-                    textAlignVertical: 'top',
-                    marginBottom: 20,
-                  }}
-                />
+              {/* Doctor name */}
+              <Text style={{ fontSize: 24, fontFamily: 'Inter_700Bold', color: '#1C1C1E', marginBottom: 2 }}>
+                {session.doctor_name}
+              </Text>
 
-                {/* Submit button */}
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log('[RequesterCoverage] Submit Review pressed, stars:', stars);
-                    handleSubmit();
-                  }}
-                  disabled={submitting}
-                  style={{
-                    backgroundColor: '#1C1C1E',
-                    borderRadius: 999,
-                    paddingVertical: 16,
-                    alignItems: 'center',
-                    marginBottom: 12,
-                    opacity: submitting ? 0.6 : 1,
-                  }}
-                >
-                  {submitting ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>Submit Review</Text>
-                  )}
-                </TouchableOpacity>
+              {/* MDCN */}
+              <Text style={{ fontSize: 13, color: '#71717A', fontFamily: 'Inter_400Regular', marginBottom: 6 }}>
+                {session.doctor_mdcn || 'MDCN/R/—'}
+              </Text>
 
-                {/* Skip */}
-                <TouchableOpacity
-                  onPress={() => {
-                    console.log('[RequesterCoverage] Skip rating pressed');
-                    onClose();
-                  }}
-                  style={{ alignItems: 'center', paddingVertical: 8 }}
-                >
-                  <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>Skip</Text>
-                </TouchableOpacity>
+              {/* Rating + reliability */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <Text style={{ fontSize: 14, color: '#F4A261' }}>{'★'}</Text>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#F4A261' }}>{ratingDisplay}</Text>
+                <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759' }} />
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#34C759' }}>{reliabilityDisplay}{'%'}</Text>
               </View>
-            </KeyboardAvoidingView>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
-  );
-}
 
-// ─── RequesterCard ────────────────────────────────────────────────────────────
+              {/* Hospital name + address */}
+              <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E', marginBottom: 2 }}>
+                {session.hospital_name}
+              </Text>
+              <Text style={{ fontSize: 14, color: '#71717A', fontFamily: 'Inter_400Regular', marginBottom: 12 }}>
+                {session.hospital_address}
+              </Text>
 
-interface RequesterCardProps {
-  session: CoverageSession;
-  showRateNow: boolean;
-  onRateNow: () => void;
-}
+              {/* Shift summary line */}
+              <Text style={{ fontSize: 14, color: '#1C1C1E', fontFamily: 'Inter_400Regular', marginBottom: 16 }}>
+                {shiftSummaryLine}
+              </Text>
 
-function RequesterCard({ session, showRateNow, onRateNow }: RequesterCardProps) {
-  const shiftStart = formatTime(session.shift_start);
-  const shiftEnd = formatTime(session.shift_end);
-  const dayLabel = session.shift_date
-    ? new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short' })
-    : '';
-  const shiftSummary = `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd}`;
+              {/* Financial breakdown box */}
+              <View style={{ backgroundColor: '#F4F4F4', borderRadius: 16, padding: 16, marginBottom: 20 }}>
+                {detailRows.map((row, i) => (
+                  <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: i < detailRows.length - 1 ? 1 : 0, borderBottomColor: '#E5E5E5' }}>
+                    <Text style={{ fontSize: 14, color: '#71717A', fontFamily: 'Inter_400Regular' }}>{row.label}</Text>
+                    <Text style={{ fontSize: 14, color: '#1C1C1E', fontFamily: 'Inter_700Bold', flexShrink: 1, textAlign: 'right', marginLeft: 12 }}>{row.value}</Text>
+                  </View>
+                ))}
+              </View>
 
-  const ratingDisplay = Number(session.doctor_rating).toFixed(1);
-  const reliabilityDisplay = Math.round(Number(session.doctor_reliability));
-
-  return (
-    <View
-      style={[
-        {
-          backgroundColor: '#FFFFFF',
-          borderRadius: 20,
-          marginBottom: 12,
-          overflow: 'hidden',
-          opacity: 0.7,
-        },
-        Platform.OS === 'ios'
-          ? { boxShadow: '0 2px 8px rgba(0,0,0,0.07)' }
-          : { elevation: 3 },
-      ]}
-    >
-      <View style={{ padding: 16 }}>
-        <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }} numberOfLines={1}>
-          {session.doctor_name}
-        </Text>
-
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3, gap: 6 }}>
-          <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#71717A' }}>
-            {session.doctor_mdcn || 'MDCN/R/—'}
-          </Text>
-          <Text style={{ color: '#D4D4D8', fontSize: 12 }}>·</Text>
-          <Text style={{ fontSize: 12, color: '#F4A261' }}>★</Text>
-          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#F4A261' }}>{ratingDisplay}</Text>
-          <Text style={{ color: '#D4D4D8', fontSize: 12 }}>·</Text>
-          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#2DC653' }} />
-          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#2DC653' }}>{reliabilityDisplay}%</Text>
-        </View>
-
-        <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#71717A', marginTop: 3 }} numberOfLines={1}>
-          {shiftSummary}
-        </Text>
-
-        {session.ended_at && (
-          <Text style={{ fontSize: 12, color: '#A1A1AA', marginTop: 8 }}>
-            {'Ended: '}{new Date(session.ended_at).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-          </Text>
-        )}
-
-        {showRateNow && (
-          <TouchableOpacity
-            onPress={() => {
-              console.log('[RequesterCoverage] Rate Now pressed for session:', session.id);
-              onRateNow();
-            }}
-            style={{
-              marginTop: 14,
-              backgroundColor: '#2DC653',
-              borderRadius: 999,
-              paddingVertical: 12,
-              alignItems: 'center',
-            }}
-          >
-            <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>Rate Now</Text>
-          </TouchableOpacity>
-        )}
+              {/* Rating section */}
+              {session.status !== 'cancelled' && (
+                alreadyReviewed ? (
+                  <Text style={{ fontSize: 14, color: '#71717A', fontFamily: 'Inter_400Regular', textAlign: 'center', paddingVertical: 8 }}>
+                    {"You've already rated this coverage."}
+                  </Text>
+                ) : (
+                  <View style={{ backgroundColor: '#F9F9F9', borderRadius: 16, padding: 16 }}>
+                    <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E', marginBottom: 4 }}>
+                      {`How was your experience with Dr. ${doctorFirstName}?`}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: '#71717A', fontFamily: 'Inter_400Regular', marginBottom: 16 }}>
+                      {'Share your feedback and help us improve.'}
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+                      {[1, 2, 3, 4, 5].map(n => (
+                        <TouchableOpacity
+                          key={n}
+                          onPress={() => {
+                            console.log('[RequesterCoverage] Star rating pressed:', n);
+                            setStars(n);
+                            setError('');
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={{ fontSize: 32, color: n <= stars ? '#F4A261' : '#D1D1D6' }}>{'★'}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    <TextInput
+                      value={comment}
+                      onChangeText={setComment}
+                      placeholder="Write a comment (optional)..."
+                      placeholderTextColor="#A1A1AA"
+                      multiline
+                      style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12, fontSize: 14, color: '#1C1C1E', fontFamily: 'Inter_400Regular', minHeight: 80, textAlignVertical: 'top', marginBottom: 12 }}
+                    />
+                    {!!error && <Text style={{ fontSize: 13, color: '#EF4444', marginBottom: 8 }}>{error}</Text>}
+                    <TouchableOpacity
+                      onPress={() => {
+                        console.log('[RequesterCoverage] Submit rating pressed, stars:', stars);
+                        handleSubmit();
+                      }}
+                      disabled={submitting}
+                      activeOpacity={0.85}
+                      style={{ backgroundColor: submitting ? '#8E8E93' : '#1C1C1E', borderRadius: 999, paddingVertical: 14, alignItems: 'center' }}
+                    >
+                      <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>
+                        {submitting ? 'Submitting...' : 'Submit rating'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )
+              )}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </View>
-    </View>
+    </Modal>
   );
 }
 
@@ -356,7 +382,7 @@ export default function RequesterCoverageScreen() {
   const { user } = useAuth();
 
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
-  const [ratingSession, setRatingSession] = useState<CoverageSession | null>(null);
+  const [selectedSession, setSelectedSession] = useState<CoverageSession | null>(null);
 
   const cacheKey = `requester-coverage-${user?.id ?? 'anon'}`;
 
@@ -411,10 +437,7 @@ export default function RequesterCoverageScreen() {
 
   const sessions = historySessions ?? [];
 
-  const handleReviewed = useCallback((sessionId: string) => {
-    console.log('[RequesterCoverage] Marking session as reviewed:', sessionId);
-    setReviewedIds((prev) => new Set([...prev, sessionId]));
-  }, []);
+  const alreadyReviewed = selectedSession ? reviewedIds.has(selectedSession.id) : false;
 
   return (
     <ScrollView
@@ -451,34 +474,31 @@ export default function RequesterCoverageScreen() {
       ) : sessions.length === 0 ? (
         <EmptyState message="No past coverage yet." />
       ) : (
-        sessions.map(session => {
-          const showRateNow = session.status === 'requester_paid' && !reviewedIds.has(session.id);
-          return (
-            <RequesterCard
-              key={session.id}
-              session={session}
-              showRateNow={showRateNow}
-              onRateNow={() => {
-                console.log('[RequesterCoverage] Opening rating overlay for session:', session.id);
-                setRatingSession(session);
-              }}
-            />
-          );
-        })
+        sessions.map(session => (
+          <HistoryCard
+            key={session.id}
+            session={session}
+            onPress={(s) => {
+              console.log('[RequesterCoverage] Opening detail sheet for session:', s.id);
+              setSelectedSession(s);
+            }}
+          />
+        ))
       )}
 
-      {/* Rating overlay */}
-      {ratingSession && (
-        <RatingOverlay
-          visible={true}
-          session={ratingSession}
-          onClose={() => {
-            console.log('[RequesterCoverage] Rating overlay closed');
-            setRatingSession(null);
-          }}
-          onReviewed={handleReviewed}
-        />
-      )}
+      <HistoryDetailSheet
+        session={selectedSession}
+        visible={selectedSession !== null}
+        onClose={() => {
+          console.log('[RequesterCoverage] HistoryDetailSheet dismissed');
+          setSelectedSession(null);
+        }}
+        alreadyReviewed={alreadyReviewed}
+        onReviewSubmitted={(id) => {
+          console.log('[RequesterCoverage] Review submitted, marking session:', id);
+          setReviewedIds(prev => new Set([...prev, id]));
+        }}
+      />
     </ScrollView>
   );
 }
