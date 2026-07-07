@@ -198,6 +198,31 @@ export default function DoctorLayout() {
   const [doctorRatingScore, setDoctorRatingScore] = useState<number>(5.0);
   const [doctorReliabilityScore, setDoctorReliabilityScore] = useState<number>(100);
 
+  // ─── Fetch doctor scores on mount ────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('doctor_profiles')
+          .select('rating, reliability')
+          .eq('id', user.id)
+          .single();
+        if (error) {
+          console.log('[DoctorLayout] Failed to fetch doctor scores:', error.message);
+          return;
+        }
+        if (data) {
+          console.log('[DoctorLayout] Fetched doctor scores:', data.rating, data.reliability);
+          setDoctorRatingScore(data.rating ?? 5.0);
+          setDoctorReliabilityScore(data.reliability ?? 100);
+        }
+      } catch (e: any) {
+        console.log('[DoctorLayout] fetchDoctorScores error:', e.message);
+      }
+    })();
+  }, [user]);
+
   const hasShownRatingRef = useRef(false);
   const prevIsOnlineRef = useRef<boolean | undefined>(undefined);
   const callEdgeRef = useRef<(fn: string, body?: object) => Promise<Response | null>>(async () => null);
@@ -537,16 +562,21 @@ export default function DoctorLayout() {
     if (!user) return;
     const ch = supabase.channel(`doctor-layout-scores:${user.id}`)
       .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
-        console.log('[DoctorLayout] RATING_UPDATED received:', payload);
-        const newRating = payload?.payload?.new_rating;
-        if (newRating !== undefined) {
-          setDoctorRatingScore(Number(newRating));
+        console.log('[DoctorLayout] RATING_UPDATED received:', JSON.stringify(payload));
+        // Only update when a requester reviewed the doctor (reviewer_role === 'requester')
+        if (payload?.payload?.reviewer_role === 'requester') {
+          const newRating = payload?.payload?.new_rating;
+          if (newRating !== undefined) {
+            console.log('[DoctorLayout] Updating doctor rating score to:', newRating);
+            setDoctorRatingScore(Number(newRating));
+          }
         }
       })
       .on('broadcast', { event: 'RELIABILITY_UPDATED' }, (payload) => {
-        console.log('[DoctorLayout] RELIABILITY_UPDATED received:', payload);
+        console.log('[DoctorLayout] RELIABILITY_UPDATED received:', JSON.stringify(payload));
         const newReliability = payload?.payload?.new_reliability;
         if (newReliability !== undefined) {
+          console.log('[DoctorLayout] Updating doctor reliability score to:', newReliability);
           setDoctorReliabilityScore(Number(newReliability));
         }
       })

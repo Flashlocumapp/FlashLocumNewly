@@ -263,21 +263,51 @@ export default function DoctorHomeScreen() {
   const [doctorRating, setDoctorRating] = useState<number>(5.0);
   const [doctorReliability, setDoctorReliability] = useState<number>(100);
 
+  // ─── Fetch doctor scores on mount ────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('doctor_profiles')
+          .select('rating, reliability')
+          .eq('id', user.id)
+          .single();
+        if (error) {
+          console.log('[DoctorHome] Failed to fetch doctor scores:', error.message);
+          return;
+        }
+        if (data) {
+          console.log('[DoctorHome] Fetched doctor scores:', data.rating, data.reliability);
+          setDoctorRating(data.rating ?? 5.0);
+          setDoctorReliability(data.reliability ?? 100);
+        }
+      } catch (e: any) {
+        console.log('[DoctorHome] fetchDoctorScores error:', e.message);
+      }
+    })();
+  }, [user]);
+
   // ─── Realtime: live rating/reliability updates ───────────────────────────────
   useEffect(() => {
     if (!user) return;
     const ch = supabase.channel(`doctor-scores:${user.id}`)
       .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
         console.log('[DoctorHome] RATING_UPDATED received:', payload);
-        const newRating = payload?.payload?.new_rating;
-        if (newRating !== undefined) {
-          setDoctorRating(Number(newRating));
+        // Only update when a requester reviewed the doctor (reviewer_role === 'requester')
+        if (payload?.payload?.reviewer_role === 'requester') {
+          const newRating = payload?.payload?.new_rating;
+          if (newRating !== undefined) {
+            console.log('[DoctorHome] Updating doctor rating to:', newRating);
+            setDoctorRating(Number(newRating));
+          }
         }
       })
       .on('broadcast', { event: 'RELIABILITY_UPDATED' }, (payload) => {
         console.log('[DoctorHome] RELIABILITY_UPDATED received:', payload);
         const newReliability = payload?.payload?.new_reliability;
         if (newReliability !== undefined) {
+          console.log('[DoctorHome] Updating doctor reliability to:', newReliability);
           setDoctorReliability(Number(newReliability));
         }
       })

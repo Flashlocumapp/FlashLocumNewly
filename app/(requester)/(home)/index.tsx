@@ -1520,6 +1520,64 @@ export default function RequesterHomeScreen() {
   const { setTabBarVisible } = useTabBarVisibility();
   const { user } = useAuth();
 
+  // Live requester scores — baseline 5.0 / 100%
+  const [requesterRating, setRequesterRating] = useState<number>(5.0);
+  const [requesterReliability, setRequesterReliability] = useState<number>(100);
+
+  // ─── Fetch requester scores on mount ─────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('requester_profiles')
+          .select('rating, reliability')
+          .eq('id', user.id)
+          .single();
+        if (error) {
+          console.log('[RequesterHome] Failed to fetch requester scores:', error.message);
+          return;
+        }
+        if (data) {
+          console.log('[RequesterHome] Fetched requester scores:', data.rating, data.reliability);
+          setRequesterRating(data.rating ?? 5.0);
+          setRequesterReliability(data.reliability ?? 100);
+        }
+      } catch (e: any) {
+        console.log('[RequesterHome] fetchRequesterScores error:', e.message);
+      }
+    })();
+  }, [user]);
+
+  // ─── Realtime: live requester score updates ───────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    const ch = supabase.channel(`requester-scores:${user.id}`)
+      .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
+        console.log('[RequesterHome] RATING_UPDATED received:', JSON.stringify(payload));
+        // Only update if a doctor reviewed the requester (reviewer_role === 'doctor')
+        if (payload?.payload?.reviewer_role === 'doctor') {
+          const newRating = payload?.payload?.new_rating;
+          if (newRating !== undefined) {
+            console.log('[RequesterHome] Updating requester rating to:', newRating);
+            setRequesterRating(newRating);
+          }
+        }
+      })
+      .on('broadcast', { event: 'RELIABILITY_UPDATED' }, (payload) => {
+        console.log('[RequesterHome] RELIABILITY_UPDATED received:', JSON.stringify(payload));
+        const newReliability = payload?.payload?.new_reliability;
+        if (newReliability !== undefined) {
+          console.log('[RequesterHome] Updating requester reliability to:', newReliability);
+          setRequesterReliability(newReliability);
+        }
+      })
+      .subscribe((status) => {
+        console.log('[RequesterHome] Scores channel status:', status);
+      });
+    return () => { supabase.removeChannel(ch); };
+  }, [user]);
+
   const mapRef = useRef<MapView>(null);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -3509,6 +3567,21 @@ export default function RequesterHomeScreen() {
                   style={{ alignItems: 'center', marginBottom: 16, paddingVertical: 8 }}
                 >
                   <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
+                </View>
+                {/* Requester scores row */}
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 }}>
+                  <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>
+                    {'★ '}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>
+                    {requesterRating.toFixed(1)}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#8E8E93', marginHorizontal: 6 }}>{'·'}</Text>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759', marginRight: 4 }} />
+                  <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>
+                    {requesterReliability.toFixed(0)}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{'%'}</Text>
                 </View>
                 {/* Search capsule */}
                 <TouchableOpacity
