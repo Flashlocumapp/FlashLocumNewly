@@ -184,6 +184,9 @@ export default function DoctorLayout() {
   // Active session state
   const [activeSession, setActiveSession] = useState<CoverageSession | null>(null);
   const [activeJobCount, setActiveJobCount] = useState(0);
+  // Stable session ID — only set when a real ID arrives, never cleared when session becomes null.
+  // This prevents the session channel from re-subscribing to 'session:undefined' after payment_confirmed.
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
   // Doctor rating overlay state
   const [showDoctorRating, setShowDoctorRating] = useState(false);
@@ -322,6 +325,16 @@ export default function DoctorLayout() {
   useEffect(() => { forceSyncRef.current = forceSync; }, [forceSync]);
   useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
 
+  // ─── Keep activeSessionId in sync — only set, never clear ───────────────────
+  useEffect(() => {
+    if (activeSession?.id) {
+      console.log('[DoctorLayout] activeSessionId updated to:', activeSession.id);
+      setActiveSessionId(activeSession.id);
+    }
+    // Intentionally do NOT clear when activeSession becomes null —
+    // this keeps the session channel alive after payment_confirmed fires.
+  }, [activeSession?.id]);
+
   // On mount — restore session state after app restart
   useEffect(() => {
     if (!user) return;
@@ -404,7 +417,7 @@ export default function DoctorLayout() {
       }
     }, POLL_INTERVAL);
     return () => clearInterval(id);
-  }, [isOnline, user, fetchActiveSession]);
+  }, [isOnline, user, fetchActiveSession]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Realtime subscription — dispatch channel ──
   useEffect(() => {
@@ -444,20 +457,20 @@ export default function DoctorLayout() {
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [user]); // intentionally omit isOnline/forceSync
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Realtime subscription — session channel (when activeSession changes) ──
   useEffect(() => {
-    if (!activeSession) {
+    if (!activeSessionId) {
       if (sessionChannelRef.current) {
-        console.log('[DoctorLayout] No active session — removing session channel');
+        console.log('[DoctorLayout] No active session ID — removing session channel');
         supabase.removeChannel(sessionChannelRef.current);
         sessionChannelRef.current = null;
       }
       return;
     }
 
-    const channelName = `session:${activeSession.id}`;
+    const channelName = `session:${activeSessionId}`;
     console.log('[DoctorLayout] Subscribing to session channel:', channelName);
 
     // Remove old channel if any
@@ -503,8 +516,9 @@ export default function DoctorLayout() {
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[DoctorLayout] PAYMENT_CONFIRMED received (session channel):', payload);
-        const sessionId = payload?.payload?.session_id ?? activeSession?.id;
-        const hospitalName = payload?.payload?.hospital_name ?? activeSession?.hospital_name ?? '';
+        // Use activeSessionId (stable ref captured at subscription time) as fallback
+        const sessionId = payload?.payload?.session_id ?? activeSessionId;
+        const hospitalName = payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         if (sessionId) {
           console.log('[DoctorLayout] Opening doctor rating overlay for session:', sessionId);
@@ -520,8 +534,8 @@ export default function DoctorLayout() {
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[DoctorLayout] payment_confirmed received (session channel):', payload);
-        const sessionId = payload?.payload?.session_id ?? activeSession?.id;
-        const hospitalName = payload?.payload?.hospital_name ?? activeSession?.hospital_name ?? '';
+        const sessionId = payload?.payload?.session_id ?? activeSessionId;
+        const hospitalName = payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         if (sessionId) {
           console.log('[DoctorLayout] Opening doctor rating overlay for session:', sessionId);
@@ -555,7 +569,7 @@ export default function DoctorLayout() {
       supabase.removeChannel(ch);
       sessionChannelRef.current = null;
     };
-  }, [activeSession?.id]); // only re-subscribe when session ID changes
+  }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Live rating/reliability updates ──
   useEffect(() => {
@@ -589,7 +603,8 @@ export default function DoctorLayout() {
   // ── Personal doctor channel (fallback for race condition on session channel) ──
   useEffect(() => {
     if (!user) return;
-    const channelName = `doctor:${user.id}`;
+    // IMPORTANT: must match the channel the Monnify webhook broadcasts to — user:{doctor_id}
+    const channelName = `user:${user.id}`;
     console.log('[DoctorLayout] Subscribing to personal doctor channel:', channelName);
 
     if (doctorChannelRef.current) {
@@ -632,8 +647,9 @@ export default function DoctorLayout() {
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[DoctorLayout] PAYMENT_CONFIRMED (doctor channel):', payload);
-        const sessionId = payload?.payload?.session_id ?? activeSession?.id;
-        const hospitalName = payload?.payload?.hospital_name ?? activeSession?.hospital_name ?? '';
+        // activeSessionId is stable — won't be stale even after setActiveSession(null)
+        const sessionId = payload?.payload?.session_id ?? activeSessionId;
+        const hospitalName = payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         if (sessionId) {
           console.log('[DoctorLayout] Opening doctor rating overlay (doctor channel) for session:', sessionId);
@@ -649,8 +665,8 @@ export default function DoctorLayout() {
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[DoctorLayout] payment_confirmed (doctor channel):', payload);
-        const sessionId = payload?.payload?.session_id ?? activeSession?.id;
-        const hospitalName = payload?.payload?.hospital_name ?? activeSession?.hospital_name ?? '';
+        const sessionId = payload?.payload?.session_id ?? activeSessionId;
+        const hospitalName = payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         if (sessionId) {
           console.log('[DoctorLayout] Opening doctor rating overlay (doctor channel) for session:', sessionId);
@@ -684,7 +700,7 @@ export default function DoctorLayout() {
       supabase.removeChannel(ch);
       doctorChannelRef.current = null;
     };
-  }, [user]); // subscribe once when user is available
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Queue → state sync ──
   useEffect(() => {

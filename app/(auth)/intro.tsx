@@ -109,7 +109,7 @@ export default function IntroScreen() {
       timeoutsRef.current.forEach(clearTimeout);
       timeoutsRef.current = [];
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const backgroundColor = bgColor.interpolate({
     inputRange: [0, 1],

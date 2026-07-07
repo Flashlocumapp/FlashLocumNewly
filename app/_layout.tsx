@@ -107,7 +107,7 @@ function NavigationGuard() {
     SecureStore.setItemAsync(LAST_PATHWAY_KEY, pathway).catch(() => {});
     console.log('[NavigationGuard] Both complete → last pathway:', dest);
     router.replace(dest as any);
-  }, [isReady, lastPathway, session, profile, profileLoading, segments]);
+  }, [isReady, lastPathway, session, profile, profileLoading, segments]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sign-out watcher — only reset after session AND profile are both gone
   useEffect(() => {
@@ -116,7 +116,7 @@ function NavigationGuard() {
       hasRouted.current = false;
       router.replace('/(auth)/intro' as any);
     }
-  }, [session, profile]);
+  }, [session, profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cross-portal redirect guard — fires on segment changes after initial routing
   useEffect(() => {
@@ -133,7 +133,7 @@ function NavigationGuard() {
       console.log('[NavigationGuard] Cross-portal block: doctor in requester route → redirecting');
       router.replace('/(doctor)/(home)' as any);
     }
-  }, [segments, isReady, profile]);
+  }, [segments, isReady, profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
 }

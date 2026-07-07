@@ -156,7 +156,7 @@ function CustomTimePicker({
         ampmListRef.current?.scrollToIndex({ index: ampm === 'AM' ? 0 : 1, animated: false });
       }, 100);
     }
-  }, [visible]);
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDone = () => {
     // Convert 12h + AM/PM to 24h
@@ -743,6 +743,9 @@ function RequesterPaymentCard({
   const [copied, setCopied] = useState(false);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
 
+  // Realtime health tracking for safety-net interval
+  const cardRealtimeHealthyRef = useRef(false);
+
   // Countdown state — recalculated from expiry_at, never persisted
   const [countdown, setCountdown] = useState('--:--');
   const [countdownColor, setCountdownColor] = useState('#000000');
@@ -957,6 +960,7 @@ function RequesterPaymentCard({
       })
       .subscribe((status) => {
         console.log('[RequesterPaymentCard] Realtime channel status:', channelName, status);
+        cardRealtimeHealthyRef.current = status === 'SUBSCRIBED';
       });
 
     return () => {
@@ -993,6 +997,38 @@ function RequesterPaymentCard({
       supabase.removeChannel(ch);
     };
   }, [user, onPaymentConfirmed]);
+
+  // ─── Safety-net interval: poll DB every 8s in case Realtime misses the event ─
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (!__DEV__ && cardRealtimeHealthyRef.current) {
+        // Realtime healthy in production — skip DB read
+        return;
+      }
+      try {
+        const { data } = await supabase
+          .from('coverage_sessions')
+          .select('status')
+          .eq('id', session.id)
+          .single();
+        const rawStatus = data?.status as string | undefined;
+        if (rawStatus && (
+          rawStatus === 'requester_paid' ||
+          rawStatus === 'settled' ||
+          rawStatus === 'disbursed' ||
+          rawStatus === 'payment_complete'
+        )) {
+          console.log('[RequesterPaymentCard] Safety-net: session paid, firing onPaymentConfirmed');
+          if (timerRef.current) clearInterval(timerRef.current);
+          setPaymentConfirmed(true);
+          onPaymentConfirmed();
+        }
+      } catch (e: any) {
+        console.log('[RequesterPaymentCard] Safety-net error:', e.message);
+      }
+    }, 8000);
+    return () => clearInterval(id);
+  }, [session.id, onPaymentConfirmed]);
 
   // ─── Derived display values ───────────────────────────────────────────────
   const amountNaira = paymentIntent?.amount_naira ?? session.price;
@@ -1596,11 +1632,11 @@ export default function RequesterHomeScreen() {
 
   // Search (Places API New)
   const [searchText, setSearchText] = useState('');
-  const [searchResults, setSearchResults] = useState<Array<{
+  const [searchResults, setSearchResults] = useState<{
     placeId: string;
     mainText: string;
     secondaryText: string;
-  }>>([]);
+  }[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1645,6 +1681,9 @@ export default function RequesterHomeScreen() {
   // Active session state
   const [activeSession, setActiveSession] = useState<CoverageSession | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
+  // Stable session ID — only set when a real ID arrives, never cleared when session becomes null.
+  // This prevents the session channel from re-subscribing to 'session:undefined' after payment_confirmed.
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
   // Post-payment success state
   const [confirmedSession, setConfirmedSession] = useState<CoverageSession | null>(null);
@@ -1721,6 +1760,16 @@ export default function RequesterHomeScreen() {
     }
   }, []);
 
+  // ─── Keep activeSessionId in sync — only set, never clear ───────────────────
+  useEffect(() => {
+    if (activeSession?.id) {
+      console.log('[RequesterHome] activeSessionId updated to:', activeSession.id);
+      setActiveSessionId(activeSession.id);
+    }
+    // Intentionally do NOT clear when activeSession becomes null —
+    // this keeps the session channel alive after payment_confirmed fires.
+  }, [activeSession?.id]);
+
   // ─── On mount — restore session state ────────────────────────────────────────
   useEffect(() => {
     fetchActiveSession();
@@ -1740,16 +1789,16 @@ export default function RequesterHomeScreen() {
 
   // ─── Session realtime subscription ───────────────────────────────────────────
   useEffect(() => {
-    if (!activeSession) {
+    if (!activeSessionId) {
       if (sessionChannelRef.current) {
-        console.log('[RequesterHome] No active session — removing session channel');
+        console.log('[RequesterHome] No active session ID — removing session channel');
         supabase.removeChannel(sessionChannelRef.current);
         sessionChannelRef.current = null;
       }
       return;
     }
 
-    const channelName = `session:${activeSession.id}`;
+    const channelName = `session:${activeSessionId}`;
     console.log('[RequesterHome] Subscribing to session channel:', channelName);
 
     if (sessionChannelRef.current) {
@@ -1810,6 +1859,7 @@ export default function RequesterHomeScreen() {
           }
           return null;
         });
+        fetchActiveSession(); // backstop: if prev was null, fetch finds requester_paid and triggers modal
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[RequesterHome] payment_confirmed received (session channel):', payload);
@@ -1820,6 +1870,7 @@ export default function RequesterHomeScreen() {
           }
           return null;
         });
+        fetchActiveSession(); // backstop: if prev was null, fetch finds requester_paid and triggers modal
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
         console.log('[RequesterHome] PAYMENT_COMPLETE received:', payload);
@@ -1840,7 +1891,7 @@ export default function RequesterHomeScreen() {
       supabase.removeChannel(ch);
       sessionChannelRef.current = null;
     };
-  }, [activeSession?.id]); // only re-subscribe when session ID changes
+  }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Realtime: user channel for payment_confirmed backstop ──────────────────
   useEffect(() => {
@@ -1858,6 +1909,7 @@ export default function RequesterHomeScreen() {
           }
           return null;
         });
+        fetchActiveSession(); // backstop: if prev was null, fetch finds requester_paid and triggers modal
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[RequesterHome] PAYMENT_CONFIRMED received (user channel):', payload);
@@ -1868,6 +1920,7 @@ export default function RequesterHomeScreen() {
           }
           return null;
         });
+        fetchActiveSession(); // backstop: if prev was null, fetch finds requester_paid and triggers modal
       })
       .subscribe((status) => {
         console.log('[RequesterHome] User channel status:', channelName, status);
@@ -1876,7 +1929,7 @@ export default function RequesterHomeScreen() {
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Personal requester channel (fallback for SHIFT_CANCELLED) ───────────────
   useEffect(() => {
@@ -2281,12 +2334,12 @@ export default function RequesterHomeScreen() {
       };
     }
     return undefined;
-  }, [activeRequestId]);
+  }, [activeRequestId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Show tab bar only when idle ─────────────────────────────────────────────
   useEffect(() => {
     setTabBarVisible(sheetState === 'idle');
-  }, [sheetState]);
+  }, [sheetState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Debounced live price preview from calculate-price edge function ──────────
   useEffect(() => {

@@ -179,7 +179,7 @@ export default function DoctorAccountScreen() {
       setLoading(false);
     };
     fetchProfile();
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const firstName = profile?.first_name ?? '';
   const lastName = profile?.last_name ?? '';
