@@ -103,7 +103,7 @@ function buildShiftPillText(session: CoverageSession): string {
   const priceDisplay = `₦${Number(session.price).toLocaleString()}`;
   const shiftStart = formatTime(session.shift_start);
   const shiftEnd = formatTime(session.shift_end);
-  const sep = ' ● ';
+  const sep = '  ·  ';
 
   if (session.status === 'paused') {
     return `${session.shift_type}${sep}Day ${session.current_day} of ${session.coverage_length}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
@@ -274,7 +274,7 @@ function HistoryCoverageCard({ session, onPress }: {
 
       {/* Hospital name + rating inline row */}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, flexWrap: 'nowrap' }}>
-        <Text style={{ fontSize: 17, fontFamily: 'Inter_700Bold', color: '#1C1C1E', flexShrink: 1 }} numberOfLines={1}>
+        <Text style={{ fontSize: 17, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E', flexShrink: 1 }} numberOfLines={1}>
           {session.hospital_name}
         </Text>
         <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 8 }}>{'|'}</Text>

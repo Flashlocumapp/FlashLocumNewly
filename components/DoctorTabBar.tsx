@@ -28,7 +28,7 @@ export default function DoctorTabBar({ tabs }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
-      <View style={[styles.bar, { backgroundColor: isCoverageActive ? '#1C1C1E' : '#F9F9F6' }]}>
+      <View style={[styles.bar, { backgroundColor: '#F9F9F6' }]}>
         {tabs.map((tab, i) => {
           const isActive = activeIndex === i;
           const iconColor = isActive

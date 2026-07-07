@@ -120,7 +120,7 @@ function HistoryCard({ session, onPress }: {
   const dayLabel = session.shift_date
     ? new Date(session.shift_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' })
     : '';
-  const shiftPill = `${session.shift_type} ● ${dayLabel} ● ${shiftStart} - ${shiftEnd}`;
+  const shiftPill = `${session.shift_type}  ·  ${dayLabel}  ·  ${shiftStart} - ${shiftEnd}`;
 
   const statusLabel = session.status === 'cancelled' ? 'CANCELLED' :
     session.status === 'requester_paid' ? 'PAID' : 'COMPLETED';
@@ -152,7 +152,7 @@ function HistoryCard({ session, onPress }: {
 
       {/* Doctor name + rating inline */}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, flexWrap: 'nowrap' }}>
-        <Text style={{ fontSize: 17, fontFamily: 'Inter_700Bold', color: '#1C1C1E', flexShrink: 1 }} numberOfLines={1}>
+        <Text style={{ fontSize: 17, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E', flexShrink: 1 }} numberOfLines={1}>
           {ensureDrTitle(session.doctor_name)}
         </Text>
         <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 8 }}>{'|'}</Text>
