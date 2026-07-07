@@ -13,6 +13,9 @@ import {
   UIManager,
   Switch,
   Animated,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
@@ -232,155 +235,250 @@ function UpcomingCoverageCard({ session, onCall, onCancel }: {
   );
 }
 
-interface DoctorCardProps {
+function HistoryCoverageCard({ session, onPress }: {
   session: CoverageSession;
-  onCall: (session: CoverageSession) => void;
-  onCancel: (session: CoverageSession) => void;
-  isHistory?: boolean;
-}
+  onPress: (session: CoverageSession) => void;
+}) {
+  const ratingDisplay = Number(session.doctor_rating ?? 0).toFixed(1);
+  const reliabilityDisplay = Math.round(Number(session.doctor_reliability ?? 100));
+  const shiftPillText = buildShiftPillText(session);
 
-function DoctorCard({ session, onCall, onCancel, isHistory }: DoctorCardProps) {
-  const shiftStart = formatTime(session.shift_start);
-  const shiftEnd = formatTime(session.shift_end);
-
-  const coverageLength = Math.max(1, session.coverage_length ?? 1);
-  const startDate = session.shift_date ? new Date(session.shift_date + 'T12:00:00') : null;
-  const dayLabel = startDate ? startDate.toLocaleDateString('en-US', { weekday: 'short' }) : '';
-
-  let shiftSummary: string;
-  if (session.status === 'paused') {
-    shiftSummary = `${session.shift_type} · Day ${session.current_day} of ${coverageLength} · ${shiftStart} – ${shiftEnd}`;
-  } else if (coverageLength > 1) {
-    const endDate = startDate ? new Date(startDate) : null;
-    if (endDate) endDate.setDate(endDate.getDate() + coverageLength - 1);
-    const endDay = endDate ? endDate.toLocaleDateString('en-US', { weekday: 'short' }) : '';
-    shiftSummary = `${session.shift_type} · ${dayLabel} - ${endDay} · ${shiftStart} – ${shiftEnd} · Day ${session.current_day} of ${coverageLength}`;
-  } else {
-    shiftSummary = `${session.shift_type} · ${dayLabel} · ${shiftStart} – ${shiftEnd}`;
-  }
-
-  const initials = getDoctorInitials(session.doctor_name || 'Doctor');
-  const ratingDisplay = Number(session.doctor_rating).toFixed(1);
-  const reliabilityDisplay = Math.round(Number(session.doctor_reliability));
+  const statusLabel = session.status === 'cancelled' ? 'CANCELLED' :
+    session.status === 'requester_paid' ? 'PAID' : 'COMPLETED SHIFT';
+  const statusColor = session.status === 'cancelled' ? '#EF4444' :
+    session.status === 'requester_paid' ? '#34C759' : '#8E8E93';
 
   return (
-    <View
-      style={[
-        {
-          backgroundColor: '#FFFFFF',
-          borderRadius: 20,
-          marginBottom: 12,
-          overflow: 'hidden',
-          opacity: isHistory ? 0.7 : 1,
-        },
-        Platform.OS === 'ios'
-          ? { boxShadow: '0 2px 8px rgba(0,0,0,0.07)' } as any
-          : { elevation: 3 },
-      ]}
+    <TouchableOpacity
+      onPress={() => {
+        console.log('[DoctorCoverage] HistoryCoverageCard pressed:', session.id, 'status:', session.status);
+        onPress(session);
+      }}
+      activeOpacity={0.85}
+      style={{
+        backgroundColor: '#2C2C2E',
+        borderRadius: 20,
+        padding: 16,
+        marginBottom: 12,
+        ...(Platform.OS === 'ios' ? { boxShadow: '0 2px 8px rgba(0,0,0,0.18)' } as any : { elevation: 4 }),
+      }}
     >
-      <View style={{ padding: 16 }}>
-        {/* Avatar row */}
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <View style={{ marginRight: 12 }}>
-            <View style={{
-              width: 52, height: 52, borderRadius: 26,
-              backgroundColor: '#2C2C2E',
-              alignItems: 'center', justifyContent: 'center',
-              overflow: 'hidden',
-            }}>
-              {session.doctor_avatar ? (
-                <Image source={{ uri: session.doctor_avatar }} style={{ width: 52, height: 52, borderRadius: 26 }} />
-              ) : (
-                <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>
-                  {initials}
-                </Text>
-              )}
-            </View>
-          </View>
-
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }} numberOfLines={1}>
-              {session.doctor_name}
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 6 }}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#71717A' }}>
-                {session.doctor_mdcn || 'MDCN/R/—'}
-              </Text>
-              <Text style={{ color: '#D4D4D8', fontSize: 12 }}>·</Text>
-              <Text style={{ fontSize: 12, color: '#F4A261' }}>★</Text>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#F4A261' }}>{ratingDisplay}</Text>
-              <Text style={{ color: '#D4D4D8', fontSize: 12 }}>·</Text>
-              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#2DC653' }} />
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#2DC653' }}>{reliabilityDisplay}%</Text>
-            </View>
-            <Text style={{ fontSize: 12, fontFamily: 'Inter_400Regular', color: '#71717A', marginTop: 3 }} numberOfLines={1}>
-              {shiftSummary}
-            </Text>
-          </View>
-        </View>
-
-        {/* History ended_at */}
-        {isHistory && session.ended_at && (
-          <Text style={{ fontSize: 12, color: '#A1A1AA', marginTop: 8 }}>
-            {'Ended: '}{new Date(session.ended_at).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-          </Text>
-        )}
-
-        {/* Payment pending status banner */}
-        {!isHistory && session.status === 'payment_pending' && (
-          <View style={{ backgroundColor: '#FFFBEB', borderRadius: 10, padding: 12, marginTop: 12 }}>
-            <Text style={{ fontSize: 13, fontWeight: '600', color: '#D97706', fontFamily: 'Inter_600SemiBold' }}>{'⏳ Waiting for Payment'}</Text>
-            <Text style={{ fontSize: 12, color: '#71717A', marginTop: 4, fontFamily: 'Inter_400Regular' }}>
-              The requester has been sent a payment request. You will be notified once payment is confirmed.
-            </Text>
-          </View>
-        )}
-
-        {/* Settled status banner */}
-        {!isHistory && session.status === 'settled' && (
-          <View style={{ backgroundColor: '#F0FDF4', borderRadius: 10, padding: 12, marginTop: 12 }}>
-            <Text style={{ fontSize: 13, fontWeight: '600', color: '#15803d', fontFamily: 'Inter_600SemiBold' }}>{'✓ Requester Paid'}</Text>
-            <Text style={{ fontSize: 12, color: '#71717A', marginTop: 4, fontFamily: 'Inter_400Regular' }}>
-              {'Payment of ₦'}{(session.price ?? 0).toLocaleString()}{' confirmed. Funds are being remitted to your account.'}
-            </Text>
-          </View>
-        )}
-
-        {/* Payment complete status banner */}
-        {!isHistory && session.status === 'payment_complete' && (
-          <View style={{ backgroundColor: '#F0FDF4', borderRadius: 10, padding: 12, marginTop: 12 }}>
-            <Text style={{ fontSize: 13, fontWeight: '600', color: '#15803d', fontFamily: 'Inter_600SemiBold' }}>{'✓ Payment Received'}</Text>
-            <Text style={{ fontSize: 12, color: '#71717A', marginTop: 4, fontFamily: 'Inter_400Regular' }}>
-              {'₦'}{(session.price ?? 0).toLocaleString()}{' has been remitted to your bank account.'}
-            </Text>
-          </View>
-        )}
-
-        {/* Action buttons — all non-history sessions */}
-        {!isHistory && (
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
-            {(session.status === 'upcoming' || session.status === 'paused' || session.status === 'payment_pending') && (
-              <TouchableOpacity onPress={() => {
-                console.log('[DoctorCoverage] Call requester pressed:', session.id, 'status:', session.status);
-                onCall(session);
-              }} activeOpacity={0.8}
-                style={{ flex: 1, borderWidth: 1.5, borderColor: '#1C1C1E', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
-                <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E', letterSpacing: 0.3 }}>CALL</Text>
-              </TouchableOpacity>
-            )}
-            {session.status === 'upcoming' && (
-              <TouchableOpacity onPress={() => {
-                console.log('[DoctorCoverage] Cancel shift pressed:', session.id);
-                onCancel(session);
-              }} activeOpacity={0.8}
-                style={{ flex: 1, backgroundColor: '#FEE2E2', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}>
-                <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#DC2626', letterSpacing: 0.3 }}>CANCEL</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
+      {/* Header row */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <Text style={{ fontSize: 11, letterSpacing: 1.2, color: statusColor, fontFamily: 'Inter_600SemiBold' }}>
+          {statusLabel}
+        </Text>
+        <Text style={{ fontSize: 11, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>{'Tap for details ›'}</Text>
       </View>
-    </View>
+
+      {/* Hospital name + rating row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
+        <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF', flexShrink: 1, marginRight: 6 }} numberOfLines={1}>
+          {session.hospital_name}
+        </Text>
+        <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_400Regular' }}>{'★ '}</Text>
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{ratingDisplay}</Text>
+        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759', marginHorizontal: 6 }} />
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{reliabilityDisplay}{'%'}</Text>
+      </View>
+
+      {/* Address */}
+      <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 8 }} numberOfLines={1}>
+        {session.hospital_address}
+      </Text>
+
+      {/* Shift pill */}
+      <View style={{ backgroundColor: '#3A3A3C', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' }}>
+        <Text style={{ fontSize: 12, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }} numberOfLines={1}>
+          {shiftPillText}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onReviewSubmitted }: {
+  session: CoverageSession | null;
+  visible: boolean;
+  onClose: () => void;
+  alreadyReviewed: boolean;
+  onReviewSubmitted: (sessionId: string) => void;
+}) {
+  const [stars, setStars] = useState(0);
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (visible) { setStars(0); setComment(''); setError(''); }
+  }, [visible, session?.id]);
+
+  if (!session) return null;
+
+  const ratingDisplay = Number(session.doctor_rating ?? 0).toFixed(1);
+  const reliabilityDisplay = Math.round(Number(session.doctor_reliability ?? 100));
+
+  const shiftStart = new Date(session.shift_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const shiftEnd = new Date(session.shift_end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const dayLabel = session.shift_date ? new Date(session.shift_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }) : '';
+  const shiftHours = session.per_day_hours && Number(session.per_day_hours) > 0 ? Number(session.per_day_hours) : 8;
+  const totalHours = shiftHours * (session.coverage_length ?? 1);
+  const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
+  const shiftSummaryLine = `${session.shift_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd} · ${hoursDisplay} · ₦${Number(session.price ?? 0).toLocaleString()}`;
+
+  const settlementStatus = session.status === 'requester_paid' || session.status === 'completed' || session.status === 'disbursed' ? 'Paid' : 'Pending';
+
+  const formatDateTime = (iso: string | null | undefined) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }) +
+      ' at ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  };
+  const formatDate = (iso: string | null | undefined) => {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+  };
+
+  const handleSubmit = async () => {
+    if (stars === 0) { setError('Please select a star rating.'); return; }
+    console.log('[DoctorCoverage] Submitting review for session:', session.id, 'stars:', stars);
+    setSubmitting(true); setError('');
+    try {
+      const token = await getValidToken();
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/submit-review`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: session.id, stars, comment: comment.trim() || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed to submit rating');
+      console.log('[DoctorCoverage] Review submitted successfully for session:', session.id);
+      onReviewSubmitted(session.id);
+    } catch (e: any) {
+      console.log('[DoctorCoverage] Review submission error:', e.message);
+      setError(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const statusSheetLabel = session.status === 'cancelled' ? 'CANCELLED SHIFT' : 'COMPLETED SHIFT';
+  const financialRows = [
+    { label: 'Amount', value: `₦${Number(session.price ?? 0).toLocaleString()}`, bold: true },
+    { label: 'Settlement', value: settlementStatus, bold: true },
+    { label: 'Started', value: formatDateTime(session.started_at), bold: true },
+    { label: 'Ended', value: formatDateTime(session.ended_at), bold: true },
+    { label: 'Completed', value: formatDate(session.ended_at ?? session.updated_at), bold: true },
+  ];
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40 }}>
+            {/* Drag handle */}
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#D1D1D6', alignSelf: 'center', marginTop: 12, marginBottom: 4 }} />
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 24, paddingTop: 8 }}>
+              {/* Close button */}
+              <TouchableOpacity onPress={() => {
+                console.log('[DoctorCoverage] HistoryDetailSheet closed for session:', session.id);
+                onClose();
+              }} style={{ alignSelf: 'flex-end', padding: 4, marginBottom: 8 }}>
+                <Text style={{ fontSize: 20, color: '#8E8E93' }}>{'✕'}</Text>
+              </TouchableOpacity>
+
+              {/* Label */}
+              <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 8 }}>
+                {statusSheetLabel}
+              </Text>
+
+              {/* Hospital name + rating */}
+              <Text style={{ fontSize: 24, fontFamily: 'Inter_700Bold', color: '#1C1C1E', marginBottom: 4 }}>
+                {session.hospital_name}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 6 }}>
+                <Text style={{ fontSize: 14, color: '#F4A261' }}>{'★'}</Text>
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#F4A261' }}>{ratingDisplay}</Text>
+                <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759' }} />
+                <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#34C759' }}>{reliabilityDisplay}{'%'}</Text>
+              </View>
+
+              {/* Address */}
+              <Text style={{ fontSize: 14, color: '#71717A', fontFamily: 'Inter_400Regular', marginBottom: 12 }}>
+                {session.hospital_address}
+              </Text>
+
+              {/* Shift summary line */}
+              <Text style={{ fontSize: 14, color: '#1C1C1E', fontFamily: 'Inter_400Regular', marginBottom: 16 }}>
+                {shiftSummaryLine}
+              </Text>
+
+              {/* Financial breakdown box */}
+              <View style={{ backgroundColor: '#F4F4F4', borderRadius: 16, padding: 16, marginBottom: 20 }}>
+                {financialRows.map((row, i) => (
+                  <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: i < 4 ? 1 : 0, borderBottomColor: '#E5E5E5' }}>
+                    <Text style={{ fontSize: 14, color: '#71717A', fontFamily: 'Inter_400Regular' }}>{row.label}</Text>
+                    <Text style={{ fontSize: 14, color: '#1C1C1E', fontFamily: 'Inter_700Bold' }}>{row.value}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Rating section */}
+              {session.status !== 'cancelled' && (
+                alreadyReviewed ? (
+                  <Text style={{ fontSize: 14, color: '#71717A', fontFamily: 'Inter_400Regular', textAlign: 'center', paddingVertical: 8 }}>
+                    {'You\'ve already rated this coverage.'}
+                  </Text>
+                ) : (
+                  <View style={{ backgroundColor: '#F9F9F9', borderRadius: 16, padding: 16 }}>
+                    <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E', marginBottom: 4 }}>
+                      {`How was your experience with ${session.hospital_name}?`}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: '#71717A', fontFamily: 'Inter_400Regular', marginBottom: 16 }}>
+                      {'Share your feedback and help us improve.'}
+                    </Text>
+                    {/* Stars */}
+                    <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+                      {[1, 2, 3, 4, 5].map(n => (
+                        <TouchableOpacity key={n} onPress={() => {
+                          console.log('[DoctorCoverage] Star rating selected:', n, 'for session:', session.id);
+                          setStars(n);
+                        }} activeOpacity={0.7}>
+                          <Text style={{ fontSize: 32, color: n <= stars ? '#F4A261' : '#D1D1D6' }}>{'★'}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {/* Comment */}
+                    <TextInput
+                      value={comment}
+                      onChangeText={setComment}
+                      placeholder="Optional feedback"
+                      placeholderTextColor="#A1A1AA"
+                      multiline
+                      numberOfLines={3}
+                      style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12, fontSize: 14, color: '#1C1C1E', fontFamily: 'Inter_400Regular', minHeight: 80, textAlignVertical: 'top', marginBottom: 12 }}
+                    />
+                    {!!error && <Text style={{ fontSize: 13, color: '#EF4444', marginBottom: 8 }}>{error}</Text>}
+                    {/* Submit */}
+                    <TouchableOpacity
+                      onPress={handleSubmit}
+                      disabled={submitting}
+                      activeOpacity={0.85}
+                      style={{ backgroundColor: submitting ? '#8E8E93' : '#1C1C1E', borderRadius: 999, paddingVertical: 14, alignItems: 'center' }}
+                    >
+                      <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>
+                        {submitting ? 'Submitting...' : 'Submit rating'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )
+              )}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 }
 
@@ -457,6 +555,8 @@ export default function DoctorCoverageScreen() {
   // Local mutable state for realtime updates on top of cached data
   const [upcomingSessions, setUpcomingSessions] = useState<CoverageSession[]>([]);
   const [historySessions, setHistorySessions] = useState<CoverageSession[]>([]);
+  const [selectedHistorySession, setSelectedHistorySession] = useState<CoverageSession | null>(null);
+  const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
 
   // Sync fetched data into local state
   useEffect(() => {
@@ -464,8 +564,19 @@ export default function DoctorCoverageScreen() {
   }, [upcomingData]);
 
   useEffect(() => {
-    if (historyData) setHistorySessions(historyData);
-  }, [historyData]);
+    if (!historyData || !user?.id) return;
+    setHistorySessions(historyData);
+    const ids = historyData.map((s: CoverageSession) => s.id);
+    if (ids.length === 0) return;
+    supabase
+      .from('shift_reviews')
+      .select('session_id')
+      .eq('reviewer_id', user.id)
+      .in('session_id', ids)
+      .then(({ data }) => {
+        if (data) setReviewedIds(new Set(data.map((r: { session_id: string }) => r.session_id)));
+      });
+  }, [historyData, user?.id]);
 
   const updateSessionStatus = useCallback(async (sessionId: string, status: string) => {
     console.log('[DoctorCoverage] Updating session status:', sessionId, '->', status);
@@ -618,6 +729,11 @@ export default function DoctorCoverageScreen() {
     ]);
   }, [updateSessionStatus, handleStatusChange]);
 
+  const handleReviewSubmitted = useCallback((sessionId: string) => {
+    console.log('[DoctorCoverage] Review submitted, marking session as reviewed:', sessionId);
+    setReviewedIds(prev => new Set([...prev, sessionId]));
+  }, []);
+
   const isHistoryTab = activeTab === 'History';
   const currentSessions = isHistoryTab ? historySessions : upcomingSessions;
   const currentLoading = isHistoryTab ? historyLoading : upcomingLoading;
@@ -697,12 +813,13 @@ export default function DoctorCoverageScreen() {
       ) : (
         currentSessions.map(session => (
           isHistoryTab ? (
-            <DoctorCard
+            <HistoryCoverageCard
               key={session.id}
               session={session}
-              onCall={handleCall}
-              onCancel={handleCancel}
-              isHistory={true}
+              onPress={(s) => {
+                console.log('[DoctorCoverage] History session selected:', s.id);
+                setSelectedHistorySession(s);
+              }}
             />
           ) : (
             <UpcomingCoverageCard
@@ -714,6 +831,13 @@ export default function DoctorCoverageScreen() {
           )
         ))
       )}
+      <HistoryDetailSheet
+        session={selectedHistorySession}
+        visible={selectedHistorySession !== null}
+        onClose={() => setSelectedHistorySession(null)}
+        alreadyReviewed={selectedHistorySession ? reviewedIds.has(selectedHistorySession.id) : false}
+        onReviewSubmitted={handleReviewSubmitted}
+      />
     </ScrollView>
   );
 }
