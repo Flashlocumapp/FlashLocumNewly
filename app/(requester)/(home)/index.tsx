@@ -894,6 +894,35 @@ function RequesterPaymentCard({
     };
   }, [fetchPaymentIntent]);
 
+  // ─── One-time mount check: catches payment that happened while app was backgrounded ───
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('coverage_sessions')
+          .select('status')
+          .eq('id', session.id)
+          .single();
+        const rawStatus = data?.status as string | undefined;
+        if (!cancelled && rawStatus && (
+          rawStatus === 'requester_paid' ||
+          rawStatus === 'settled' ||
+          rawStatus === 'disbursed' ||
+          rawStatus === 'payment_complete'
+        )) {
+          console.log('[RequesterPaymentCard] Mount check: session already paid, firing onPaymentConfirmed');
+          if (timerRef.current) clearInterval(timerRef.current);
+          setPaymentConfirmed(true);
+          onPaymentConfirmed();
+        }
+      } catch (e: any) {
+        console.log('[RequesterPaymentCard] Mount check error:', e.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Realtime: session:<sessionId> ───────────────────────────────────────
   useEffect(() => {
     const channelName = `session:${session.id}`;
@@ -924,6 +953,12 @@ function RequesterPaymentCard({
         setPaymentConfirmed(true);
         onPaymentConfirmed();
       })
+      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+        console.log('[RequesterPaymentCard] PAYMENT_CONFIRMED received (session channel):', payload);
+        if (timerRef.current) clearInterval(timerRef.current);
+        setPaymentConfirmed(true);
+        onPaymentConfirmed();
+      })
       .subscribe((status) => {
         console.log('[RequesterPaymentCard] Realtime channel status:', channelName, status);
       });
@@ -943,6 +978,12 @@ function RequesterPaymentCard({
     const ch = supabase.channel(channelName)
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[RequesterPaymentCard] payment_confirmed received (user channel):', payload);
+        if (timerRef.current) clearInterval(timerRef.current);
+        setPaymentConfirmed(true);
+        onPaymentConfirmed();
+      })
+      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+        console.log('[RequesterPaymentCard] PAYMENT_CONFIRMED received (user channel):', payload);
         if (timerRef.current) clearInterval(timerRef.current);
         setPaymentConfirmed(true);
         onPaymentConfirmed();
@@ -2415,6 +2456,17 @@ export default function RequesterHomeScreen() {
     setShowCancelReasons(true);
   };
 
+  const handlePaymentConfirmed = useCallback(() => {
+    console.log('[RequesterHome] Payment confirmed — snapshotting session and showing success modal');
+    setActiveSession((prev) => {
+      if (prev) {
+        setConfirmedSession(prev);
+        setShowPaymentSuccess(true);
+      }
+      return null;
+    });
+  }, []); // no deps — uses functional setState so never goes stale
+
   const handleCancelReasonSelected = async (reason: string) => {
     console.log('[RequesterHome] Cancel reason selected:', reason);
     // Update the request with cancellation reason
@@ -3324,12 +3376,7 @@ export default function RequesterHomeScreen() {
             <RequesterPaymentCard
               session={activeSession}
               bottomPadding={whiteCardPaddingBottom}
-              onPaymentConfirmed={() => {
-                console.log('[RequesterHome] Payment confirmed — snapshotting session and showing success modal');
-                setConfirmedSession(activeSession);
-                setActiveSession(null);
-                setShowPaymentSuccess(true);
-              }}
+              onPaymentConfirmed={handlePaymentConfirmed}
             />
           )}
 
