@@ -39,7 +39,8 @@ import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
-
+// Module-level flag — survives tab switches / screen remounts
+let _hasInitialFix = false;
 
 const ANDROID_KEY = 'AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU';
 const IOS_KEY = 'AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk';
@@ -1552,7 +1553,6 @@ export default function RequesterHomeScreen() {
   const [onlineDoctors, setOnlineDoctors] = useState<{ id: string; lat: number; lng: number }[]>([]);
 
   const locationSub = useRef<Location.LocationSubscription | null>(null);
-  const hasInitialFix = useRef(false);
 
   // ── Online doctors realtime ──
   useEffect(() => {
@@ -1581,29 +1581,57 @@ export default function RequesterHomeScreen() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'doctor_profiles' },
         (payload) => {
-          console.log('[RequesterHome] doctor_profiles change:', payload.eventType, payload.new);
-          const row = payload.new as { id: string; lat?: number; lng?: number; is_online?: boolean } | null;
-          if (!row) {
-            if (payload.old) {
-              setOnlineDoctors((prev) => prev.filter((d) => d.id !== (payload.old as any).id));
+          console.log('[RequesterHome] doctor_profiles change:', payload.eventType, JSON.stringify(payload.new));
+          const row = payload.new as { id?: string; lat?: number; lng?: number; is_online?: boolean } | null;
+          const doctorId = row?.id ?? (payload.old as any)?.id;
+          if (!doctorId) return;
+
+          // If we have a complete row, handle it directly
+          if (row && row.id && row.is_online !== undefined && (row.lat !== undefined || row.lng !== undefined)) {
+            if (row.is_online && row.lat != null && row.lng != null) {
+              setOnlineDoctors((prev) => {
+                const filtered = prev.filter((d) => d.id !== row.id);
+                return [...filtered, { id: row.id!, lat: row.lat!, lng: row.lng! }];
+              });
+            } else {
+              setOnlineDoctors((prev) => prev.filter((d) => d.id !== doctorId));
             }
             return;
           }
-          if (row.is_online && row.lat != null && row.lng != null) {
-            setOnlineDoctors((prev) => {
-              const filtered = prev.filter((d) => d.id !== row.id);
-              return [...filtered, { id: row.id, lat: row.lat!, lng: row.lng! }];
+
+          // Partial row — re-fetch this doctor's full current state
+          console.log('[RequesterHome] Partial row detected, re-fetching doctor:', doctorId);
+          supabase
+            .from('doctor_profiles')
+            .select('id, lat, lng, is_online')
+            .eq('id', doctorId)
+            .single()
+            .then(({ data }) => {
+              if (!data) {
+                setOnlineDoctors((prev) => prev.filter((d) => d.id !== doctorId));
+                return;
+              }
+              if (data.is_online && data.lat != null && data.lng != null) {
+                setOnlineDoctors((prev) => {
+                  const filtered = prev.filter((d) => d.id !== data.id);
+                  return [...filtered, { id: data.id, lat: data.lat!, lng: data.lng! }];
+                });
+              } else {
+                setOnlineDoctors((prev) => prev.filter((d) => d.id !== data.id));
+              }
             });
-          } else {
-            setOnlineDoctors((prev) => prev.filter((d) => d.id !== row.id));
-          }
         }
       )
       .subscribe((status) => {
         console.log('[RequesterHome] online-doctors channel status:', status);
       });
 
-    return () => { supabase.removeChannel(ch); };
+    const refreshInterval = setInterval(fetchOnlineDoctors, 30000);
+
+    return () => {
+      supabase.removeChannel(ch);
+      clearInterval(refreshInterval);
+    };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sheet state
@@ -1899,10 +1927,10 @@ export default function RequesterHomeScreen() {
           accuracy: immediatePos.coords.accuracy,
           timestamp: new Date(immediatePos.timestamp).toISOString(),
           mapRefReady: !!mapRef.current,
-          hasInitialFix: hasInitialFix.current,
+          hasInitialFix: _hasInitialFix,
         });
-        if (!hasInitialFix.current) {
-          hasInitialFix.current = true;
+        if (!_hasInitialFix) {
+          _hasInitialFix = true;
           console.log('[RequesterHome] Immediate GPS fix:', immediatePos.coords.latitude, immediatePos.coords.longitude);
           setUserCoords({ latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude });
           console.log('[RequesterHome][MAP-ANIMATE] animateToRegion:', { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude, source: 'immediatePos' });
@@ -1922,11 +1950,11 @@ export default function RequesterHomeScreen() {
               lng: loc.coords.longitude,
               accuracy: loc.coords.accuracy,
               timestamp: new Date(loc.timestamp).toISOString(),
-              hasInitialFix: hasInitialFix.current,
+              hasInitialFix: _hasInitialFix,
               mapRefReady: !!mapRef.current,
             });
-            if (!hasInitialFix.current) {
-              hasInitialFix.current = true;
+            if (!_hasInitialFix) {
+              _hasInitialFix = true;
               console.log('[RequesterHome][MAP-ANIMATE] animateToRegion:', { latitude: loc.coords.latitude, longitude: loc.coords.longitude, source: 'watchStream' });
               mapRef.current?.animateToRegion({
                 latitude: loc.coords.latitude,

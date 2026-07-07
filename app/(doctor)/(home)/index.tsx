@@ -29,6 +29,9 @@ import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
+// Module-level flag — survives tab switches / screen remounts
+let _hasAnimatedToUser = false;
+
 const { height: screenHeight } = Dimensions.get('window');
 const SHEET_HEIGHT = screenHeight * 0.45;
 
@@ -296,7 +299,6 @@ export default function DoctorHomeScreen() {
 
   const mapRef = useRef<MapView>(null);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
-  const hasAnimatedToUser = useRef(false);
 
   // ─── tracksViewChanges fix for stethoscope blank on first toggle ────────────
   const [markerTracksViews, setMarkerTracksViews] = useState(true);
@@ -322,14 +324,14 @@ export default function DoctorHomeScreen() {
         accuracy: immediatePos.coords.accuracy,
         timestamp: new Date(immediatePos.timestamp).toISOString(),
         mapRefReady: !!mapRef.current,
-        hasAnimated: hasAnimatedToUser.current,
+        hasAnimated: _hasAnimatedToUser,
       });
       if (active) {
         const coords = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude };
         console.log('[DoctorHome] Immediate GPS fix:', coords);
         setUserLocation(coords);
-        if (!hasAnimatedToUser.current && mapRef.current) {
-          hasAnimatedToUser.current = true;
+        if (!_hasAnimatedToUser && mapRef.current) {
+          _hasAnimatedToUser = true;
           console.log('[DoctorHome] Animating map to immediate fix');
           mapRef.current.animateToRegion({ ...coords, latitudeDelta: 0.12, longitudeDelta: 0.12 }, 800);
         }
@@ -346,8 +348,8 @@ export default function DoctorHomeScreen() {
           if (!active) return;
           const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
           setUserLocation(coords);
-          if (!hasAnimatedToUser.current && mapRef.current) {
-            hasAnimatedToUser.current = true;
+          if (!_hasAnimatedToUser && mapRef.current) {
+            _hasAnimatedToUser = true;
             mapRef.current.animateToRegion(
               { ...coords, latitudeDelta: 0.12, longitudeDelta: 0.12 },
               800,
