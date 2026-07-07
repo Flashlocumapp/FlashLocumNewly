@@ -15,10 +15,19 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.placeholder.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       },
       "config": {
         "googleMapsApiKey": "AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk"
+      },
+      "entitlements": {
+        "aps-environment": "production",
+        "com.apple.security.application-groups": [
+          "group.com.placeholder.app.onesignal"
+        ]
       }
     },
     "android": {
@@ -42,6 +51,12 @@
       "bundler": "metro"
     },
     "plugins": [
+      [
+        "onesignal-expo-plugin",
+        {
+          "mode": "production"
+        }
+      ],
       "expo-font",
       "expo-router",
       "expo-web-browser",
@@ -54,7 +69,8 @@
     },
     "extra": {
       "router": {},
-      "backendUrl": "https://bm7mn4rkap7zw8ax5ddfbmfaz9q8m3ru.app.specular.dev"
+      "backendUrl": "https://bm7mn4rkap7zw8ax5ddfbmfaz9q8m3ru.app.specular.dev",
+      "oneSignalAppId": "e865db07-c6ae-412a-ba03-d139e934eeb0"
     }
   }
 }

@@ -25,6 +25,7 @@ import { supabase, getValidToken } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
 import { DoctorDispatchContext, CoverageSession } from '@/contexts/DoctorDispatchContext';
+import OneSignal from 'react-native-onesignal';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
@@ -233,7 +234,6 @@ export default function DoctorLayout() {
   const forceSyncRef = useRef<() => Promise<void>>(async () => {});
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const doctorChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const isOnlineRef = useRef(false);
   const isRealtimeHealthyRef = useRef(false);
   const lastLocationRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -343,6 +343,22 @@ export default function DoctorLayout() {
     fetchActiveSession();
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── OneSignal notification tap handler ──
+  useEffect(() => {
+    const handler = (event: any) => {
+      const data = event.notification.additionalData as any;
+      console.log('[OneSignal] Notification tapped, data:', data);
+      if (data?.type === 'NEW_REQUEST') {
+        console.log('[OneSignal] NEW_REQUEST notification tapped, navigating to home');
+        router.push('/(doctor)/(home)' as any);
+      }
+    };
+    OneSignal.Notifications.addEventListener('click', handler);
+    return () => {
+      OneSignal.Notifications.removeEventListener('click', handler);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Go-online / Go-offline — only fires when isOnline actually changes ──
   useEffect(() => {
     if (!user) return;
@@ -375,6 +391,24 @@ export default function DoctorLayout() {
               }
               return current; // no change to queue itself
             });
+            // Register OneSignal player ID so backend can send push notifications
+            try {
+              console.log('[DoctorLayout] Registering OneSignal player ID');
+              const playerId =
+                (await (OneSignal.User.pushSubscription as any).getIdAsync?.()) ??
+                OneSignal.User.pushSubscription.id;
+              if (playerId) {
+                await supabase
+                  .from('doctor_profiles')
+                  .update({ onesignal_player_id: playerId })
+                  .eq('id', user!.id);
+                console.log('[DoctorLayout] OneSignal player ID registered:', playerId);
+              } else {
+                console.log('[DoctorLayout] OneSignal player ID not available yet');
+              }
+            } catch (e: any) {
+              console.log('[DoctorLayout] Failed to register OneSignal player ID:', e.message);
+            }
           }
         } else {
           console.log('[DoctorLayout] Went offline — clearing queue');
@@ -595,17 +629,20 @@ export default function DoctorLayout() {
     };
   }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Live rating/reliability updates ──
+  // ── Merged doctor-user channel: scores (RATING_UPDATED, RELIABILITY_UPDATED) ──
+  // Channel 4 (user:{user.id}) was fully redundant with channel 2 (session:{activeSessionId})
+  // for all shift/payment events, so it has been removed. This single channel replaces
+  // both the old doctor-layout-scores channel and the old user:{user.id} channel.
   useEffect(() => {
     if (!user) return;
-    const ch = supabase.channel(`doctor-layout-scores:${user.id}`)
+    console.log('[DoctorLayout] Subscribing to doctor-user channel for user:', user.id);
+    const ch = supabase.channel(`doctor-user:${user.id}`)
       .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
         console.log('[DoctorLayout] RATING_UPDATED received:', JSON.stringify(payload));
-        // Only update when a requester reviewed the doctor (reviewer_role === 'requester')
         if (payload?.payload?.reviewer_role === 'requester') {
           const newRating = payload?.payload?.new_rating;
           if (newRating !== undefined) {
-            console.log('[DoctorLayout] Updating doctor rating score to:', newRating);
+            console.log('[DoctorLayout] Updating doctor rating to:', newRating);
             setDoctorRatingScore(Number(newRating));
           }
         }
@@ -614,116 +651,14 @@ export default function DoctorLayout() {
         console.log('[DoctorLayout] RELIABILITY_UPDATED received:', JSON.stringify(payload));
         const newReliability = payload?.payload?.new_reliability;
         if (newReliability !== undefined) {
-          console.log('[DoctorLayout] Updating doctor reliability score to:', newReliability);
+          console.log('[DoctorLayout] Updating doctor reliability to:', newReliability);
           setDoctorReliabilityScore(Number(newReliability));
         }
       })
       .subscribe((status) => {
-        console.log('[DoctorLayout] Scores channel status:', status);
+        console.log('[DoctorLayout] doctor-user channel status:', status);
       });
     return () => { supabase.removeChannel(ch); };
-  }, [user]);
-
-  // ── Personal doctor channel (fallback for race condition on session channel) ──
-  useEffect(() => {
-    if (!user) return;
-    // IMPORTANT: must match the channel the Monnify webhook broadcasts to — user:{doctor_id}
-    const channelName = `user:${user.id}`;
-    console.log('[DoctorLayout] Subscribing to personal doctor channel:', channelName);
-
-    if (doctorChannelRef.current) {
-      supabase.removeChannel(doctorChannelRef.current);
-      doctorChannelRef.current = null;
-    }
-
-    const ch = supabase.channel(channelName)
-      .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
-        console.log('[DoctorLayout] SHIFT_STARTED (doctor channel):', payload);
-        const updated = payload?.payload?.session as CoverageSession | undefined;
-        if (updated) {
-          setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
-        }
-        // Always re-fetch to confirm — optimistic update fires first, re-fetch corrects within ~300ms
-        fetchActiveSession();
-      })
-      .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
-        console.log('[DoctorLayout] SHIFT_PAUSED (doctor channel):', payload);
-        const updated = payload?.payload?.session as CoverageSession | undefined;
-        if (updated) {
-          setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
-        }
-        // Always re-fetch to confirm — optimistic update fires first, re-fetch corrects within ~300ms
-        fetchActiveSession();
-      })
-      .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
-        console.log('[DoctorLayout] SHIFT_RESUMED (doctor channel):', payload);
-        const updated = payload?.payload?.session as CoverageSession | undefined;
-        if (updated) {
-          setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
-        }
-        // Always re-fetch to confirm — optimistic update fires first, re-fetch corrects within ~300ms
-        fetchActiveSession();
-      })
-      .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
-        console.log('[DoctorLayout] SHIFT_ENDED (doctor channel):', payload);
-        const updated = payload?.payload?.session as CoverageSession | undefined;
-        if (updated) setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
-      })
-      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        console.log('[DoctorLayout] PAYMENT_CONFIRMED (doctor channel):', payload);
-        // activeSessionId is stable — won't be stale even after setActiveSession(null)
-        const sessionId = payload?.payload?.session_id ?? activeSessionId;
-        const hospitalName = payload?.payload?.hospital_name ?? '';
-        setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-        if (sessionId) {
-          console.log('[DoctorLayout] Opening doctor rating overlay (doctor channel) for session:', sessionId);
-          setDoctorRatingSessionId(sessionId);
-          setDoctorRatingHospitalName(hospitalName);
-          setDoctorRatingStars(0);
-          setDoctorRatingComment('');
-          setDoctorRatingError('');
-          setShowDoctorRating(true);
-          // Refresh session state to get latest data (hospital_name etc.)
-          fetchActiveSession();
-        }
-      })
-      .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
-        console.log('[DoctorLayout] payment_confirmed (doctor channel):', payload);
-        const sessionId = payload?.payload?.session_id ?? activeSessionId;
-        const hospitalName = payload?.payload?.hospital_name ?? '';
-        setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-        if (sessionId) {
-          console.log('[DoctorLayout] Opening doctor rating overlay (doctor channel) for session:', sessionId);
-          setDoctorRatingSessionId(sessionId);
-          setDoctorRatingHospitalName(hospitalName);
-          setDoctorRatingStars(0);
-          setDoctorRatingComment('');
-          setDoctorRatingError('');
-          setShowDoctorRating(true);
-          // Refresh session state to get latest data (hospital_name etc.)
-          fetchActiveSession();
-        }
-      })
-      .on('broadcast', { event: 'PAYMENT_COMPLETE' }, () => {
-        console.log('[DoctorLayout] PAYMENT_COMPLETE (doctor channel)');
-        setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
-      })
-      .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
-        console.log('[DoctorLayout] SHIFT_CANCELLED received (doctor channel):', payload);
-        setActiveSession(null);
-        setActiveJobCount((prev) => Math.max(0, prev - 1));
-      })
-      .subscribe((status) => {
-        console.log('[DoctorLayout] Doctor channel status:', channelName, status);
-      });
-
-    doctorChannelRef.current = ch;
-
-    return () => {
-      console.log('[DoctorLayout] Unsubscribing from doctor channel:', channelName);
-      supabase.removeChannel(ch);
-      doctorChannelRef.current = null;
-    };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Queue → state sync ──

@@ -2,6 +2,7 @@ import React from "react";
 import { Stack } from "expo-router";
 import { StyleSheet, View, Text } from "react-native";
 import { useTheme } from "@react-navigation/native";
+import { NotificationBell } from "@/components/NotificationBell";
 
 export default function HomeScreen() {
   const theme = useTheme();
@@ -17,7 +18,9 @@ export default function HomeScreen() {
         <Text style={[styles.title, { color: theme.colors.text }]}>
           Welcome to Newly
         </Text>
-        <Text style={[styles.subtitle, { color: theme.dark ? '#98989D' : '#666' }]}>
+                <NotificationBell />
+        
+<Text style={[styles.subtitle, { color: theme.dark ? '#98989D' : '#666' }]}>
           Your app is currently building...
         </Text>
       </View>

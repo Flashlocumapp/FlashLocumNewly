@@ -9,6 +9,7 @@ import { SystemBars } from 'react-native-edge-to-edge';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 
@@ -182,8 +183,10 @@ export default function RootLayout() {
   return (
     <DevErrorBoundary>
       <AuthProvider>
+        <NotificationProvider>
         <RootLayoutInner />
-      </AuthProvider>
+      </NotificationProvider>
+        </AuthProvider>
     </DevErrorBoundary>
   );
 }

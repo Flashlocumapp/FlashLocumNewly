@@ -743,10 +743,7 @@ function RequesterPaymentCard({
   const [loadingIntent, setLoadingIntent] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
-
-  // Realtime health tracking for safety-net interval
-  const cardRealtimeHealthyRef = useRef(false);
+  // paymentConfirmed is now driven entirely by the parent via onPaymentConfirmed
 
   // Countdown state — recalculated from expiry_at, never persisted
   const [countdown, setCountdown] = useState('--:--');
@@ -914,7 +911,6 @@ function RequesterPaymentCard({
         )) {
           console.log('[RequesterPaymentCard] Mount check: session already paid, firing onPaymentConfirmed');
           if (timerRef.current) clearInterval(timerRef.current);
-          setPaymentConfirmed(true);
           onPaymentConfirmed();
         }
       } catch (e: any) {
@@ -924,7 +920,9 @@ function RequesterPaymentCard({
     return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Realtime: session:<sessionId> ───────────────────────────────────────
+  // ─── Realtime: session:<sessionId> — payment_refreshed only ─────────────
+  // payment_confirmed / PAYMENT_CONFIRMED are handled by the parent's
+  // requester-user channel and session channel; parent calls onPaymentConfirmed.
   useEffect(() => {
     const channelName = `session:${session.id}`;
     console.log('[RequesterPaymentCard] Subscribing to Realtime channel:', channelName);
@@ -948,89 +946,15 @@ function RequesterPaymentCard({
           }
         }
       })
-      .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
-        console.log('[RequesterPaymentCard] payment_confirmed received (session channel):', payload);
-        if (timerRef.current) clearInterval(timerRef.current);
-        setPaymentConfirmed(true);
-        onPaymentConfirmed();
-      })
-      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        console.log('[RequesterPaymentCard] PAYMENT_CONFIRMED received (session channel):', payload);
-        if (timerRef.current) clearInterval(timerRef.current);
-        setPaymentConfirmed(true);
-        onPaymentConfirmed();
-      })
       .subscribe((status) => {
         console.log('[RequesterPaymentCard] Realtime channel status:', channelName, status);
-        cardRealtimeHealthyRef.current = status === 'SUBSCRIBED';
       });
 
     return () => {
       console.log('[RequesterPaymentCard] Unsubscribing from channel:', channelName);
       supabase.removeChannel(ch);
     };
-  }, [session.id, startCountdown, onPaymentConfirmed]);
-
-  // ─── Realtime: user:<userId> ──────────────────────────────────────────────
-  useEffect(() => {
-    if (!user) return;
-    const channelName = `user:${user.id}`;
-    console.log('[RequesterPaymentCard] Subscribing to user Realtime channel:', channelName);
-
-    const ch = supabase.channel(channelName)
-      .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
-        console.log('[RequesterPaymentCard] payment_confirmed received (user channel):', payload);
-        if (timerRef.current) clearInterval(timerRef.current);
-        setPaymentConfirmed(true);
-        onPaymentConfirmed();
-      })
-      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        console.log('[RequesterPaymentCard] PAYMENT_CONFIRMED received (user channel):', payload);
-        if (timerRef.current) clearInterval(timerRef.current);
-        setPaymentConfirmed(true);
-        onPaymentConfirmed();
-      })
-      .subscribe((status) => {
-        console.log('[RequesterPaymentCard] User channel status:', channelName, status);
-      });
-
-    return () => {
-      console.log('[RequesterPaymentCard] Unsubscribing from user channel:', channelName);
-      supabase.removeChannel(ch);
-    };
-  }, [user, onPaymentConfirmed]);
-
-  // ─── Safety-net interval: poll DB every 8s in case Realtime misses the event ─
-  useEffect(() => {
-    const id = setInterval(async () => {
-      if (!__DEV__ && cardRealtimeHealthyRef.current) {
-        // Realtime healthy in production — skip DB read
-        return;
-      }
-      try {
-        const { data } = await supabase
-          .from('coverage_sessions')
-          .select('status')
-          .eq('id', session.id)
-          .single();
-        const rawStatus = data?.status as string | undefined;
-        if (rawStatus && (
-          rawStatus === 'requester_paid' ||
-          rawStatus === 'settled' ||
-          rawStatus === 'disbursed' ||
-          rawStatus === 'payment_complete'
-        )) {
-          console.log('[RequesterPaymentCard] Safety-net: session paid, firing onPaymentConfirmed');
-          if (timerRef.current) clearInterval(timerRef.current);
-          setPaymentConfirmed(true);
-          onPaymentConfirmed();
-        }
-      } catch (e: any) {
-        console.log('[RequesterPaymentCard] Safety-net error:', e.message);
-      }
-    }, 8000);
-    return () => clearInterval(id);
-  }, [session.id, onPaymentConfirmed]);
+  }, [session.id, startCountdown]);
 
   // ─── Derived display values ───────────────────────────────────────────────
   const amountNaira = paymentIntent?.amount_naira ?? session.price;
@@ -1052,7 +976,7 @@ function RequesterPaymentCard({
 
   return (
     <Modal
-      visible={session.status === 'payment_pending' && !paymentConfirmed}
+      visible={session.status === 'payment_pending'}
       animationType="slide"
       presentationStyle="fullScreen"
     >
@@ -1571,13 +1495,14 @@ export default function RequesterHomeScreen() {
     })();
   }, [user]);
 
-  // ─── Realtime: live requester score updates ───────────────────────────────────
+  // ─── Realtime: merged requester-user channel (scores + payment + cancellation) ─
+  // Consolidates former channels: requester-scores, requester-home-user, requester
   useEffect(() => {
     if (!user) return;
-    const ch = supabase.channel(`requester-scores:${user.id}`)
+    const ch = supabase.channel(`requester-user:${user.id}`)
+      // From channel 3 (scores)
       .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
         console.log('[RequesterHome] RATING_UPDATED received:', JSON.stringify(payload));
-        // Only update if a doctor reviewed the requester (reviewer_role === 'doctor')
         if (payload?.payload?.reviewer_role === 'doctor') {
           const newRating = payload?.payload?.new_rating;
           if (newRating !== undefined) {
@@ -1594,11 +1519,33 @@ export default function RequesterHomeScreen() {
           setRequesterReliability(newReliability);
         }
       })
+      // From channel 6 (payment confirmed on user channel)
+      .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+        console.log('[RequesterHome] payment_confirmed received (user channel):', payload);
+        setActiveSession((prev) => {
+          if (prev) { setConfirmedSession(prev); setShowPaymentSuccess(true); }
+          return null;
+        });
+        fetchActiveSession();
+      })
+      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+        console.log('[RequesterHome] PAYMENT_CONFIRMED received (user channel):', payload);
+        setActiveSession((prev) => {
+          if (prev) { setConfirmedSession(prev); setShowPaymentSuccess(true); }
+          return null;
+        });
+        fetchActiveSession();
+      })
+      // From channel 7 (shift cancelled on requester channel)
+      .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+        console.log('[RequesterHome] SHIFT_CANCELLED received (requester channel):', payload);
+        setActiveSession(null);
+      })
       .subscribe((status) => {
-        console.log('[RequesterHome] Scores channel status:', status);
+        console.log('[RequesterHome] requester-user channel status:', status);
       });
     return () => { supabase.removeChannel(ch); };
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mapRef = useRef<MapView>(null);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -1734,7 +1681,6 @@ export default function RequesterHomeScreen() {
   const [submittingRating, setSubmittingRating] = useState(false);
   const [ratingError, setRatingError] = useState('');
   const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const requesterChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // Realtime refs for matching
   const matchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1934,72 +1880,7 @@ export default function RequesterHomeScreen() {
     };
   }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Realtime: user channel for payment_confirmed backstop ──────────────────
-  useEffect(() => {
-    if (!user) return;
-    const channelName = `user:${user.id}`;
-    console.log('[RequesterHome] Subscribing to user channel:', channelName);
-
-    const ch = supabase.channel(`requester-home-user:${user.id}`)
-      .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
-        console.log('[RequesterHome] payment_confirmed received (user channel):', payload);
-        setActiveSession((prev) => {
-          if (prev) {
-            setConfirmedSession(prev);
-            setShowPaymentSuccess(true);
-          }
-          return null;
-        });
-        fetchActiveSession(); // backstop: if prev was null, fetch finds requester_paid and triggers modal
-      })
-      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        console.log('[RequesterHome] PAYMENT_CONFIRMED received (user channel):', payload);
-        setActiveSession((prev) => {
-          if (prev) {
-            setConfirmedSession(prev);
-            setShowPaymentSuccess(true);
-          }
-          return null;
-        });
-        fetchActiveSession(); // backstop: if prev was null, fetch finds requester_paid and triggers modal
-      })
-      .subscribe((status) => {
-        console.log('[RequesterHome] User channel status:', channelName, status);
-      });
-
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ─── Personal requester channel (fallback for SHIFT_CANCELLED) ───────────────
-  useEffect(() => {
-    if (!user) return;
-    const channelName = `requester:${user.id}`;
-    console.log('[RequesterHome] Subscribing to personal requester channel:', channelName);
-
-    if (requesterChannelRef.current) {
-      supabase.removeChannel(requesterChannelRef.current);
-      requesterChannelRef.current = null;
-    }
-
-    const ch = supabase.channel(channelName)
-      .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
-        console.log('[RequesterHome] SHIFT_CANCELLED received (requester channel):', payload);
-        setActiveSession(null);
-      })
-      .subscribe((status) => {
-        console.log('[RequesterHome] Requester channel status:', channelName, status);
-      });
-
-    requesterChannelRef.current = ch;
-
-    return () => {
-      console.log('[RequesterHome] Unsubscribing from requester channel:', channelName);
-      supabase.removeChannel(ch);
-      requesterChannelRef.current = null;
-    };
-  }, [user]); // subscribe once when user is available
+  // Channels 6 and 7 merged into requester-user channel above
 
   // ─── Location on mount — animate map to user position + stream ───────────────
   useEffect(() => {

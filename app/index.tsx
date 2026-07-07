@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Image, StyleSheet, Dimensions } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
+import { NotificationBell } from "@/components/NotificationBell";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -9,7 +10,9 @@ const appIcon = require('@/assets/images/APP ICON.png');
 export default function IndexScreen() {
   return (
     <View style={styles.container}>
-      <Image source={appIcon} style={styles.icon} resizeMode="contain" />
+            <NotificationBell />
+      
+<Image source={appIcon} style={styles.icon} resizeMode="contain" />
     </View>
   );
 }

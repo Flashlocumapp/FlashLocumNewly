@@ -292,35 +292,6 @@ export default function DoctorHomeScreen() {
     })();
   }, [user]);
 
-  // ─── Realtime: live rating/reliability updates ───────────────────────────────
-  useEffect(() => {
-    if (!user) return;
-    const ch = supabase.channel(`doctor-scores:${user.id}`)
-      .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
-        console.log('[DoctorHome] RATING_UPDATED received:', payload);
-        // Only update when a requester reviewed the doctor (reviewer_role === 'requester')
-        if (payload?.payload?.reviewer_role === 'requester') {
-          const newRating = payload?.payload?.new_rating;
-          if (newRating !== undefined) {
-            console.log('[DoctorHome] Updating doctor rating to:', newRating);
-            setDoctorRating(Number(newRating));
-          }
-        }
-      })
-      .on('broadcast', { event: 'RELIABILITY_UPDATED' }, (payload) => {
-        console.log('[DoctorHome] RELIABILITY_UPDATED received:', payload);
-        const newReliability = payload?.payload?.new_reliability;
-        if (newReliability !== undefined) {
-          console.log('[DoctorHome] Updating doctor reliability to:', newReliability);
-          setDoctorReliability(Number(newReliability));
-        }
-      })
-      .subscribe((status) => {
-        console.log('[DoctorHome] Scores channel status:', status);
-      });
-    return () => { supabase.removeChannel(ch); };
-  }, [user]);
-
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const mapRef = useRef<MapView>(null);
