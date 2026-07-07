@@ -413,7 +413,7 @@ export default function DoctorEarningsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F7F7F5',
   },
 
   // Header

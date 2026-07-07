@@ -316,7 +316,7 @@ export default function DoctorAccountScreen() {
   if (loading && profile === null) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FFFFFF" />
+        <ActivityIndicator size="large" color="#1C1C1E" />
       </View>
     );
   }
@@ -509,16 +509,16 @@ export default function DoctorAccountScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1C1C1E' },
+  container: { flex: 1, backgroundColor: '#F7F7F5' },
   scrollContent: { paddingHorizontal: 16 },
-  loadingContainer: { flex: 1, backgroundColor: '#1C1C1E', alignItems: 'center', justifyContent: 'center' },
+  loadingContainer: { flex: 1, backgroundColor: '#F7F7F5', alignItems: 'center', justifyContent: 'center' },
   avatarSection: { alignItems: 'center', marginBottom: 28 },
-  avatarCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#2C2C2E', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  avatarInitials: { fontSize: 28, fontWeight: '700', color: '#FFFFFF' },
-  displayName: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', marginBottom: 4 },
+  avatarCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#E5E5EA', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  avatarInitials: { fontSize: 28, fontWeight: '700', color: '#1C1C1E' },
+  displayName: { fontSize: 22, fontWeight: '700', color: '#1C1C1E', marginBottom: 4 },
   emailText: { fontSize: 14, color: '#8E8E93' },
   sectionHeader: { fontSize: 11, fontWeight: '700', color: '#8E8E93', letterSpacing: 1, marginBottom: 8, marginTop: 24, marginLeft: 4 },
-  card: { backgroundColor: '#F9F9F6', borderRadius: 16, overflow: 'hidden' },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden' },
   cardRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14 },
   cardDivider: { height: 1, backgroundColor: '#E5E5E5', marginLeft: 16 },
   rowLabel: { fontSize: 14, color: '#6B6B6B', flex: 1 },
@@ -531,7 +531,7 @@ const styles = StyleSheet.create({
   pendingBadge: { backgroundColor: '#3A2A1A', borderColor: '#F4A261', borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   pendingText: { fontSize: 13, color: '#F4A261', fontWeight: '600' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalSheet: { backgroundColor: '#F9F9F6', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 48 },
+  modalSheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 48 },
   modalTitle: { fontSize: 16, fontWeight: '700', color: '#1C1C1E', textAlign: 'center', marginBottom: 20 },
   modalInput: { backgroundColor: '#EFEFEF', borderRadius: 28, paddingHorizontal: 18, paddingVertical: 16, fontSize: 16, color: '#0A0A0A', marginBottom: 8 },
   modalInputError: { borderWidth: 1, borderColor: '#EF4444' },
