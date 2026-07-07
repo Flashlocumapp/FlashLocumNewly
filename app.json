@@ -23,12 +23,6 @@
       "config": {
         "googleMapsApiKey": "AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk"
       },
-      "entitlements": {
-        "aps-environment": "production",
-        "com.apple.security.application-groups": [
-          "group.com.placeholder.app.onesignal"
-        ]
-      }
     },
     "android": {
       "adaptiveIcon": {

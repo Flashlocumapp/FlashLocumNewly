@@ -23,7 +23,7 @@ import {
   AppState,
   AppStateStatus,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { Map, MapMarker } from '@/components/Map';
 import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -78,26 +78,7 @@ type SelectedPlace = {
   lng: number;
 };
 
-const MINIMALIST_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#dde0e3' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#dde0e3' }] },
-  { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
-  { featureType: 'administrative.neighborhood', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#cfd2d5' }] },
-  { featureType: 'poi.park', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#cdd0d4' }] },
-  { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#c4c8cc' }] },
-  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
-  { featureType: 'road.local', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road.local', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#a8c4d8' }] },
-  { featureType: 'water', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
-];
+
 
 // ─── Custom Time Picker ───────────────────────────────────────────────────────
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 1); // 1–12
@@ -1547,7 +1528,7 @@ export default function RequesterHomeScreen() {
     return () => { supabase.removeChannel(ch); };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [onlineDoctors, setOnlineDoctors] = useState<{ id: string; lat: number; lng: number }[]>([]);
 
@@ -1905,13 +1886,6 @@ export default function RequesterHomeScreen() {
           hasInitialFix.current = true;
           console.log('[RequesterHome] Immediate GPS fix:', immediatePos.coords.latitude, immediatePos.coords.longitude);
           setUserCoords({ latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude });
-          console.log('[RequesterHome][MAP-ANIMATE] animateToRegion:', { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude, source: 'immediatePos' });
-          mapRef.current?.animateToRegion({
-            latitude: immediatePos.coords.latitude,
-            longitude: immediatePos.coords.longitude,
-            latitudeDelta: 0.12,
-            longitudeDelta: 0.12,
-          }, 800);
         }
         console.log('[RequesterHome] Starting watch stream');
         locationSub.current = await Location.watchPositionAsync(
@@ -1923,18 +1897,7 @@ export default function RequesterHomeScreen() {
               accuracy: loc.coords.accuracy,
               timestamp: new Date(loc.timestamp).toISOString(),
               hasInitialFix: hasInitialFix.current,
-              mapRefReady: !!mapRef.current,
             });
-            if (!hasInitialFix.current) {
-              hasInitialFix.current = true;
-              console.log('[RequesterHome][MAP-ANIMATE] animateToRegion:', { latitude: loc.coords.latitude, longitude: loc.coords.longitude, source: 'watchStream' });
-              mapRef.current?.animateToRegion({
-                latitude: loc.coords.latitude,
-                longitude: loc.coords.longitude,
-                latitudeDelta: 0.12,
-                longitudeDelta: 0.12,
-              }, 800);
-            }
             setUserCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
           }
         );
@@ -2702,44 +2665,18 @@ export default function RequesterHomeScreen() {
   const isPlusDisabled = coverageLength >= 15;
 
   // ─── Render ───────────────────────────────────────────────────────────────────
-  console.log('[RequesterHome] RENDER — Platform:', Platform.OS, 'MapView type:', typeof MapView, 'MapView value:', MapView);
-  console.log('[RequesterHome] About to render MapView — provider:', PROVIDER_GOOGLE, 'ref:', !!mapRef);
   return (
     <View style={{ flex: 1, backgroundColor: '#F9F9F6' }}>
 
       {/* ── FULL-SCREEN MAP (always behind everything) ── */}
-      <MapView
-        ref={mapRef}
+      <Map
         style={StyleSheet.absoluteFillObject}
-        provider={PROVIDER_GOOGLE}
         initialRegion={LAGOS_REGION}
-        customMapStyle={MINIMALIST_MAP_STYLE}
-        minZoomLevel={10}
-        maxZoomLevel={18}
-        onMapReady={() => console.log('[RequesterHome] MAP READY ✓')}
-      >
-        {userCoords && (
-          <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
-            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#1C1C1E', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
-          </Marker>
-        )}
-        {onlineDoctors.map((doc) => (
-          <Marker
-            key={doc.id}
-            coordinate={{ latitude: doc.lat, longitude: doc.lng }}
-            anchor={{ x: 0.5, y: 0.5 }}
-            tracksViewChanges={false}
-          >
-            <View style={{
-              width: 32, height: 32, borderRadius: 16,
-              backgroundColor: '#1C1C1E',
-              alignItems: 'center', justifyContent: 'center',
-            }}>
-              <MaterialCommunityIcons name="stethoscope" size={17} color="#FFFFFF" />
-            </View>
-          </Marker>
-        ))}
-      </MapView>
+        markers={[
+          ...(userCoords ? [{ id: 'user', latitude: userCoords.latitude, longitude: userCoords.longitude, title: 'You' } as MapMarker] : []),
+          ...onlineDoctors.map((doc) => ({ id: doc.id, latitude: doc.lat, longitude: doc.lng, title: 'Doctor' } as MapMarker)),
+        ]}
+      />
 
 
 

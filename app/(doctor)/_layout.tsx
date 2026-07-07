@@ -25,7 +25,7 @@ import { supabase, getValidToken } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
 import { DoctorDispatchContext, CoverageSession } from '@/contexts/DoctorDispatchContext';
-import OneSignal from 'react-native-onesignal';
+
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
@@ -343,21 +343,7 @@ export default function DoctorLayout() {
     fetchActiveSession();
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── OneSignal notification tap handler ──
-  useEffect(() => {
-    const handler = (event: any) => {
-      const data = event.notification.additionalData as any;
-      console.log('[OneSignal] Notification tapped, data:', data);
-      if (data?.type === 'NEW_REQUEST') {
-        console.log('[OneSignal] NEW_REQUEST notification tapped, navigating to home');
-        router.push('/(doctor)/(home)' as any);
-      }
-    };
-    OneSignal.Notifications.addEventListener('click', handler);
-    return () => {
-      OneSignal.Notifications.removeEventListener('click', handler);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // ── Go-online / Go-offline — only fires when isOnline actually changes ──
   useEffect(() => {
@@ -391,24 +377,7 @@ export default function DoctorLayout() {
               }
               return current; // no change to queue itself
             });
-            // Register OneSignal player ID so backend can send push notifications
-            try {
-              console.log('[DoctorLayout] Registering OneSignal player ID');
-              const playerId =
-                (await (OneSignal.User.pushSubscription as any).getIdAsync?.()) ??
-                OneSignal.User.pushSubscription.id;
-              if (playerId) {
-                await supabase
-                  .from('doctor_profiles')
-                  .update({ onesignal_player_id: playerId })
-                  .eq('id', user!.id);
-                console.log('[DoctorLayout] OneSignal player ID registered:', playerId);
-              } else {
-                console.log('[DoctorLayout] OneSignal player ID not available yet');
-              }
-            } catch (e: any) {
-              console.log('[DoctorLayout] Failed to register OneSignal player ID:', e.message);
-            }
+
           }
         } else {
           console.log('[DoctorLayout] Went offline — clearing queue');

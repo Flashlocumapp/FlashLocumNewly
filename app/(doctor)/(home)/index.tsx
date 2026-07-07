@@ -11,7 +11,7 @@ import {
   Modal,
   Pressable,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { Map } from '@/components/Map';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import Feather from '@expo/vector-icons/Feather';
@@ -294,12 +294,9 @@ export default function DoctorHomeScreen() {
 
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<any>(null);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const hasAnimatedToUser = useRef(false);
-
-  // ─── tracksViewChanges fix for stethoscope blank on first toggle ────────────
-  const [markerTracksViews, setMarkerTracksViews] = useState(true);
 
   // ─── GPS setup ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -328,11 +325,6 @@ export default function DoctorHomeScreen() {
         const coords = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude };
         console.log('[DoctorHome] Immediate GPS fix:', coords);
         setUserLocation(coords);
-        if (!hasAnimatedToUser.current && mapRef.current) {
-          hasAnimatedToUser.current = true;
-          console.log('[DoctorHome] Animating map to immediate fix');
-          mapRef.current.animateToRegion({ ...coords, latitudeDelta: 0.12, longitudeDelta: 0.12 }, 800);
-        }
       }
       console.log('[DoctorHome] Starting watch stream');
       locationSubscription.current = await Location.watchPositionAsync(
@@ -346,13 +338,6 @@ export default function DoctorHomeScreen() {
           if (!active) return;
           const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
           setUserLocation(coords);
-          if (!hasAnimatedToUser.current && mapRef.current) {
-            hasAnimatedToUser.current = true;
-            mapRef.current.animateToRegion(
-              { ...coords, latitudeDelta: 0.12, longitudeDelta: 0.12 },
-              800,
-            );
-          }
         },
       );
     }
@@ -368,14 +353,7 @@ export default function DoctorHomeScreen() {
     };
   }, []);
 
-  // ─── tracksViewChanges: reset to true briefly when marker appears ───────────
   const showMarker = isOnline && userLocation !== null;
-  useEffect(() => {
-    if (!showMarker) return;
-    setMarkerTracksViews(true);
-    const t = setTimeout(() => setMarkerTracksViews(false), 500);
-    return () => clearTimeout(t);
-  }, [showMarker]);
 
   useEffect(() => {
     console.log('[DoctorHome][MARKER-STATE] userLocation changed:', userLocation);
@@ -456,30 +434,16 @@ export default function DoctorHomeScreen() {
   return (
     <View style={styles.container}>
       {/* Full-screen map */}
-      <MapView
-        ref={mapRef}
+      <Map
         style={StyleSheet.absoluteFillObject}
-        provider={PROVIDER_GOOGLE}
         initialRegion={LAGOS_REGION}
-        showsMyLocationButton={false}
-        customMapStyle={DESATURATED_MAP_STYLE}
-        minZoomLevel={10}
-        maxZoomLevel={18}
-      >
-        {showMarker && userLocation && (
-          <Marker
-            coordinate={userLocation}
-            anchor={{ x: 0.5, y: 0.5 }}
-            tracksViewChanges={markerTracksViews}
-          >
-            <View style={styles.markerContainer}>
-              <View style={styles.stethoscopeCircle}>
-                <MaterialCommunityIcons name="stethoscope" size={17} color="#FFFFFF" />
-              </View>
-            </View>
-          </Marker>
-        )}
-      </MapView>
+        markers={showMarker && userLocation ? [{
+          id: 'doctor',
+          latitude: userLocation.latitude,
+          longitude: userLocation.longitude,
+          title: 'You',
+        }] : []}
+      />
 
       {/* Online/Offline pill */}
       <TouchableOpacity
@@ -784,26 +748,4 @@ const styles = StyleSheet.create({
   },
 });
 
-const DESATURATED_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#dde0e3' }] },
-  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#dde0e3' }] },
-  { featureType: 'administrative.land_parcel', elementType: 'labels.text.fill', stylers: [{ color: '#bdbdbd' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#d8dbde' }] },
-  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#cfd2d5' }] },
-  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#cdd0d4' }] },
-  { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#c4c8cc' }] },
-  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
-  { featureType: 'road.local', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road.local', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-  { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#cfd2d5' }] },
-  { featureType: 'transit.station', elementType: 'geometry', stylers: [{ color: '#d8dbde' }] },
-  { featureType: 'administrative.neighborhood', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#a8c4d8' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
-];
+
