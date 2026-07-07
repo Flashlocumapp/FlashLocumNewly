@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -110,7 +110,7 @@ function TransactionCard({
   const hospitalName = row.hospital_name ?? 'Hospital';
   const isPaid = row.session_status === 'completed';
   const statusDotColor = isPaid ? '#34C759' : '#F4A261';
-  const statusLabel = isPaid ? 'PAID' : 'PENDING';
+  const statusLabel = isPaid ? 'Completed' : 'Awaiting Disbursement';
   const statusTextColor = isPaid ? '#34C759' : '#F4A261';
   const shiftDateStr = formatShiftDate(row.paid_at ?? row.start_time);
   const coverageLabel = row.coverage_type ?? 'Standard';
@@ -118,7 +118,6 @@ function TransactionCard({
   const netPayoutDisplay = formatNaira(row.net_payout_naira);
   const totalChargedDisplay = formatNaira(row.total_amount_naira);
   const platformFeeDisplay = formatNaira(row.platform_fee_naira);
-  const chevron = expanded ? '▴' : '▾';
   const disbursedStatus = isPaid ? 'Disbursed' : 'Awaiting Disbursement';
   const paymentDateDisplay = formatDateTime(row.paid_at);
   const disbursementDateDisplay = formatDateTime(row.disbursed_at);
@@ -161,7 +160,11 @@ function TransactionCard({
             <View style={[styles.statusDot, { backgroundColor: statusDotColor }]} />
             <Text style={[styles.statusLabel, { color: statusTextColor }]}>{statusLabel}</Text>
           </View>
-          <Text style={styles.chevron}>{chevron}</Text>
+          <MaterialIcons
+              name={expanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+              size={22}
+              color="#1C1C1E"
+            />
         </View>
       </View>
 
@@ -201,8 +204,6 @@ export default function DoctorEarningsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('this_week');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
   const fetchEarnings = useCallback(async () => {
@@ -260,39 +261,9 @@ export default function DoctorEarningsScreen() {
         console.log('[EarningsScreen] Realtime channel status:', userChannelName, status);
       });
 
-    channelRef.current = ch;
-
     return () => {
       console.log('[EarningsScreen] Unsubscribing from realtime channel:', userChannelName);
       supabase.removeChannel(ch);
-      channelRef.current = null;
-    };
-  }, [user, fetchEarnings]);
-
-  // ── Realtime: Postgres changes on doctor_earnings (fallback) ────────────────
-  useEffect(() => {
-    if (!user) return;
-
-    const pgChannelName = `doctor_earnings_changes:${user.id}`;
-    console.log('[EarningsScreen] Subscribing to Postgres changes channel:', pgChannelName);
-
-    const pgCh = supabase
-      .channel(pgChannelName)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'payment_intents' },
-        (payload) => {
-          console.log('[EarningsScreen] Postgres change on payment_intents:', payload.eventType);
-          fetchEarnings();
-        }
-      )
-      .subscribe((status) => {
-        console.log('[EarningsScreen] Postgres changes channel status:', pgChannelName, status);
-      });
-
-    return () => {
-      console.log('[EarningsScreen] Unsubscribing from Postgres changes channel:', pgChannelName);
-      supabase.removeChannel(pgCh);
     };
   }, [user, fetchEarnings]);
 
@@ -582,7 +553,7 @@ const styles = StyleSheet.create({
   },
   cardRight: {
     alignItems: 'flex-end',
-    gap: 3,
+    gap: 6,
   },
   cardAmount: {
     fontSize: 15,
@@ -604,12 +575,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     letterSpacing: 0.3,
   },
-  chevron: {
-    fontSize: 12,
-    color: '#8E8E93',
-    marginTop: 2,
-  },
-
   // Detail box
   detailBox: {
     backgroundColor: '#F4F4F4',
