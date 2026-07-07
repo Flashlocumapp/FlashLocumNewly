@@ -167,23 +167,19 @@ export default function SignUpScreen() {
 
         // Portal-vs-role enforcement
         // role = the portal the user entered from ('doctor' = Cover & Earn, 'requester' = Request Coverage)
-        if (role === 'doctor' && !doctorComplete) {
-          // Requester trying to enter Cover & Earn portal
-          await supabase.auth.signOut();
-          setError(
-            'This account is registered as a Requester. Please use the Request Coverage portal or sign up as a doctor.'
-          );
-          setLoading(false);
+        if (role === 'doctor' && !doctorComplete && requesterComplete) {
+          // They're a requester who tapped the wrong card — silently route to requester portal
+          console.log('[SignUp] Cross-portal: doctor portal selected but user is a requester — redirecting to requester portal');
+          await SecureStore.setItemAsync('flashlocum_last_pathway', 'requester');
+          router.replace('/(requester)/(home)' as any);
           return;
         }
 
-        if (role === 'requester' && !requesterComplete) {
-          // Doctor trying to enter Request Coverage portal
-          await supabase.auth.signOut();
-          setError(
-            'This account is registered as a Doctor. Please use the Cover & Earn portal or sign up as a requester.'
-          );
-          setLoading(false);
+        if (role === 'requester' && !requesterComplete && doctorComplete) {
+          // They're a doctor who tapped the wrong card — silently route to doctor portal
+          console.log('[SignUp] Cross-portal: requester portal selected but user is a doctor — redirecting to doctor portal');
+          await SecureStore.setItemAsync('flashlocum_last_pathway', 'doctor');
+          router.replace('/(doctor)/(home)' as any);
           return;
         }
 

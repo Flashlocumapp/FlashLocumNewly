@@ -1,18 +1,27 @@
-import React from 'react';
-import { View, Image, StyleSheet, Dimensions } from 'react-native';
-import * as SplashScreen from 'expo-splash-screen';
-import { NotificationBell } from "@/components/NotificationBell";
-
-SplashScreen.preventAutoHideAsync();
+import React, { useState, useEffect } from 'react';
+import { View, Image, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
 
 const appIcon = require('@/assets/images/APP ICON.png');
 
 export default function IndexScreen() {
+  const [showSpinner, setShowSpinner] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      console.log('[IndexScreen] Slow network detected — showing spinner after 5s');
+      setShowSpinner(true);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <View style={styles.container}>
-            <NotificationBell />
-      
-<Image source={appIcon} style={styles.icon} resizeMode="contain" />
+      <Image source={appIcon} style={styles.icon} resizeMode="contain" />
+      <ActivityIndicator
+        color="#FFFFFF"
+        size="small"
+        style={[styles.spinner, { opacity: showSpinner ? 1 : 0 }]}
+      />
     </View>
   );
 }
@@ -29,5 +38,8 @@ const styles = StyleSheet.create({
   icon: {
     width: width * 0.60,
     height: width * 0.60,
+  },
+  spinner: {
+    marginTop: 32,
   },
 });

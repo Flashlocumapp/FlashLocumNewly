@@ -9,6 +9,9 @@ const HOLD_FULL = 2000;
 const FADE_OUT_DURATION = 250;
 const BG_TRANSITION_DURATION = 400;
 
+// Module-level flag: animation only plays once per app session
+let _introHasPlayed = false;
+
 export default function IntroScreen() {
   const router = useRouter();
   const { dest } = useLocalSearchParams<{ dest?: string }>();
@@ -17,7 +20,7 @@ export default function IntroScreen() {
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const displayedTextRef = useRef('');
-  const [, forceUpdate] = React.useReducer((x: number) => x + 1, 0);
+  const textRef = useRef<Text>(null);
 
   const contentOpacity = useRef(new Animated.Value(0)).current;
   const bgColor = useRef(new Animated.Value(0)).current;
@@ -33,6 +36,17 @@ export default function IntroScreen() {
   useEffect(() => {
     unmountedRef.current = false;
 
+    const destination = dest ? decodeURIComponent(dest) : '/(auth)/role-select';
+
+    // If animation already played this session, skip straight to destination
+    if (_introHasPlayed) {
+      console.log('[IntroScreen] Animation already played this session, skipping to:', destination);
+      router.replace(destination as any);
+      return;
+    }
+
+    _introHasPlayed = true;
+
     const runPhrase = (index: number) => {
       if (unmountedRef.current) return;
       if (index >= PHRASES.length) return;
@@ -47,7 +61,7 @@ export default function IntroScreen() {
 
       // Step 2: Pre-load the first character so text is ready but invisible.
       displayedTextRef.current = phrase.slice(0, 1);
-      forceUpdate();
+      textRef.current?.setNativeProps({ text: phrase.slice(0, 1) });
 
       // Step 3: Fade in to opacity 1 — text is already loaded so no blank frame.
       Animated.timing(contentOpacity, {
@@ -63,7 +77,7 @@ export default function IntroScreen() {
           if (unmountedRef.current) return;
           charIndex += 1;
           displayedTextRef.current = phrase.slice(0, charIndex);
-          forceUpdate();
+          textRef.current?.setNativeProps({ text: phrase.slice(0, charIndex) });
 
           if (charIndex < phrase.length) {
             addTimeout(typeNext, CHAR_DELAY);
@@ -79,7 +93,6 @@ export default function IntroScreen() {
                 if (unmountedRef.current) return;
                 // Step 6: Navigate or advance to next phrase.
                 if (isLast) {
-                  const destination = dest ? decodeURIComponent(dest) : '/(auth)/role-select';
                   console.log('[IntroScreen] All phrases done, transitioning to:', destination);
                   Animated.timing(bgColor, {
                     toValue: 1,
@@ -116,12 +129,10 @@ export default function IntroScreen() {
     outputRange: ['#0D0D0D', '#FFFFFF'],
   });
 
-  const displayText = displayedTextRef.current;
-
   return (
     <Animated.View style={[styles.container, { backgroundColor }]}>
       <Animated.View style={[styles.textRow, { opacity: contentOpacity }]}>
-        <Text style={styles.text}>{displayText}</Text>
+        <Text ref={textRef} style={styles.text} />
         <View style={styles.ball} />
       </Animated.View>
     </Animated.View>

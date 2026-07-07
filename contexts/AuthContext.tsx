@@ -33,7 +33,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, fetchProfile]);
 
   useEffect(() => {
+    // Safety net: if auth doesn't resolve in 10s, unblock the app
+    const authTimeout = setTimeout(() => {
+      console.log('[AuthContext] Auth timeout fired after 10s — unblocking app with no session');
+      setLoading(false);
+      setIsReady(true);
+    }, 10000);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      clearTimeout(authTimeout);
+      console.log('[AuthContext] getSession resolved — session:', session ? 'present' : 'null');
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -63,7 +72,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(authTimeout);
+      subscription.unsubscribe();
+    };
   }, [fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
