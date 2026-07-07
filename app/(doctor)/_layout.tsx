@@ -21,6 +21,7 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, getValidToken } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
@@ -28,6 +29,37 @@ import { DoctorDispatchContext, CoverageSession } from '@/contexts/DoctorDispatc
 
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
+
+// ─── Persistent deduplication for doctor rating overlay ──────────────────────
+const DOCTOR_RATED_SESSIONS_KEY = 'doctor_rated_sessions_v1';
+const _doctorRatedSessions = new Set<string>(); // in-memory cache, loaded from AsyncStorage on mount
+
+async function markDoctorSessionRated(sessionId: string) {
+  console.log('[DoctorLayout] markDoctorSessionRated:', sessionId);
+  _doctorRatedSessions.add(sessionId);
+  try {
+    const existing = await AsyncStorage.getItem(DOCTOR_RATED_SESSIONS_KEY);
+    const arr: string[] = existing ? JSON.parse(existing) : [];
+    if (!arr.includes(sessionId)) {
+      arr.push(sessionId);
+      const trimmed = arr.slice(-20);
+      await AsyncStorage.setItem(DOCTOR_RATED_SESSIONS_KEY, JSON.stringify(trimmed));
+    }
+  } catch {}
+}
+
+async function isDoctorSessionRated(sessionId: string): Promise<boolean> {
+  if (_doctorRatedSessions.has(sessionId)) return true;
+  try {
+    const existing = await AsyncStorage.getItem(DOCTOR_RATED_SESSIONS_KEY);
+    const arr: string[] = existing ? JSON.parse(existing) : [];
+    if (arr.includes(sessionId)) {
+      _doctorRatedSessions.add(sessionId);
+      return true;
+    }
+  } catch {}
+  return false;
+}
 
 // POLL_INTERVAL: 8s in dev (Expo Go WebSocket unreliable), 30s in production.
 // Cost at 30s: 2 req/min per online doctor. At 1,000 concurrent doctors = 2,000 req/min —
@@ -230,6 +262,19 @@ export default function DoctorLayout() {
 
   const hasShownRatingRef = useRef(false);
   const prevIsOnlineRef = useRef<boolean | undefined>(undefined);
+
+  // ── Load persisted rated sessions into in-memory cache on mount ──
+  useEffect(() => {
+    AsyncStorage.getItem(DOCTOR_RATED_SESSIONS_KEY).then((val) => {
+      if (val) {
+        try {
+          const arr: string[] = JSON.parse(val);
+          arr.forEach((id) => _doctorRatedSessions.add(id));
+          console.log('[DoctorLayout] Loaded', arr.length, 'rated sessions from storage');
+        } catch {}
+      }
+    });
+  }, []);
   const callEdgeRef = useRef<(fn: string, body?: object) => Promise<Response | null>>(async () => null);
   const forceSyncRef = useRef<() => Promise<void>>(async () => {});
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -282,6 +327,24 @@ export default function DoctorLayout() {
     }
   }, [user, callEdge]);
 
+  // ── Central guard: show rating overlay only if session not already rated/dismissed ──
+  const maybeShowDoctorRating = useCallback(async (sessionId: string, hospitalName: string) => {
+    if (!sessionId) return;
+    const alreadyHandled = await isDoctorSessionRated(sessionId);
+    if (alreadyHandled) {
+      console.log('[DoctorLayout] Rating overlay suppressed — session already rated/dismissed:', sessionId);
+      return;
+    }
+    console.log('[DoctorLayout] maybeShowDoctorRating: showing overlay for session:', sessionId);
+    hasShownRatingRef.current = true;
+    setDoctorRatingSessionId(sessionId);
+    setDoctorRatingHospitalName(hospitalName);
+    setDoctorRatingStars(0);
+    setDoctorRatingComment('');
+    setDoctorRatingError('');
+    setShowDoctorRating(true);
+  }, []);
+
   // Fetch active session from edge function
   const fetchActiveSession = useCallback(async () => {
     const token = await getValidToken();
@@ -303,26 +366,14 @@ export default function DoctorLayout() {
       console.log('[DoctorLayout] Active session fetched:', session?.id ?? 'none', 'job count:', jobCount);
       setActiveSession(session);
       setActiveJobCount(jobCount);
-      // If session is already paid and rating overlay not yet shown, trigger it
-      // (handles app-was-backgrounded case)
-      if (
-        session &&
-        (session.status === 'requester_paid' || session.status === 'settled') &&
-        !hasShownRatingRef.current
-      ) {
-        console.log('[DoctorLayout] fetchActiveSession: session already paid, showing rating overlay for:', session.id);
-        hasShownRatingRef.current = true;
-        setDoctorRatingSessionId(session.id);
-        setDoctorRatingHospitalName(session.hospital_name ?? '');
-        setDoctorRatingStars(0);
-        setDoctorRatingComment('');
-        setDoctorRatingError('');
-        setShowDoctorRating(true);
+      // If session is already paid, use persistent guard to decide whether to show overlay
+      if (session && (session.status === 'requester_paid' || session.status === 'settled')) {
+        maybeShowDoctorRating(session.id, session.hospital_name ?? '');
       }
     } catch (e: any) {
       console.log('[DoctorLayout] fetchActiveSession error:', e.message);
     }
-  }, []);
+  }, [maybeShowDoctorRating]);
 
   // Keep stable refs
   useEffect(() => { callEdgeRef.current = callEdge; }, [callEdge]);
@@ -562,42 +613,19 @@ export default function DoctorLayout() {
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[DoctorLayout] PAYMENT_CONFIRMED received (session channel):', payload);
-        if (hasShownRatingRef.current) return; // deduplicate — user channel may fire first
-        hasShownRatingRef.current = true;
-        // Use activeSessionId (stable ref captured at subscription time) as fallback
         const sessionId = payload?.payload?.session_id ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-        if (sessionId) {
-          console.log('[DoctorLayout] Opening doctor rating overlay for session:', sessionId);
-          setDoctorRatingSessionId(sessionId);
-          setDoctorRatingHospitalName(hospitalName);
-          setDoctorRatingStars(0);
-          setDoctorRatingComment('');
-          setDoctorRatingError('');
-          setShowDoctorRating(true);
-          // Refresh session state to get latest data (hospital_name etc.)
-          fetchActiveSession();
-        }
+        maybeShowDoctorRating(sessionId ?? '', hospitalName);
+        fetchActiveSession();
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[DoctorLayout] payment_confirmed received (session channel):', payload);
-        if (hasShownRatingRef.current) return; // deduplicate — user channel may fire first
-        hasShownRatingRef.current = true;
         const sessionId = payload?.payload?.session_id ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-        if (sessionId) {
-          console.log('[DoctorLayout] Opening doctor rating overlay for session:', sessionId);
-          setDoctorRatingSessionId(sessionId);
-          setDoctorRatingHospitalName(hospitalName);
-          setDoctorRatingStars(0);
-          setDoctorRatingComment('');
-          setDoctorRatingError('');
-          setShowDoctorRating(true);
-          // Refresh session state to get latest data (hospital_name etc.)
-          fetchActiveSession();
-        }
+        maybeShowDoctorRating(sessionId ?? '', hospitalName);
+        fetchActiveSession();
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
         console.log('[DoctorLayout] PAYMENT_COMPLETE received:', payload);
@@ -649,37 +677,19 @@ export default function DoctorLayout() {
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[DoctorLayout] PAYMENT_CONFIRMED received (user channel):', payload);
-        if (hasShownRatingRef.current) return; // deduplicate — session channel may fire first
-        hasShownRatingRef.current = true;
         const sessionId = payload?.payload?.session_id ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-        if (sessionId) {
-          setDoctorRatingSessionId(sessionId);
-          setDoctorRatingHospitalName(hospitalName);
-          setDoctorRatingStars(0);
-          setDoctorRatingComment('');
-          setDoctorRatingError('');
-          setShowDoctorRating(true);
-          fetchActiveSession();
-        }
+        maybeShowDoctorRating(sessionId ?? '', hospitalName);
+        fetchActiveSession();
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[DoctorLayout] payment_confirmed received (user channel):', payload);
-        if (hasShownRatingRef.current) return; // deduplicate — session channel may fire first
-        hasShownRatingRef.current = true;
         const sessionId = payload?.payload?.session_id ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-        if (sessionId) {
-          setDoctorRatingSessionId(sessionId);
-          setDoctorRatingHospitalName(hospitalName);
-          setDoctorRatingStars(0);
-          setDoctorRatingComment('');
-          setDoctorRatingError('');
-          setShowDoctorRating(true);
-          fetchActiveSession();
-        }
+        maybeShowDoctorRating(sessionId ?? '', hospitalName);
+        fetchActiveSession();
       })
       .subscribe((status) => {
         console.log('[DoctorLayout] user channel status:', status);
@@ -781,7 +791,8 @@ export default function DoctorLayout() {
   const handleDoctorRatingDone = useCallback(() => {
     console.log('[DoctorLayout] Doctor rating overlay dismissed, navigating to payment-summary');
     const sid = doctorRatingSessionId;
-    hasShownRatingRef.current = false;
+    if (sid) markDoctorSessionRated(sid); // persist — never show again for this session
+    // DO NOT reset hasShownRatingRef here — that would re-arm the guard
     setShowDoctorRating(false);
     setDoctorRatingSessionId(null);
     if (sid) {
@@ -815,6 +826,7 @@ export default function DoctorLayout() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to submit review');
       console.log('[DoctorLayout] Review submitted successfully');
+      if (doctorRatingSessionId) markDoctorSessionRated(doctorRatingSessionId);
       handleDoctorRatingDone();
     } catch (e: any) {
       console.log('[DoctorLayout] submit-review error:', e.message);

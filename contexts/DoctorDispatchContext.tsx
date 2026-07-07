@@ -44,7 +44,7 @@ export type CoverageSession = {
   hourly_rate_kobo: number;
   current_day: number;
   day_logs: DayLog[];
-  status: 'upcoming' | 'active' | 'paused' | 'payment_pending' | 'settled' | 'payment_complete' | 'completed' | 'cancelled' | 'history';
+  status: 'upcoming' | 'active' | 'paused' | 'payment_pending' | 'requester_paid' | 'settled' | 'payment_complete' | 'completed' | 'cancelled' | 'history';
   started_at: string | null;
   ended_at: string | null;
   paused_at: string | null;

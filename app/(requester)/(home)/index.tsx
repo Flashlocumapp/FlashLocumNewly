@@ -31,6 +31,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
 import * as Clipboard from 'expo-clipboard';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, getValidToken } from '@/lib/supabase';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { useTabBarVisibility, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
@@ -38,6 +39,36 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
+
+// ─── Persistent deduplication for payment success modal ──────────────────────
+const REQUESTER_PAID_SESSIONS_KEY = 'requester_paid_sessions_v1';
+const _requesterPaidSessions = new Set<string>(); // in-memory cache, loaded from AsyncStorage on mount
+
+async function markRequesterSessionPaid(sessionId: string) {
+  console.log('[RequesterHome] markRequesterSessionPaid:', sessionId);
+  _requesterPaidSessions.add(sessionId);
+  try {
+    const existing = await AsyncStorage.getItem(REQUESTER_PAID_SESSIONS_KEY);
+    const arr: string[] = existing ? JSON.parse(existing) : [];
+    if (!arr.includes(sessionId)) {
+      arr.push(sessionId);
+      await AsyncStorage.setItem(REQUESTER_PAID_SESSIONS_KEY, JSON.stringify(arr.slice(-20)));
+    }
+  } catch {}
+}
+
+async function isRequesterSessionPaid(sessionId: string): Promise<boolean> {
+  if (_requesterPaidSessions.has(sessionId)) return true;
+  try {
+    const existing = await AsyncStorage.getItem(REQUESTER_PAID_SESSIONS_KEY);
+    const arr: string[] = existing ? JSON.parse(existing) : [];
+    if (arr.includes(sessionId)) {
+      _requesterPaidSessions.add(sessionId);
+      return true;
+    }
+  } catch {}
+  return false;
+}
 
 // Module-level flag — survives tab switches / screen remounts
 let _hasInitialFix = false;
@@ -1721,6 +1752,19 @@ export default function RequesterHomeScreen() {
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const transitionToRef = useRef<(state: SheetState) => void>(() => {});
 
+  // ─── Load persisted paid sessions into in-memory cache on mount ─────────────
+  useEffect(() => {
+    AsyncStorage.getItem(REQUESTER_PAID_SESSIONS_KEY).then((val) => {
+      if (val) {
+        try {
+          const arr: string[] = JSON.parse(val);
+          arr.forEach((id) => _requesterPaidSessions.add(id));
+          console.log('[RequesterHome] Loaded', arr.length, 'paid sessions from storage');
+        } catch {}
+      }
+    });
+  }, []);
+
   // ─── Load recent place on mount ───────────────────────────────────────────────
   useEffect(() => {
     SecureStore.getItemAsync(RECENT_PLACE_KEY).then((raw) => {
@@ -1755,16 +1799,20 @@ export default function RequesterHomeScreen() {
       const session: CoverageSession | null = data?.session ?? null;
       console.log('[RequesterHome] Active session fetched:', session?.id ?? 'none', 'status:', session?.status ?? 'none');
       setActiveSession(session);
-      // If session is already paid and we haven't shown the modal yet, show it now
-      // (handles the case where the app was backgrounded during payment)
+      // If session is already paid, use persistent guard to decide whether to show modal
       if (session && session.status === 'requester_paid') {
-        setConfirmedSession((prev) => {
-          if (!prev) {
-            // Only show if not already showing
-            setShowPaymentSuccess(true);
-            return session;
+        isRequesterSessionPaid(session.id).then((alreadyHandled) => {
+          if (alreadyHandled) {
+            console.log('[RequesterHome] Payment success modal suppressed — session already handled:', session.id);
+            return;
           }
-          return prev;
+          setConfirmedSession((prev) => {
+            if (!prev) {
+              setShowPaymentSuccess(true);
+              return session;
+            }
+            return prev;
+          });
         });
       }
     } catch (e: any) {
@@ -1869,23 +1917,35 @@ export default function RequesterHomeScreen() {
         console.log('[RequesterHome] PAYMENT_CONFIRMED received:', payload);
         setActiveSession((prev) => {
           if (prev) {
-            setConfirmedSession(prev);
-            setShowPaymentSuccess(true);
+            isRequesterSessionPaid(prev.id).then((alreadyHandled) => {
+              if (!alreadyHandled) {
+                setConfirmedSession(prev);
+                setShowPaymentSuccess(true);
+              } else {
+                console.log('[RequesterHome] PAYMENT_CONFIRMED suppressed — session already handled:', prev.id);
+              }
+            });
           }
           return null;
         });
-        fetchActiveSession(); // backstop: if prev was null, fetch finds requester_paid and triggers modal
+        fetchActiveSession();
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[RequesterHome] payment_confirmed received (session channel):', payload);
         setActiveSession((prev) => {
           if (prev) {
-            setConfirmedSession(prev);
-            setShowPaymentSuccess(true);
+            isRequesterSessionPaid(prev.id).then((alreadyHandled) => {
+              if (!alreadyHandled) {
+                setConfirmedSession(prev);
+                setShowPaymentSuccess(true);
+              } else {
+                console.log('[RequesterHome] payment_confirmed suppressed — session already handled:', prev.id);
+              }
+            });
           }
           return null;
         });
-        fetchActiveSession(); // backstop: if prev was null, fetch finds requester_paid and triggers modal
+        fetchActiveSession();
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
         console.log('[RequesterHome] PAYMENT_COMPLETE received:', payload);
@@ -3585,6 +3645,7 @@ export default function RequesterHomeScreen() {
         ratingError={ratingError}
         onDismiss={() => {
           console.log('[RequesterHome] Payment success modal dismissed');
+          if (confirmedSession?.id) markRequesterSessionPaid(confirmedSession.id);
           setShowPaymentSuccess(false);
           setConfirmedSession(null);
           setShowRatingOverlay(false);
@@ -3629,6 +3690,7 @@ export default function RequesterHomeScreen() {
             }
             const data = await res.json();
             console.log('[RequesterHome] Review submitted successfully:', data?.review?.id);
+            if (confirmedSession?.id) markRequesterSessionPaid(confirmedSession.id);
             setShowRatingOverlay(false);
           } catch (e: any) {
             console.log('[RequesterHome] Review submission error:', e.message);
