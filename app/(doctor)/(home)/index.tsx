@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Animated,
   Dimensions,
   StyleSheet,
   Alert,
@@ -34,8 +33,8 @@ const SHEET_HEIGHT = screenHeight * 0.45;
 const LAGOS_REGION = {
   latitude: 6.5244,
   longitude: 3.3792,
-  latitudeDelta: 0.15,
-  longitudeDelta: 0.15,
+  latitudeDelta: 0.05,
+  longitudeDelta: 0.05,
 };
 
 function formatTime(iso: string) {
@@ -323,9 +322,8 @@ export default function DoctorHomeScreen() {
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
   const hasAnimatedToUser = useRef(false);
 
-  // Radar pulse animation
-  const radarScale = useRef(new Animated.Value(1)).current;
-  const radarOpacity = useRef(new Animated.Value(0.6)).current;
+  // ─── tracksViewChanges fix for stethoscope blank on first toggle ────────────
+  const [markerTracksViews, setMarkerTracksViews] = useState(true);
 
   // ─── GPS setup ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -394,24 +392,14 @@ export default function DoctorHomeScreen() {
     };
   }, []);
 
-  // ─── Radar pulse loop ────────────────────────────────────────────────────────
+  // ─── tracksViewChanges: reset to true briefly when marker appears ───────────
+  const showMarker = isOnline && userLocation !== null;
   useEffect(() => {
-    if (!isOnline) return;
-    const loop = Animated.loop(
-      Animated.parallel([
-        Animated.sequence([
-          Animated.timing(radarScale, { toValue: 1.8, duration: 1800, useNativeDriver: true }),
-          Animated.timing(radarScale, { toValue: 1, duration: 0, useNativeDriver: true }),
-        ]),
-        Animated.sequence([
-          Animated.timing(radarOpacity, { toValue: 0, duration: 1800, useNativeDriver: true }),
-          Animated.timing(radarOpacity, { toValue: 0.6, duration: 0, useNativeDriver: true }),
-        ]),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [isOnline, radarScale, radarOpacity]);
+    if (!showMarker) return;
+    setMarkerTracksViews(true);
+    const t = setTimeout(() => setMarkerTracksViews(false), 500);
+    return () => clearTimeout(t);
+  }, [showMarker]);
 
   useEffect(() => {
     console.log('[DoctorHome][MARKER-STATE] userLocation changed:', userLocation);
@@ -479,9 +467,7 @@ export default function DoctorHomeScreen() {
   const dotBg = isJobCapReached ? '#8E8E93' : isOnline ? '#FFFFFF' : '#8E8E93';
   const statusText = isJobCapReached ? '3 Jobs Active' : isOnline ? 'Online' : 'Offline';
   const pillTop = insets.top + 12;
-  const sheetPaddingBottom = insets.bottom + 120;
-
-  const showMarker = isOnline && userLocation !== null;
+  const sheetPaddingBottom = insets.bottom + 4;
 
   // Determine which sub-card to show
   const hasActiveSession = activeSession !== null;
@@ -498,20 +484,16 @@ export default function DoctorHomeScreen() {
         initialRegion={LAGOS_REGION}
         showsMyLocationButton={false}
         customMapStyle={DESATURATED_MAP_STYLE}
+        minZoomLevel={10}
+        maxZoomLevel={18}
       >
         {showMarker && userLocation && (
           <Marker
             coordinate={userLocation}
             anchor={{ x: 0.5, y: 0.5 }}
-            tracksViewChanges={false}
+            tracksViewChanges={markerTracksViews}
           >
             <View style={styles.markerContainer}>
-              <Animated.View
-                style={[
-                  styles.radarRing,
-                  { transform: [{ scale: radarScale }], opacity: radarOpacity },
-                ]}
-              />
               <View style={styles.stethoscopeCircle}>
                 <MaterialCommunityIcons name="stethoscope" size={28} color="#FFFFFF" />
               </View>
@@ -569,7 +551,7 @@ export default function DoctorHomeScreen() {
           )}
 
           {/* Stats row */}
-          <View style={[styles.statsRow, { marginBottom: 8 }]}>
+          <View style={[styles.statsRow, { marginBottom: 4 }]}>
             {/* Ratings */}
             <View style={styles.statCard}>
               <View style={styles.statLabelRow}>
@@ -607,13 +589,6 @@ const styles = StyleSheet.create({
     height: 80,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  radarRing: {
-    position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(28,28,30,0.35)',
   },
   stethoscopeCircle: {
     width: 52,
@@ -756,22 +731,25 @@ const styles = StyleSheet.create({
 });
 
 const DESATURATED_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
+  { elementType: 'geometry', stylers: [{ color: '#dde0e3' }] },
   { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#dde0e3' }] },
   { featureType: 'administrative.land_parcel', elementType: 'labels.text.fill', stylers: [{ color: '#bdbdbd' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#eeeeee' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#d8dbde' }] },
   { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#e5e5e5' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#cfd2d5' }] },
   { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#cdd0d4' }] },
+  { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] },
   { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dadada' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#c4c8cc' }] },
   { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
-  { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
-  { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#e5e5e5' }] },
-  { featureType: 'transit.station', elementType: 'geometry', stylers: [{ color: '#eeeeee' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#c9d8e8' }] },
+  { featureType: 'road.local', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road.local', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#cfd2d5' }] },
+  { featureType: 'transit.station', elementType: 'geometry', stylers: [{ color: '#d8dbde' }] },
+  { featureType: 'administrative.neighborhood', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#a8c4d8' }] },
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
 ];

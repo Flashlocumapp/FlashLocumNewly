@@ -79,21 +79,23 @@ type SelectedPlace = {
 };
 
 const MINIMALIST_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
+  { elementType: 'geometry', stylers: [{ color: '#dde0e3' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#dde0e3' }] },
   { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
-  { featureType: 'administrative.neighborhood', stylers: [{ visibility: 'off' }] },
+  { featureType: 'administrative.neighborhood', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#e5e5e5' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#cfd2d5' }] },
   { featureType: 'poi.park', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#cdd0d4' }] },
+  { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] },
   { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dadada' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#c4c8cc' }] },
   { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
-  { featureType: 'road.local', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road.local', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road.local', elementType: 'labels', stylers: [{ visibility: 'off' }] },
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#c9d8e8' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#a8c4d8' }] },
   { featureType: 'water', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
 ];
 
@@ -2781,7 +2783,8 @@ export default function RequesterHomeScreen() {
         provider={PROVIDER_GOOGLE}
         initialRegion={LAGOS_REGION}
         customMapStyle={MINIMALIST_MAP_STYLE}
-        maxZoomLevel={14}
+        minZoomLevel={10}
+        maxZoomLevel={18}
         onMapReady={() => console.log('[RequesterHome] MAP READY ✓')}
       >
         {userCoords && (
