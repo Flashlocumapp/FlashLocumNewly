@@ -1691,7 +1691,13 @@ export default function RequesterHomeScreen() {
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[RequesterHome] PAYMENT_CONFIRMED received:', payload);
-        setActiveSession(null);
+        setActiveSession((prev) => {
+          if (prev) {
+            setConfirmedSession(prev);
+            setShowPaymentSuccess(true);
+          }
+          return null;
+        });
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
         console.log('[RequesterHome] PAYMENT_COMPLETE received:', payload);

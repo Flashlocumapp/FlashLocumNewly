@@ -8,6 +8,9 @@ import {
   AppState,
   AppStateStatus,
   StyleSheet,
+  Modal,
+  TextInput,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { Stack, Href, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -181,6 +184,15 @@ export default function DoctorLayout() {
   // Active session state
   const [activeSession, setActiveSession] = useState<CoverageSession | null>(null);
   const [activeJobCount, setActiveJobCount] = useState(0);
+
+  // Doctor rating overlay state
+  const [showDoctorRating, setShowDoctorRating] = useState(false);
+  const [doctorRatingSessionId, setDoctorRatingSessionId] = useState<string | null>(null);
+  const [doctorRatingHospitalName, setDoctorRatingHospitalName] = useState<string>('');
+  const [doctorRatingStars, setDoctorRatingStars] = useState(0);
+  const [doctorRatingComment, setDoctorRatingComment] = useState('');
+  const [submittingDoctorRating, setSubmittingDoctorRating] = useState(false);
+  const [doctorRatingError, setDoctorRatingError] = useState('');
 
   const prevIsOnlineRef = useRef<boolean | undefined>(undefined);
   const callEdgeRef = useRef<(fn: string, body?: object) => Promise<Response | null>>(async () => null);
@@ -442,19 +454,31 @@ export default function DoctorLayout() {
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[DoctorLayout] PAYMENT_CONFIRMED received (session channel):', payload);
         const sessionId = payload?.payload?.session_id ?? activeSession?.id;
+        const hospitalName = activeSession?.hospital_name ?? payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         if (sessionId) {
-          console.log('[DoctorLayout] Navigating to payment-summary for session:', sessionId);
-          router.push(`/(doctor)/(home)/payment-summary?session_id=${sessionId}`);
+          console.log('[DoctorLayout] Opening doctor rating overlay for session:', sessionId);
+          setDoctorRatingSessionId(sessionId);
+          setDoctorRatingHospitalName(hospitalName);
+          setDoctorRatingStars(0);
+          setDoctorRatingComment('');
+          setDoctorRatingError('');
+          setShowDoctorRating(true);
         }
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[DoctorLayout] payment_confirmed received (session channel):', payload);
         const sessionId = payload?.payload?.session_id ?? activeSession?.id;
+        const hospitalName = activeSession?.hospital_name ?? payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         if (sessionId) {
-          console.log('[DoctorLayout] Navigating to payment-summary for session:', sessionId);
-          router.push(`/(doctor)/(home)/payment-summary?session_id=${sessionId}`);
+          console.log('[DoctorLayout] Opening doctor rating overlay for session:', sessionId);
+          setDoctorRatingSessionId(sessionId);
+          setDoctorRatingHospitalName(hospitalName);
+          setDoctorRatingStars(0);
+          setDoctorRatingComment('');
+          setDoctorRatingError('');
+          setShowDoctorRating(true);
         }
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
@@ -526,19 +550,31 @@ export default function DoctorLayout() {
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[DoctorLayout] PAYMENT_CONFIRMED (doctor channel):', payload);
         const sessionId = payload?.payload?.session_id ?? activeSession?.id;
+        const hospitalName = activeSession?.hospital_name ?? payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         if (sessionId) {
-          console.log('[DoctorLayout] Navigating to payment-summary (doctor channel) for session:', sessionId);
-          router.push(`/(doctor)/(home)/payment-summary?session_id=${sessionId}`);
+          console.log('[DoctorLayout] Opening doctor rating overlay (doctor channel) for session:', sessionId);
+          setDoctorRatingSessionId(sessionId);
+          setDoctorRatingHospitalName(hospitalName);
+          setDoctorRatingStars(0);
+          setDoctorRatingComment('');
+          setDoctorRatingError('');
+          setShowDoctorRating(true);
         }
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[DoctorLayout] payment_confirmed (doctor channel):', payload);
         const sessionId = payload?.payload?.session_id ?? activeSession?.id;
+        const hospitalName = activeSession?.hospital_name ?? payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         if (sessionId) {
-          console.log('[DoctorLayout] Navigating to payment-summary (doctor channel) for session:', sessionId);
-          router.push(`/(doctor)/(home)/payment-summary?session_id=${sessionId}`);
+          console.log('[DoctorLayout] Opening doctor rating overlay (doctor channel) for session:', sessionId);
+          setDoctorRatingSessionId(sessionId);
+          setDoctorRatingHospitalName(hospitalName);
+          setDoctorRatingStars(0);
+          setDoctorRatingComment('');
+          setDoctorRatingError('');
+          setShowDoctorRating(true);
         }
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, () => {
@@ -652,6 +688,51 @@ export default function DoctorLayout() {
     } catch {}
     setRequestQueue((prev) => prev.slice(1));
   }, [requestQueue, user, callEdge]);
+
+  // ── Doctor Rating — dismiss and navigate to summary ──
+  const handleDoctorRatingDone = useCallback(() => {
+    console.log('[DoctorLayout] Doctor rating overlay dismissed, navigating to payment-summary');
+    const sid = doctorRatingSessionId;
+    setShowDoctorRating(false);
+    setDoctorRatingSessionId(null);
+    if (sid) {
+      router.push(`/(doctor)/(home)/payment-summary?session_id=${sid}`);
+    }
+  }, [doctorRatingSessionId, router]);
+
+  // ── Doctor Rating — submit review ──
+  const handleSubmitDoctorRating = useCallback(async () => {
+    console.log('[DoctorLayout] Submit rating button pressed — stars:', doctorRatingStars);
+    if (doctorRatingStars === 0) {
+      setDoctorRatingError('Please select a star rating.');
+      return;
+    }
+    setSubmittingDoctorRating(true);
+    setDoctorRatingError('');
+    try {
+      const token = await getValidToken();
+      console.log('[DoctorLayout] Submitting review to edge function — session:', doctorRatingSessionId, 'stars:', doctorRatingStars);
+      const res = await fetch(`${EDGE_BASE}/submit-review`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: doctorRatingSessionId,
+          stars: doctorRatingStars,
+          comment: doctorRatingComment.trim() || undefined,
+        }),
+      });
+      console.log('[DoctorLayout] submit-review response status:', res.status);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Failed to submit review');
+      console.log('[DoctorLayout] Review submitted successfully');
+      handleDoctorRatingDone();
+    } catch (e: any) {
+      console.log('[DoctorLayout] submit-review error:', e.message);
+      setDoctorRatingError(e.message);
+    } finally {
+      setSubmittingDoctorRating(false);
+    }
+  }, [doctorRatingSessionId, doctorRatingStars, doctorRatingComment, handleDoctorRatingDone]);
 
   const currentRequest = requestQueue[0] ?? null;
   const showCard = doctorScreenState === 'incoming' && currentRequest !== null;
@@ -768,6 +849,89 @@ export default function DoctorLayout() {
             </View>
           </View>
         )}
+
+        {/* ── Doctor Rating Overlay ── */}
+        <Modal
+          visible={showDoctorRating}
+          transparent
+          animationType="fade"
+          onRequestClose={handleDoctorRatingDone}
+        >
+          <TouchableWithoutFeedback onPress={handleDoctorRatingDone}>
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+              <TouchableWithoutFeedback onPress={() => {}}>
+                <View style={{ backgroundColor: '#2C2C2E', borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 }}>
+                  <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 12 }}>
+                    SHIFT COMPLETED
+                  </Text>
+                  <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 4 }}>
+                    {`How was your experience with ${doctorRatingHospitalName || 'this hospital'}?`}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 20 }}>
+                    Share your feedback and help us improve.
+                  </Text>
+                  {/* Stars */}
+                  <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <TouchableOpacity
+                        key={n}
+                        onPress={() => {
+                          console.log('[DoctorLayout] Star rating selected:', n);
+                          setDoctorRatingStars(n);
+                          setDoctorRatingError('');
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ fontSize: 36, color: n <= doctorRatingStars ? '#F4A261' : '#48484A' }}>★</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {/* Comment */}
+                  <TextInput
+                    value={doctorRatingComment}
+                    onChangeText={setDoctorRatingComment}
+                    placeholder="Write a comment (optional)..."
+                    placeholderTextColor="#636366"
+                    multiline
+                    style={{
+                      backgroundColor: '#1C1C1E',
+                      borderRadius: 12,
+                      padding: 12,
+                      fontSize: 14,
+                      color: '#FFFFFF',
+                      minHeight: 80,
+                      textAlignVertical: 'top',
+                      marginBottom: 12,
+                    }}
+                  />
+                  {!!doctorRatingError && (
+                    <Text style={{ fontSize: 13, color: '#EF4444', marginBottom: 8 }}>{doctorRatingError}</Text>
+                  )}
+                  {/* Buttons */}
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TouchableOpacity
+                      onPress={handleDoctorRatingDone}
+                      activeOpacity={0.8}
+                      style={{ flex: 1, backgroundColor: '#3A3A3C', borderRadius: 999, paddingVertical: 13, alignItems: 'center' }}
+                    >
+                      <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>Skip</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={handleSubmitDoctorRating}
+                      disabled={submittingDoctorRating}
+                      activeOpacity={0.85}
+                      style={{ flex: 2, backgroundColor: submittingDoctorRating ? '#636366' : '#FFFFFF', borderRadius: 999, paddingVertical: 13, alignItems: 'center' }}
+                    >
+                      <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>
+                        {submittingDoctorRating ? 'Submitting...' : 'Submit Rating'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
       </View>
     </DoctorDispatchContext.Provider>
   );
