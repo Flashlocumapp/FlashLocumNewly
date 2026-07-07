@@ -50,8 +50,8 @@ const RECENT_PLACE_KEY = 'flashlocum_recent_place';
 const LAGOS_REGION = {
   latitude: 6.5244,
   longitude: 3.3792,
-  latitudeDelta: 0.08,
-  longitudeDelta: 0.08,
+  latitudeDelta: 0.12,
+  longitudeDelta: 0.12,
 };
 
 const LAGOS_BOUNDS = {
@@ -1989,8 +1989,8 @@ export default function RequesterHomeScreen() {
           mapRef.current?.animateToRegion({
             latitude: immediatePos.coords.latitude,
             longitude: immediatePos.coords.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
+            latitudeDelta: 0.12,
+            longitudeDelta: 0.12,
           }, 800);
         }
         console.log('[RequesterHome] Starting watch stream');
@@ -2011,8 +2011,8 @@ export default function RequesterHomeScreen() {
               mapRef.current?.animateToRegion({
                 latitude: loc.coords.latitude,
                 longitude: loc.coords.longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
+                latitudeDelta: 0.12,
+                longitudeDelta: 0.12,
               }, 800);
             }
             setUserCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
@@ -2803,37 +2803,7 @@ export default function RequesterHomeScreen() {
         )}
       </MapView>
 
-      {/* ── RE-CENTRE FAB ── */}
-      {userCoords && (
-        <TouchableOpacity
-          onPress={() => {
-            console.log('[RequesterHome] Re-centre FAB pressed');
-            mapRef.current?.animateToRegion(
-              { latitude: userCoords.latitude, longitude: userCoords.longitude, latitudeDelta: 0.08, longitudeDelta: 0.08 },
-              500
-            );
-          }}
-          activeOpacity={0.85}
-          style={{
-            position: 'absolute',
-            top: insets.top + 16,
-            right: 16,
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: '#FFFFFF',
-            justifyContent: 'center',
-            alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.15,
-            shadowRadius: 6,
-            elevation: 6,
-          }}
-        >
-          <MapPin size={20} color="#1C1C1E" />
-        </TouchableOpacity>
-      )}
+
 
       {/* ── SUMMARY BACK BUTTON ── */}
       {sheetState === 'summary' && (
