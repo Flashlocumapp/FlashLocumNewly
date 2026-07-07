@@ -271,21 +271,17 @@ function HistoryCoverageCard({ session, onPress }: {
         <Text style={{ fontSize: 11, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>{'Tap for details ›'}</Text>
       </View>
 
-      {/* Hospital name + rating row */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
-        <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF', flexShrink: 1, marginRight: 6 }} numberOfLines={1}>
+      {/* Hospital name + rating inline row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, flexWrap: 'nowrap' }}>
+        <Text style={{ fontSize: 17, fontFamily: 'Inter_700Bold', color: '#FFFFFF', flexShrink: 1 }} numberOfLines={1}>
           {session.hospital_name}
         </Text>
-        <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_400Regular' }}>{'★ '}</Text>
-        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{ratingDisplay}</Text>
-        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759', marginHorizontal: 6 }} />
-        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{reliabilityDisplay}{'%'}</Text>
+        <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 8 }}>{'|'}</Text>
+        <Text style={{ fontSize: 13, color: '#F4A261' }}>{'★ '}</Text>
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
+        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759', marginHorizontal: 5 }} />
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>{reliabilityDisplay}{'%'}</Text>
       </View>
-
-      {/* Address */}
-      <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 8 }} numberOfLines={1}>
-        {session.hospital_address}
-      </Text>
 
       {/* Shift pill */}
       <View style={{ backgroundColor: '#3A3A3C', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' }}>
@@ -364,7 +360,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
 
   const statusSheetLabel = session.status === 'cancelled' ? 'CANCELLED SHIFT' : 'COMPLETED SHIFT';
   const financialRows = [
-    { label: 'Amount', value: `₦${Number(session.price ?? 0).toLocaleString()}`, bold: true },
+    { label: 'Amount', value: `₦${Number((session as any).total_cost ?? session.price ?? 0).toLocaleString()}`, bold: true },
     { label: 'Settlement', value: settlementStatus, bold: true },
     { label: 'Started', value: formatDateTime(session.started_at), bold: true },
     { label: 'Ended', value: formatDateTime(session.ended_at), bold: true },
@@ -373,111 +369,112 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' }}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={{ backgroundColor: '#FFFFFF', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40 }}>
-            {/* Drag handle */}
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#D1D1D6', alignSelf: 'center', marginTop: 12, marginBottom: 4 }} />
-
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 24, paddingTop: 8 }}>
-              {/* Close button */}
-              <TouchableOpacity onPress={() => {
-                console.log('[DoctorCoverage] HistoryDetailSheet closed for session:', session.id);
-                onClose();
-              }} style={{ alignSelf: 'flex-end', padding: 4, marginBottom: 8 }}>
-                <Text style={{ fontSize: 20, color: '#8E8E93' }}>{'✕'}</Text>
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={onClose}
+        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}
+      >
+        <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={{ backgroundColor: '#2C2C2E', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40 }}>
+              {/* Drag handle — tapping it also closes */}
+              <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
+                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#636366' }} />
               </TouchableOpacity>
 
-              {/* Label */}
-              <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 8 }}>
-                {statusSheetLabel}
-              </Text>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 24, paddingTop: 8 }}>
+                {/* Label */}
+                <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 10 }}>
+                  {statusSheetLabel}
+                </Text>
 
-              {/* Hospital name + rating */}
-              <Text style={{ fontSize: 24, fontFamily: 'Inter_700Bold', color: '#1C1C1E', marginBottom: 4 }}>
-                {session.hospital_name}
-              </Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 6 }}>
-                <Text style={{ fontSize: 14, color: '#F4A261' }}>{'★'}</Text>
-                <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#F4A261' }}>{ratingDisplay}</Text>
-                <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759' }} />
-                <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#34C759' }}>{reliabilityDisplay}{'%'}</Text>
-              </View>
-
-              {/* Address */}
-              <Text style={{ fontSize: 14, color: '#71717A', fontFamily: 'Inter_400Regular', marginBottom: 12 }}>
-                {session.hospital_address}
-              </Text>
-
-              {/* Shift summary line */}
-              <Text style={{ fontSize: 14, color: '#1C1C1E', fontFamily: 'Inter_400Regular', marginBottom: 16 }}>
-                {shiftSummaryLine}
-              </Text>
-
-              {/* Financial breakdown box */}
-              <View style={{ backgroundColor: '#F4F4F4', borderRadius: 16, padding: 16, marginBottom: 20 }}>
-                {financialRows.map((row, i) => (
-                  <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: i < 4 ? 1 : 0, borderBottomColor: '#E5E5E5' }}>
-                    <Text style={{ fontSize: 14, color: '#71717A', fontFamily: 'Inter_400Regular' }}>{row.label}</Text>
-                    <Text style={{ fontSize: 14, color: '#1C1C1E', fontFamily: 'Inter_700Bold' }}>{row.value}</Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* Rating section */}
-              {session.status !== 'cancelled' && (
-                alreadyReviewed ? (
-                  <Text style={{ fontSize: 14, color: '#71717A', fontFamily: 'Inter_400Regular', textAlign: 'center', paddingVertical: 8 }}>
-                    {'You\'ve already rated this coverage.'}
+                {/* Name + rating inline */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
+                  <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#FFFFFF', flexShrink: 1 }} numberOfLines={1}>
+                    {session.hospital_name}
                   </Text>
-                ) : (
-                  <View style={{ backgroundColor: '#F9F9F9', borderRadius: 16, padding: 16 }}>
-                    <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E', marginBottom: 4 }}>
-                      {`How was your experience with ${session.hospital_name}?`}
-                    </Text>
-                    <Text style={{ fontSize: 13, color: '#71717A', fontFamily: 'Inter_400Regular', marginBottom: 16 }}>
-                      {'Share your feedback and help us improve.'}
-                    </Text>
-                    {/* Stars */}
-                    <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
-                      {[1, 2, 3, 4, 5].map(n => (
-                        <TouchableOpacity key={n} onPress={() => {
-                          console.log('[DoctorCoverage] Star rating selected:', n, 'for session:', session.id);
-                          setStars(n);
-                        }} activeOpacity={0.7}>
-                          <Text style={{ fontSize: 32, color: n <= stars ? '#F4A261' : '#D1D1D6' }}>{'★'}</Text>
-                        </TouchableOpacity>
-                      ))}
+                  <Text style={{ fontSize: 14, color: '#8E8E93', marginHorizontal: 8 }}>{'|'}</Text>
+                  <Text style={{ fontSize: 14, color: '#F4A261' }}>{'★ '}</Text>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#F4A261' }}>{ratingDisplay}</Text>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759', marginHorizontal: 5 }} />
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#34C759' }}>{reliabilityDisplay}{'%'}</Text>
+                </View>
+
+                {/* Address */}
+                <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 14 }}>
+                  {session.hospital_address}
+                </Text>
+
+                {/* Shift summary line */}
+                <Text style={{ fontSize: 14, color: '#ADADAD', fontFamily: 'Inter_400Regular', marginBottom: 16 }}>
+                  {shiftSummaryLine}
+                </Text>
+
+                {/* Financial breakdown box */}
+                <View style={{ backgroundColor: '#3A3A3C', borderRadius: 16, padding: 16, marginBottom: 20 }}>
+                  {financialRows.map((row, i) => (
+                    <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: i < 4 ? 1 : 0, borderBottomColor: '#48484A' }}>
+                      <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>{row.label}</Text>
+                      <Text style={{ fontSize: 14, color: '#FFFFFF', fontFamily: 'Inter_700Bold' }}>{row.value}</Text>
                     </View>
-                    {/* Comment */}
-                    <TextInput
-                      value={comment}
-                      onChangeText={setComment}
-                      placeholder="Optional feedback"
-                      placeholderTextColor="#A1A1AA"
-                      multiline
-                      numberOfLines={3}
-                      style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 12, fontSize: 14, color: '#1C1C1E', fontFamily: 'Inter_400Regular', minHeight: 80, textAlignVertical: 'top', marginBottom: 12 }}
-                    />
-                    {!!error && <Text style={{ fontSize: 13, color: '#EF4444', marginBottom: 8 }}>{error}</Text>}
-                    {/* Submit */}
-                    <TouchableOpacity
-                      onPress={handleSubmit}
-                      disabled={submitting}
-                      activeOpacity={0.85}
-                      style={{ backgroundColor: submitting ? '#8E8E93' : '#1C1C1E', borderRadius: 999, paddingVertical: 14, alignItems: 'center' }}
-                    >
-                      <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>
-                        {submitting ? 'Submitting...' : 'Submit rating'}
+                  ))}
+                </View>
+
+                {/* Rating section */}
+                {session.status !== 'cancelled' && (
+                  alreadyReviewed ? (
+                    <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular', textAlign: 'center', paddingVertical: 8 }}>
+                      {'You\'ve already rated this coverage.'}
+                    </Text>
+                  ) : (
+                    <View style={{ backgroundColor: '#3A3A3C', borderRadius: 16, padding: 16 }}>
+                      <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', marginBottom: 4 }}>
+                        {`How was your experience with ${session.hospital_name}?`}
                       </Text>
-                    </TouchableOpacity>
-                  </View>
-                )
-              )}
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </View>
+                      <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 16 }}>
+                        {'Share your feedback and help us improve.'}
+                      </Text>
+                      {/* Stars */}
+                      <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
+                        {[1, 2, 3, 4, 5].map(n => (
+                          <TouchableOpacity key={n} onPress={() => {
+                            console.log('[DoctorCoverage] Star rating selected:', n, 'for session:', session.id);
+                            setStars(n);
+                          }} activeOpacity={0.7}>
+                            <Text style={{ fontSize: 32, color: n <= stars ? '#F4A261' : '#D1D1D6' }}>{'★'}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      {/* Comment */}
+                      <TextInput
+                        value={comment}
+                        onChangeText={setComment}
+                        placeholder="Optional feedback"
+                        placeholderTextColor="#636366"
+                        multiline
+                        numberOfLines={3}
+                        style={{ backgroundColor: '#1C1C1E', borderRadius: 12, padding: 12, fontSize: 14, color: '#FFFFFF', fontFamily: 'Inter_400Regular', minHeight: 80, textAlignVertical: 'top', marginBottom: 12 }}
+                      />
+                      {!!error && <Text style={{ fontSize: 13, color: '#EF4444', marginBottom: 8 }}>{error}</Text>}
+                      {/* Submit */}
+                      <TouchableOpacity
+                        onPress={handleSubmit}
+                        disabled={submitting}
+                        activeOpacity={0.85}
+                        style={{ backgroundColor: submitting ? '#8E8E93' : '#FFFFFF', borderRadius: 999, paddingVertical: 14, alignItems: 'center' }}
+                      >
+                        <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>
+                          {submitting ? 'Submitting...' : 'Submit rating'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )
+                )}
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 }
