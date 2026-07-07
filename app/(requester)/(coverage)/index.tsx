@@ -476,14 +476,6 @@ export default function RequesterCoverageScreen() {
         Your coverage continuity
       </Text>
 
-      {/* Background refresh indicator */}
-      {refreshing && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8, gap: 6 }}>
-          <ActivityIndicator size="small" color="#0066CC" />
-          <Text style={{ fontSize: 12, color: '#8E8E93' }}>Updating...</Text>
-        </View>
-      )}
-
       {/* Content */}
       {loading ? (
         <>

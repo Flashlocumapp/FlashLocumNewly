@@ -807,14 +807,6 @@ export default function DoctorCoverageScreen() {
         </Text>
       </View>
 
-      {/* Background refresh indicator */}
-      {currentRefreshing && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8, gap: 6 }}>
-          <ActivityIndicator size="small" color="#0066CC" />
-          <Text style={{ fontSize: 12, color: '#8E8E93' }}>Updating...</Text>
-        </View>
-      )}
-
       {/* Content */}
       {currentLoading ? (
         <>

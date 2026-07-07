@@ -193,7 +193,7 @@ export default function PaymentSummaryScreen() {
     router.replace('/(doctor)/(home)');
   };
 
-  if (!fontsLoaded || loading) {
+  if (!fontsLoaded) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color="#34C759" />
@@ -201,10 +201,10 @@ export default function PaymentSummaryScreen() {
     );
   }
 
-  if (error || !session) {
+  if (error) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }]}>
-        <Text style={styles.errorText}>{error ?? 'Session not found.'}</Text>
+        <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity onPress={handleDone} style={styles.doneButton}>
           <Text style={styles.doneButtonText}>Go Home</Text>
         </TouchableOpacity>
@@ -213,27 +213,27 @@ export default function PaymentSummaryScreen() {
   }
 
   // ─── Derived values ───────────────────────────────────────────────────────
-  const totalAmount = amountPaid ?? session.price;
+  const totalAmount = amountPaid ?? session?.price ?? 0;
   const platformFee = Math.round(totalAmount * PLATFORM_FEE_RATE);
   const netPayout = totalAmount - platformFee;
 
-  const totalAmountDisplay = formatNaira(totalAmount);
-  const platformFeeDisplay = formatNaira(platformFee);
-  const netPayoutDisplay = formatNaira(netPayout);
+  const totalAmountDisplay = totalAmount > 0 ? formatNaira(totalAmount) : '—';
+  const platformFeeDisplay = totalAmount > 0 ? formatNaira(platformFee) : '—';
+  const netPayoutDisplay = totalAmount > 0 ? formatNaira(netPayout) : '—';
 
   // Booked shift summary
-  const shiftStartDate = formatDate(session.shift_date);
-  const shiftStartTime = formatTime(session.shift_start);
-  const shiftEndTime = formatTime(session.shift_end);
-  const coverageLength = session.coverage_length ?? 1;
-  const perDayHours = session.per_day_hours ?? 0;
+  const shiftStartDate = session?.shift_date ? formatDate(session.shift_date) : '—';
+  const shiftStartTime = session?.shift_start ? formatTime(session.shift_start) : '—';
+  const shiftEndTime = session?.shift_end ? formatTime(session.shift_end) : '—';
+  const coverageLength = session?.coverage_length ?? 1;
+  const perDayHours = session?.per_day_hours ?? 0;
   const bookedHoursDisplay = perDayHours > 0
     ? `${perDayHours}h/day`
-    : `${shiftStartTime} – ${shiftEndTime}`;
+    : session ? `${shiftStartTime} – ${shiftEndTime}` : '—';
 
   // Multi-day end date
   let dateRangeDisplay = shiftStartDate;
-  if (coverageLength > 1) {
+  if (session && coverageLength > 1) {
     const endDateObj = new Date(session.shift_date + 'T12:00:00');
     endDateObj.setDate(endDateObj.getDate() + coverageLength - 1);
     const endDateStr = endDateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -241,7 +241,7 @@ export default function PaymentSummaryScreen() {
   }
 
   // Actual shift summary from day_logs
-  const dayLogs: DayLog[] = session.day_logs ?? [];
+  const dayLogs: DayLog[] = session?.day_logs ?? [];
   const totalActualSeconds = dayLogs.reduce((sum, log) => sum + (log.duration_seconds ?? 0), 0);
   const totalActualDisplay = totalActualSeconds > 0 ? formatDuration(totalActualSeconds) : '—';
 
@@ -251,6 +251,9 @@ export default function PaymentSummaryScreen() {
   const overage = actualHours - bookedTotalHours;
   const hasOverage = bookedTotalHours > 0 && overage > 0.1;
   const overageDisplay = hasOverage ? `+${formatDuration(Math.round(overage * 3600))} overage` : null;
+
+  const hospitalName = session?.hospital_name ?? '—';
+  const shiftType = session?.shift_type ?? '—';
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -265,7 +268,7 @@ export default function PaymentSummaryScreen() {
             <Text style={styles.successBadgeText}>Payment Confirmed</Text>
           </View>
           <Text style={styles.headerTitle}>Payment Summary</Text>
-          <Text style={styles.headerSubtitle}>{session.hospital_name}</Text>
+          <Text style={styles.headerSubtitle}>{hospitalName}</Text>
         </View>
 
         {/* ── Payout Breakdown ── */}
@@ -276,7 +279,7 @@ export default function PaymentSummaryScreen() {
           <View style={styles.divider} />
           <ReceiptRow
             label="Platform Fee (15%)"
-            value={`-${platformFeeDisplay}`}
+            value={totalAmount > 0 ? `-${platformFeeDisplay}` : '—'}
             valueStyle={{ color: '#FF453A' }}
           />
           <View style={styles.divider} />
@@ -292,7 +295,7 @@ export default function PaymentSummaryScreen() {
         <View style={styles.card}>
           <SectionLabel text="BOOKED SHIFT" />
 
-          <ReceiptRow label="Shift Type" value={session.shift_type} />
+          <ReceiptRow label="Shift Type" value={shiftType} />
           <View style={styles.divider} />
           <ReceiptRow label="Date(s)" value={dateRangeDisplay} />
           <View style={styles.divider} />

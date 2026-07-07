@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -204,10 +204,15 @@ export default function DoctorEarningsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('this_week');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const isFirstLoadRef = useRef(true);
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
   const fetchEarnings = useCallback(async () => {
     console.log('[EarningsScreen] Fetching doctor_earnings from Supabase');
+    // Only show full-screen spinner on the very first load when list is empty
+    if (isFirstLoadRef.current && earnings.length === 0) {
+      setLoading(true);
+    }
     try {
       const { data, error: fetchError } = await supabase
         .from('doctor_earnings')
@@ -226,14 +231,16 @@ export default function DoctorEarningsScreen() {
     } catch (e: any) {
       console.log('[EarningsScreen] Unexpected fetch error:', e.message);
       setError(e.message);
+    } finally {
+      setLoading(false);
+      isFirstLoadRef.current = false;
     }
-  }, []);
+  }, [earnings.length]);
 
   // ── Initial load ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
-    setLoading(true);
-    fetchEarnings().finally(() => setLoading(false));
+    fetchEarnings();
   }, [user, fetchEarnings]);
 
   // ── Pull-to-refresh ─────────────────────────────────────────────────────────
@@ -369,7 +376,7 @@ export default function DoctorEarningsScreen() {
         )}
 
         {/* Loading */}
-        {loading && !error && (
+        {loading && !error && earnings.length === 0 && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.primary} />
             <Text style={styles.loadingText}>Loading earnings…</Text>
@@ -377,14 +384,14 @@ export default function DoctorEarningsScreen() {
         )}
 
         {/* Empty state */}
-        {!loading && !error && filteredRows.length === 0 && (
+        {!loading && !error && earnings.length > 0 && filteredRows.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>No transactions in this period.</Text>
           </View>
         )}
 
         {/* Transaction list */}
-        {!loading && !error && filteredRows.length > 0 && (
+        {!error && filteredRows.length > 0 && (
           <View style={styles.listContainer}>
             {filteredRows.map(row => (
               <TransactionCard
