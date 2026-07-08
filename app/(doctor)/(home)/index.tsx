@@ -263,7 +263,7 @@ export default function DoctorHomeScreen() {
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
   const { user } = useAuth();
 
-  const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount } = useDoctorDispatch();
+  const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached } = useDoctorDispatch();
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCancelReasons, setShowCancelReasons] = useState(false);
@@ -457,10 +457,10 @@ export default function DoctorHomeScreen() {
 
   if (!fontsLoaded) return null;
 
-  const isJobCapReached = activeJobCount >= 3;
   const pillBg = isJobCapReached ? '#3A3A3C' : isOnline ? '#34C759' : '#3A3A3C';
   const dotBg = isJobCapReached ? '#8E8E93' : isOnline ? '#FFFFFF' : '#8E8E93';
-  const statusText = isJobCapReached ? '3 Jobs Active' : isOnline ? 'Online' : 'Offline';
+  const statusText = isJobCapReached ? 'Max Shifts Reached' : isOnline ? 'Online' : 'Offline';
+  const showCapSubtext = isJobCapReached && !isOnline;
   const pillTop = insets.top + 12;
   const sheetPaddingBottom = 80 + 16;
 
@@ -497,11 +497,20 @@ export default function DoctorHomeScreen() {
       <TouchableOpacity
         onPress={handleToggleStatus}
         activeOpacity={isJobCapReached ? 1 : 0.85}
-        style={[styles.pill, { top: pillTop, backgroundColor: pillBg }]}
+        style={[styles.pill, { top: pillTop, backgroundColor: pillBg, flexDirection: showCapSubtext ? 'column' : 'row', alignItems: 'center', gap: showCapSubtext ? 2 : 8 }]}
         disabled={isJobCapReached}
       >
-        <View style={[styles.pillDot, { backgroundColor: dotBg }]} />
-        <Text style={styles.pillText}>{statusText}</Text>
+        {showCapSubtext ? (
+          <>
+            <Text style={styles.pillText}>{statusText}</Text>
+            <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#8E8E93' }}>Complete a shift to go online</Text>
+          </>
+        ) : (
+          <>
+            <View style={[styles.pillDot, { backgroundColor: dotBg }]} />
+            <Text style={styles.pillText}>{statusText}</Text>
+          </>
+        )}
       </TouchableOpacity>
 
       {/* Bottom sheet */}

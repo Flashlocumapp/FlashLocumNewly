@@ -460,14 +460,32 @@ export default function DoctorLayout() {
         const res = await callEdgeRef.current(fn, goOnlineBody);
         if (isOnline) {
           if (!res || !res.ok) {
-            let body = '';
-            try { body = await res?.text() ?? ''; } catch (_) {}
-            console.log('[DoctorLayout] go-online failed — status:', res?.status, 'body:', body);
-            Alert.alert(
-              'Could not go online',
-              `Error ${res?.status ?? 'unknown'}: ${body || 'No response from server'}`,
-              [{ text: 'OK' }]
-            );
+            if (res?.status === 409) {
+              const body409 = await res.json().catch(() => ({}));
+              console.log('[DoctorLayout] go-online 409 — error code:', body409.error);
+              if (body409.error === 'CAP_REACHED') {
+                Alert.alert('Max Shifts Reached', 'Complete a shift to go online again.');
+                setIsOnline(false);
+              } else {
+                let body = '';
+                try { body = await res?.text() ?? ''; } catch (_) {}
+                console.log('[DoctorLayout] go-online failed — status:', res?.status, 'body:', body);
+                Alert.alert(
+                  'Could not go online',
+                  `Error ${res?.status ?? 'unknown'}: ${body || 'No response from server'}`,
+                  [{ text: 'OK' }]
+                );
+              }
+            } else {
+              let body = '';
+              try { body = await res?.text() ?? ''; } catch (_) {}
+              console.log('[DoctorLayout] go-online failed — status:', res?.status, 'body:', body);
+              Alert.alert(
+                'Could not go online',
+                `Error ${res?.status ?? 'unknown'}: ${body || 'No response from server'}`,
+                [{ text: 'OK' }]
+              );
+            }
           } else {
             console.log('[DoctorLayout] Went online — force-syncing queue');
             await forceSyncRef.current();
@@ -807,8 +825,17 @@ export default function DoctorLayout() {
       });
       console.log('[DoctorLayout] accept-request response status:', res.status);
       if (res.status === 409) {
-        console.log('[DoctorLayout] Race condition — request already taken');
-        Alert.alert('Request Taken', 'Request no longer available.');
+        const body409 = await res.json().catch(() => ({}));
+        console.log('[DoctorLayout] 409 on accept — error code:', body409.error);
+        if (body409.error === 'CAP_REACHED') {
+          Alert.alert('Max Shifts Reached', 'You have been taken offline. Complete a shift to go online again.');
+          setIsOnline(false);
+          callEdge('go-offline');
+        } else if (body409.error === 'SHIFT_CONFLICT') {
+          Alert.alert('Shift Conflict', 'You already have a confirmed shift scheduled during these hours.');
+        } else {
+          Alert.alert('Request Taken', 'Request no longer available.');
+        }
         setRequestQueue((prev) => prev.slice(1));
         await forceSync();
         return;
@@ -825,13 +852,20 @@ export default function DoctorLayout() {
       // Fetch the newly created session
       console.log('[DoctorLayout] Fetching active session after accept');
       await fetchActiveSession();
+
+      // Auto-go-offline after accepting the 3rd shift
+      if (activeJobCount + 1 >= 3) {
+        console.log('[DoctorLayout] Job cap reached after accept — going offline silently');
+        callEdge('go-offline');
+        setIsOnline(false);
+      }
     } catch (e: any) {
       console.log('[DoctorLayout] Accept error:', e.message);
       Alert.alert('Error', e.message);
     } finally {
       setAccepting(false);
     }
-  }, [requestQueue, user, forceSync, fetchActiveSession]);
+  }, [requestQueue, user, forceSync, fetchActiveSession, activeJobCount, callEdge]);
 
   // ── Decline ──
   const handleDecline = useCallback(async () => {
@@ -934,6 +968,7 @@ export default function DoctorLayout() {
       setActiveSession,
       activeJobCount,
       setActiveJobCount,
+      isJobCapReached,
     }}>
       <View style={{ flex: 1 }}>
         <Stack screenOptions={{ headerShown: false }}>

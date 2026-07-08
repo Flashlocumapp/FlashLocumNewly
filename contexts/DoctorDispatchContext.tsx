@@ -86,6 +86,7 @@ type DoctorDispatchCtx = {
   setActiveSession: (s: CoverageSession | null) => void;
   activeJobCount: number;
   setActiveJobCount: (n: number) => void;
+  isJobCapReached: boolean;
 };
 
 export const DoctorDispatchContext = createContext<DoctorDispatchCtx>({
@@ -102,6 +103,7 @@ export const DoctorDispatchContext = createContext<DoctorDispatchCtx>({
   setActiveSession: () => {},
   activeJobCount: 0,
   setActiveJobCount: () => {},
+  isJobCapReached: false,
 });
 
 export const useDoctorDispatch = () => useContext(DoctorDispatchContext);
