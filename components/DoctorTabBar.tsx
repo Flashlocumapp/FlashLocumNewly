@@ -24,16 +24,12 @@ export default function DoctorTabBar({ tabs }: Props) {
     return idx >= 0 ? idx : 0;
   }, [segments, tabs]);
 
-  const isCoverageActive = tabs[activeIndex]?.name?.toLowerCase().includes('coverage') ?? false;
-
   return (
     <SafeAreaView style={styles.safeArea} edges={['bottom']}>
       <View style={[styles.bar, { backgroundColor: '#F9F9F6' }]}>
         {tabs.map((tab, i) => {
           const isActive = activeIndex === i;
-          const iconColor = isActive
-            ? (isCoverageActive ? '#FFFFFF' : '#1C1C1E')
-            : '#8E8E93';
+          const iconColor = isActive ? '#1C1C1E' : '#8E8E93';
           return (
             <Pressable
               key={tab.name}
@@ -48,7 +44,7 @@ export default function DoctorTabBar({ tabs }: Props) {
                 size={24}
                 color={iconColor}
               />
-              <Text style={[styles.label, isActive && { color: isCoverageActive ? '#FFFFFF' : '#1C1C1E', fontWeight: '700' }]}>
+              <Text style={[styles.label, isActive && { color: '#1C1C1E', fontWeight: '700' }]}>
                 {tab.label}
               </Text>
             </Pressable>

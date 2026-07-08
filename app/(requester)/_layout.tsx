@@ -27,8 +27,6 @@ export default function RequesterLayout() {
     }).start();
   };
 
-  const isCoverageActive = (segments as string[]).includes('(coverage)');
-
   return (
     <TabBarVisibilityContext.Provider value={{ setTabBarVisible }}>
       <View style={{ flex: 1, backgroundColor: '#F9F9F6' }}>
@@ -42,7 +40,7 @@ export default function RequesterLayout() {
           <Animated.View style={{
             position: 'absolute',
             bottom: 0, left: 0, right: 0,
-            backgroundColor: isCoverageActive ? '#1C1C1E' : '#F9F9F6',
+            backgroundColor: '#F9F9F6',
             flexDirection: 'row',
             paddingBottom: insets.bottom,
             borderTopLeftRadius: 24,
@@ -51,7 +49,6 @@ export default function RequesterLayout() {
           }}>
             {REQUESTER_TABS.map((tab) => {
               const isActive = (segments as string[]).includes(tab.name);
-              const activeColor = isCoverageActive ? '#FFFFFF' : '#1C1C1E';
               return (
                 <Pressable
                   key={tab.name}
@@ -61,8 +58,8 @@ export default function RequesterLayout() {
                   }}
                   style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}
                 >
-                  <MaterialIcons name={tab.icon} size={24} color={isActive ? activeColor : '#8E8E93'} />
-                  <Text style={{ fontSize: 10, fontWeight: isActive ? '600' : '400', color: isActive ? activeColor : '#8E8E93', marginTop: 3 }}>
+                  <MaterialIcons name={tab.icon} size={24} color={isActive ? '#1C1C1E' : '#8E8E93'} />
+                  <Text style={{ fontSize: 10, fontWeight: isActive ? '600' : '400', color: isActive ? '#1C1C1E' : '#8E8E93', marginTop: 3 }}>
                     {tab.label}
                   </Text>
                 </Pressable>
