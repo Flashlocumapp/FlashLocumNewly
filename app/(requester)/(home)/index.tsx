@@ -2813,23 +2813,27 @@ export default function RequesterHomeScreen() {
     if (!activeSession) return;
     console.log('[RequesterHome] Cancel active shift reason selected:', reason);
     setShowCancelActiveReasons(false);
+    const sessionId = activeSession.id;
+    // Clear immediately so the search card appears right away
+    setActiveSession(null);
     try {
       const token = await getValidToken();
       if (!token) throw new Error('Not authenticated');
       const res = await fetch(`${EDGE_BASE}/update-shift-status`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: activeSession.id, status: 'cancelled', cancellation_reason: reason }),
+        body: JSON.stringify({ session_id: sessionId, status: 'cancelled', cancellation_reason: reason }),
       });
       console.log('[RequesterHome] Cancel active shift response:', res.status);
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
         throw new Error(errText || 'Cancel failed');
       }
-      setActiveSession(null);
     } catch (e: any) {
       console.log('[RequesterHome] Cancel active shift error:', e.message);
       Alert.alert('Error', e.message);
+      // Re-fetch to restore correct state if the API call failed
+      fetchActiveSession();
     }
   };
 
@@ -3653,10 +3657,17 @@ export default function RequesterHomeScreen() {
             </View>
           )}
 
-          {/* No active session — show search card */}
+          {/* No active session OR unhandled status — show search card */}
           {(activeSession === null ||
             activeSession.status === 'completed' ||
-            activeSession.status === 'cancelled') && (
+            activeSession.status === 'cancelled' ||
+            activeSession.status === 'requester_paid' ||
+            (activeSession.status !== 'upcoming' &&
+             activeSession.status !== 'paused' &&
+             activeSession.status !== 'active' &&
+             activeSession.status !== 'payment_pending' &&
+             activeSession.status !== 'settled' &&
+             activeSession.status !== 'payment_complete')) && (
             <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
               {/* White search card */}
               <View style={{
@@ -3724,6 +3735,7 @@ export default function RequesterHomeScreen() {
           if (confirmedSession?.id) markRequesterSessionPaid(confirmedSession.id);
           setShowPaymentSuccess(false);
           setConfirmedSession(null);
+          setActiveSession(null);
           setShowRatingOverlay(false);
           setRatingStars(0);
           setRatingComment('');
@@ -3770,6 +3782,7 @@ export default function RequesterHomeScreen() {
             setShowRatingOverlay(false);
             setShowPaymentSuccess(false);   // close entire modal
             setConfirmedSession(null);       // clear confirmed session
+            setActiveSession(null);
             setRatingStars(0);
             setRatingComment('');
             setRatingError('');
@@ -3784,6 +3797,9 @@ export default function RequesterHomeScreen() {
           console.log('[RequesterHome] Rating skipped — persisting guard');
           if (confirmedSession?.id) markRequesterSessionPaid(confirmedSession.id);
           setShowRatingOverlay(false);
+          setShowPaymentSuccess(false);
+          setConfirmedSession(null);
+          setActiveSession(null);
         }}
       />
 
