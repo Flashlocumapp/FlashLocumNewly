@@ -2905,11 +2905,16 @@ export default function RequesterHomeScreen() {
             tracksViewChanges={false}
           >
             <View style={{
-              width: 32, height: 32, borderRadius: 16,
+              width: 22, height: 22, borderRadius: 11,
               backgroundColor: '#1C1C1E',
               alignItems: 'center', justifyContent: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.4,
+              shadowRadius: 6,
+              elevation: 8,
             }}>
-              <MaterialCommunityIcons name="stethoscope" size={17} color="#FFFFFF" />
+              <MaterialCommunityIcons name="stethoscope" size={12} color="#FFFFFF" />
             </View>
           </Marker>
         ))}
