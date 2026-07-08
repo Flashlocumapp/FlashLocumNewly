@@ -488,7 +488,7 @@ export default function DoctorHomeScreen() {
             anchor={{ x: 0.5, y: 0.5 }}
             tracksViewChanges={markerTracksViews}
           >
-            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#EF4444', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
+            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#34C759', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
           </Marker>
         )}
       </MapView>

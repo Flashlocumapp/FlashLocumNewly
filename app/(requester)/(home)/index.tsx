@@ -2901,7 +2901,7 @@ export default function RequesterHomeScreen() {
       >
         {userCoords && (
           <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
-            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#22c55e', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
+            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#F59E0B', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
           </Marker>
         )}
         {onlineDoctors.map((doc) => (
