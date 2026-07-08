@@ -2704,7 +2704,7 @@ export default function RequesterHomeScreen() {
       const token = await getValidToken();
       if (token) {
         supabase.from('dispatch_requests')
-          .update({ status: 'cancelled', cancellation_reason: reason })
+          .update({ status: 'cancelled', cancellation_reason: reason, cancelled_by: 'requester' })
           .eq('id', activeRequestId)
           .then(() => console.log('[RequesterHome] Cancellation reason saved'));
       }
@@ -2894,7 +2894,7 @@ export default function RequesterHomeScreen() {
       >
         {userCoords && (
           <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
-            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#1C1C1E', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
+            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#22c55e', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
           </Marker>
         )}
         {onlineDoctors.map((doc) => (

@@ -46,6 +46,7 @@ export type CoverageSession = {
   current_day: number;
   day_logs: DayLog[];
   status: 'upcoming' | 'active' | 'paused' | 'payment_pending' | 'requester_paid' | 'settled' | 'payment_complete' | 'completed' | 'cancelled' | 'history';
+  cancelled_by?: 'doctor' | 'requester' | null;
   started_at: string | null;
   ended_at: string | null;
   paused_at: string | null;

@@ -244,8 +244,9 @@ function HistoryCoverageCard({ session, onPress }: {
   const reliabilityDisplay = Math.round(Number(session.doctor_reliability ?? 100));
   const shiftPillText = buildShiftPillText(session);
 
-  const statusLabel = session.status === 'cancelled' ? 'CANCELLED' :
-    session.status === 'requester_paid' ? 'PAID' : 'COMPLETED SHIFT';
+  const statusLabel = session.status === 'cancelled'
+    ? (session.cancelled_by === 'doctor' ? 'YOU CANCELLED' : 'CANCELLED')
+    : session.status === 'requester_paid' ? 'PAID' : 'COMPLETED SHIFT';
   const statusColor = session.status === 'cancelled' ? '#EF4444' :
     session.status === 'requester_paid' ? '#34C759' : '#8E8E93';
 
@@ -372,7 +373,9 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
     }
   };
 
-  const statusSheetLabel = session.status === 'cancelled' ? 'CANCELLED SHIFT' : 'COMPLETED SHIFT';
+  const statusSheetLabel = session.status === 'cancelled'
+    ? (session.cancelled_by === 'doctor' ? 'YOU CANCELLED THIS SHIFT' : 'CANCELLED SHIFT')
+    : 'COMPLETED SHIFT';
   const financialRows = [
     { label: 'Amount', value: `₦${Number((session as any).total_cost ?? session.price ?? 0).toLocaleString()}`, bold: true },
     { label: 'Settlement', value: settlementStatus, bold: true },

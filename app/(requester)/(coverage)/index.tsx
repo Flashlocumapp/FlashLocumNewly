@@ -36,6 +36,7 @@ type CoverageSession = {
   shift_type: string;
   coverage_type: string;
   status: 'upcoming' | 'active' | 'paused' | 'completed' | 'cancelled' | 'requester_paid';
+  cancelled_by?: 'doctor' | 'requester' | null;
   started_at: string | null;
   ended_at: string | null;
   paused_at: string | null;
@@ -123,8 +124,9 @@ function HistoryCard({ session, onPress }: {
     : '';
   const shiftPill = `${session.shift_type}  ·  ${dayLabel}  ·  ${shiftStart} - ${shiftEnd}`;
 
-  const statusLabel = session.status === 'cancelled' ? 'CANCELLED' :
-    session.status === 'requester_paid' ? 'PAID' : 'COMPLETED';
+  const statusLabel = session.status === 'cancelled'
+    ? (session.cancelled_by === 'requester' ? 'YOU CANCELLED' : 'CANCELLED')
+    : session.status === 'requester_paid' ? 'PAID' : 'COMPLETED';
   const statusColor = session.status === 'cancelled' ? '#EF4444' :
     session.status === 'requester_paid' ? '#34C759' : '#8E8E93';
 
@@ -258,7 +260,9 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
     }
   };
 
-  const shiftLabel = session.status === 'cancelled' ? 'CANCELLED SHIFT' : 'COMPLETED SHIFT';
+  const shiftLabel = session.status === 'cancelled'
+    ? (session.cancelled_by === 'requester' ? 'YOU CANCELLED THIS SHIFT' : 'CANCELLED SHIFT')
+    : 'COMPLETED SHIFT';
 
   const amountValue = `₦${Number(session.total_cost ?? session.price ?? 0).toLocaleString()}`;
 
