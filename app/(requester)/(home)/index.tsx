@@ -86,6 +86,8 @@ async function warmRequesterPaidCache() {
 
 // Module-level flag — survives tab switches / screen remounts
 let _hasInitialFix = false;
+// Module-level coord cache — survives tab switches (screen remounts)
+let _cachedRequesterCoords: { latitude: number; longitude: number } | null = null;
 
 const ANDROID_KEY = 'AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU';
 const IOS_KEY = 'AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk';
@@ -1624,7 +1626,9 @@ export default function RequesterHomeScreen() {
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mapRef = useRef<MapView>(null);
-  const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(
+    _cachedRequesterCoords
+  );
   const [onlineDoctors, setOnlineDoctors] = useState<{ id: string; lat: number; lng: number }[]>([]);
 
   const locationSub = useRef<Location.LocationSubscription | null>(null);
@@ -2068,6 +2072,7 @@ export default function RequesterHomeScreen() {
         if (!_hasInitialFix) {
           _hasInitialFix = true;
           console.log('[RequesterHome] Immediate GPS fix:', immediatePos.coords.latitude, immediatePos.coords.longitude);
+          _cachedRequesterCoords = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude };
           setUserCoords({ latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude });
           console.log('[RequesterHome][MAP-ANIMATE] animateToRegion:', { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude, source: 'immediatePos' });
           mapRef.current?.animateToRegion({
@@ -2099,6 +2104,7 @@ export default function RequesterHomeScreen() {
                 longitudeDelta: 0.12,
               }, 800);
             }
+            _cachedRequesterCoords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
             setUserCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
           }
         );

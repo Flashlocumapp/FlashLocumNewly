@@ -31,6 +31,8 @@ const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
 // Module-level flag — survives tab switches / screen remounts
 let _hasAnimatedToUser = false;
+// Module-level coord cache — survives tab switches (screen remounts)
+let _cachedDoctorCoords: { latitude: number; longitude: number } | null = null;
 
 const { height: screenHeight } = Dimensions.get('window');
 const SHEET_HEIGHT = screenHeight * 0.45;
@@ -295,7 +297,9 @@ export default function DoctorHomeScreen() {
     })();
   }, [user]);
 
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(
+    _cachedDoctorCoords
+  );
 
   const mapRef = useRef<MapView>(null);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
@@ -329,6 +333,7 @@ export default function DoctorHomeScreen() {
       if (active) {
         const coords = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude };
         console.log('[DoctorHome] Immediate GPS fix:', coords);
+        _cachedDoctorCoords = coords;
         setUserLocation(coords);
         if (!_hasAnimatedToUser && mapRef.current) {
           _hasAnimatedToUser = true;
@@ -347,6 +352,7 @@ export default function DoctorHomeScreen() {
         (loc) => {
           if (!active) return;
           const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+          _cachedDoctorCoords = coords;
           setUserLocation(coords);
           if (!_hasAnimatedToUser && mapRef.current) {
             _hasAnimatedToUser = true;
