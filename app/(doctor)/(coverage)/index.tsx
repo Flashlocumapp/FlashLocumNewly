@@ -100,7 +100,7 @@ function buildShiftPillText(session: CoverageSession): string {
     : (msHours > 0 ? msHours : 24);
   const totalHours = shiftHours * session.coverage_length;
   const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
-  const priceDisplay = `₦${Number(session.price).toLocaleString()}`;
+  const priceDisplay = `₦${Number(session.booked_price ?? session.price).toLocaleString()}`;
   const shiftStart = formatTime(session.shift_start);
   const shiftEnd = formatTime(session.shift_end);
   const sep = '  ·  ';
@@ -334,7 +334,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const shiftHours = session.per_day_hours && Number(session.per_day_hours) > 0 ? Number(session.per_day_hours) : 8;
   const totalHours = shiftHours * (session.coverage_length ?? 1);
   const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
-  const shiftSummaryLine = `${session.shift_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd} · ${hoursDisplay} · ₦${Number(session.price ?? 0).toLocaleString()}`;
+  const shiftSummaryLine = `${session.shift_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd} · ${hoursDisplay} · ₦${Number(session.booked_price ?? session.price ?? 0).toLocaleString()}`;
 
   const settlementStatus = session.status === 'requester_paid' || session.status === 'completed' || session.status === 'disbursed' ? 'Paid' : 'Pending';
 

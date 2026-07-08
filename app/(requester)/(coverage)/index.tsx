@@ -48,6 +48,7 @@ type CoverageSession = {
   requester_phone: string | null;
   created_at: string;
   price?: number;
+  booked_price?: number | null;
   total_cost?: number;
 };
 
@@ -216,7 +217,8 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const dayLabel = session.shift_date
     ? new Date(session.shift_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' })
     : '';
-  const bookedPrice = session.price ? `₦${Number(session.price).toLocaleString()}` : '';
+  const displayBookedPrice = session.booked_price ?? session.price;
+  const bookedPrice = displayBookedPrice ? `₦${Number(displayBookedPrice).toLocaleString()}` : '';
   const shiftSummaryLine = `${session.shift_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd}${bookedPrice ? ` · ${bookedPrice}` : ''}`;
 
   const settlementStatus = session.status === 'requester_paid' || session.status === 'completed' ? 'Paid' : 'Pending';

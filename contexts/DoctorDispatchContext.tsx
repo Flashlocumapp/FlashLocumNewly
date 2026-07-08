@@ -41,6 +41,7 @@ export type CoverageSession = {
   per_day_hours: number | null;
   environment: string;
   price: number;
+  booked_price?: number | null;
   hourly_rate_kobo: number;
   current_day: number;
   day_logs: DayLog[];
