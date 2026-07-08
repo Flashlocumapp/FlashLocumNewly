@@ -525,8 +525,9 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
   forgotWrap: {
-    alignItems: 'center',
+    alignItems: 'flex-end',
     marginTop: 8,
+    paddingHorizontal: 24,
   },
   forgotText: {
     fontSize: 14,

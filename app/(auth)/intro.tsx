@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 
@@ -19,8 +19,8 @@ export default function IntroScreen() {
   const unmountedRef = useRef(false);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const displayedTextRef = useRef('');
-  const textRef = useRef<Text>(null);
+  // Use state instead of setNativeProps — reliable on all platforms and architectures
+  const [displayedText, setDisplayedText] = useState('');
 
   const contentOpacity = useRef(new Animated.Value(0)).current;
   const bgColor = useRef(new Animated.Value(0)).current;
@@ -56,63 +56,64 @@ export default function IntroScreen() {
 
       console.log(`[IntroScreen] Starting phrase ${index + 1}/${PHRASES.length}: "${phrase}"`);
 
-      // Step 1: Reset text, opacity is already 0 from previous fade-out (or initial state).
-      displayedTextRef.current = '';
+      // Step 1: Reset text and ensure opacity is 0 before starting
+      setDisplayedText('');
+      contentOpacity.setValue(0);
 
-      // Step 2: Pre-load the first character so text is ready but invisible.
-      displayedTextRef.current = phrase.slice(0, 1);
-      textRef.current?.setNativeProps({ text: phrase.slice(0, 1) });
+      // Step 2: Pre-load the first character so text is ready before fade-in
+      setDisplayedText(phrase.slice(0, 1));
 
-      // Step 3: Fade in to opacity 1 — text is already loaded so no blank frame.
-      Animated.timing(contentOpacity, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: true,
-      }).start(() => {
-        if (unmountedRef.current) return;
-
-        // Step 4: Type remaining characters (index 1 onwards).
-        let charIndex = 1;
-        const typeNext = () => {
+      // Small delay to let React commit the first character before fading in
+      addTimeout(() => {
+        // Step 3: Fade in
+        Animated.timing(contentOpacity, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }).start(() => {
           if (unmountedRef.current) return;
-          charIndex += 1;
-          displayedTextRef.current = phrase.slice(0, charIndex);
-          textRef.current?.setNativeProps({ text: phrase.slice(0, charIndex) });
 
-          if (charIndex < phrase.length) {
-            addTimeout(typeNext, CHAR_DELAY);
-          } else {
-            // Step 5: Hold then fade out.
-            console.log(`[IntroScreen] Phrase complete: "${phrase}", holding for ${HOLD_FULL}ms`);
-            addTimeout(() => {
-              Animated.timing(contentOpacity, {
-                toValue: 0,
-                duration: FADE_OUT_DURATION,
-                useNativeDriver: true,
-              }).start(() => {
-                if (unmountedRef.current) return;
-                // Step 6: Navigate or advance to next phrase.
-                if (isLast) {
-                  console.log('[IntroScreen] All phrases done, transitioning to:', destination);
-                  Animated.timing(bgColor, {
-                    toValue: 1,
-                    duration: BG_TRANSITION_DURATION,
-                    useNativeDriver: false,
-                  }).start(() => {
-                    if (!unmountedRef.current) {
-                      router.replace(destination as any);
-                    }
-                  });
-                } else {
-                  runPhrase(index + 1);
-                }
-              });
-            }, HOLD_FULL);
-          }
-        };
+          // Step 4: Type remaining characters
+          let charIndex = 1;
+          const typeNext = () => {
+            if (unmountedRef.current) return;
+            charIndex += 1;
+            setDisplayedText(phrase.slice(0, charIndex));
 
-        addTimeout(typeNext, CHAR_DELAY);
-      });
+            if (charIndex < phrase.length) {
+              addTimeout(typeNext, CHAR_DELAY);
+            } else {
+              // Step 5: Hold then fade out
+              console.log(`[IntroScreen] Phrase complete: "${phrase}", holding for ${HOLD_FULL}ms`);
+              addTimeout(() => {
+                Animated.timing(contentOpacity, {
+                  toValue: 0,
+                  duration: FADE_OUT_DURATION,
+                  useNativeDriver: true,
+                }).start(() => {
+                  if (unmountedRef.current) return;
+                  if (isLast) {
+                    console.log('[IntroScreen] All phrases done, transitioning to:', destination);
+                    Animated.timing(bgColor, {
+                      toValue: 1,
+                      duration: BG_TRANSITION_DURATION,
+                      useNativeDriver: false,
+                    }).start(() => {
+                      if (!unmountedRef.current) {
+                        router.replace(destination as any);
+                      }
+                    });
+                  } else {
+                    runPhrase(index + 1);
+                  }
+                });
+              }, HOLD_FULL);
+            }
+          };
+
+          addTimeout(typeNext, CHAR_DELAY);
+        });
+      }, 16); // one frame delay so React commits the first character
     };
 
     runPhrase(0);
@@ -132,7 +133,7 @@ export default function IntroScreen() {
   return (
     <Animated.View style={[styles.container, { backgroundColor }]}>
       <Animated.View style={[styles.textRow, { opacity: contentOpacity }]}>
-        <Text ref={textRef} style={styles.text} />
+        <Text style={styles.text}>{displayedText}</Text>
         <View style={styles.ball} />
       </Animated.View>
     </Animated.View>
