@@ -461,7 +461,28 @@ export default function RequesterCoverageScreen() {
     alwaysRefresh: true,
   });
 
-  const sessions = historySessions ?? [];
+  type DateRange = 'this_month' | 'last_month' | 'last_3_months';
+  const [dateRange, setDateRange] = useState<DateRange>('last_3_months');
+
+  function filterByDateRange(sessions: CoverageSession[], range: DateRange): CoverageSession[] {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+
+    return sessions.filter(s => {
+      const d = new Date(s.shift_date);
+      if (range === 'this_month') return d >= startOfMonth;
+      if (range === 'last_month') return d >= startOfLastMonth && d <= endOfLastMonth;
+      return d >= threeMonthsAgo; // last_3_months
+    });
+  }
+
+  const sessions = [...(historySessions ?? [])].sort(
+    (a, b) => new Date(b.shift_date).getTime() - new Date(a.shift_date).getTime()
+  );
+  const filteredSessions = filterByDateRange(sessions, dateRange);
 
   const alreadyReviewed = selectedSession ? reviewedIds.has(selectedSession.id) : false;
 
@@ -482,6 +503,38 @@ export default function RequesterCoverageScreen() {
         Your coverage continuity
       </Text>
 
+      {/* Date-range filter pills */}
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+        {([
+          { key: 'this_month', label: 'This Month' },
+          { key: 'last_month', label: 'Last Month' },
+          { key: 'last_3_months', label: 'Last 3 Months' },
+        ] as { key: DateRange; label: string }[]).map(({ key, label }) => (
+          <TouchableOpacity
+            key={key}
+            onPress={() => {
+              console.log('[RequesterCoverage] Date range filter pressed:', key);
+              setDateRange(key);
+            }}
+            activeOpacity={0.7}
+            style={{
+              paddingHorizontal: 14,
+              paddingVertical: 7,
+              borderRadius: 999,
+              backgroundColor: dateRange === key ? '#1C1C1E' : '#F0F0F0',
+            }}
+          >
+            <Text style={{
+              fontSize: 12,
+              fontFamily: 'Inter_600SemiBold',
+              color: dateRange === key ? '#FFFFFF' : '#1C1C1E',
+            }}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       {/* Content */}
       {loading ? (
         <>
@@ -489,10 +542,10 @@ export default function RequesterCoverageScreen() {
           <SkeletonCard />
           <SkeletonCard />
         </>
-      ) : sessions.length === 0 ? (
+      ) : filteredSessions.length === 0 ? (
         <EmptyState message="No past coverage yet." />
       ) : (
-        sessions.map(session => (
+        filteredSessions.map(session => (
           <HistoryCard
             key={session.id}
             session={session}

@@ -11,7 +11,6 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
-  Switch,
   Animated,
   Modal,
   TextInput,
@@ -751,8 +750,41 @@ export default function DoctorCoverageScreen() {
     setReviewedIds(prev => new Set([...prev, sessionId]));
   }, []);
 
+  type DateRange = 'this_month' | 'last_month' | 'last_3_months';
+  const [dateRange, setDateRange] = useState<DateRange>('last_3_months');
+
+  function filterByDateRange(sessions: CoverageSession[], range: DateRange): CoverageSession[] {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+
+    return sessions.filter(s => {
+      const d = new Date(s.shift_date);
+      if (range === 'this_month') return d >= startOfMonth;
+      if (range === 'last_month') return d >= startOfLastMonth && d <= endOfLastMonth;
+      return d >= threeMonthsAgo; // last_3_months
+    });
+  }
+
+  const tabUnderlineX = useRef(new Animated.Value(0)).current;
+  const TAB_WIDTH = 100;
+
+  useEffect(() => {
+    Animated.timing(tabUnderlineX, {
+      toValue: activeTab === 'Upcoming' ? 0 : TAB_WIDTH,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [activeTab]);
+
   const isHistoryTab = activeTab === 'History';
-  const currentSessions = isHistoryTab ? historySessions : upcomingSessions;
+  const sortedHistory = [...historySessions].sort(
+    (a, b) => new Date(b.shift_date).getTime() - new Date(a.shift_date).getTime()
+  );
+  const filteredHistory = filterByDateRange(sortedHistory, dateRange);
+  const currentSessions = isHistoryTab ? filteredHistory : upcomingSessions;
   const currentLoading = isHistoryTab ? historyLoading : upcomingLoading;
   const currentRefreshing = isHistoryTab ? historyRefreshing : upcomingRefreshing;
   const emptyMessage = isHistoryTab
@@ -776,39 +808,73 @@ export default function DoctorCoverageScreen() {
         Your operational coverage
       </Text>
 
-      {/* Switch tab selector */}
-      <View style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: SPACING.xxl,
-        gap: 12,
-      }}>
-        <Text style={{
-          fontSize: 14,
-          fontFamily: 'Inter_600SemiBold',
-          color: !isHistoryTab ? '#1C1C1E' : '#8E8E93',
-        }}>
-          Upcoming
-        </Text>
-        <Switch
-          value={isHistoryTab}
-          onValueChange={(val) => {
-            const next: TabType = val ? 'History' : 'Upcoming';
-            console.log('[DoctorCoverage] Tab switch toggled to:', next);
-            setActiveTab(next);
-          }}
-          trackColor={{ false: '#3A3A3C', true: '#2DC653' }}
-          thumbColor="#FFFFFF"
-        />
-        <Text style={{
-          fontSize: 14,
-          fontFamily: 'Inter_600SemiBold',
-          color: isHistoryTab ? '#1C1C1E' : '#8E8E93',
-        }}>
-          History
-        </Text>
+      {/* Underline tab selector */}
+      <View style={{ marginBottom: SPACING.xl }}>
+        <View style={{ flexDirection: 'row' }}>
+          {(['Upcoming', 'History'] as TabType[]).map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              onPress={() => {
+                console.log('[DoctorCoverage] Tab pressed:', tab);
+                setActiveTab(tab);
+              }}
+              activeOpacity={0.7}
+              style={{ width: TAB_WIDTH, paddingBottom: 10, alignItems: 'center' }}
+            >
+              <Text style={{
+                fontSize: 15,
+                fontFamily: activeTab === tab ? 'Inter_700Bold' : 'Inter_400Regular',
+                color: activeTab === tab ? '#1C1C1E' : '#8E8E93',
+              }}>
+                {tab}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {/* Animated underline */}
+        <View style={{ height: 2, backgroundColor: '#E5E5EA' }}>
+          <Animated.View style={{
+            height: 2,
+            width: TAB_WIDTH,
+            backgroundColor: '#1C1C1E',
+            transform: [{ translateX: tabUnderlineX }],
+          }} />
+        </View>
       </View>
+
+      {/* Date-range filter pills (History only) */}
+      {isHistoryTab && (
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+          {([
+            { key: 'this_month', label: 'This Month' },
+            { key: 'last_month', label: 'Last Month' },
+            { key: 'last_3_months', label: 'Last 3 Months' },
+          ] as { key: DateRange; label: string }[]).map(({ key, label }) => (
+            <TouchableOpacity
+              key={key}
+              onPress={() => {
+                console.log('[DoctorCoverage] Date range filter pressed:', key);
+                setDateRange(key);
+              }}
+              activeOpacity={0.7}
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: 999,
+                backgroundColor: dateRange === key ? '#1C1C1E' : '#F0F0F0',
+              }}
+            >
+              <Text style={{
+                fontSize: 12,
+                fontFamily: 'Inter_600SemiBold',
+                color: dateRange === key ? '#FFFFFF' : '#1C1C1E',
+              }}>
+                {label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {/* Content */}
       {currentLoading ? (
