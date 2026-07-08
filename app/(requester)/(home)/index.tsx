@@ -1585,13 +1585,14 @@ export default function RequesterHomeScreen() {
               _requesterRatingInFlight.add(sid);
               isRequesterSessionPaid(sid).then((alreadyHandled) => {
                 if (!alreadyHandled) {
+                  _requesterRatingInFlight.delete(sid);
                   setConfirmedSession(prev);
                   setShowPaymentSuccess(true);
                 } else {
                   _requesterRatingInFlight.delete(sid);
                   console.log('[RequesterHome] payment_confirmed suppressed (user channel) — session already handled:', sid);
                 }
-              });
+              }).catch(() => { _requesterRatingInFlight.delete(sid); });
             }
           }
           return prev ? { ...prev, status: 'requester_paid' } : prev;
@@ -1608,13 +1609,14 @@ export default function RequesterHomeScreen() {
               _requesterRatingInFlight.add(sid);
               isRequesterSessionPaid(sid).then((alreadyHandled) => {
                 if (!alreadyHandled) {
+                  _requesterRatingInFlight.delete(sid);
                   setConfirmedSession(prev);
                   setShowPaymentSuccess(true);
                 } else {
                   _requesterRatingInFlight.delete(sid);
                   console.log('[RequesterHome] PAYMENT_CONFIRMED suppressed (user channel) — session already handled:', sid);
                 }
-              });
+              }).catch(() => { _requesterRatingInFlight.delete(sid); });
             }
           }
           return prev ? { ...prev, status: 'requester_paid' } : prev;
@@ -1859,7 +1861,7 @@ export default function RequesterHomeScreen() {
             // Check DB — ultimate source of truth
             try {
               const { data: existingReview } = await supabase
-                .from('reviews')
+                .from('shift_reviews')
                 .select('id')
                 .eq('session_id', session.id)
                 .eq('reviewer_role', 'requester')
@@ -1867,7 +1869,9 @@ export default function RequesterHomeScreen() {
               if (existingReview) {
                 console.log('[RequesterHome] Payment modal suppressed (DB) — review exists for session:', session.id);
                 markRequesterSessionPaid(session.id);
+                _requesterRatingInFlight.delete(session.id);
               } else {
+                _requesterRatingInFlight.delete(session.id);
                 setConfirmedSession((prev) => {
                   if (!prev) {
                     setShowPaymentSuccess(true);
@@ -1878,6 +1882,7 @@ export default function RequesterHomeScreen() {
               }
             } catch {
               // Non-fatal — fall through to show modal
+              _requesterRatingInFlight.delete(session.id);
               setConfirmedSession((prev) => {
                 if (!prev) {
                   setShowPaymentSuccess(true);
@@ -1998,13 +2003,14 @@ export default function RequesterHomeScreen() {
               _requesterRatingInFlight.add(sid);
               isRequesterSessionPaid(sid).then((alreadyHandled) => {
                 if (!alreadyHandled) {
+                  _requesterRatingInFlight.delete(sid);
                   setConfirmedSession(prev);
                   setShowPaymentSuccess(true);
                 } else {
                   _requesterRatingInFlight.delete(sid);
                   console.log('[RequesterHome] PAYMENT_CONFIRMED suppressed — session already handled:', sid);
                 }
-              });
+              }).catch(() => { _requesterRatingInFlight.delete(sid); });
             }
           }
           return prev ? { ...prev, status: 'requester_paid' } : prev;
@@ -2021,13 +2027,14 @@ export default function RequesterHomeScreen() {
               _requesterRatingInFlight.add(sid);
               isRequesterSessionPaid(sid).then((alreadyHandled) => {
                 if (!alreadyHandled) {
+                  _requesterRatingInFlight.delete(sid);
                   setConfirmedSession(prev);
                   setShowPaymentSuccess(true);
                 } else {
                   _requesterRatingInFlight.delete(sid);
                   console.log('[RequesterHome] payment_confirmed suppressed — session already handled:', sid);
                 }
-              });
+              }).catch(() => { _requesterRatingInFlight.delete(sid); });
             }
           }
           return prev ? { ...prev, status: 'requester_paid' } : prev;

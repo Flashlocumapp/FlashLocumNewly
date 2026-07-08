@@ -352,7 +352,7 @@ export default function DoctorLayout() {
       const token = await getValidToken();
       if (token) {
         const { data } = await supabase
-          .from('reviews')
+          .from('shift_reviews')
           .select('id')
           .eq('session_id', sessionId)
           .eq('reviewer_role', 'doctor')
@@ -360,11 +360,13 @@ export default function DoctorLayout() {
         if (data) {
           console.log('[DoctorLayout] Rating overlay suppressed (DB) — review already exists for session:', sessionId);
           markDoctorSessionRated(sessionId); // backfill AsyncStorage
+          _doctorRatingInFlight.delete(sessionId);
           return;
         }
       }
     } catch (e: any) {
       console.log('[DoctorLayout] DB review check error (non-fatal):', e.message);
+      _doctorRatingInFlight.delete(sessionId);
     }
     console.log('[DoctorLayout] maybeShowDoctorRating: showing overlay for session:', sessionId);
     setDoctorRatingSessionId(sessionId);

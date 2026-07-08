@@ -51,6 +51,7 @@ type CoverageSession = {
   price?: number;
   booked_price?: number | null;
   total_cost?: number;
+  coverage_length?: number | null;
 };
 
 function formatTime(iso: string) {
@@ -122,7 +123,18 @@ function HistoryCard({ session, onPress }: {
   const dayLabel = session.shift_date
     ? new Date(session.shift_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' })
     : '';
-  const shiftPill = `${session.shift_type}  ·  ${dayLabel}  ·  ${shiftStart} - ${shiftEnd}`;
+  const bookedHours = session.coverage_length ? `${session.coverage_length}h` : null;
+  const bookedAmt = (session.booked_price ?? session.price)
+    ? `₦${Number(session.booked_price ?? session.price).toLocaleString()}`
+    : null;
+  const shiftPillParts = [
+    session.shift_type,
+    dayLabel,
+    `${shiftStart} - ${shiftEnd}`,
+    bookedHours,
+    bookedAmt,
+  ].filter(Boolean);
+  const shiftPill = shiftPillParts.join('  ·  ');
 
   const statusLabel = session.status === 'cancelled'
     ? (session.cancelled_by === 'requester' ? 'YOU CANCELLED' : 'CANCELLED')
