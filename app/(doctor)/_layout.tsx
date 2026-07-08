@@ -30,6 +30,9 @@ import { DoctorDispatchContext, CoverageSession } from '@/contexts/DoctorDispatc
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
+// Module-level GPS cache for go-online/heartbeat — written by the location watcher
+let _layoutCachedCoords: { lat: number; lng: number } | null = null;
+
 // ─── Persistent deduplication for doctor rating overlay ──────────────────────
 const DOCTOR_RATED_SESSIONS_KEY = 'doctor_rated_sessions_v1';
 // Layer 1: synchronous in-memory Set — blocks concurrent triggers instantly
@@ -447,8 +450,8 @@ export default function DoctorLayout() {
       const fn = isOnline ? 'go-online' : 'go-offline';
       console.log('[DoctorLayout] Toggling status:', fn);
       try {
-        const goOnlineBody = isOnline && pendingGoOnlineCoordsRef.current
-          ? { lat: pendingGoOnlineCoordsRef.current.lat, lng: pendingGoOnlineCoordsRef.current.lng }
+        const goOnlineBody = isOnline
+          ? (pendingGoOnlineCoordsRef.current ?? lastLocationRef.current ?? _layoutCachedCoords ?? undefined)
           : undefined;
         if (isOnline) {
           console.log('[DoctorLayout] go-online coords:', goOnlineBody ?? 'none');
@@ -501,10 +504,22 @@ export default function DoctorLayout() {
         console.log('[DoctorLayout] Location permission not granted');
         return;
       }
+
+      // Get immediate fix so we have coords right away (don't wait for first watcher tick)
+      try {
+        const immediate = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        lastLocationRef.current = { lat: immediate.coords.latitude, lng: immediate.coords.longitude };
+        _layoutCachedCoords = { lat: immediate.coords.latitude, lng: immediate.coords.longitude };
+        console.log('[DoctorLayout] Immediate location fix:', lastLocationRef.current);
+      } catch (e) {
+        console.log('[DoctorLayout] Immediate location fix failed:', e);
+      }
+
       sub = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.Balanced, timeInterval: 30000, distanceInterval: 50 },
+        { accuracy: Location.Accuracy.Balanced, timeInterval: 10000, distanceInterval: 10 },
         (loc) => {
           lastLocationRef.current = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+          _layoutCachedCoords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
           console.log('[DoctorLayout] Location updated:', lastLocationRef.current);
         }
       );
@@ -517,7 +532,8 @@ export default function DoctorLayout() {
     if (!isOnline || !user) return;
     const send = async () => {
       console.log('[DoctorLayout] Sending heartbeat');
-      const locPayload = lastLocationRef.current ? { lat: lastLocationRef.current.lat, lng: lastLocationRef.current.lng } : {};
+      const bestCoords = lastLocationRef.current ?? _layoutCachedCoords;
+      const locPayload = bestCoords ? { lat: bestCoords.lat, lng: bestCoords.lng } : {};
       await callEdge('heartbeat', locPayload);
     };
     send();
