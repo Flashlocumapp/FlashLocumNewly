@@ -842,6 +842,8 @@ export default function DoctorLayout() {
     if (sid) {
       router.push(`/(doctor)/(home)/payment-summary?session_id=${sid}`);
     }
+    // Clear activeSession so home screen shows "No coverage yet" after payment flow
+    setActiveSession(null);
   }, [doctorRatingSessionId, router]);
 
   // ── Doctor Rating — submit review ──

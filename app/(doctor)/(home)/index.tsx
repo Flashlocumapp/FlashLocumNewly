@@ -519,8 +519,8 @@ export default function DoctorHomeScreen() {
           {/* Decorative drag handle */}
           <View style={styles.dragHandle} />
 
-          {/* Coverage sub-card — conditional */}
-          {!hasActiveSession && (
+          {/* Coverage sub-card — default fallback, shows when no named card matches */}
+          {(!isUpcomingOrPaused && !isActive) && (
             <View style={styles.subCard}>
               <Text style={styles.subCardLabel}>COVERAGE</Text>
               <Text style={styles.subCardHeading}>No coverage yet</Text>
