@@ -8,6 +8,10 @@ export default function AuthLayout() {
       <Stack.Screen name="sign-up" />
       <Stack.Screen name="sign-in" options={{ presentation: 'modal' }} />
       <Stack.Screen name="verify" />
+      <Stack.Screen name="forgot-password" />
+      <Stack.Screen name="reset-verify" />
+      <Stack.Screen name="new-password" />
+      <Stack.Screen name="terms" />
     </Stack>
   );
 }

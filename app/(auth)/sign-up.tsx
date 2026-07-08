@@ -326,6 +326,20 @@ export default function SignUpScreen() {
           </View>
         </View>
 
+        {/* Forgot password — sign in mode only */}
+        {!isSignup ? (
+          <AnimatedPressable
+            onPress={() => {
+              console.log('[SignUp] Forgot password pressed — role:', role);
+              router.push(`/(auth)/forgot-password?role=${role}` as any);
+            }}
+            scaleValue={0.97}
+            style={styles.forgotWrap}
+          >
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </AnimatedPressable>
+        ) : null}
+
         {/* Submit button */}
         <AnimatedPressable
           onPress={handleSubmit}
@@ -350,7 +364,15 @@ export default function SignUpScreen() {
           <View style={styles.legalContainer}>
             <Text style={styles.legalText}>
               {'By creating an account, you agree to our '}
-              <Text style={styles.legalLink}>Terms of Service</Text>
+              <AnimatedPressable
+                onPress={() => {
+                  console.log('[SignUp] Terms of Service link pressed');
+                  router.push('/(auth)/terms' as any);
+                }}
+                scaleValue={0.97}
+              >
+                <Text style={styles.legalLink}>Terms of Service</Text>
+              </AnimatedPressable>
               {' and '}
               <Text style={styles.legalLink}>Privacy Policy</Text>
               {'.'}
@@ -500,6 +522,15 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   legalLink: {
+    textDecorationLine: 'underline',
+  },
+  forgotWrap: {
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  forgotText: {
+    fontSize: 14,
+    color: '#0A0A0A',
     textDecorationLine: 'underline',
   },
 });

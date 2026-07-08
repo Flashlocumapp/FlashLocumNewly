@@ -24,6 +24,7 @@ export default function RoleSelectScreen() {
 
   const handleTerms = () => {
     console.log('[RoleSelect] Terms link pressed');
+    router.push('/(auth)/terms');
   };
 
   const handlePrivacy = () => {
