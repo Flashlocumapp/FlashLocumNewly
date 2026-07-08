@@ -15,7 +15,7 @@ import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import Feather from '@expo/vector-icons/Feather';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+
 import {
   useFonts,
   Inter_400Regular,
@@ -488,11 +488,7 @@ export default function DoctorHomeScreen() {
             anchor={{ x: 0.5, y: 0.5 }}
             tracksViewChanges={markerTracksViews}
           >
-            <View style={styles.markerContainer}>
-              <View style={styles.stethoscopeCircle}>
-                <MaterialCommunityIcons name="stethoscope" size={12} color="#FFFFFF" />
-              </View>
-            </View>
+            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#EF4444', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
           </Marker>
         )}
       </MapView>
@@ -653,25 +649,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
-  },
-  markerContainer: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stethoscopeCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#1C1C1E',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 8,
   },
   dragHandle: {
     width: 36,
