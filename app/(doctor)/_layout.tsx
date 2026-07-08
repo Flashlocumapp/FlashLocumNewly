@@ -753,6 +753,21 @@ export default function DoctorLayout() {
   // ── AppState force-sync ──
   useEffect(() => {
     const sub = AppState.addEventListener('change', async (state) => {
+      if ((state === 'background' || state === 'inactive') && isOnlineRef.current) {
+        console.log('[DoctorLayout] App backgrounded while online — calling go-offline');
+        // Fire-and-forget: mark doctor offline in DB immediately
+        getValidToken().then((token) => {
+          if (token) {
+            fetch(`${EDGE_BASE}/go-offline`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({}),
+            }).catch((e) => console.log('[DoctorLayout] go-offline on background error:', e.message));
+          }
+        });
+        // Also update local state so the toggle reflects offline when app resumes
+        setIsOnline(false);
+      }
       if (state === 'active' && isOnline && user) {
         console.log('[DoctorLayout] App foregrounded — force-syncing');
         await forceSync();
