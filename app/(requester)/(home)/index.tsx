@@ -798,6 +798,7 @@ function RequesterPaymentCard({
   const [countdownColor, setCountdownColor] = useState('#000000');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const expiryRef = useRef<string | null>(null);
+  const handleRefreshPaymentRef = useRef<() => Promise<void>>(async () => {});
 
   const skeletonAnim = useRef(new Animated.Value(0.4)).current;
 
@@ -825,7 +826,7 @@ function RequesterPaymentCard({
         setCountdownColor('#FF3B30');
         if (timerRef.current) clearInterval(timerRef.current);
         // Auto-refresh when timer hits zero
-        handleRefreshPayment();
+        handleRefreshPaymentRef.current();
         return;
       }
       const totalSec = Math.floor(diffMs / 1000);
@@ -921,6 +922,12 @@ function RequesterPaymentCard({
       setRefreshing(false);
     }
   }, [session.id, refreshing, startCountdown]);
+
+  // Keep ref in sync with latest handleRefreshPayment so startCountdown's tick
+  // always calls the version that has the current paymentIntent in scope.
+  useEffect(() => {
+    handleRefreshPaymentRef.current = handleRefreshPayment;
+  }, [handleRefreshPayment]);
 
   // ─── On mount: fetch intent + AppState foreground re-fetch ───────────────
   useEffect(() => {
@@ -1145,7 +1152,7 @@ function RequesterPaymentCard({
               ACCOUNT NAME
             </Text>
             <Text style={{ fontSize: 17, fontFamily: 'Inter_600SemiBold', color: loadingIntent ? '#8E8E93' : '#000000' }}>
-              {loadingIntent ? 'Loading...' : (session.monnify_account_name ?? '—')}
+              {loadingIntent ? 'Loading...' : 'FlashLocum'}
             </Text>
           </View>
 
