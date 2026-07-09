@@ -55,6 +55,7 @@ export default function DoctorBasicProfile() {
   };
 
   const handleContinue = async () => {
+    console.log('[basic-profile] Continue pressed', { phone, gender });
     if (loading) return;
 
     let valid = true;
@@ -84,6 +85,7 @@ export default function DoctorBasicProfile() {
       const firstName = spaceIdx > -1 ? fullName.slice(0, spaceIdx).trim() : fullName.trim();
       const lastName = spaceIdx > -1 ? fullName.slice(spaceIdx + 1).trim() : '';
 
+      console.log('[basic-profile] handleContinue: upserting profile for user', user!.id);
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert({
@@ -93,8 +95,7 @@ export default function DoctorBasicProfile() {
           phone: cleanedPhone,
           gender,
           role: 'doctor',
-          onboarding_complete: true,
-          doctor_onboarding_complete: true,
+          doctor_basic_profile_complete: true,
         });
 
       if (profileError) throw profileError;

@@ -9,6 +9,7 @@ import { SystemBars } from 'react-native-edge-to-edge';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
@@ -75,10 +76,36 @@ function NavigationGuard() {
 
     // 3. Neither onboarding complete
     if (!doctorComplete && !requesterComplete) {
-      const route = profile.role === 'doctor'
-        ? '/(onboarding)/doctor/basic-profile'
-        : '/(onboarding)/requester/basic-profile';
-      router.replace(route as any);
+      if (profile.role === 'doctor') {
+        // Resume doctor at the correct step
+        if (!profile.doctor_basic_profile_complete) {
+          // Never completed Step 1
+          console.log('[NavigationGuard] Doctor resuming at Step 1 (basic-profile)');
+          router.replace('/(onboarding)/doctor/basic-profile' as any);
+        } else {
+          // Step 1 done — check if Step 2 (credentials) is done
+          // by querying doctor_profiles for mdcn_number
+          console.log('[NavigationGuard] Doctor Step 1 complete, querying doctor_profiles for Step 2 status');
+          supabase
+            .from('doctor_profiles')
+            .select('mdcn_number')
+            .eq('id', profile.id)
+            .single()
+            .then(({ data }) => {
+              if (!data?.mdcn_number) {
+                // Step 2 not done
+                console.log('[NavigationGuard] Doctor resuming at Step 2 (credentials)');
+                router.replace('/(onboarding)/doctor/credentials' as any);
+              } else {
+                // Step 2 done, Step 3 not done
+                console.log('[NavigationGuard] Doctor resuming at Step 3 (payout)');
+                router.replace('/(onboarding)/doctor/payout' as any);
+              }
+            });
+        }
+      } else {
+        router.replace('/(onboarding)/requester/basic-profile' as any);
+      }
       return;
     }
 
