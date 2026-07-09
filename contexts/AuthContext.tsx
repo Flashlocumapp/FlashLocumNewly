@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase, getValidToken } from '@/lib/supabase';
+import { supabase, getValidToken, setForegroundRefreshPromise } from '@/lib/supabase';
 import { AuthContextType, Profile } from '@/types';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -72,8 +72,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active') {
-        // Silently warm up the token when app comes to foreground
-        getValidToken().catch(() => {});
+        console.log('[AuthContext] App foregrounded — warming up token');
+        // Store the warm-up promise so fetchWithAuth can await it instead of racing
+        const p = getValidToken();
+        setForegroundRefreshPromise(p);
+        p.catch(() => {});
       }
     };
     const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
