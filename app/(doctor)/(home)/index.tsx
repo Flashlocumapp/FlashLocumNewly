@@ -77,7 +77,7 @@ function buildShiftPillText(session: CoverageSession): string {
   const priceDisplay = `₦${Number(session.price).toLocaleString()}`;
   const shiftStart = formatTime(session.shift_start);
   const shiftEnd = formatTime(session.shift_end);
-  const sep = ' ● ';
+  const sep = ' · ';
 
   if (session.status === 'paused') {
     return `${session.shift_type}${sep}Day ${session.current_day} of ${session.coverage_length}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;

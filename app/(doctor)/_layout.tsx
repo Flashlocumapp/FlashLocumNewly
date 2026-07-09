@@ -113,7 +113,7 @@ function formatHHMM(hhmm: string): string {
 }
 
 function formatShiftSummary(req: DispatchRequest): string {
-  const sep = ' ● ';
+  const sep = ' · ';
   const coverageLength = Math.max(1, req.coverage_length ?? 1);
   const startDate = new Date(req.shift_date + 'T12:00:00');
 
@@ -165,19 +165,19 @@ function ShiftDetails({ request, note }: { request: DispatchRequest | null; note
         <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
           {request.shift_type}
         </Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 13 }}> ● </Text>
+        <Text style={{ color: '#8E8E93', fontSize: 13 }}> · </Text>
         <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
           {startDay}
         </Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 13 }}> ● </Text>
+        <Text style={{ color: '#8E8E93', fontSize: 13 }}> · </Text>
         <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
           {startFormatted} – {endFormatted}
         </Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 13 }}> ● </Text>
+        <Text style={{ color: '#8E8E93', fontSize: 13 }}> · </Text>
         <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
           {hoursLabel}
         </Text>
-        <Text style={{ color: '#FFFFFF', fontSize: 13 }}> ● </Text>
+        <Text style={{ color: '#8E8E93', fontSize: 13 }}> · </Text>
         <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
           {priceDisplay}
         </Text>

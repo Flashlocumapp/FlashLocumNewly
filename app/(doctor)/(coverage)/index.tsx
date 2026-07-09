@@ -145,8 +145,30 @@ function UpcomingCoverageCard({ session, onCall, onCancel }: {
   onCall: (session: CoverageSession) => void;
   onCancel: (session: CoverageSession) => void;
 }) {
-  const ratingDisplay = Number(session.doctor_rating ?? 0).toFixed(1);
-  const reliabilityDisplay = Math.round(Number(session.doctor_reliability ?? 100));
+  const [liveRating, setLiveRating] = useState<number | null>(null);
+  const [liveReliability, setLiveReliability] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!session.requester_id) return;
+    supabase
+      .from('requester_profiles')
+      .select('rating, reliability')
+      .eq('id', session.requester_id)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setLiveRating(data.rating ?? null);
+          setLiveReliability(data.reliability ?? null);
+        }
+      });
+  }, [session.requester_id]);
+
+  const ratingDisplay = liveRating != null
+    ? liveRating.toFixed(1)
+    : (Number(session.doctor_rating ?? 0) > 0 ? Number(session.doctor_rating).toFixed(1) : '5.0');
+  const reliabilityDisplay = liveReliability != null
+    ? Math.round(liveReliability)
+    : (Number(session.doctor_reliability ?? 0) > 0 ? Math.round(Number(session.doctor_reliability)) : 100);
   const shiftPillText = buildShiftPillText(session);
   const canCancel = session.status === 'upcoming';
 
@@ -237,8 +259,30 @@ function HistoryCoverageCard({ session, onPress }: {
   session: CoverageSession;
   onPress: (session: CoverageSession) => void;
 }) {
-  const ratingDisplay = Number(session.doctor_rating ?? 0).toFixed(1);
-  const reliabilityDisplay = Math.round(Number(session.doctor_reliability ?? 100));
+  const [liveRating, setLiveRating] = useState<number | null>(null);
+  const [liveReliability, setLiveReliability] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!session.requester_id) return;
+    supabase
+      .from('requester_profiles')
+      .select('rating, reliability')
+      .eq('id', session.requester_id)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setLiveRating(data.rating ?? null);
+          setLiveReliability(data.reliability ?? null);
+        }
+      });
+  }, [session.requester_id]);
+
+  const ratingDisplay = liveRating != null
+    ? liveRating.toFixed(1)
+    : (Number(session.doctor_rating ?? 0) > 0 ? Number(session.doctor_rating).toFixed(1) : '5.0');
+  const reliabilityDisplay = liveReliability != null
+    ? Math.round(liveReliability)
+    : (Number(session.doctor_reliability ?? 0) > 0 ? Math.round(Number(session.doctor_reliability)) : 100);
   const shiftPillText = buildShiftPillText(session);
 
   const statusLabel = session.status === 'cancelled'
@@ -302,6 +346,23 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [liveRating, setLiveRating] = useState<number | null>(null);
+  const [liveReliability, setLiveReliability] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!session?.requester_id) return;
+    supabase
+      .from('requester_profiles')
+      .select('rating, reliability')
+      .eq('id', session.requester_id)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setLiveRating(data.rating ?? null);
+          setLiveReliability(data.reliability ?? null);
+        }
+      });
+  }, [session?.requester_id]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -321,8 +382,12 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
 
   if (!session) return null;
 
-  const ratingDisplay = Number(session.doctor_rating ?? 0).toFixed(1);
-  const reliabilityDisplay = Math.round(Number(session.doctor_reliability ?? 100));
+  const ratingDisplay = liveRating != null
+    ? liveRating.toFixed(1)
+    : (Number(session?.doctor_rating ?? 0) > 0 ? Number(session?.doctor_rating).toFixed(1) : '5.0');
+  const reliabilityDisplay = liveReliability != null
+    ? Math.round(liveReliability)
+    : (Number(session?.doctor_reliability ?? 0) > 0 ? Math.round(Number(session?.doctor_reliability)) : 100);
 
   const shiftStart = new Date(session.shift_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   const shiftEnd = new Date(session.shift_end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
