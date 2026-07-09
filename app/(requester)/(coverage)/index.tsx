@@ -459,7 +459,7 @@ export default function RequesterCoverageScreen() {
   });
 
   type DateRange = 'this_month' | 'last_month' | 'last_3_months';
-  const [dateRange, setDateRange] = useState<DateRange>('last_3_months');
+  const [dateRange, setDateRange] = useState<DateRange>('this_month');
 
   function filterByDateRange(sessions: CoverageSession[], range: DateRange): CoverageSession[] {
     const now = new Date();

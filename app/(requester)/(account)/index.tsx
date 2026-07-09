@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { supabase, getValidToken } from '@/lib/supabase';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 
 interface RequesterProfile {
@@ -83,6 +83,8 @@ export default function RequesterAccountScreen() {
 
   const [genderModalVisible, setGenderModalVisible] = useState(false);
   const [savingGender, setSavingGender] = useState(false);
+
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -160,10 +162,46 @@ export default function RequesterAccountScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert('Delete Account', 'This action is permanent and cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => Alert.alert('Coming Soon', 'Account deletion will be available soon.') },
-    ]);
+    console.log('[Requester Account] Delete Account pressed');
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all associated data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            console.log('[Requester Account] Delete Account confirmed, proceeding with deletion');
+            setDeleting(true);
+            try {
+              const token = await getValidToken();
+              if (!token) throw new Error('Not authenticated');
+              console.log('[Requester Account] Calling delete-account edge function');
+              try {
+                const res = await fetch(
+                  'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/delete-account',
+                  {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                  },
+                );
+                console.log('[Requester Account] delete-account response status:', res.status);
+              } catch (fetchErr) {
+                console.warn('[Requester Account] delete-account fetch error (continuing with signOut):', fetchErr);
+              }
+              console.log('[Requester Account] Signing out after delete');
+              await supabase.auth.signOut();
+              router.replace('/');
+            } catch (err: unknown) {
+              console.error('[Requester Account] Delete account error:', err);
+              setDeleting(false);
+              Alert.alert('Error', 'Could not delete account. Please contact support.');
+            }
+          },
+        },
+      ],
+    );
   };
 
   // Only show full-screen spinner if we have no data at all (no authProfile seed)
@@ -171,6 +209,15 @@ export default function RequesterAccountScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#1C1C1E" />
+      </View>
+    );
+  }
+
+  if (deleting) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1C1C1E" />
+        <Text style={{ marginTop: 16, fontSize: 14, color: '#8E8E93' }}>Deleting account...</Text>
       </View>
     );
   }
@@ -288,7 +335,7 @@ const styles = StyleSheet.create({
   cardDivider: { height: 1, backgroundColor: '#E5E5E5', marginLeft: 16 },
   rowLabel: { fontSize: 14, color: '#6B6B6B', flex: 1 },
   rowLabelRed: { color: '#E63946' },
-  editablePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1C1C1E', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
+  editablePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#3A3A3C', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
   editablePillText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalSheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 48 },
@@ -299,7 +346,7 @@ const styles = StyleSheet.create({
   modalButtons: { flexDirection: 'row', gap: 12, marginTop: 8 },
   modalCancelBtn: { flex: 1, backgroundColor: '#EFEFEF', borderRadius: 28, paddingVertical: 16, alignItems: 'center' },
   modalCancelText: { fontSize: 15, fontWeight: '600', color: '#1C1C1E' },
-  modalSaveBtn: { flex: 1, backgroundColor: '#1C1C1E', borderRadius: 28, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
+  modalSaveBtn: { flex: 1, backgroundColor: '#3A3A3C', borderRadius: 28, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
   modalSaveText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
   genderOption: { paddingVertical: 18, alignItems: 'center' },
   genderOptionText: { fontSize: 17, color: '#1C1C1E', fontWeight: '400' },

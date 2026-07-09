@@ -137,6 +137,9 @@ export default function DoctorAccountScreen() {
   const [retryError, setRetryError] = useState('');
   const [retrySuccess, setRetrySuccess] = useState(false);
 
+  // Delete account
+  const [deleting, setDeleting] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     const fetchProfile = async () => {
@@ -294,10 +297,46 @@ export default function DoctorAccountScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert('Delete Account', 'This action is permanent and cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => Alert.alert('Coming Soon', 'Account deletion will be available soon.') },
-    ]);
+    console.log('[Doctor Account] Delete Account pressed');
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all associated data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            console.log('[Doctor Account] Delete Account confirmed, proceeding with deletion');
+            setDeleting(true);
+            try {
+              const token = await getValidToken();
+              if (!token) throw new Error('Not authenticated');
+              console.log('[Doctor Account] Calling delete-account edge function');
+              try {
+                const res = await fetch(
+                  'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/delete-account',
+                  {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                  },
+                );
+                console.log('[Doctor Account] delete-account response status:', res.status);
+              } catch (fetchErr) {
+                console.warn('[Doctor Account] delete-account fetch error (continuing with signOut):', fetchErr);
+              }
+              console.log('[Doctor Account] Signing out after delete');
+              await supabase.auth.signOut();
+              router.replace('/');
+            } catch (err: unknown) {
+              console.error('[Doctor Account] Delete account error:', err);
+              setDeleting(false);
+              Alert.alert('Error', 'Could not delete account. Please contact support.');
+            }
+          },
+        },
+      ],
+    );
   };
 
   // If we have absolutely no profile data yet (no authProfile seed), show a minimal spinner
@@ -305,6 +344,15 @@ export default function DoctorAccountScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#1C1C1E" />
+      </View>
+    );
+  }
+
+  if (deleting) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1C1C1E" />
+        <Text style={{ marginTop: 16, fontSize: 14, color: '#8E8E93' }}>Deleting account...</Text>
       </View>
     );
   }
@@ -511,7 +559,7 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 14, color: '#6B6B6B', flex: 1 },
   rowLabelRed: { color: '#E63946' },
   rowValue: { fontSize: 14, fontWeight: '600', color: '#1C1C1E', textAlign: 'right', maxWidth: '55%' },
-  editablePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1C1C1E', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
+  editablePill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#3A3A3C', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 5 },
   editablePillText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
   verifiedBadge: { backgroundColor: '#1A3A2A', borderColor: '#34C759', borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   verifiedText: { fontSize: 13, color: '#34C759', fontWeight: '600' },
@@ -526,7 +574,7 @@ const styles = StyleSheet.create({
   modalButtons: { flexDirection: 'row', gap: 12, marginTop: 8 },
   modalCancelBtn: { flex: 1, backgroundColor: '#EFEFEF', borderRadius: 28, paddingVertical: 16, alignItems: 'center' },
   modalCancelText: { fontSize: 15, fontWeight: '600', color: '#1C1C1E' },
-  modalSaveBtn: { flex: 1, backgroundColor: '#1C1C1E', borderRadius: 28, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
+  modalSaveBtn: { flex: 1, backgroundColor: '#3A3A3C', borderRadius: 28, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
   modalSaveText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
   genderOption: { paddingVertical: 18, alignItems: 'center' },
   genderOptionText: { fontSize: 17, color: '#1C1C1E', fontWeight: '400' },
