@@ -147,7 +147,12 @@ function NavigationGuard() {
   // Session-arrival watcher — if we routed with no session and session later arrives, re-run routing
   useEffect(() => {
     if (!routedWithNoSession.current) return;
-    if (segments[0] === '(auth)') return; // auth flow owns navigation — don't interfere
+    // Only act if the user is still in the auth/intro flow waiting for a session.
+    // If they've already navigated to a portal or onboarding on their own, do nothing.
+    if (segments[0] === '(auth)') return;
+    if (segments[0] === '(doctor)') return;
+    if (segments[0] === '(requester)') return;
+    if (segments[0] === '(onboarding)') return;
     if (!session || !profile || profileLoading) return;
     if (lastPathway === undefined) return;
     console.log('[NavigationGuard] Session arrived after no-session route — retrying routing');
@@ -159,6 +164,7 @@ function NavigationGuard() {
   // Sign-out watcher — only reset after session AND profile are both gone
   useEffect(() => {
     if (!session && !profile && hasRouted.current) {
+      routedWithNoSession.current = false; // clear stale flag on sign-out
       if (segments[0] === '(auth)') return; // already in auth flow — don't redirect
       hasRouted.current = false;
       skipIntroRef.current = true;
