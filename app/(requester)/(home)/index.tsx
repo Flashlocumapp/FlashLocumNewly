@@ -2518,6 +2518,7 @@ export default function RequesterHomeScreen() {
   const [showCancelActiveReasons, setShowCancelActiveReasons] = useState(false);
   const [showEndShiftModal, setShowEndShiftModal] = useState(false);
   const [showPauseShiftModal, setShowPauseShiftModal] = useState(false);
+  const [settledAmount, setSettledAmount] = useState<number | null>(null);
 
   const handleCancelRequest = async () => {
     setShowCancelModal(true);
@@ -2660,15 +2661,55 @@ export default function RequesterHomeScreen() {
 
   const handleConfirmEndShift = async () => {
     if (!activeSession) return;
+    console.log('[Requester] handleConfirmEndShift: ending shift for session', activeSession.id);
     setShowEndShiftModal(false);
     try {
       const data = await callSessionEdge('end-shift', activeSession.id);
+      console.log('[Requester] end-shift response:', JSON.stringify(data));
       const updated = data?.session as Partial<CoverageSession>;
-      if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      if (updated) {
+        // Ensure price from backend is merged in (covers multi-day total)
+        if (updated.price != null) {
+          console.log('[Requester] end-shift updated price from backend:', updated.price);
+        }
+        setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      }
     } catch (e: any) {
+      console.error('[Requester] end-shift failed:', e.message);
       Alert.alert('End Shift Failed', e.message || 'Something went wrong. Please try again.');
     }
   };
+
+  // Fetch the authoritative payment_intents amount when session reaches settled/payment_complete
+  useEffect(() => {
+    const status = activeSession?.status;
+    const sessionId = activeSession?.id;
+    if (!sessionId || (status !== 'settled' && status !== 'payment_complete')) {
+      return;
+    }
+    console.log('[Requester] Fetching payment_intent amount for settled session', sessionId);
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('payment_intents')
+          .select('amount_naira')
+          .eq('session_id', sessionId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        if (error) {
+          console.warn('[Requester] payment_intents fetch error:', error.message);
+          return;
+        }
+        if (data?.amount_naira != null) {
+          console.log('[Requester] payment_intent amount_naira:', data.amount_naira);
+          setSettledAmount(Number(data.amount_naira));
+        }
+      } catch (e: any) {
+        console.warn('[Requester] payment_intents fetch exception:', e.message);
+      }
+    })();
+  }, [activeSession?.status, activeSession?.id]);
 
   const handleCancelActiveShift = useCallback(() => {
     if (!activeSession) return;
@@ -3455,7 +3496,7 @@ export default function RequesterHomeScreen() {
                 <Text style={{ fontSize: 13, fontWeight: '600', color: '#22c55e', fontFamily: 'Inter_600SemiBold' }}>Payment Confirmed</Text>
               </View>
               <Text style={{ fontSize: 44, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 4 }}>
-                {'₦'}{(activeSession.price ?? 0).toLocaleString()}
+                {'₦'}{(settledAmount ?? activeSession.price ?? 0).toLocaleString()}
               </Text>
               <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 16 }}>
                 {'Payment received. Funds are being remitted to '}
@@ -3490,7 +3531,7 @@ export default function RequesterHomeScreen() {
                 <Text style={{ fontSize: 13, fontWeight: '600', color: '#22c55e', fontFamily: 'Inter_600SemiBold' }}>Payment Complete</Text>
               </View>
               <Text style={{ fontSize: 44, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 4 }}>
-                {'₦'}{(activeSession.price ?? 0).toLocaleString()}
+                {'₦'}{(settledAmount ?? activeSession.price ?? 0).toLocaleString()}
               </Text>
               <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 16 }}>
                 {'All done! Funds have been remitted to '}
