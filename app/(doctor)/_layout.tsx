@@ -525,17 +525,25 @@ export default function DoctorLayout() {
     return () => clearInterval(id);
   }, [isOnline, user, callEdge]);
 
-  // ── Polling fallback ──
+  // ── Polling fallback — dispatch poll (online only) ──
   useEffect(() => {
     if (!isOnline || !user) return;
     const id = setInterval(() => {
       if (__DEV__ || !isRealtimeHealthyRef.current) {
         forceSyncRef.current();
-        fetchActiveSession();
       }
     }, POLL_INTERVAL);
     return () => clearInterval(id);
-  }, [isOnline, user, fetchActiveSession]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOnline, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Polling fallback — session poll (runs whenever there is an active session) ──
+  useEffect(() => {
+    if (!activeSessionId || !user) return;
+    const id = setInterval(() => {
+      fetchActiveSession();
+    }, POLL_INTERVAL);
+    return () => clearInterval(id);
+  }, [activeSessionId, user, fetchActiveSession]);
 
   // ── Realtime subscription — dispatch channel ──
   useEffect(() => {
@@ -707,36 +715,26 @@ export default function DoctorLayout() {
     }
   }, [requestQueue, doctorScreenState]); // isOnline removed — use ref for live value
 
-  // ── AppState force-sync ──
+  // ── AppState handler (merged) ──
   useEffect(() => {
-    const sub = AppState.addEventListener('change', async (state) => {
-      if ((state === 'background' || state === 'inactive') && isOnlineRef.current) {
-        // Fire-and-forget: mark doctor offline in DB immediately
+    const sub = AppState.addEventListener('change', async (state: AppStateStatus) => {
+      if (state === 'background' && isOnlineRef.current) {
+        console.log('[AppState] background — going offline');
         fetchWithAuth(`${EDGE_BASE}/go-offline`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         }).catch(() => {});
-        // Also update local state so the toggle reflects offline when app resumes
         setIsOnline(false);
       }
-      if (state === 'active' && isOnline && user) {
-        await forceSync();
+      if (state === 'active') {
+        console.log('[AppState] active — syncing session');
+        if (isOnlineRef.current && user) await forceSync();
+        fetchActiveSession();
       }
     });
     return () => sub.remove();
-  }, [isOnline, user, forceSync]);
-
-  // ── AppState session re-fetch ──
-  useEffect(() => {
-    const handleAppStateChange = (nextState: AppStateStatus) => {
-      if (nextState === 'active') {
-        fetchActiveSession();
-      }
-    };
-    const sub = AppState.addEventListener('change', handleAppStateChange);
-    return () => sub.remove();
-  }, [fetchActiveSession]);
+  }, [user, forceSync, fetchActiveSession]);
 
   // ── Accept ──
   const handleAccept = useCallback(async () => {
