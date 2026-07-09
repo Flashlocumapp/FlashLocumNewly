@@ -33,10 +33,9 @@ export default function DoctorTabBar({ tabs }: Props) {
           return (
             <Pressable
               key={tab.name}
-              style={styles.tab}
-              onPress={() => {
-                router.replace(tab.route);
-              }}
+              style={({ pressed }) => [styles.tab, { opacity: 1 }]}
+              android_ripple={{ color: 'transparent' }}
+              onPress={() => { router.replace(tab.route); }}
             >
               <MaterialIcons
                 name={tab.icon}

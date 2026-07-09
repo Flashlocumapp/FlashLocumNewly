@@ -51,10 +51,9 @@ export default function RequesterLayout() {
               return (
                 <Pressable
                   key={tab.name}
-                  onPress={() => {
-                    router.replace(tab.route);
-                  }}
-                  style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}
+                  onPress={() => { router.replace(tab.route); }}
+                  android_ripple={{ color: 'transparent' }}
+                  style={({ pressed }) => ({ flex: 1, alignItems: 'center', paddingVertical: 10, opacity: 1 })}
                 >
                   <MaterialIcons name={tab.icon} size={24} color={isActive ? '#1C1C1E' : '#8E8E93'} />
                   <Text style={{ fontSize: 10, fontWeight: isActive ? '600' : '400', color: isActive ? '#1C1C1E' : '#8E8E93', marginTop: 3 }}>

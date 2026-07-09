@@ -3747,7 +3747,7 @@ export default function RequesterHomeScreen() {
                 End Shift?
               </Text>
               <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
-                This will end the current shift and trigger the payment process.
+                This will close the entire booking and trigger the payment process.
               </Text>
               <TouchableOpacity
                 onPress={() => setShowEndShiftModal(false)}
@@ -3783,7 +3783,7 @@ export default function RequesterHomeScreen() {
                 Pause Shift?
               </Text>
               <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
-                The shift timer will be paused. You can resume it at any time.
+                This marks the daily session as complete. You can resume it at any time.
               </Text>
               <TouchableOpacity
                 onPress={() => setShowPauseShiftModal(false)}

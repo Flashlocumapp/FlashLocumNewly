@@ -176,7 +176,8 @@ export default function FloatingTabBar({
                 return (
                   <React.Fragment key={index}>
                     <Pressable
-                      style={styles.tab}
+                      style={({ pressed }) => [styles.tab, { opacity: 1 }]}
+                      android_ripple={{ color: 'transparent' }}
                       onPress={() => handleTabPress(tab.route)}
                     >
                       <View style={styles.tabContent}>
@@ -215,7 +216,8 @@ export default function FloatingTabBar({
                 return (
                   <React.Fragment key={index}>
                     <Pressable
-                      style={styles.tab}
+                      style={({ pressed }) => [styles.tab, { opacity: 1 }]}
+                      android_ripple={{ color: 'transparent' }}
                       onPress={() => handleTabPress(tab.route)}
                     >
                       <View style={styles.tabContent}>
