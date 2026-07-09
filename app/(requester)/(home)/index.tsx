@@ -26,6 +26,7 @@ import {
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Feather from '@expo/vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
@@ -1503,6 +1504,7 @@ export default function RequesterHomeScreen() {
   // Live requester scores — baseline 5.0 / 100%
   const [requesterRating, setRequesterRating] = useState<number>(5.0);
   const [requesterReliability, setRequesterReliability] = useState<number>(100);
+  const [tooltipVisible, setTooltipVisible] = useState<'rating' | 'reliability' | null>(null);
 
   // ─── Fetch requester scores on mount ─────────────────────────────────────────
   useEffect(() => {
@@ -3546,12 +3548,18 @@ export default function RequesterHomeScreen() {
                   <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>
                     {requesterRating.toFixed(1)}
                   </Text>
+                  <TouchableOpacity onPress={() => { console.log('[Requester] Info icon pressed: rating tooltip'); setTooltipVisible('rating'); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 3 }}>
+                    <Feather name="info" size={11} color="#8E8E93" />
+                  </TouchableOpacity>
                   <Text style={{ fontSize: 13, color: '#8E8E93', marginHorizontal: 6 }}>{'·'}</Text>
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759', marginRight: 4 }} />
                   <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>
                     {requesterReliability.toFixed(0)}
                   </Text>
                   <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{'%'}</Text>
+                  <TouchableOpacity onPress={() => { console.log('[Requester] Info icon pressed: reliability tooltip'); setTooltipVisible('reliability'); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 3 }}>
+                    <Feather name="info" size={11} color="#8E8E93" />
+                  </TouchableOpacity>
                 </View>
                 {/* Search capsule */}
                 <TouchableOpacity
@@ -3980,6 +3988,38 @@ export default function RequesterHomeScreen() {
                 style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center' }}
               >
                 <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF9500' }}>Pause Shift</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── TOOLTIP MODAL ── */}
+      <Modal
+        visible={tooltipVisible !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTooltipVisible(null)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}
+          onPress={() => { console.log('[Requester] Tooltip modal backdrop pressed, closing'); setTooltipVisible(null); }}
+        >
+          <Pressable onPress={e => e.stopPropagation()}>
+            <View style={{ backgroundColor: '#1C1C1E', borderRadius: 20, padding: 24, width: '100%' }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: '#FFFFFF', marginBottom: 10 }}>
+                {tooltipVisible === 'rating' ? 'Ratings' : 'Reliability'}
+              </Text>
+              <Text style={{ fontSize: 14, color: '#EBEBF5CC', lineHeight: 20 }}>
+                {tooltipVisible === 'rating'
+                  ? 'Reflects how satisfied doctors are with your work environment. Minimum: 3.5 stars.'
+                  : 'Frequently cancelling accepted shifts may reduce your reliability score. Minimum: 75%'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => { console.log('[Requester] Tooltip "Got it" pressed:', tooltipVisible); setTooltipVisible(null); }}
+                style={{ marginTop: 20, backgroundColor: '#3A3A3C', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FFFFFF' }}>Got it</Text>
               </TouchableOpacity>
             </View>
           </Pressable>

@@ -267,6 +267,7 @@ export default function DoctorHomeScreen() {
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCancelReasons, setShowCancelReasons] = useState(false);
+  const [tooltipVisible, setTooltipVisible] = useState<'rating' | 'reliability' | null>(null);
 
   // Live rating/reliability state — baseline is 5.0 / 100%
   const [doctorRating, setDoctorRating] = useState<number>(5.0);
@@ -525,7 +526,9 @@ export default function DoctorHomeScreen() {
             <View style={styles.statCard}>
               <View style={styles.statLabelRow}>
                 <Text style={styles.statLabel}>RATINGS</Text>
-                <Feather name="info" size={12} color="#8E8E93" />
+                <TouchableOpacity onPress={() => { console.log('[Doctor] Info icon pressed: rating tooltip'); setTooltipVisible('rating'); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Feather name="info" size={12} color="#8E8E93" />
+                </TouchableOpacity>
               </View>
               <View style={styles.ratingValueRow}>
                 <Text style={styles.statValue}>{doctorRating.toFixed(1)}</Text>
@@ -537,7 +540,9 @@ export default function DoctorHomeScreen() {
             <View style={styles.statCard}>
               <View style={styles.statLabelRow}>
                 <Text style={styles.statLabel}>RELIABILITY</Text>
-                <Feather name="info" size={12} color="#8E8E93" />
+                <TouchableOpacity onPress={() => { console.log('[Doctor] Info icon pressed: reliability tooltip'); setTooltipVisible('reliability'); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Feather name="info" size={12} color="#8E8E93" />
+                </TouchableOpacity>
               </View>
               <Text style={styles.statValue}>{Math.round(doctorReliability)}{'%'}</Text>
             </View>
@@ -618,6 +623,38 @@ export default function DoctorHomeScreen() {
             ))}
           </View>
         </View>
+      </Modal>
+
+      {/* ── TOOLTIP MODAL ── */}
+      <Modal
+        visible={tooltipVisible !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTooltipVisible(null)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}
+          onPress={() => { console.log('[Doctor] Tooltip modal backdrop pressed, closing'); setTooltipVisible(null); }}
+        >
+          <Pressable onPress={e => e.stopPropagation()}>
+            <View style={{ backgroundColor: '#1C1C1E', borderRadius: 20, padding: 24, width: '100%' }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: '#FFFFFF', marginBottom: 10 }}>
+                {tooltipVisible === 'rating' ? 'Ratings' : 'Reliability'}
+              </Text>
+              <Text style={{ fontSize: 14, color: '#EBEBF5CC', lineHeight: 20 }}>
+                {tooltipVisible === 'rating'
+                  ? 'Reflects how satisfied requesters are with your service. Minimum: 4.0 stars.'
+                  : 'Frequently cancelling accepted shifts may reduce your reliability score. Minimum: 85%'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => { console.log('[Doctor] Tooltip "Got it" pressed:', tooltipVisible); setTooltipVisible(null); }}
+                style={{ marginTop: 20, backgroundColor: '#3A3A3C', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FFFFFF' }}>Got it</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </View>
   );
