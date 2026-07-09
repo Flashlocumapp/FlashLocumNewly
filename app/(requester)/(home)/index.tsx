@@ -2569,13 +2569,20 @@ export default function RequesterHomeScreen() {
   }, []); // no deps — reads from ref so never goes stale
 
   const handleCancelReasonSelected = async (reason: string) => {
+    console.log('[Requester] Cancel reason selected:', reason, 'for request:', activeRequestId);
     // Update the request with cancellation reason
     if (activeRequestId) {
-      const token = await getValidToken();
-      if (token) {
-        supabase.from('dispatch_requests')
+      try {
+        const { error } = await supabase.from('coverage_requests')
           .update({ status: 'cancelled', cancellation_reason: reason, cancelled_by: 'requester' })
           .eq('id', activeRequestId);
+        if (error) {
+          console.error('[Requester] Failed to record cancellation reason:', error);
+        } else {
+          console.log('[Requester] Cancellation reason recorded successfully');
+        }
+      } catch (e) {
+        console.error('[Requester] Exception recording cancellation reason:', e);
       }
     }
     setShowCancelReasons(false);

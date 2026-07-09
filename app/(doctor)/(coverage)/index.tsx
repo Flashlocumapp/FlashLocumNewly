@@ -555,6 +555,8 @@ export default function DoctorCoverageScreen() {
   const [historySessions, setHistorySessions] = useState<CoverageSession[]>([]);
   const [selectedHistorySession, setSelectedHistorySession] = useState<CoverageSession | null>(null);
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
+  const [showCancelReasons, setShowCancelReasons] = useState(false);
+  const [pendingCancelSession, setPendingCancelSession] = useState<CoverageSession | null>(null);
 
   // Sync fetched data into local state
   useEffect(() => {
@@ -576,13 +578,13 @@ export default function DoctorCoverageScreen() {
       });
   }, [historyData, user?.id]);
 
-  const updateSessionStatus = useCallback(async (sessionId: string, status: string) => {
+  const updateSessionStatus = useCallback(async (sessionId: string, status: string, extraFields?: Record<string, string>) => {
     const token = await getAccessToken();
     if (!token) return false;
     const res = await fetch(`${SUPABASE_URL}/functions/v1/update-shift-status`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId, status }),
+      body: JSON.stringify({ session_id: sessionId, status, ...extraFields }),
     });
     if (!res.ok) {
       return false;
@@ -699,18 +701,42 @@ export default function DoctorCoverageScreen() {
   }, []);
 
   const handleCancel = useCallback((session: CoverageSession) => {
+    console.log('[Doctor Coverage] Cancel shift pressed for session:', session.id);
     Alert.alert('Cancel Shift?', 'This will cancel the booking.', [
       { text: 'Keep', style: 'cancel' },
       {
         text: 'Cancel Shift',
         style: 'destructive',
-        onPress: async () => {
-          const ok = await updateSessionStatus(session.id, 'cancelled');
-          if (ok) handleStatusChange(session.id, 'cancelled');
+        onPress: () => {
+          console.log('[Doctor Coverage] Cancel confirmed, showing reason picker for session:', session.id);
+          setPendingCancelSession(session);
+          setShowCancelReasons(true);
         },
       },
     ]);
-  }, [updateSessionStatus, handleStatusChange]);
+  }, []);
+
+  const handleCancelReasonSelected = useCallback(async (reason: string) => {
+    if (!pendingCancelSession) return;
+    console.log('[Doctor Coverage] Cancel reason selected:', reason, 'for session:', pendingCancelSession.id);
+    setShowCancelReasons(false);
+    const sessionId = pendingCancelSession.id;
+    setPendingCancelSession(null);
+    try {
+      const ok = await updateSessionStatus(sessionId, 'cancelled', {
+        cancellation_reason: reason,
+        cancelled_by: 'doctor',
+      });
+      if (ok) {
+        console.log('[Doctor Coverage] Session cancelled successfully with reason:', reason);
+        handleStatusChange(sessionId, 'cancelled');
+      } else {
+        console.error('[Doctor Coverage] Failed to cancel session:', sessionId);
+      }
+    } catch (e) {
+      console.error('[Doctor Coverage] Exception cancelling session:', e);
+    }
+  }, [pendingCancelSession, updateSessionStatus, handleStatusChange]);
 
   const handleReviewSubmitted = useCallback((sessionId: string) => {
     setReviewedIds(prev => new Set([...prev, sessionId]));
@@ -758,6 +784,7 @@ export default function DoctorCoverageScreen() {
     : 'No upcoming shifts. Stay online to receive requests.';
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView
       style={{ flex: 1, backgroundColor: '#F7F7F5' }}
       contentContainerStyle={{
@@ -877,5 +904,45 @@ export default function DoctorCoverageScreen() {
         onReviewSubmitted={handleReviewSubmitted}
       />
     </ScrollView>
+
+    {/* ── CANCEL SHIFT REASON MODAL ── */}
+    <Modal
+      visible={showCancelReasons}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowCancelReasons(false)}
+    >
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+        <View style={{
+          backgroundColor: '#1C1C1E',
+          borderTopLeftRadius: 28,
+          borderTopRightRadius: 28,
+          paddingTop: 12,
+          paddingBottom: insets.bottom + 24,
+          paddingHorizontal: 24,
+        }}>
+          <View style={{ alignItems: 'center', marginBottom: 20 }}>
+            <View style={{ width: 36, height: 4, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
+          </View>
+          <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 6 }}>
+            Reason for Cancellation
+          </Text>
+          <Text style={{ fontSize: 14, color: '#8E8E93', marginBottom: 24 }}>
+            Help us improve by letting us know why you cancelled.
+          </Text>
+          {['Personal emergency', 'Scheduling conflict', 'Health reasons', 'Transport issues', 'Other'].map((reason) => (
+            <TouchableOpacity
+              key={reason}
+              onPress={() => handleCancelReasonSelected(reason)}
+              style={{ backgroundColor: '#2C2C2E', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 20, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+            >
+              <Text style={{ fontSize: 15, color: '#FFFFFF', fontWeight: '500' }}>{reason}</Text>
+              <Text style={{ fontSize: 18, color: '#8E8E93' }}>{'›'}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    </Modal>
+    </View>
   );
 }
