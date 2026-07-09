@@ -1779,11 +1779,15 @@ export default function RequesterHomeScreen() {
 
   // Active session state
   const [activeSession, setActiveSession] = useState<CoverageSession | null>(null);
+  const activeSessionRef = useRef<CoverageSession | null>(null);
   const isFirstLoadRef = useRef(true);
   const [sessionLoading, setSessionLoading] = useState(false); // kept for any remaining uses but never set true again after first load
   // Stable session ID — only set when a real ID arrives, never cleared when session becomes null.
   // This prevents the session channel from re-subscribing to 'session:undefined' after payment_confirmed.
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+
+  // Keep activeSessionRef in sync with activeSession state
+  useEffect(() => { activeSessionRef.current = activeSession; }, [activeSession]);
 
   // Post-payment success state
   const [confirmedSession, setConfirmedSession] = useState<CoverageSession | null>(null);
@@ -2700,14 +2704,13 @@ export default function RequesterHomeScreen() {
 
   const handlePaymentConfirmed = useCallback(() => {
     console.log('[RequesterHome] Payment confirmed — snapshotting session and showing success modal');
-    setActiveSession((prev) => {
-      if (prev) {
-        setConfirmedSession(prev);
-        setShowPaymentSuccess(true);
-      }
-      return null;
-    });
-  }, []); // no deps — uses functional setState so never goes stale
+    const snap = activeSessionRef.current;
+    if (snap) {
+      setConfirmedSession(snap);
+      setShowPaymentSuccess(true);
+    }
+    setActiveSession(null);
+  }, []); // no deps — reads from ref so never goes stale
 
   const handleCancelReasonSelected = async (reason: string) => {
     console.log('[RequesterHome] Cancel reason selected:', reason);

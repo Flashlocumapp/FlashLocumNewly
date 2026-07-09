@@ -124,6 +124,7 @@ function DoctorUpcomingCard({
   onCall: () => void;
 }) {
   const ratingDisplay = Number(session.doctor_rating).toFixed(1);
+  const requesterRatingDisplay = session.requester_rating != null ? Number(session.requester_rating).toFixed(1) : '—';
   const reliabilityDisplay = Math.round(Number(session.doctor_reliability));
   const shiftPillText = buildShiftPillText(session);
   const canCancel = session.status === 'upcoming' && session.current_day === 1;
@@ -141,7 +142,7 @@ function DoctorUpcomingCard({
         <Text style={[styles.subCardHeading, { flexShrink: 1 }]} numberOfLines={1}>{session.hospital_name}</Text>
         <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 6 }}>{'|'}</Text>
         <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_400Regular' }}>{'★ '}</Text>
-        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{ratingDisplay}</Text>
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{requesterRatingDisplay}</Text>
         <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759', marginHorizontal: 6 }} />
         <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{reliabilityDisplay}</Text>
         <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{'%'}</Text>
@@ -199,6 +200,7 @@ function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCal
   }, [startedAt]);
 
   const ratingDisplay = Number(session.doctor_rating).toFixed(1);
+  const requesterRatingDisplay = session.requester_rating != null ? Number(session.requester_rating).toFixed(1) : '—';
   const reliabilityDisplay = Math.round(Number(session.doctor_reliability));
   const shiftPillText = buildShiftPillText(session);
   const showDayPill = session.coverage_length > 1;
@@ -217,7 +219,7 @@ function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCal
         <Text style={[styles.subCardHeading, { flexShrink: 1 }]} numberOfLines={1}>{session.hospital_name}</Text>
         <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 6 }}>{'|'}</Text>
         <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_400Regular' }}>{'★ '}</Text>
-        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{ratingDisplay}</Text>
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{requesterRatingDisplay}</Text>
         <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#34C759', marginHorizontal: 6 }} />
         <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{reliabilityDisplay}</Text>
         <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{'%'}</Text>
@@ -431,7 +433,7 @@ export default function DoctorHomeScreen() {
       const res = await fetch(`${EDGE_BASE}/update-shift-status`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: activeSession.id, status: 'cancelled', cancellation_reason: reason }),
+        body: JSON.stringify({ session_id: activeSession.id, status: 'cancelled', cancellation_reason: reason, cancelled_by: 'doctor' }),
       });
       console.log('[DoctorHome] Cancel shift response:', res.status);
       if (!res.ok) {

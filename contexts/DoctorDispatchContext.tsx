@@ -69,6 +69,7 @@ export type CoverageSession = {
   doctor_avatar: string | null;
   requester_name: string;
   requester_phone: string | null;
+  requester_rating?: number | null;
   created_at: string;
 };
 
