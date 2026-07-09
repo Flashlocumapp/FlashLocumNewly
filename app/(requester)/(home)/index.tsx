@@ -38,6 +38,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { useTabBarVisibility, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
+import { getCached, setCached } from '@/utils/tabCache';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
@@ -1368,9 +1369,10 @@ export default function RequesterHomeScreen() {
   const { setTabBarVisible } = useTabBarVisibility();
   const { user } = useAuth();
 
-  // Live requester scores — baseline 5.0 / 100%
-  const [requesterRating, setRequesterRating] = useState<number>(5.0);
-  const [requesterReliability, setRequesterReliability] = useState<number>(100);
+  // Live requester scores — seeded from cache to avoid flicker
+  const _cachedRScores = getCached<{ rating: number; reliability: number }>('requester_scores');
+  const [requesterRating, setRequesterRating] = useState<number>(_cachedRScores?.rating ?? 5.0);
+  const [requesterReliability, setRequesterReliability] = useState<number>(_cachedRScores?.reliability ?? 100);
   const [tooltipVisible, setTooltipVisible] = useState<'rating' | 'reliability' | null>(null);
 
   // ─── Fetch requester scores on mount ─────────────────────────────────────────
@@ -1389,6 +1391,7 @@ export default function RequesterHomeScreen() {
         if (data) {
           setRequesterRating(data.rating ?? 5.0);
           setRequesterReliability(data.reliability ?? 100);
+          setCached('requester_scores', { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
         }
       } catch (e: any) {
       }
@@ -1406,6 +1409,8 @@ export default function RequesterHomeScreen() {
           const newRating = payload?.payload?.new_rating;
           if (newRating !== undefined) {
             setRequesterRating(newRating);
+            const prev = getCached<{ rating: number; reliability: number }>('requester_scores');
+            setCached('requester_scores', { rating: newRating, reliability: prev?.reliability ?? 100 });
           }
         }
       })
@@ -1413,6 +1418,8 @@ export default function RequesterHomeScreen() {
         const newReliability = payload?.payload?.new_reliability;
         if (newReliability !== undefined) {
           setRequesterReliability(newReliability);
+          const prev = getCached<{ rating: number; reliability: number }>('requester_scores');
+          setCached('requester_scores', { rating: prev?.rating ?? 5.0, reliability: newReliability });
         }
       })
       // From channel 6 (payment confirmed on user channel)

@@ -20,6 +20,7 @@ import { ChevronRight } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
+import { getCached, setCached } from '@/utils/tabCache';
 
 interface DoctorProfile {
   first_name: string | null;
@@ -102,6 +103,8 @@ export default function DoctorAccountScreen() {
   const { user, profile: authProfile } = useAuth();
 
   const [profile, setProfile] = useState<DoctorProfile | null>(() => {
+    const cached = getCached<DoctorProfile>('doctor_profile');
+    if (cached) return cached;
     if (!authProfile) return null;
     return {
       first_name: authProfile.first_name ?? null,
@@ -118,8 +121,8 @@ export default function DoctorAccountScreen() {
       subaccount_code: null,
     };
   });
-  // Only show loading state if we have no profile at all (no authProfile seed)
-  const [loading, setLoading] = useState(profile === null);
+  // Only show loading state if we have no profile at all (no cache and no authProfile seed)
+  const [loading, setLoading] = useState(getCached('doctor_profile') === null && profile === null);
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
 
   // Phone edit modal
@@ -156,7 +159,7 @@ export default function DoctorAccountScreen() {
           .single(),
       ]);
 
-      setProfile({
+      const mergedProfile: DoctorProfile = {
         first_name: authProfile?.first_name ?? profileRes.data?.first_name ?? null,
         last_name: authProfile?.last_name ?? profileRes.data?.last_name ?? null,
         phone: authProfile?.phone ?? profileRes.data?.phone ?? null,
@@ -169,7 +172,9 @@ export default function DoctorAccountScreen() {
         account_name: doctorProfileRes.data?.account_name ?? null,
         selfie_url: doctorProfileRes.data?.selfie_url ?? null,
         subaccount_code: doctorProfileRes.data?.subaccount_code ?? null,
-      });
+      };
+      setProfile(mergedProfile);
+      setCached('doctor_profile', { ...mergedProfile });
       const rawSelfieUrl = doctorProfileRes.data?.selfie_url ?? null;
       if (rawSelfieUrl) {
         const { data: signedData } = await supabase.storage

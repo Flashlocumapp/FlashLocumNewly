@@ -26,6 +26,7 @@ import { supabase, getValidToken, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
 import { DoctorDispatchContext, CoverageSession } from '@/contexts/DoctorDispatchContext';
+import { getCached, setCached } from '@/utils/tabCache';
 
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
@@ -248,9 +249,10 @@ export default function DoctorLayout() {
   const [doctorRatingError, setDoctorRatingError] = useState('');
   const [doctorRatingAmount, setDoctorRatingAmount] = useState<number>(0);
 
-  // Live doctor scores — baseline 5.0 / 100%
-  const [doctorRatingScore, setDoctorRatingScore] = useState<number>(5.0);
-  const [doctorReliabilityScore, setDoctorReliabilityScore] = useState<number>(100);
+  // Live doctor scores — seeded from cache to avoid flicker
+  const _cachedScores = getCached<{ rating: number; reliability: number }>('doctor_scores');
+  const [doctorRatingScore, setDoctorRatingScore] = useState<number>(_cachedScores?.rating ?? 5.0);
+  const [doctorReliabilityScore, setDoctorReliabilityScore] = useState<number>(_cachedScores?.reliability ?? 100);
 
   // ─── Fetch doctor scores on mount ────────────────────────────────────────────
   useEffect(() => {
@@ -268,6 +270,7 @@ export default function DoctorLayout() {
         if (data) {
           setDoctorRatingScore(data.rating ?? 5.0);
           setDoctorReliabilityScore(data.reliability ?? 100);
+          setCached('doctor_scores', { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
         }
       } catch (e: any) {
         // non-fatal
@@ -886,7 +889,7 @@ export default function DoctorLayout() {
       isJobCapReached,
     }}>
       <View style={{ flex: 1 }}>
-        <Stack screenOptions={{ headerShown: false }}>
+        <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
           <Stack.Screen name="(home)" />
           <Stack.Screen name="(coverage)" />
           <Stack.Screen name="(earnings)" />

@@ -29,7 +29,7 @@ export default function RequesterLayout() {
   return (
     <TabBarVisibilityContext.Provider value={{ setTabBarVisible }}>
       <View style={{ flex: 1, backgroundColor: '#F9F9F6' }}>
-        <Stack screenOptions={{ headerShown: false }}>
+        <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
           <Stack.Screen name="(home)" />
           <Stack.Screen name="(coverage)" />
           <Stack.Screen name="(account)" />

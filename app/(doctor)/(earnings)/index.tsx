@@ -13,6 +13,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { DoctorEarning } from '@/types';
+import { getCached, setCached } from '@/utils/tabCache';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { BodyScrollView } from '@/components/BodyScrollView';
 
@@ -196,7 +197,7 @@ export default function DoctorEarningsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
-  const [earnings, setEarnings] = useState<DoctorEarning[]>([]);
+  const [earnings, setEarnings] = useState<DoctorEarning[]>(() => getCached<DoctorEarning[]>('doctor_earnings') ?? []);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('this_week');
@@ -221,6 +222,7 @@ export default function DoctorEarningsScreen() {
       const rows = (data as DoctorEarning[]) ?? [];
       console.log('[Earnings] Fetched', rows.length, 'rows');
       setEarnings(rows);
+      setCached('doctor_earnings', rows);
       setError(null);
     } catch (e: any) {
       console.log('[Earnings] Fetch exception:', e.message);

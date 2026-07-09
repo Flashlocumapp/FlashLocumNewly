@@ -26,6 +26,7 @@ import { useDoctorDispatch } from '@/contexts/DoctorDispatchContext';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
+import { getCached, setCached } from '@/utils/tabCache';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
@@ -314,9 +315,10 @@ export default function DoctorHomeScreen() {
   const [showCancelReasons, setShowCancelReasons] = useState(false);
   const [tooltipVisible, setTooltipVisible] = useState<'rating' | 'reliability' | null>(null);
 
-  // Live rating/reliability state — baseline is 5.0 / 100%
-  const [doctorRating, setDoctorRating] = useState<number>(5.0);
-  const [doctorReliability, setDoctorReliability] = useState<number>(100);
+  // Live rating/reliability state — seeded from cache to avoid flicker
+  const _cachedScores = getCached<{ rating: number; reliability: number }>('doctor_scores');
+  const [doctorRating, setDoctorRating] = useState<number>(_cachedScores?.rating ?? 5.0);
+  const [doctorReliability, setDoctorReliability] = useState<number>(_cachedScores?.reliability ?? 100);
 
   // ─── Fetch doctor scores on mount ────────────────────────────────────────────
   useEffect(() => {
@@ -334,6 +336,7 @@ export default function DoctorHomeScreen() {
         if (data) {
           setDoctorRating(data.rating ?? 5.0);
           setDoctorReliability(data.reliability ?? 100);
+          setCached('doctor_scores', { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
         }
       } catch (e: any) {
         // ignore

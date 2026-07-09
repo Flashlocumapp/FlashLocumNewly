@@ -18,6 +18,7 @@ import { ChevronRight } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
+import { getCached, setCached } from '@/utils/tabCache';
 
 interface RequesterProfile {
   first_name: string | null;
@@ -65,6 +66,8 @@ export default function RequesterAccountScreen() {
   const { user, profile: authProfile } = useAuth();
 
   const [profile, setProfile] = useState<RequesterProfile | null>(() => {
+    const cached = getCached<RequesterProfile>('requester_profile');
+    if (cached) return cached;
     if (!authProfile) return null;
     return {
       first_name: authProfile.first_name ?? null,
@@ -73,8 +76,8 @@ export default function RequesterAccountScreen() {
       gender: authProfile.gender ?? null,
     };
   });
-  // Only block render if we have no seed data at all
-  const [loading, setLoading] = useState(profile === null);
+  // Only block render if we have no cache and no seed data at all
+  const [loading, setLoading] = useState(getCached('requester_profile') === null && profile === null);
 
   const [phoneModalVisible, setPhoneModalVisible] = useState(false);
   const [editPhone, setEditPhone] = useState('');
@@ -95,12 +98,14 @@ export default function RequesterAccountScreen() {
         .eq('id', user.id)
         .single();
 
-      setProfile({
+      const mergedProfile: RequesterProfile = {
         first_name: authProfile?.first_name ?? data?.first_name ?? null,
         last_name: authProfile?.last_name ?? data?.last_name ?? null,
         phone: authProfile?.phone ?? data?.phone ?? null,
         gender: authProfile?.gender ?? data?.gender ?? null,
-      });
+      };
+      setProfile(mergedProfile);
+      setCached('requester_profile', { ...mergedProfile });
       setLoading(false);
     };
     fetchProfile();
