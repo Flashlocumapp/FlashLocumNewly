@@ -29,6 +29,7 @@ function NavigationGuard() {
   const segments = useSegments();
   const [lastPathway, setLastPathway] = useState<'doctor' | 'requester' | null | undefined>(undefined);
   const hasRouted = useRef(false);
+  const skipIntroRef = useRef(false);
 
   // Load last pathway from AsyncStorage once on mount
   useEffect(() => {
@@ -57,7 +58,14 @@ function NavigationGuard() {
 
     // 1. No session
     if (!session) {
-      router.replace('/(auth)/intro' as any);
+      if (skipIntroRef.current) {
+        // Sign-out path — go directly to role-select, no animation
+        skipIntroRef.current = false;
+        router.replace('/(auth)/role-select' as any);
+      } else {
+        // First launch / fresh sign-in — play the animation
+        router.replace('/(auth)/intro' as any);
+      }
       return;
     }
 
@@ -137,6 +145,7 @@ function NavigationGuard() {
   useEffect(() => {
     if (!session && !profile && hasRouted.current) {
       hasRouted.current = false;
+      skipIntroRef.current = true;
       router.replace('/(auth)/role-select' as any);
     }
   }, [session, profile]); // eslint-disable-line react-hooks/exhaustive-deps
