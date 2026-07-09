@@ -204,33 +204,41 @@ export default function DoctorEarningsScreen() {
   const [period, setPeriod] = useState<Period>('this_week');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const isFirstLoadRef = useRef(true);
+  const hasDataRef = useRef(false);
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
   const fetchEarnings = useCallback(async () => {
+    console.log('[Earnings] fetchEarnings called');
     // Only show full-screen spinner on the very first load when list is empty
-    if (isFirstLoadRef.current && earnings.length === 0) {
+    if (isFirstLoadRef.current && !hasDataRef.current) {
       setLoading(true);
     }
     try {
+      console.log('[Earnings] Fetching doctor_earnings from Supabase');
       const { data, error: fetchError } = await supabase
         .from('doctor_earnings')
         .select('*')
         .order('paid_at', { ascending: false });
 
       if (fetchError) {
+        console.log('[Earnings] Fetch error:', fetchError.message);
         setError(fetchError.message);
         return;
       }
 
-      setEarnings((data as DoctorEarning[]) ?? []);
+      const rows = (data as DoctorEarning[]) ?? [];
+      console.log('[Earnings] Fetched', rows.length, 'rows');
+      hasDataRef.current = rows.length > 0;
+      setEarnings(rows);
       setError(null);
     } catch (e: any) {
+      console.log('[Earnings] Fetch exception:', e.message);
       setError(e.message);
     } finally {
       setLoading(false);
       isFirstLoadRef.current = false;
     }
-  }, [earnings.length]);
+  }, []); // empty deps — no earnings.length
 
   // ── Initial load ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -372,7 +380,7 @@ export default function DoctorEarningsScreen() {
         )}
 
         {/* Empty state */}
-        {!loading && !error && earnings.length > 0 && filteredRows.length === 0 && (
+        {!loading && !error && filteredRows.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>No transactions in this period.</Text>
           </View>

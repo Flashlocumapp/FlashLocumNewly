@@ -2997,7 +2997,7 @@ export default function RequesterHomeScreen() {
                     <Text style={[TYPOGRAPHY.bodyMedium, { color: '#FFFFFF' }]} numberOfLines={1} ellipsizeMode="tail">
                       {selectedPlace.name}
                     </Text>
-                    <Text style={[TYPOGRAPHY.caption, { color: '#8E8E93' }]} numberOfLines={1} ellipsizeMode="tail">
+                    <Text style={[TYPOGRAPHY.caption, { color: '#D1D1D6' }]} numberOfLines={1} ellipsizeMode="tail">
                       {selectedPlace.address}
                     </Text>
                   </View>
