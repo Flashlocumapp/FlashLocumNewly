@@ -20,7 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
-import { supabase, getValidToken } from '@/lib/supabase';
+import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 import { useTabData } from '@/hooks/useTabData';
@@ -349,10 +349,9 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
     if (stars === 0) { setError('Please select a star rating.'); return; }
     setSubmitting(true); setError('');
     try {
-      const token = await getValidToken();
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/submit-review`, {
+      const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/submit-review`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: session.id, stars, comment: comment.trim() || null, reviewer_role: 'doctor' }),
       });
       const data = await res.json();
@@ -499,8 +498,6 @@ export default function DoctorCoverageScreen() {
   const upcomingKey = `doctor-coverage-upcoming-${user?.id ?? 'anon'}`;
   const historyKey = `doctor-coverage-history-${user?.id ?? 'anon'}`;
 
-  const getAccessToken = useCallback(async () => getValidToken(), []);
-
   const {
     data: upcomingData,
     loading: upcomingLoading,
@@ -509,13 +506,9 @@ export default function DoctorCoverageScreen() {
   } = useTabData<CoverageSession[]>({
     cacheKey: upcomingKey,
     fetcher: async () => {
-      const token = await getAccessToken();
-      if (!token) {
-        return [];
-      }
-      const res = await fetch(
+      const res = await fetchWithAuth(
         `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=upcoming,paused,payment_pending,settled,payment_complete`,
-        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+        { headers: { 'Content-Type': 'application/json' } },
       );
       if (!res.ok) {
         throw new Error('Failed to load upcoming sessions');
@@ -533,13 +526,9 @@ export default function DoctorCoverageScreen() {
   } = useTabData<CoverageSession[]>({
     cacheKey: historyKey,
     fetcher: async () => {
-      const token = await getAccessToken();
-      if (!token) {
-        return [];
-      }
-      const res = await fetch(
+      const res = await fetchWithAuth(
         `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=completed,cancelled,requester_paid`,
-        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+        { headers: { 'Content-Type': 'application/json' } },
       );
       if (!res.ok) {
         throw new Error('Failed to load history sessions');
@@ -579,18 +568,16 @@ export default function DoctorCoverageScreen() {
   }, [historyData, user?.id]);
 
   const updateSessionStatus = useCallback(async (sessionId: string, status: string, extraFields?: Record<string, string>) => {
-    const token = await getAccessToken();
-    if (!token) return false;
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/update-shift-status`, {
+    const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/update-shift-status`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId, status, ...extraFields }),
     });
     if (!res.ok) {
       return false;
     }
     return true;
-  }, [getAccessToken]);
+  }, []);
 
   const handleStatusChange = useCallback((sessionId: string, newStatus: CoverageSession['status']) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);

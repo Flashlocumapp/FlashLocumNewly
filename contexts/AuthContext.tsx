@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { supabase, getValidToken } from '@/lib/supabase';
 import { AuthContextType, Profile } from '@/types';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -69,9 +70,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        // Silently warm up the token when app comes to foreground
+        getValidToken().catch(() => {});
+      }
+    };
+    const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
+
     return () => {
       clearTimeout(authTimeout);
       subscription.unsubscribe();
+      appStateSubscription.remove();
     };
   }, [fetchProfile]);
 

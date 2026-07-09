@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 
 interface DoctorProfile {
@@ -262,18 +262,11 @@ export default function DoctorAccountScreen() {
     setRetryError('');
     setRetrySuccess(false);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) throw new Error('Not authenticated');
-
-      const res = await fetch(
+      const res = await fetchWithAuth(
         'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/create-subaccount',
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             doctor_id: user!.id,
             bank_code: profile.bank_code,
@@ -310,15 +303,13 @@ export default function DoctorAccountScreen() {
             console.log('[Doctor Account] Delete Account confirmed, proceeding with deletion');
             setDeleting(true);
             try {
-              const token = await getValidToken();
-              if (!token) throw new Error('Not authenticated');
               console.log('[Doctor Account] Calling delete-account edge function');
               try {
-                const res = await fetch(
+                const res = await fetchWithAuth(
                   'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/delete-account',
                   {
                     method: 'POST',
-                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json' },
                   },
                 );
                 console.log('[Doctor Account] delete-account response status:', res.status);

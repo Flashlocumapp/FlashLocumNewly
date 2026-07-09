@@ -18,7 +18,7 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
-import { supabase, getValidToken } from '@/lib/supabase';
+import { supabase, fetchWithAuth } from '@/lib/supabase';
 import type { CoverageSession, DayLog } from '@/contexts/DoctorDispatchContext';
 
 const PLATFORM_FEE_RATE = 0.15;
@@ -161,10 +161,9 @@ export default function PaymentSummaryScreen() {
     setSubmittingRating(true);
     setRatingError('');
     try {
-      const token = await getValidToken();
-      const res = await fetch(`${EDGE_BASE}/submit-review`, {
+      const res = await fetchWithAuth(`${EDGE_BASE}/submit-review`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: session_id, stars: ratingStars, comment: ratingComment, reviewer_role: 'requester' }),
       });
       const data = await res.json();

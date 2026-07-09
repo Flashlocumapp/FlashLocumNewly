@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase, getValidToken } from '@/lib/supabase';
+import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 
 interface RequesterProfile {
@@ -175,15 +175,13 @@ export default function RequesterAccountScreen() {
             console.log('[Requester Account] Delete Account confirmed, proceeding with deletion');
             setDeleting(true);
             try {
-              const token = await getValidToken();
-              if (!token) throw new Error('Not authenticated');
               console.log('[Requester Account] Calling delete-account edge function');
               try {
-                const res = await fetch(
+                const res = await fetchWithAuth(
                   'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/delete-account',
                   {
                     method: 'POST',
-                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json' },
                   },
                 );
                 console.log('[Requester Account] delete-account response status:', res.status);

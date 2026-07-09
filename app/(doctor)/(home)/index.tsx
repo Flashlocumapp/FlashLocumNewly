@@ -23,7 +23,7 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
 import { useDoctorDispatch } from '@/contexts/DoctorDispatchContext';
-import { supabase, getValidToken } from '@/lib/supabase';
+import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 
@@ -444,11 +444,9 @@ export default function DoctorHomeScreen() {
     if (!activeSession) return;
     setShowCancelReasons(false);
     try {
-      const token = await getValidToken();
-      if (!token) throw new Error('Not authenticated');
-      const res = await fetch(`${EDGE_BASE}/update-shift-status`, {
+      const res = await fetchWithAuth(`${EDGE_BASE}/update-shift-status`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: activeSession.id, status: 'cancelled', cancellation_reason: reason, cancelled_by: 'doctor' }),
       });
       if (!res.ok) {

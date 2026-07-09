@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase, getValidToken } from '@/lib/supabase';
+import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 
@@ -78,10 +78,7 @@ export default function DoctorPayout() {
   useEffect(() => {
     const loadBanks = async () => {
       try {
-        const token = await getValidToken();
-        const response = await fetch(MONNIFY_BANKS_URL, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await fetchWithAuth(MONNIFY_BANKS_URL, {});
         if (!response.ok) return;
         const json = await response.json();
         if (Array.isArray(json) && json.length > 0) {
@@ -103,13 +100,9 @@ export default function DoctorPayout() {
     setAccountNameError('');
     setAccountName('');
     try {
-      const token = await getValidToken();
-      const response = await fetch(MONNIFY_VERIFY_URL, {
+      const response = await fetchWithAuth(MONNIFY_VERIFY_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accountNumber: accNum, bankCode: bank.code }),
       });
       const result = await response.json();
@@ -209,17 +202,11 @@ export default function DoctorPayout() {
 
       // Step 2: Create Monnify subaccount — BLOCKING, must succeed
       setLoadingLabel('Setting up payout account...');
-      const token = await getValidToken();
-      if (!token) throw new Error('Authentication error. Please sign in again.');
-
-      const subaccountResponse = await fetch(
+      const subaccountResponse = await fetchWithAuth(
         'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/create-subaccount',
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             doctor_id: userId,
             bank_code: selectedBank!.code,
@@ -242,14 +229,11 @@ export default function DoctorPayout() {
       // Step 2b: Provision Monnify reserved account for this doctor
       setLoadingLabel('Setting up payment account...');
       try {
-        const provisionResponse = await fetch(
+        const provisionResponse = await fetchWithAuth(
           'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/provision-reserved-account',
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
           }
         );

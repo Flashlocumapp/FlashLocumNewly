@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
-import { supabase, getValidToken } from '@/lib/supabase';
+import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { useTabData } from '@/hooks/useTabData';
@@ -251,10 +251,9 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
     if (stars === 0) { setError('Please select a star rating.'); return; }
     setSubmitting(true); setError('');
     try {
-      const token = await getValidToken();
-      const res = await fetch(`${EDGE_BASE}/submit-review`, {
+      const res = await fetchWithAuth(`${EDGE_BASE}/submit-review`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: session.id, stars, comment: comment.trim() || undefined, reviewer_role: 'requester' }),
       });
       const data = await res.json();
@@ -420,13 +419,9 @@ export default function RequesterCoverageScreen() {
   const { data: historySessions, loading, refreshing } = useTabData<CoverageSession[]>({
     cacheKey,
     fetcher: async () => {
-      const token = await getValidToken();
-      if (!token) {
-        return [];
-      }
-      const res = await fetch(
+      const res = await fetchWithAuth(
         `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=requester&status=completed,cancelled,requester_paid`,
-        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+        { headers: { 'Content-Type': 'application/json' } },
       );
       if (!res.ok) {
         await res.text();

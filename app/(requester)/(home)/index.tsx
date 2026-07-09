@@ -33,7 +33,7 @@ import * as Location from 'expo-location';
 import * as Clipboard from 'expo-clipboard';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase, getValidToken } from '@/lib/supabase';
+import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { useTabBarVisibility, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -925,14 +925,9 @@ function RequesterPaymentCard({
     if (refreshing) return;
     setRefreshing(true);
     try {
-      const token = await getValidToken();
-      if (!token) throw new Error('Not authenticated');
-      const res = await fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/refresh-payment', {
+      const res = await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/refresh-payment', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: session.id }),
       });
       if (!res.ok) {
@@ -1841,11 +1836,7 @@ export default function RequesterHomeScreen() {
   // ─── Fetch active session helper ──────────────────────────────────────────────
   const fetchActiveSession = useCallback(async () => {
     try {
-      const token = await getValidToken();
-      if (!token) return;
-      const res = await fetch(`${EDGE_BASE}/get-active-session?role=requester`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=requester`, {});
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
         return;
@@ -2466,9 +2457,6 @@ export default function RequesterHomeScreen() {
     if (!selectedPlace) return;
     setSubmitting(true);
     try {
-      const token = await getValidToken();
-      if (!token) throw new Error('Not authenticated');
-
       // Construct ISO datetime strings for start_date and end_date
       const shiftDateStr = shiftDate.toISOString().split('T')[0]; // YYYY-MM-DD
 
@@ -2484,12 +2472,9 @@ export default function RequesterHomeScreen() {
       const startDateISO = startDateObj.toISOString();
       const endDateISO = endDateObj.toISOString();
 
-      const res = await fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/submit-request', {
+      const res = await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/submit-request', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           hospital_name: selectedPlace.name,
           hospital_address: selectedPlace.address,
@@ -2542,14 +2527,11 @@ export default function RequesterHomeScreen() {
 
   const handleEditRequest = async () => {
     if (activeRequestId) {
-      const token = await getValidToken();
-      if (token) {
-        fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ request_id: activeRequestId }),
-        }).catch(() => {});
-      }
+      fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: activeRequestId }),
+      }).catch(() => {});
     }
     // Clear match timer and realtime channel
     if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
@@ -2574,17 +2556,14 @@ export default function RequesterHomeScreen() {
     setShowCancelModal(true);
     // Immediately withdraw in background
     if (activeRequestId) {
-      const token = await getValidToken();
-      if (token) {
-        try {
-          await fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ request_id: activeRequestId }),
-          });
-          setCancelWithdrawn(true);
-        } catch (e) {
-        }
+      try {
+        await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ request_id: activeRequestId }),
+        });
+        setCancelWithdrawn(true);
+      } catch (e) {
       }
     }
   };
@@ -2592,16 +2571,13 @@ export default function RequesterHomeScreen() {
   const handleWaitForDoctor = async () => {
     setShowCancelModal(false);
     if (activeRequestId && cancelWithdrawn) {
-      const token = await getValidToken();
-      if (token) {
-        try {
-          await fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/rebroadcast-request', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ request_id: activeRequestId }),
-          });
-        } catch (e) {
-        }
+      try {
+        await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/rebroadcast-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ request_id: activeRequestId }),
+        });
+      } catch (e) {
       }
     }
     setCancelWithdrawn(false);
@@ -2645,11 +2621,9 @@ export default function RequesterHomeScreen() {
 
   // ─── Session action handlers ──────────────────────────────────────────────────
   const callSessionEdge = useCallback(async (fn: string, sessionId: string) => {
-    const token = await getValidToken();
-    if (!token) throw new Error('Not authenticated');
-    const res = await fetch(`${EDGE_BASE}/${fn}`, {
+    const res = await fetchWithAuth(`${EDGE_BASE}/${fn}`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId }),
     });
     if (!res.ok) {
@@ -2778,11 +2752,9 @@ export default function RequesterHomeScreen() {
     // Clear immediately so the search card appears right away
     setActiveSession(null);
     try {
-      const token = await getValidToken();
-      if (!token) throw new Error('Not authenticated');
-      const res = await fetch(`${EDGE_BASE}/update-shift-status`, {
+      const res = await fetchWithAuth(`${EDGE_BASE}/update-shift-status`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, status: 'cancelled', cancellation_reason: reason }),
       });
       if (!res.ok) {
@@ -3706,10 +3678,9 @@ export default function RequesterHomeScreen() {
           setSubmittingRating(true);
           setRatingError('');
           try {
-            const token = await getValidToken();
-            const res = await fetch(`${EDGE_BASE}/submit-review`, {
+            const res = await fetchWithAuth(`${EDGE_BASE}/submit-review`, {
               method: 'POST',
-              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ session_id: confirmedSession.id, stars: ratingStars, comment: ratingComment || undefined, reviewer_role: 'requester' }),
             });
             if (!res.ok) {

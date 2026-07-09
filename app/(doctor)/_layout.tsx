@@ -22,7 +22,7 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase, getValidToken } from '@/lib/supabase';
+import { supabase, getValidToken, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
 import { DoctorDispatchContext, CoverageSession } from '@/contexts/DoctorDispatchContext';
@@ -286,17 +286,16 @@ export default function DoctorLayout() {
   const pendingGoOnlineCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const callEdge = useCallback(async (fn: string, body?: object) => {
-    const token = await getValidToken();
-    if (!token) return null;
-    const res = await fetch(`${EDGE_BASE}/${fn}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    return res;
+    try {
+      const res = await fetchWithAuth(`${EDGE_BASE}/${fn}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return res;
+    } catch {
+      return null;
+    }
   }, []);
 
   const forceSync = useCallback(async () => {
@@ -367,12 +366,8 @@ export default function DoctorLayout() {
 
   // Fetch active session from edge function
   const fetchActiveSession = useCallback(async () => {
-    const token = await getValidToken();
-    if (!token) return;
     try {
-      const res = await fetch(`${EDGE_BASE}/get-active-session?role=doctor`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=doctor`, {});
       if (!res.ok) {
         return;
       }
@@ -707,15 +702,11 @@ export default function DoctorLayout() {
     const sub = AppState.addEventListener('change', async (state) => {
       if ((state === 'background' || state === 'inactive') && isOnlineRef.current) {
         // Fire-and-forget: mark doctor offline in DB immediately
-        getValidToken().then((token) => {
-          if (token) {
-            fetch(`${EDGE_BASE}/go-offline`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({}),
-            }).catch(() => {});
-          }
-        });
+        fetchWithAuth(`${EDGE_BASE}/go-offline`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        }).catch(() => {});
         // Also update local state so the toggle reflects offline when app resumes
         setIsOnline(false);
       }
@@ -743,14 +734,9 @@ export default function DoctorLayout() {
     if (!req || !user) return;
     setAccepting(true);
     try {
-      const token = await getValidToken();
-      if (!token) throw new Error('Not authenticated');
-      const res = await fetch(`${EDGE_BASE}/accept-request`, {
+      const res = await fetchWithAuth(`${EDGE_BASE}/accept-request`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ request_id: req.id }),
       });
       if (res.status === 409) {
@@ -826,10 +812,9 @@ export default function DoctorLayout() {
     setSubmittingDoctorRating(true);
     setDoctorRatingError('');
     try {
-      const token = await getValidToken();
-      const res = await fetch(`${EDGE_BASE}/submit-review`, {
+      const res = await fetchWithAuth(`${EDGE_BASE}/submit-review`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: doctorRatingSessionId,
           stars: doctorRatingStars,
