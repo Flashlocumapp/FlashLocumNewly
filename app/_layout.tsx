@@ -28,8 +28,10 @@ function NavigationGuard() {
   const router = useRouter();
   const segments = useSegments();
   const [lastPathway, setLastPathway] = useState<'doctor' | 'requester' | null | undefined>(undefined);
+  const [retryCount, setRetryCount] = useState(0);
   const hasRouted = useRef(false);
   const skipIntroRef = useRef(false);
+  const routedWithNoSession = useRef(false);
 
   // Load last pathway from AsyncStorage once on mount
   useEffect(() => {
@@ -64,6 +66,7 @@ function NavigationGuard() {
         router.replace('/(auth)/role-select' as any);
       } else {
         // First launch / fresh sign-in — play the animation
+        routedWithNoSession.current = true;
         router.replace('/(auth)/intro' as any);
       }
       return;
@@ -139,7 +142,18 @@ function NavigationGuard() {
     SecureStore.setItemAsync(LAST_PATHWAY_KEY, pathway).catch(() => {});
     const encodedDest = encodeURIComponent(dest);
     router.replace(`/(auth)/intro?dest=${encodedDest}` as any);
-  }, [isReady, lastPathway, session, profile, profileLoading, segments]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isReady, lastPathway, session, profile, profileLoading, segments, retryCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Session-arrival watcher — if we routed with no session and session later arrives, re-run routing
+  useEffect(() => {
+    if (!routedWithNoSession.current) return;
+    if (!session || !profile || profileLoading) return;
+    if (lastPathway === undefined) return;
+    console.log('[NavigationGuard] Session arrived after no-session route — retrying routing');
+    routedWithNoSession.current = false;
+    hasRouted.current = false;
+    setRetryCount(c => c + 1);
+  }, [session, profile, profileLoading, lastPathway]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sign-out watcher — only reset after session AND profile are both gone
   useEffect(() => {

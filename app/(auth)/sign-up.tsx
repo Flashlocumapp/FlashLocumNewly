@@ -14,6 +14,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 
 type Mode = 'signup' | 'signin';
@@ -64,6 +65,7 @@ function EyeClosed() {
 export default function SignUpScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { signOut } = useAuth();
   const params = useLocalSearchParams<{ role?: string; mode?: string }>();
 
   const initialMode: Mode = params.mode === 'signin' ? 'signin' : 'signup';
@@ -157,16 +159,20 @@ export default function SignUpScreen() {
         // Portal-vs-role enforcement
         // role = the portal the user entered from ('doctor' = Cover & Earn, 'requester' = Request Coverage)
         if (role === 'doctor' && !doctorComplete && requesterComplete) {
-          // They're a requester who tapped the wrong card — silently route to requester portal
-          await SecureStore.setItemAsync('flashlocum_last_pathway', 'requester');
-          router.replace('/(requester)/(home)' as any);
+          // Wrong portal — sign them out and show an error
+          console.log('[SignUp] Wrong portal: requester account used on doctor portal, signing out');
+          await signOut();
+          setError('This account is registered under Request Coverage. Kindly log in through the right channel.');
+          setLoading(false);
           return;
         }
 
         if (role === 'requester' && !requesterComplete && doctorComplete) {
-          // They're a doctor who tapped the wrong card — silently route to doctor portal
-          await SecureStore.setItemAsync('flashlocum_last_pathway', 'doctor');
-          router.replace('/(doctor)/(home)' as any);
+          // Wrong portal — sign them out and show an error
+          console.log('[SignUp] Wrong portal: doctor account used on requester portal, signing out');
+          await signOut();
+          setError('This account is registered under Cover & Earn. Kindly log in through the right channel.');
+          setLoading(false);
           return;
         }
 
