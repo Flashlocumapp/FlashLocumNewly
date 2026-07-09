@@ -246,6 +246,7 @@ export default function DoctorLayout() {
   const [doctorRatingComment, setDoctorRatingComment] = useState('');
   const [submittingDoctorRating, setSubmittingDoctorRating] = useState(false);
   const [doctorRatingError, setDoctorRatingError] = useState('');
+  const [doctorRatingAmount, setDoctorRatingAmount] = useState<number>(0);
 
   // Live doctor scores — baseline 5.0 / 100%
   const [doctorRatingScore, setDoctorRatingScore] = useState<number>(5.0);
@@ -323,7 +324,7 @@ export default function DoctorLayout() {
   }, [user, callEdge]);
 
   // ── Central guard: show rating overlay only if session not already rated/dismissed ──
-  const maybeShowDoctorRating = useCallback(async (sessionId: string, hospitalName: string) => {
+  const maybeShowDoctorRating = useCallback(async (sessionId: string, hospitalName: string, amount?: number) => {
     if (!sessionId) return;
     // Synchronous check — blocks instantly before any async work
     if (_doctorRatedSessions.has(sessionId) || _doctorRatingInFlight.has(sessionId)) {
@@ -361,6 +362,7 @@ export default function DoctorLayout() {
     setDoctorRatingStars(0);
     setDoctorRatingComment('');
     setDoctorRatingError('');
+    setDoctorRatingAmount(amount ?? 0);
     setShowDoctorRating(true);
   }, []);
 
@@ -380,7 +382,7 @@ export default function DoctorLayout() {
       if (session && (session.status === 'requester_paid' || session.status === 'settled')) {
         // Synchronous check before entering async maybeShowDoctorRating
         if (!_doctorRatedSessions.has(session.id) && !_doctorRatingInFlight.has(session.id)) {
-          maybeShowDoctorRating(session.id, session.hospital_name ?? '');
+          maybeShowDoctorRating(session.id, session.hospital_name ?? '', session.price ?? 0);
         }
       }
     } catch (e: any) {
@@ -621,14 +623,18 @@ export default function DoctorLayout() {
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         const sessionId = payload?.payload?.session_id ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
+        const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
+        console.log('[Doctor] PAYMENT_CONFIRMED broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName);
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         const sessionId = payload?.payload?.session_id ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
+        const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
+        console.log('[Doctor] payment_confirmed broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName);
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
         setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
@@ -673,14 +679,18 @@ export default function DoctorLayout() {
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         const sessionId = payload?.payload?.session_id ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
+        const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
+        console.log('[Doctor] user channel PAYMENT_CONFIRMED received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName);
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         const sessionId = payload?.payload?.session_id ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
+        const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
+        console.log('[Doctor] user channel payment_confirmed received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName);
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
       })
       .subscribe((status) => {
         // subscription status — no logging needed
@@ -787,21 +797,23 @@ export default function DoctorLayout() {
     setRequestQueue((prev) => prev.slice(1));
   }, [requestQueue, user, callEdge]);
 
-  // ── Doctor Rating — dismiss and navigate to summary ──
+  // ── Doctor Rating — dismiss ──
   const handleDoctorRatingDone = useCallback(() => {
     const sid = doctorRatingSessionId;
     if (sid) {
       _doctorRatingInFlight.delete(sid);
       markDoctorSessionRated(sid); // persist — never show again for this session
     }
+    console.log('[Doctor] Rating card dismissed', { sessionId: sid });
     setShowDoctorRating(false);
     setDoctorRatingSessionId(null);
-    if (sid) {
-      router.push(`/(doctor)/(home)/payment-summary?session_id=${sid}`);
-    }
+    setDoctorRatingStars(0);
+    setDoctorRatingComment('');
+    setDoctorRatingError('');
+    setDoctorRatingAmount(0);
     // Clear activeSession so home screen shows "No coverage yet" after payment flow
     setActiveSession(null);
-  }, [doctorRatingSessionId, router]);
+  }, [doctorRatingSessionId]);
 
   // ── Doctor Rating — submit review ──
   const handleSubmitDoctorRating = useCallback(async () => {
@@ -809,6 +821,7 @@ export default function DoctorLayout() {
       setDoctorRatingError('Please select a star rating.');
       return;
     }
+    console.log('[Doctor] Submitting rating', { sessionId: doctorRatingSessionId, stars: doctorRatingStars });
     setSubmittingDoctorRating(true);
     setDoctorRatingError('');
     try {
@@ -824,9 +837,11 @@ export default function DoctorLayout() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to submit review');
+      console.log('[Doctor] Rating submitted successfully', { sessionId: doctorRatingSessionId });
       if (doctorRatingSessionId) markDoctorSessionRated(doctorRatingSessionId);
       handleDoctorRatingDone();
     } catch (e: any) {
+      console.log('[Doctor] Rating submission failed', { error: e.message });
       setDoctorRatingError(e.message);
     } finally {
       setSubmittingDoctorRating(false);
@@ -962,30 +977,43 @@ export default function DoctorLayout() {
             <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
               <TouchableWithoutFeedback onPress={() => {}}>
                 <View style={{ backgroundColor: '#2C2C2E', borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 }}>
-                  <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 12 }}>
-                    SHIFT COMPLETED
-                  </Text>
+                  {/* Payment confirmation banner */}
+                  <View style={{ backgroundColor: '#1A3A2A', borderRadius: 12, padding: 14, marginBottom: 20 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759', marginRight: 8 }} />
+                      <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#34C759', letterSpacing: 0.5 }}>PAYMENT RECEIVED</Text>
+                    </View>
+                    {doctorRatingAmount > 0 && (
+                      <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 2 }}>
+                        {'₦'}{doctorRatingAmount.toLocaleString()}
+                      </Text>
+                    )}
+                    <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>
+                      To be remitted to your account by 10PM today.
+                    </Text>
+                  </View>
+
+                  {/* Rating prompt */}
                   <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 4 }}>
-                    {`How was your experience with ${doctorRatingHospitalName || 'this hospital'}?`}
+                    {`How was your shift with ${doctorRatingHospitalName || 'this hospital'}?`}
                   </Text>
                   <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 20 }}>
                     Share your feedback and help us improve.
                   </Text>
+
                   {/* Stars */}
                   <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
                     {[1, 2, 3, 4, 5].map((n) => (
                       <TouchableOpacity
                         key={n}
-                        onPress={() => {
-                          setDoctorRatingStars(n);
-                          setDoctorRatingError('');
-                        }}
+                        onPress={() => { console.log('[Doctor] Rating star pressed', { star: n }); setDoctorRatingStars(n); setDoctorRatingError(''); }}
                         activeOpacity={0.7}
                       >
                         <Text style={{ fontSize: 36, color: n <= doctorRatingStars ? '#F4A261' : '#48484A' }}>★</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
+
                   {/* Comment */}
                   <TextInput
                     value={doctorRatingComment}
@@ -1004,9 +1032,11 @@ export default function DoctorLayout() {
                       marginBottom: 12,
                     }}
                   />
+
                   {!!doctorRatingError && (
                     <Text style={{ fontSize: 13, color: '#EF4444', marginBottom: 8 }}>{doctorRatingError}</Text>
                   )}
+
                   {/* Buttons */}
                   <View style={{ flexDirection: 'row', gap: 10 }}>
                     <TouchableOpacity
@@ -1014,7 +1044,7 @@ export default function DoctorLayout() {
                       activeOpacity={0.8}
                       style={{ flex: 1, backgroundColor: '#3A3A3C', borderRadius: 999, paddingVertical: 13, alignItems: 'center' }}
                     >
-                      <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>Skip</Text>
+                      <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>Dismiss</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={handleSubmitDoctorRating}

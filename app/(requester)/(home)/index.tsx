@@ -1230,311 +1230,133 @@ function RequesterPaymentCard({
   );
 }
 
-// ─── PaymentSuccessModal ──────────────────────────────────────────────────────
+// ─── RequesterRatingCard ──────────────────────────────────────────────────────
 
-interface PaymentSuccessModalProps {
+interface RequesterRatingCardProps {
   visible: boolean;
   session: CoverageSession | null;
-  showRatingOverlay: boolean;
+  amount: number;
   ratingStars: number;
   ratingComment: string;
-  submittingRating: boolean;
   ratingError: string;
+  submittingRating: boolean;
   onDismiss: () => void;
-  onRatingOverlayOpen: () => void;
-  onRatingOverlayClose: () => void;
   onStarPress: (star: number) => void;
   onCommentChange: (text: string) => void;
   onSubmitRating: () => void;
-  onSkipRating: () => void;
 }
 
-function PaymentSuccessModal({
+function RequesterRatingCard({
   visible,
   session,
-  showRatingOverlay,
+  amount,
   ratingStars,
   ratingComment,
-  submittingRating,
   ratingError,
+  submittingRating,
   onDismiss,
-  onRatingOverlayOpen,
-  onRatingOverlayClose,
   onStarPress,
   onCommentChange,
   onSubmitRating,
-  onSkipRating,
-}: PaymentSuccessModalProps) {
-  const insets = useSafeAreaInsets();
+}: RequesterRatingCardProps) {
+  if (!visible || !session) return null;
 
-  // Auto-show rating overlay 800ms after modal becomes visible
-  useEffect(() => {
-    if (!visible) return;
-    const timer = setTimeout(() => {
-      onRatingOverlayOpen();
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [visible, onRatingOverlayOpen]);
-
-  if (!session) return null;
-
-  const amountDisplay = `₦${Number(session.price).toLocaleString()}`;
-  const reference = session.monnify_account_reference ?? '—';
-  const endedDate = session.ended_at ? new Date(session.ended_at) : new Date();
-  const dateDisplay = endedDate.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-  const timeDisplay = endedDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-  const shiftStartDisplay = new Date(session.shift_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-  const shiftEndDisplay = new Date(session.shift_end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-  const shiftDateDisplay = new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
-  const doctorFirstName = (session.doctor_name ?? '').replace(/^Dr\.?\s*/i, '');
+  const doctorName = session.doctor_name ?? 'the doctor';
+  const displayAmount = amount > 0 ? amount : (session.price ?? 0);
 
   return (
     <Modal
       visible={visible}
-      animationType="slide"
-      presentationStyle="fullScreen"
+      transparent
+      animationType="fade"
       onRequestClose={onDismiss}
     >
-      <View style={{ flex: 1, backgroundColor: '#0A0A0A' }}>
-        {/* Close button */}
-        <TouchableOpacity
-          onPress={onDismiss}
-          style={{
-            position: 'absolute',
-            top: insets.top + 16,
-            right: 20,
-            zIndex: 10,
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            backgroundColor: '#1C1C1E',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <X size={18} color="#FFFFFF" />
-        </TouchableOpacity>
+      <TouchableWithoutFeedback onPress={onDismiss}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <TouchableWithoutFeedback onPress={() => {}}>
+            <View style={{ backgroundColor: '#2C2C2E', borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 }}>
+              {/* Payment confirmation banner */}
+              <View style={{ backgroundColor: '#1A3A2A', borderRadius: 12, padding: 14, marginBottom: 20 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759', marginRight: 8 }} />
+                  <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#34C759', letterSpacing: 0.5 }}>PAYMENT CONFIRMED</Text>
+                </View>
+                <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 2 }}>
+                  {'₦'}{Number(displayAmount).toLocaleString()}
+                </Text>
+                <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>
+                  Payment has been received successfully.
+                </Text>
+              </View>
 
-        <ScrollView
-          contentContainerStyle={{
-            paddingTop: insets.top + 64,
-            paddingHorizontal: 24,
-            paddingBottom: insets.bottom + 40,
-            alignItems: 'center',
-          }}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Green checkmark circle */}
-          <View style={{
-            width: 80,
-            height: 80,
-            borderRadius: 40,
-            backgroundColor: '#1A3A2A',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 24,
-          }}>
-            <Text style={{ fontSize: 36, color: '#2DC653' }}>✓</Text>
-          </View>
+              {/* Rating prompt */}
+              <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 4 }}>
+                {`How was your shift with ${doctorName}?`}
+              </Text>
+              <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 20 }}>
+                Share your feedback and help us improve.
+              </Text>
 
-          {/* Title */}
-          <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
-            Payment Successful
-          </Text>
+              {/* Stars */}
+              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <TouchableOpacity
+                    key={n}
+                    onPress={() => { console.log('[Requester] Rating star pressed', { star: n }); onStarPress(n); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 36, color: n <= ratingStars ? '#F4A261' : '#48484A' }}>★</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-          {/* Amount */}
-          <Text style={{ fontSize: 44, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 24, textAlign: 'center', letterSpacing: -1 }}>
-            {amountDisplay}
-          </Text>
+              {/* Comment */}
+              <TextInput
+                value={ratingComment}
+                onChangeText={onCommentChange}
+                placeholder="Write a comment (optional)..."
+                placeholderTextColor="#636366"
+                multiline
+                style={{
+                  backgroundColor: '#1C1C1E',
+                  borderRadius: 12,
+                  padding: 12,
+                  fontSize: 14,
+                  color: '#FFFFFF',
+                  minHeight: 80,
+                  textAlignVertical: 'top',
+                  marginBottom: 12,
+                }}
+              />
 
-          {/* Reference row */}
-          <View style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            width: '100%',
-            marginBottom: 12,
-          }}>
-            <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>Reference</Text>
-            <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold', maxWidth: '65%', textAlign: 'right' }} numberOfLines={1}>
-              {reference}
-            </Text>
-          </View>
+              {!!ratingError && (
+                <Text style={{ fontSize: 13, color: '#EF4444', marginBottom: 8 }}>{ratingError}</Text>
+              )}
 
-          {/* Date & Time row */}
-          <View style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            width: '100%',
-            marginBottom: 32,
-          }}>
-            <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>Date & Time</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>{dateDisplay}</Text>
-              <Text style={{ fontSize: 13, color: '#8E8E93' }}>·</Text>
-              <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>{timeDisplay}</Text>
-            </View>
-          </View>
-
-          {/* Shift Summary Card */}
-          <View style={{
-            width: '100%',
-            backgroundColor: '#1C1C1E',
-            borderRadius: 20,
-            padding: 20,
-            marginBottom: 32,
-          }}>
-            <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 12 }}>
-              SHIFT SUMMARY
-            </Text>
-            <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 4 }}>
-              {session.doctor_name}
-            </Text>
-            <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 12 }}>
-              {session.coverage_type}
-            </Text>
-            <View style={{ height: 1, backgroundColor: '#2C2C2E', marginBottom: 12 }} />
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>{shiftDateDisplay}</Text>
-              <Text style={{ fontSize: 13, color: '#3A3A3C' }}>·</Text>
-              <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>{shiftStartDisplay}</Text>
-              <Text style={{ fontSize: 13, color: '#8E8E93' }}>–</Text>
-              <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>{shiftEndDisplay}</Text>
-            </View>
-          </View>
-
-          {/* Rate Now button (shown when overlay was skipped) */}
-          {!showRatingOverlay && (
-            <TouchableOpacity
-              onPress={() => {
-                onRatingOverlayOpen();
-              }}
-              style={{
-                width: '100%',
-                backgroundColor: '#2DC653',
-                borderRadius: 999,
-                paddingVertical: 16,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>Rate Now</Text>
-            </TouchableOpacity>
-          )}
-        </ScrollView>
-
-        {/* Rating Overlay */}
-        <Modal
-          visible={showRatingOverlay}
-          transparent
-          animationType="fade"
-          onRequestClose={onRatingOverlayClose}
-        >
-          <TouchableWithoutFeedback onPress={onRatingOverlayClose}>
-            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}>
-              <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                  <View style={{
-                    backgroundColor: '#FFFFFF',
-                    borderRadius: 24,
-                    padding: 28,
-                    width: '100%',
-                  }}>
-                    {/* Header */}
-                    <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#1C1C1E', marginBottom: 6, textAlign: 'center' }}>
-                      {'How was your experience with Dr. '}
-                      {doctorFirstName}
-                      {'?'}
-                    </Text>
-                    <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', textAlign: 'center', marginBottom: 24 }}>
-                      Share your feedback and help us improve.
-                    </Text>
-
-                    {/* Stars */}
-                    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 20 }}>
-                      {[1, 2, 3, 4, 5].map((star) => {
-                        const filled = star <= ratingStars;
-                        return (
-                          <TouchableOpacity
-                            key={star}
-                            onPress={() => {
-                              onStarPress(star);
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={{ fontSize: 36, color: filled ? '#F4A261' : '#D4D4D8' }}>
-                              {filled ? '★' : '☆'}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-
-                    {/* Error */}
-                    {ratingError !== '' && (
-                      <Text style={{ fontSize: 12, color: '#FF3B30', textAlign: 'center', marginBottom: 8, fontFamily: 'Inter_400Regular' }}>
-                        {ratingError}
-                      </Text>
-                    )}
-
-                    {/* Comment */}
-                    <TextInput
-                      value={ratingComment}
-                      onChangeText={onCommentChange}
-                      placeholder="Write a comment (optional)..."
-                      placeholderTextColor="#A1A1AA"
-                      multiline
-                      style={{
-                        backgroundColor: '#F7F7F5',
-                        borderRadius: 12,
-                        padding: 14,
-                        fontSize: 14,
-                        fontFamily: 'Inter_400Regular',
-                        color: '#1C1C1E',
-                        minHeight: 80,
-                        textAlignVertical: 'top',
-                        marginBottom: 20,
-                      }}
-                    />
-
-                    {/* Submit button */}
-                    <TouchableOpacity
-                      onPress={() => {
-                        onSubmitRating();
-                      }}
-                      disabled={submittingRating}
-                      style={{
-                        backgroundColor: '#1C1C1E',
-                        borderRadius: 999,
-                        paddingVertical: 16,
-                        alignItems: 'center',
-                        marginBottom: 12,
-                        opacity: submittingRating ? 0.6 : 1,
-                      }}
-                    >
-                      {submittingRating ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>Submit Review</Text>
-                      )}
-                    </TouchableOpacity>
-
-                    {/* Skip */}
-                    <TouchableOpacity
-                      onPress={() => {
-                        onSkipRating();
-                      }}
-                      style={{ alignItems: 'center', paddingVertical: 8 }}
-                    >
-                      <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>Skip</Text>
-                    </TouchableOpacity>
-                  </View>
-                </KeyboardAvoidingView>
-              </TouchableWithoutFeedback>
+              {/* Buttons */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  onPress={onDismiss}
+                  activeOpacity={0.8}
+                  style={{ flex: 1, backgroundColor: '#3A3A3C', borderRadius: 999, paddingVertical: 13, alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>Dismiss</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={onSubmitRating}
+                  disabled={submittingRating}
+                  activeOpacity={0.85}
+                  style={{ flex: 2, backgroundColor: submittingRating ? '#636366' : '#FFFFFF', borderRadius: 999, paddingVertical: 13, alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>
+                    {submittingRating ? 'Submitting...' : 'Submit Rating'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </TouchableWithoutFeedback>
-        </Modal>
-      </View>
+        </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 }
@@ -1800,7 +1622,6 @@ export default function RequesterHomeScreen() {
   // Post-payment success state
   const [confirmedSession, setConfirmedSession] = useState<CoverageSession | null>(null);
   const [showPaymentSuccess, setShowPaymentSuccess] = useState(false);
-  const [showRatingOverlay, setShowRatingOverlay] = useState(false);
   const [ratingStars, setRatingStars] = useState(0);
   const [ratingComment, setRatingComment] = useState('');
   const [submittingRating, setSubmittingRating] = useState(false);
@@ -3499,87 +3320,17 @@ export default function RequesterHomeScreen() {
             />
           )}
 
-          {/* Settled — payment received, awaiting doctor bank remittance */}
-          {activeSession !== null && activeSession.status === 'settled' && (
-            <View style={{
-              position: 'absolute', bottom: 0, left: 0, right: 0,
-              backgroundColor: '#1C1C1E',
-              borderTopLeftRadius: 24, borderTopRightRadius: 24,
-              paddingTop: 16, paddingHorizontal: 16,
-              paddingBottom: whiteCardPaddingBottom,
-              shadowColor: '#000', shadowOffset: { width: 0, height: -3 },
-              shadowOpacity: 0.08, shadowRadius: 10, elevation: 10,
-            }}>
-              <View style={{ alignItems: 'center', marginBottom: 16 }}>
-                <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#22c55e', marginRight: 8 }} />
-                <Text style={{ fontSize: 13, fontWeight: '600', color: '#22c55e', fontFamily: 'Inter_600SemiBold' }}>Payment Confirmed</Text>
-              </View>
-              <Text style={{ fontSize: 44, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 4 }}>
-                {'₦'}{(settledAmount ?? activeSession.price ?? 0).toLocaleString()}
-              </Text>
-              <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 16 }}>
-                {'Payment received. Funds are being remitted to '}
-                {activeSession.doctor_name ?? 'the doctor'}
-                {'.'}
-              </Text>
-              <View style={{ backgroundColor: '#1A3A2A', borderRadius: 10, padding: 14 }}>
-                <Text style={{ fontSize: 13, color: '#34C759', fontWeight: '500', fontFamily: 'Inter_600SemiBold' }}>{'✓ Settled'}</Text>
-                <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 4, fontFamily: 'Inter_400Regular' }}>
-                  The shift has been completed and payment confirmed.
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* Payment Complete — funds remitted to doctor */}
-          {activeSession !== null && activeSession.status === 'payment_complete' && (
-            <View style={{
-              position: 'absolute', bottom: 0, left: 0, right: 0,
-              backgroundColor: '#1C1C1E',
-              borderTopLeftRadius: 24, borderTopRightRadius: 24,
-              paddingTop: 16, paddingHorizontal: 16,
-              paddingBottom: whiteCardPaddingBottom,
-              shadowColor: '#000', shadowOffset: { width: 0, height: -3 },
-              shadowOpacity: 0.08, shadowRadius: 10, elevation: 10,
-            }}>
-              <View style={{ alignItems: 'center', marginBottom: 16 }}>
-                <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#22c55e', marginRight: 8 }} />
-                <Text style={{ fontSize: 13, fontWeight: '600', color: '#22c55e', fontFamily: 'Inter_600SemiBold' }}>Payment Complete</Text>
-              </View>
-              <Text style={{ fontSize: 44, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 4 }}>
-                {'₦'}{(settledAmount ?? activeSession.price ?? 0).toLocaleString()}
-              </Text>
-              <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 16 }}>
-                {'All done! Funds have been remitted to '}
-                {activeSession.doctor_name ?? 'the doctor'}
-                {"'s account."}
-              </Text>
-              <View style={{ backgroundColor: '#1A3A2A', borderRadius: 10, padding: 14 }}>
-                <Text style={{ fontSize: 13, color: '#34C759', fontWeight: '500', fontFamily: 'Inter_600SemiBold' }}>{'✓ Payment Complete'}</Text>
-                <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 4, fontFamily: 'Inter_400Regular' }}>
-                  This coverage session is fully closed.
-                </Text>
-              </View>
-            </View>
-          )}
-
           {/* No active session OR unhandled status — show search card */}
           {(activeSession === null ||
             activeSession.status === 'completed' ||
             activeSession.status === 'cancelled' ||
             activeSession.status === 'requester_paid' ||
+            activeSession.status === 'settled' ||
+            activeSession.status === 'payment_complete' ||
             (activeSession.status !== 'upcoming' &&
              activeSession.status !== 'paused' &&
              activeSession.status !== 'active' &&
-             activeSession.status !== 'payment_pending' &&
-             activeSession.status !== 'settled' &&
-             activeSession.status !== 'payment_complete')) && (
+             activeSession.status !== 'payment_pending')) && (
             <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
               {/* White search card */}
               <View style={{
@@ -3639,30 +3390,24 @@ export default function RequesterHomeScreen() {
         </>
       )}
 
-      {/* ── PAYMENT SUCCESS MODAL ── */}
-      <PaymentSuccessModal
+      {/* ── REQUESTER RATING CARD ── */}
+      <RequesterRatingCard
         visible={showPaymentSuccess}
         session={confirmedSession}
-        showRatingOverlay={showRatingOverlay}
+        amount={settledAmount ?? confirmedSession?.price ?? 0}
         ratingStars={ratingStars}
         ratingComment={ratingComment}
-        submittingRating={submittingRating}
         ratingError={ratingError}
+        submittingRating={submittingRating}
         onDismiss={() => {
+          console.log('[Requester] Rating card dismissed', { sessionId: confirmedSession?.id });
           if (confirmedSession?.id) markRequesterSessionPaid(confirmedSession.id);
           setShowPaymentSuccess(false);
           setConfirmedSession(null);
           setActiveSession(null);
-          setShowRatingOverlay(false);
           setRatingStars(0);
           setRatingComment('');
           setRatingError('');
-        }}
-        onRatingOverlayOpen={() => {
-          setShowRatingOverlay(true);
-        }}
-        onRatingOverlayClose={() => {
-          setShowRatingOverlay(false);
         }}
         onStarPress={(star) => {
           setRatingStars(star);
@@ -3675,6 +3420,7 @@ export default function RequesterHomeScreen() {
             return;
           }
           if (!confirmedSession) return;
+          console.log('[Requester] Submitting rating', { sessionId: confirmedSession.id, stars: ratingStars });
           setSubmittingRating(true);
           setRatingError('');
           try {
@@ -3687,27 +3433,20 @@ export default function RequesterHomeScreen() {
               const errBody = await res.json().catch(() => ({}));
               throw new Error((errBody as any).error || 'Failed to submit review');
             }
-            const data = await res.json();
+            console.log('[Requester] Rating submitted successfully', { sessionId: confirmedSession.id });
             if (confirmedSession?.id) markRequesterSessionPaid(confirmedSession.id);
-            setShowRatingOverlay(false);
-            setShowPaymentSuccess(false);   // close entire modal
-            setConfirmedSession(null);       // clear confirmed session
+            setShowPaymentSuccess(false);
+            setConfirmedSession(null);
             setActiveSession(null);
             setRatingStars(0);
             setRatingComment('');
             setRatingError('');
           } catch (e: any) {
+            console.log('[Requester] Rating submission failed', { error: e.message });
             setRatingError(e.message || 'Failed to submit review');
           } finally {
             setSubmittingRating(false);
           }
-        }}
-        onSkipRating={() => {
-          if (confirmedSession?.id) markRequesterSessionPaid(confirmedSession.id);
-          setShowRatingOverlay(false);
-          setShowPaymentSuccess(false);
-          setConfirmedSession(null);
-          setActiveSession(null);
         }}
       />
 
