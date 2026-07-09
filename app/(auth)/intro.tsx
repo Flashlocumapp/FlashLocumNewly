@@ -9,9 +9,6 @@ const HOLD_FULL = 2000;
 const FADE_OUT_DURATION = 250;
 const BG_TRANSITION_DURATION = 400;
 
-// Module-level flag: animation only plays once per app session
-let _introHasPlayed = false;
-
 export default function IntroScreen() {
   const router = useRouter();
   const { dest } = useLocalSearchParams<{ dest?: string }>();
@@ -37,15 +34,6 @@ export default function IntroScreen() {
     unmountedRef.current = false;
 
     const destination = dest ? decodeURIComponent(dest) : '/(auth)/role-select';
-
-    // If animation already played this session, skip straight to destination
-    if (_introHasPlayed) {
-      console.log('[IntroScreen] Animation already played this session, skipping to:', destination);
-      router.replace(destination as any);
-      return;
-    }
-
-    _introHasPlayed = true;
 
     const runPhrase = (index: number) => {
       if (unmountedRef.current) return;

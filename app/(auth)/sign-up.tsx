@@ -187,12 +187,12 @@ export default function SignUpScreen() {
         await SecureStore.setItemAsync('flashlocum_last_pathway', role);
         console.log('[SignUp] lastPathway written:', role);
 
-        // Route through intro with destination encoded
+        // Route directly to destination
         const dest = role === 'doctor'
           ? (doctorComplete ? '/(doctor)/(home)' : '/(onboarding)/doctor/basic-profile')
           : (requesterComplete ? '/(requester)/(home)' : '/(onboarding)/requester/basic-profile');
 
-        console.log('[SignUp] Routing through intro to dest:', dest);
+        console.log('[SignUp] Routing directly to dest:', dest);
         router.replace(dest as any);
       }
     }

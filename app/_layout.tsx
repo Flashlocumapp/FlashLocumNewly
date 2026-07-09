@@ -90,15 +90,19 @@ function NavigationGuard() {
 
     // 4. Doctor only complete
     if (doctorComplete && !requesterComplete) {
-      console.log('[NavigationGuard] Doctor only → /(doctor)/(home)');
-      router.replace('/(doctor)/(home)' as any);
+      const homeDest = '/(doctor)/(home)';
+      const encodedDest = encodeURIComponent(homeDest);
+      console.log('[NavigationGuard] Doctor only → intro → /(doctor)/(home)');
+      router.replace(`/(auth)/intro?dest=${encodedDest}` as any);
       return;
     }
 
     // 5. Requester only complete
     if (requesterComplete && !doctorComplete) {
-      console.log('[NavigationGuard] Requester only → /(requester)/(home)');
-      router.replace('/(requester)/(home)' as any);
+      const homeDest = '/(requester)/(home)';
+      const encodedDest = encodeURIComponent(homeDest);
+      console.log('[NavigationGuard] Requester only → intro → /(requester)/(home)');
+      router.replace(`/(auth)/intro?dest=${encodedDest}` as any);
       return;
     }
 
@@ -106,16 +110,17 @@ function NavigationGuard() {
     const dest = lastPathway === 'doctor' ? '/(doctor)/(home)' : '/(requester)/(home)';
     const pathway = lastPathway === 'doctor' ? 'doctor' : 'requester';
     SecureStore.setItemAsync(LAST_PATHWAY_KEY, pathway).catch(() => {});
-    console.log('[NavigationGuard] Both complete → last pathway:', dest);
-    router.replace(dest as any);
+    const encodedDest = encodeURIComponent(dest);
+    console.log('[NavigationGuard] Both complete → intro → last pathway:', dest);
+    router.replace(`/(auth)/intro?dest=${encodedDest}` as any);
   }, [isReady, lastPathway, session, profile, profileLoading, segments]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sign-out watcher — only reset after session AND profile are both gone
   useEffect(() => {
     if (!session && !profile && hasRouted.current) {
-      console.log('[NavigationGuard] Session + profile both gone — resetting and going to intro');
+      console.log('[NavigationGuard] Session + profile both gone — resetting and going to role-select');
       hasRouted.current = false;
-      router.replace('/(auth)/intro' as any);
+      router.replace('/(auth)/role-select' as any);
     }
   }, [session, profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
