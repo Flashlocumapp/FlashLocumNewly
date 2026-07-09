@@ -25,6 +25,7 @@ export default function RoleSelectScreen() {
   };
 
   const handlePrivacy = () => {
+    router.push('/(auth)/privacy');
   };
 
   const topPadding = insets.top + 72;

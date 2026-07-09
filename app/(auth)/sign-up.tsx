@@ -348,23 +348,13 @@ export default function SignUpScreen() {
           <View style={styles.legalContainer}>
             <Text style={styles.legalText}>
               {'By creating an account, you agree to our '}
-              <AnimatedPressable
-                onPress={() => {
-                  router.push('/(auth)/terms' as any);
-                }}
-                scaleValue={0.97}
-              >
-                <Text style={styles.legalLink}>Terms of Service</Text>
-              </AnimatedPressable>
+              <Text style={styles.legalLink} onPress={() => router.push('/(auth)/terms' as any)}>
+                Terms of Service
+              </Text>
               {' and '}
-              <AnimatedPressable
-                  onPress={() => {
-                    router.push('/(auth)/privacy' as any);
-                  }}
-                  scaleValue={0.97}
-                >
-                  <Text style={styles.legalLink}>Privacy Policy</Text>
-                </AnimatedPressable>
+              <Text style={styles.legalLink} onPress={() => router.push('/(auth)/privacy' as any)}>
+                Privacy Policy
+              </Text>
               {'.'}
             </Text>
           </View>
