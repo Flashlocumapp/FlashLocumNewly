@@ -7,7 +7,7 @@
     "icon": "./assets/images/APP ICON.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/APP ICON.png",
+      "image": "./assets/images/cb747b9b-1071-4164-92e8-77d3aeee418a.png",
       "resizeMode": "native",
       "backgroundColor": "#111315"
     },
@@ -26,7 +26,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/APP ICON.png",
+        "foregroundImage": "./assets/images/cb747b9b-1071-4164-92e8-77d3aeee418a.png",
         "backgroundColor": "#111315"
       },
       "package": "com.placeholder.app",
