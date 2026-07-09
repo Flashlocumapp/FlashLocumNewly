@@ -85,7 +85,11 @@ export default function DoctorPayout() {
         if (!response.ok) return;
         const json = await response.json();
         if (Array.isArray(json) && json.length > 0) {
-          setBanks(json);
+          const normalised = json.map((b: any) => ({
+            name: b.name || b.bankName || '',
+            code: b.code || b.bankCode || '',
+          })).filter(b => b.name && b.code);
+          if (normalised.length > 0) setBanks(normalised);
         }
       } catch {
         // keep fallback list
