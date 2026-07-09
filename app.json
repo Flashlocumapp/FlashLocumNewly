@@ -8,7 +8,7 @@
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/APP ICON.png",
-      "resizeMode": "contain",
+      "resizeMode": "native",
       "backgroundColor": "#111315"
     },
     "ios": {
