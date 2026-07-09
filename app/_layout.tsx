@@ -147,13 +147,14 @@ function NavigationGuard() {
   // Session-arrival watcher — if we routed with no session and session later arrives, re-run routing
   useEffect(() => {
     if (!routedWithNoSession.current) return;
+    if (segments[0] === '(auth)') return; // auth flow owns navigation — don't interfere
     if (!session || !profile || profileLoading) return;
     if (lastPathway === undefined) return;
     console.log('[NavigationGuard] Session arrived after no-session route — retrying routing');
     routedWithNoSession.current = false;
     hasRouted.current = false;
     setRetryCount(c => c + 1);
-  }, [session, profile, profileLoading, lastPathway]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session, profile, profileLoading, lastPathway, segments]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sign-out watcher — only reset after session AND profile are both gone
   useEffect(() => {

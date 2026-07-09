@@ -146,7 +146,7 @@ export default function SignUpScreen() {
       if (signInError) {
         setError(signInError.message || 'Sign in failed. Please try again.');
       } else {
-        // Sign-in success — fetch profile
+        // Fetch profile FIRST (while session is still active — needed for RLS)
         const { data: profileData } = await supabase
           .from('profiles')
           .select('role, doctor_onboarding_complete, requester_onboarding_complete')
@@ -156,10 +156,8 @@ export default function SignUpScreen() {
         const doctorComplete = profileData?.doctor_onboarding_complete === true;
         const requesterComplete = profileData?.requester_onboarding_complete === true;
 
-        // Portal-vs-role enforcement
-        // role = the portal the user entered from ('doctor' = Cover & Earn, 'requester' = Request Coverage)
+        // Wrong portal check — sign out IMMEDIATELY before any NavigationGuard watcher can fire
         if (role === 'doctor' && !doctorComplete && requesterComplete) {
-          // Wrong portal — sign them out and show an error
           console.log('[SignUp] Wrong portal: requester account used on doctor portal, signing out');
           await signOut();
           setError('This account is registered under Request Coverage. Kindly log in through the right channel.');
@@ -168,7 +166,6 @@ export default function SignUpScreen() {
         }
 
         if (role === 'requester' && !requesterComplete && doctorComplete) {
-          // Wrong portal — sign them out and show an error
           console.log('[SignUp] Wrong portal: doctor account used on requester portal, signing out');
           await signOut();
           setError('This account is registered under Cover & Earn. Kindly log in through the right channel.');
@@ -176,14 +173,11 @@ export default function SignUpScreen() {
           return;
         }
 
-        // Passed validation — write lastPathway to AsyncStorage
+        // Correct portal — write lastPathway and navigate
         await SecureStore.setItemAsync('flashlocum_last_pathway', role);
-
-        // Route directly to destination
         const dest = role === 'doctor'
           ? (doctorComplete ? '/(doctor)/(home)' : '/(onboarding)/doctor/basic-profile')
           : (requesterComplete ? '/(requester)/(home)' : '/(onboarding)/requester/basic-profile');
-
         router.replace(dest as any);
       }
     }
