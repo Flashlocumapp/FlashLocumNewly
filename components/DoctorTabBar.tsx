@@ -35,7 +35,6 @@ export default function DoctorTabBar({ tabs }: Props) {
               key={tab.name}
               style={styles.tab}
               onPress={() => {
-                console.log('[DoctorTabBar] Tab pressed:', tab.label, 'route:', tab.route);
                 router.replace(tab.route);
               }}
             >

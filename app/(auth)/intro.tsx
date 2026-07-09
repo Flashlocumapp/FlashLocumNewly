@@ -42,8 +42,6 @@ export default function IntroScreen() {
       const phrase = PHRASES[index];
       const isLast = index === PHRASES.length - 1;
 
-      console.log(`[IntroScreen] Starting phrase ${index + 1}/${PHRASES.length}: "${phrase}"`);
-
       // Step 1: Reset text and ensure opacity is 0 before starting
       setDisplayedText('');
       contentOpacity.setValue(0);
@@ -72,7 +70,6 @@ export default function IntroScreen() {
               addTimeout(typeNext, CHAR_DELAY);
             } else {
               // Step 5: Hold then fade out
-              console.log(`[IntroScreen] Phrase complete: "${phrase}", holding for ${HOLD_FULL}ms`);
               addTimeout(() => {
                 Animated.timing(contentOpacity, {
                   toValue: 0,
@@ -81,7 +78,6 @@ export default function IntroScreen() {
                 }).start(() => {
                   if (unmountedRef.current) return;
                   if (isLast) {
-                    console.log('[IntroScreen] All phrases done, transitioning to:', destination);
                     Animated.timing(bgColor, {
                       toValue: 1,
                       duration: BG_TRANSITION_DURATION,

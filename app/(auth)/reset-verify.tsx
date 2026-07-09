@@ -48,7 +48,6 @@ export default function ResetVerifyScreen() {
   };
 
   const handleBack = () => {
-    console.log('[ResetVerify] Back button pressed');
     router.back();
   };
 
@@ -59,7 +58,6 @@ export default function ResetVerifyScreen() {
       return;
     }
 
-    console.log('[ResetVerify] Verify reset code pressed — email:', email, 'role:', role);
     setLoading(true);
     setError('');
 
@@ -72,10 +70,8 @@ export default function ResetVerifyScreen() {
     setLoading(false);
 
     if (verifyError) {
-      console.log('[ResetVerify] OTP verification error:', verifyError.message);
       setError(verifyError.message || 'Invalid code. Please try again.');
     } else {
-      console.log('[ResetVerify] OTP verification success — navigating to new-password');
       router.push(
         `/(auth)/new-password?email=${encodeURIComponent(email)}&role=${role}` as any
       );
@@ -84,18 +80,11 @@ export default function ResetVerifyScreen() {
 
   const handleResend = async () => {
     if (resendCooldown > 0) return;
-    console.log('[ResetVerify] Resend code pressed — email:', email);
     startCooldown();
-    const { error: resendError } = await supabase.auth.resetPasswordForEmail(email);
-    if (resendError) {
-      console.log('[ResetVerify] Resend error:', resendError.message);
-    } else {
-      console.log('[ResetVerify] Resend success');
-    }
+    await supabase.auth.resetPasswordForEmail(email);
   };
 
   const handleBackToSignIn = () => {
-    console.log('[ResetVerify] Back to sign in pressed');
     router.replace(`/(auth)/sign-up?mode=signin&role=${role}` as any);
   };
 

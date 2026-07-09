@@ -54,7 +54,6 @@ export default function RequesterLayoutIOS() {
               <Pressable
                 key={tab.name}
                 onPress={() => {
-                  console.log('[RequesterLayoutIOS] Tab pressed:', tab.label);
                   router.replace(tab.route);
                 }}
                 style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}

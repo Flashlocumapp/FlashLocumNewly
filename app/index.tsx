@@ -8,7 +8,6 @@ export default function IndexScreen() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      console.log('[IndexScreen] Slow network detected — showing spinner after 5s');
       setShowSpinner(true);
     }, 5000);
     return () => clearTimeout(timer);

@@ -37,7 +37,6 @@ export function useTabData<T>({
 
   const doFetch = useCallback(
     async (isBackground: boolean) => {
-      console.log('[useTabData] Fetching', cacheKey, isBackground ? '(background)' : '(first load)');
       if (isBackground) setRefreshing(true);
       else setLoading(true);
       setError(null);
@@ -46,11 +45,9 @@ export function useTabData<T>({
         if (!mountedRef.current) return;
         setCached(cacheKey, result);
         setData(result);
-        console.log('[useTabData] Fetch complete', cacheKey);
       } catch (e: unknown) {
         if (!mountedRef.current) return;
         const msg = e instanceof Error ? e.message : 'Failed to load';
-        console.log('[useTabData] Fetch error', cacheKey, msg);
         setError(msg);
       } finally {
         if (mountedRef.current) {

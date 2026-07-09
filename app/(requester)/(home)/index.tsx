@@ -48,7 +48,6 @@ const _requesterPaidSessions = new Set<string>();
 const _requesterRatingInFlight = new Set<string>();
 
 async function markRequesterSessionPaid(sessionId: string) {
-  console.log('[RequesterHome] markRequesterSessionPaid:', sessionId);
   _requesterPaidSessions.add(sessionId);
   _requesterRatingInFlight.delete(sessionId);
   try {
@@ -216,7 +215,6 @@ function CustomTimePicker({
     } else {
       h24 = selectedHour === 12 ? 12 : selectedHour + 12;
     }
-    console.log('[CustomTimePicker] Done pressed — h24:', h24, 'minute:', selectedMinute, 'ampm:', selectedAmPm);
     // WAT validation
     const shiftDateStr = shiftDate.toISOString().split('T')[0];
     const watTodayStr = watNow.toISOString().split('T')[0];
@@ -241,7 +239,6 @@ function CustomTimePicker({
     return (
       <TouchableOpacity
         onPress={() => {
-          console.log('[CustomTimePicker] Hour selected:', item);
           setSelectedHour(item);
         }}
         style={{
@@ -266,7 +263,6 @@ function CustomTimePicker({
     return (
       <TouchableOpacity
         onPress={() => {
-          console.log('[CustomTimePicker] Minute selected:', item);
           setSelectedMinute(item);
         }}
         style={{
@@ -358,7 +354,6 @@ function CustomTimePicker({
                     return (
                       <TouchableOpacity
                         onPress={() => {
-                          console.log('[CustomTimePicker] AM/PM selected:', item);
                           setSelectedAmPm(item as 'AM' | 'PM');
                         }}
                         style={{
@@ -595,18 +590,18 @@ function RequesterUpcomingCard({
       {!isPaused ? (
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {canCancel && (
-            <TouchableOpacity onPress={() => { console.log('[RequesterHome] Cancel shift pressed:', session.id); onCancel(); }}
+            <TouchableOpacity onPress={() => { onCancel(); }}
               activeOpacity={0.8}
               style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
               <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>CANCEL SHIFT</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed:', session.id); onCall(); }}
+          <TouchableOpacity onPress={() => { onCall(); }}
             activeOpacity={0.8}
             style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { console.log('[RequesterHome] Start shift pressed:', session.id); onStartShift(); }}
+          <TouchableOpacity onPress={() => { onStartShift(); }}
             activeOpacity={0.8}
             style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>START SHIFT</Text>
@@ -614,17 +609,17 @@ function RequesterUpcomingCard({
         </View>
       ) : (
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity onPress={() => { console.log('[RequesterHome] End shift pressed (paused):', session.id); onEndShift(); }}
+          <TouchableOpacity onPress={() => { onEndShift(); }}
             activeOpacity={0.8}
             style={{ flex: 1, backgroundColor: '#FF3B30', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>END SHIFT</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed (paused):', session.id); onCall(); }}
+          <TouchableOpacity onPress={() => { onCall(); }}
             activeOpacity={0.8}
             style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { console.log('[RequesterHome] Resume shift pressed:', session.id); onResumeShift(); }}
+          <TouchableOpacity onPress={() => { onResumeShift(); }}
             activeOpacity={0.8}
             style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>RESUME SHIFT</Text>
@@ -752,18 +747,18 @@ function RequesterActiveCard({
       {/* Action buttons */}
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {showPauseButton && (
-          <TouchableOpacity onPress={() => { console.log('[RequesterHome] Pause shift pressed:', session.id); onPauseShift(); }}
+          <TouchableOpacity onPress={() => { onPauseShift(); }}
             activeOpacity={0.8}
             style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>PAUSE SHIFT</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity onPress={() => { console.log('[RequesterHome] End shift pressed:', session.id); onEndShift(); }}
+        <TouchableOpacity onPress={() => { onEndShift(); }}
           activeOpacity={0.8}
           style={{ flex: 1, backgroundColor: '#FF3B30', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
           <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>END SHIFT</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => { console.log('[RequesterHome] Call doctor pressed (active):', session.id); onCall(); }}
+        <TouchableOpacity onPress={() => { onCall(); }}
           activeOpacity={0.8}
           style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
           <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
@@ -851,7 +846,6 @@ function RequesterPaymentCard({
 
   // ─── Fetch payment intent from Supabase ──────────────────────────────────
   const fetchPaymentIntent = useCallback(async () => {
-    console.log('[RequesterPaymentCard] Fetching payment intent for session:', session.id);
     setLoadingIntent(true);
     try {
       const { data, error } = await supabase
@@ -864,15 +858,12 @@ function RequesterPaymentCard({
         .single();
 
       if (error) {
-        console.log('[RequesterPaymentCard] payment_intents query error:', error.message);
         setPaymentIntent(null);
       } else if (data) {
-        console.log('[RequesterPaymentCard] Payment intent fetched:', data.id, 'expiry_at:', data.expiry_at);
         setPaymentIntent(data as import('@/types').PaymentIntent);
         startCountdown(data.expiry_at);
       }
     } catch (e: any) {
-      console.log('[RequesterPaymentCard] fetchPaymentIntent exception:', e.message);
     } finally {
       setLoadingIntent(false);
     }
@@ -881,7 +872,6 @@ function RequesterPaymentCard({
   // ─── Refresh payment via edge function ───────────────────────────────────
   const handleRefreshPayment = useCallback(async () => {
     if (refreshing) return;
-    console.log('[RequesterPaymentCard] Calling refresh-payment edge function for session:', session.id);
     setRefreshing(true);
     try {
       const token = await getValidToken();
@@ -894,15 +884,12 @@ function RequesterPaymentCard({
         },
         body: JSON.stringify({ session_id: session.id }),
       });
-      console.log('[RequesterPaymentCard] refresh-payment response status:', res.status);
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
-        console.log('[RequesterPaymentCard] refresh-payment error:', errText);
         return;
       }
       const data = await res.json();
       const payment = data?.payment;
-      console.log('[RequesterPaymentCard] refresh-payment success:', payment?.id, 'new expiry:', payment?.expiry_at);
       if (payment) {
         const snap = paymentIntentRef.current;
         setPaymentIntent(snap ? {
@@ -919,7 +906,6 @@ function RequesterPaymentCard({
         }
       }
     } catch (e: any) {
-      console.log('[RequesterPaymentCard] handleRefreshPayment exception:', e.message);
     } finally {
       setRefreshing(false);
     }
@@ -940,7 +926,6 @@ function RequesterPaymentCard({
 
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active') {
-        console.log('[RequesterPaymentCard] App foregrounded — re-fetching payment intent');
         fetchPaymentIntent();
       }
     };
@@ -969,12 +954,10 @@ function RequesterPaymentCard({
           rawStatus === 'disbursed' ||
           rawStatus === 'payment_complete'
         )) {
-          console.log('[RequesterPaymentCard] Mount check: session already paid, firing onPaymentConfirmed');
           if (timerRef.current) clearInterval(timerRef.current);
           onPaymentConfirmed();
         }
       } catch (e: any) {
-        console.log('[RequesterPaymentCard] Mount check error:', e.message);
       }
     })();
     return () => { cancelled = true; };
@@ -985,11 +968,9 @@ function RequesterPaymentCard({
   // requester-user channel and session channel; parent calls onPaymentConfirmed.
   useEffect(() => {
     const channelName = `session:${session.id}`;
-    console.log('[RequesterPaymentCard] Subscribing to Realtime channel:', channelName);
 
     const ch = supabase.channel(channelName)
       .on('broadcast', { event: 'payment_refreshed' }, (payload) => {
-        console.log('[RequesterPaymentCard] payment_refreshed received:', payload);
         const payment = payload?.payload?.payment;
         if (payment) {
           const snap = paymentIntentRef.current;
@@ -1008,11 +989,9 @@ function RequesterPaymentCard({
         }
       })
       .subscribe((status) => {
-        console.log('[RequesterPaymentCard] Realtime channel status:', channelName, status);
       });
 
     return () => {
-      console.log('[RequesterPaymentCard] Unsubscribing from channel:', channelName);
       supabase.removeChannel(ch);
     };
   }, [session.id, startCountdown]);
@@ -1029,7 +1008,6 @@ function RequesterPaymentCard({
   const isLoading = loadingIntent && !paymentIntent;
 
   const handleCopy = async () => {
-    console.log('[RequesterPaymentCard] Copy account number pressed:', accountNumber);
     await Clipboard.setStringAsync(accountNumber);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -1247,7 +1225,6 @@ function PaymentSuccessModal({
   useEffect(() => {
     if (!visible) return;
     const timer = setTimeout(() => {
-      console.log('[PaymentSuccessModal] Auto-showing rating overlay');
       onRatingOverlayOpen();
     }, 800);
     return () => clearTimeout(timer);
@@ -1385,7 +1362,6 @@ function PaymentSuccessModal({
           {!showRatingOverlay && (
             <TouchableOpacity
               onPress={() => {
-                console.log('[PaymentSuccessModal] Rate Now button pressed');
                 onRatingOverlayOpen();
               }}
               style={{
@@ -1436,7 +1412,6 @@ function PaymentSuccessModal({
                           <TouchableOpacity
                             key={star}
                             onPress={() => {
-                              console.log('[PaymentSuccessModal] Star pressed:', star);
                               onStarPress(star);
                             }}
                             activeOpacity={0.7}
@@ -1479,7 +1454,6 @@ function PaymentSuccessModal({
                     {/* Submit button */}
                     <TouchableOpacity
                       onPress={() => {
-                        console.log('[PaymentSuccessModal] Submit Review pressed, stars:', ratingStars);
                         onSubmitRating();
                       }}
                       disabled={submittingRating}
@@ -1502,7 +1476,6 @@ function PaymentSuccessModal({
                     {/* Skip */}
                     <TouchableOpacity
                       onPress={() => {
-                        console.log('[PaymentSuccessModal] Skip rating pressed');
                         onSkipRating();
                       }}
                       style={{ alignItems: 'center', paddingVertical: 8 }}
@@ -1542,16 +1515,13 @@ export default function RequesterHomeScreen() {
           .eq('id', user.id)
           .single();
         if (error) {
-          console.log('[RequesterHome] Failed to fetch requester scores:', error.message);
           return;
         }
         if (data) {
-          console.log('[RequesterHome] Fetched requester scores:', data.rating, data.reliability);
           setRequesterRating(data.rating ?? 5.0);
           setRequesterReliability(data.reliability ?? 100);
         }
       } catch (e: any) {
-        console.log('[RequesterHome] fetchRequesterScores error:', e.message);
       }
     })();
   }, [user]);
@@ -1563,26 +1533,21 @@ export default function RequesterHomeScreen() {
     const ch = supabase.channel(`requester-user:${user.id}`)
       // From channel 3 (scores)
       .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
-        console.log('[RequesterHome] RATING_UPDATED received:', JSON.stringify(payload));
         if (payload?.payload?.reviewer_role === 'doctor') {
           const newRating = payload?.payload?.new_rating;
           if (newRating !== undefined) {
-            console.log('[RequesterHome] Updating requester rating to:', newRating);
             setRequesterRating(newRating);
           }
         }
       })
       .on('broadcast', { event: 'RELIABILITY_UPDATED' }, (payload) => {
-        console.log('[RequesterHome] RELIABILITY_UPDATED received:', JSON.stringify(payload));
         const newReliability = payload?.payload?.new_reliability;
         if (newReliability !== undefined) {
-          console.log('[RequesterHome] Updating requester reliability to:', newReliability);
           setRequesterReliability(newReliability);
         }
       })
       // From channel 6 (payment confirmed on user channel)
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
-        console.log('[RequesterHome] payment_confirmed received (user channel):', payload);
         const sessionId = payload?.payload?.session_id;
         setActiveSession((prev) => {
           if (prev) {
@@ -1596,7 +1561,6 @@ export default function RequesterHomeScreen() {
                   setShowPaymentSuccess(true);
                 } else {
                   _requesterRatingInFlight.delete(sid);
-                  console.log('[RequesterHome] payment_confirmed suppressed (user channel) — session already handled:', sid);
                 }
               }).catch(() => { _requesterRatingInFlight.delete(sid); });
             }
@@ -1606,7 +1570,6 @@ export default function RequesterHomeScreen() {
         fetchActiveSession();
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        console.log('[RequesterHome] PAYMENT_CONFIRMED received (user channel):', payload);
         const sessionId = payload?.payload?.session_id;
         setActiveSession((prev) => {
           if (prev) {
@@ -1620,7 +1583,6 @@ export default function RequesterHomeScreen() {
                   setShowPaymentSuccess(true);
                 } else {
                   _requesterRatingInFlight.delete(sid);
-                  console.log('[RequesterHome] PAYMENT_CONFIRMED suppressed (user channel) — session already handled:', sid);
                 }
               }).catch(() => { _requesterRatingInFlight.delete(sid); });
             }
@@ -1631,11 +1593,9 @@ export default function RequesterHomeScreen() {
       })
       // From channel 7 (shift cancelled on requester channel)
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
-        console.log('[RequesterHome] SHIFT_CANCELLED received (requester channel):', payload);
         setActiveSession(null);
       })
       .subscribe((status) => {
-        console.log('[RequesterHome] requester-user channel status:', status);
       });
     return () => { supabase.removeChannel(ch); };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1656,10 +1616,8 @@ export default function RequesterHomeScreen() {
       .not('lat', 'is', null)
       .not('lng', 'is', null);
     if (error) {
-      console.log('[RequesterHome] fetchOnlineDoctors error:', error.message);
       return;
     }
-    console.log('[RequesterHome] Online doctors fetched:', data?.length ?? 0);
     setOnlineDoctors((data ?? []) as { id: string; lat: number; lng: number }[]);
   }, [user]);
 
@@ -1675,7 +1633,6 @@ export default function RequesterHomeScreen() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'doctor_profiles' },
         (payload) => {
-          console.log('[RequesterHome] doctor_profiles change:', payload.eventType, JSON.stringify(payload.new));
           const row = payload.new as { id?: string; lat?: number; lng?: number; is_online?: boolean } | null;
           const doctorId = row?.id ?? (payload.old as any)?.id;
           if (!doctorId) return;
@@ -1694,7 +1651,6 @@ export default function RequesterHomeScreen() {
           }
 
           // Partial row — re-fetch this doctor's full current state
-          console.log('[RequesterHome] Partial row detected, re-fetching doctor:', doctorId);
           supabase
             .from('doctor_profiles')
             .select('id, lat, lng, is_online')
@@ -1717,7 +1673,6 @@ export default function RequesterHomeScreen() {
         }
       )
       .subscribe((status) => {
-        console.log('[RequesterHome] online-doctors channel status:', status);
       });
 
     return () => {
@@ -1824,10 +1779,8 @@ export default function RequesterHomeScreen() {
       if (raw) {
         try {
           const parsed = JSON.parse(raw) as SelectedPlace;
-          console.log('[RequesterHome] Loaded recent place:', parsed.name);
           setRecentPlace(parsed);
         } catch {
-          console.log('[RequesterHome] Failed to parse recent place');
         }
       }
     });
@@ -1835,35 +1788,29 @@ export default function RequesterHomeScreen() {
 
   // ─── Fetch active session helper ──────────────────────────────────────────────
   const fetchActiveSession = useCallback(async () => {
-    console.log('[RequesterHome] Fetching active session for requester');
     try {
       const token = await getValidToken();
       if (!token) return;
       const res = await fetch(`${EDGE_BASE}/get-active-session?role=requester`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      console.log('[RequesterHome] get-active-session response:', res.status);
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
-        console.log('[RequesterHome] get-active-session error:', errText);
         return;
       }
       const data = await res.json();
       const session: CoverageSession | null = data?.session ?? null;
-      console.log('[RequesterHome] Active session fetched:', session?.id ?? 'none', 'status:', session?.status ?? 'none');
       setActiveSession(session);
       // If session is already paid, use persistent guard to decide whether to show modal
       if (session && session.status === 'requester_paid') {
         // Synchronous check first — avoids async gap
         if (_requesterPaidSessions.has(session.id) || _requesterRatingInFlight.has(session.id)) {
-          console.log('[RequesterHome] Payment modal suppressed (sync) — session:', session.id);
         } else {
           _requesterRatingInFlight.add(session.id);
           // Check AsyncStorage first
           const alreadyHandled = await isRequesterSessionPaid(session.id);
           if (alreadyHandled) {
             _requesterRatingInFlight.delete(session.id);
-            console.log('[RequesterHome] Payment modal suppressed (async) — session:', session.id);
           } else {
             // Check DB — ultimate source of truth
             try {
@@ -1874,7 +1821,6 @@ export default function RequesterHomeScreen() {
                 .eq('reviewer_role', 'requester')
                 .maybeSingle();
               if (existingReview) {
-                console.log('[RequesterHome] Payment modal suppressed (DB) — review exists for session:', session.id);
                 markRequesterSessionPaid(session.id);
                 _requesterRatingInFlight.delete(session.id);
               } else {
@@ -1902,7 +1848,6 @@ export default function RequesterHomeScreen() {
         }
       }
     } catch (e: any) {
-      console.log('[RequesterHome] fetchActiveSession error:', e.message);
     } finally {
       isFirstLoadRef.current = false;
       setSessionLoading(false);
@@ -1912,7 +1857,6 @@ export default function RequesterHomeScreen() {
   // ─── Keep activeSessionId in sync — only set, never clear ───────────────────
   useEffect(() => {
     if (activeSession?.id) {
-      console.log('[RequesterHome] activeSessionId updated to:', activeSession.id);
       setActiveSessionId(activeSession.id);
     }
     // Intentionally do NOT clear when activeSession becomes null —
@@ -1929,7 +1873,6 @@ export default function RequesterHomeScreen() {
   useEffect(() => {
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active') {
-        console.log('[RequesterHome] App foregrounded — re-fetching active session');
         fetchActiveSession();
         fetchOnlineDoctors();
       }
@@ -1942,7 +1885,6 @@ export default function RequesterHomeScreen() {
   useEffect(() => {
     if (!activeSessionId) {
       if (sessionChannelRef.current) {
-        console.log('[RequesterHome] No active session ID — removing session channel');
         supabase.removeChannel(sessionChannelRef.current);
         sessionChannelRef.current = null;
       }
@@ -1950,7 +1892,6 @@ export default function RequesterHomeScreen() {
     }
 
     const channelName = `session:${activeSessionId}`;
-    console.log('[RequesterHome] Subscribing to session channel:', channelName);
 
     if (sessionChannelRef.current) {
       supabase.removeChannel(sessionChannelRef.current);
@@ -1959,27 +1900,22 @@ export default function RequesterHomeScreen() {
 
     const ch = supabase.channel(channelName)
       .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
-        console.log('[RequesterHome] SHIFT_STARTED received:', payload);
         const updated = payload?.payload?.session as Partial<CoverageSession>;
         setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
       })
       .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
-        console.log('[RequesterHome] SHIFT_PAUSED received:', payload);
         const updated = payload?.payload?.session as Partial<CoverageSession>;
         setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
       })
       .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
-        console.log('[RequesterHome] SHIFT_RESUMED received:', payload);
         const updated = payload?.payload?.session as Partial<CoverageSession>;
         setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
-        console.log('[RequesterHome] SHIFT_ENDED received:', payload);
         const updated = payload?.payload?.session as Partial<CoverageSession>;
         setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
       })
       .on('broadcast', { event: 'PAYMENT_DEADLINE_EXTENDED' }, (payload) => {
-        console.log('[RequesterHome] PAYMENT_DEADLINE_EXTENDED received:', payload);
         const newDeadline = payload?.payload?.payment_deadline_at as string;
         const lateFee = payload?.payload?.late_fee as number;
         const newTotal = payload?.payload?.new_total as number;
@@ -2002,7 +1938,6 @@ export default function RequesterHomeScreen() {
         }
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        console.log('[RequesterHome] PAYMENT_CONFIRMED received:', payload);
         const sessionId = payload?.payload?.session_id;
         setActiveSession((prev) => {
           if (prev) {
@@ -2016,7 +1951,6 @@ export default function RequesterHomeScreen() {
                   setShowPaymentSuccess(true);
                 } else {
                   _requesterRatingInFlight.delete(sid);
-                  console.log('[RequesterHome] PAYMENT_CONFIRMED suppressed — session already handled:', sid);
                 }
               }).catch(() => { _requesterRatingInFlight.delete(sid); });
             }
@@ -2026,7 +1960,6 @@ export default function RequesterHomeScreen() {
         fetchActiveSession();
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
-        console.log('[RequesterHome] payment_confirmed received (session channel):', payload);
         const sessionId = payload?.payload?.session_id;
         setActiveSession((prev) => {
           if (prev) {
@@ -2040,7 +1973,6 @@ export default function RequesterHomeScreen() {
                   setShowPaymentSuccess(true);
                 } else {
                   _requesterRatingInFlight.delete(sid);
-                  console.log('[RequesterHome] payment_confirmed suppressed — session already handled:', sid);
                 }
               }).catch(() => { _requesterRatingInFlight.delete(sid); });
             }
@@ -2050,21 +1982,17 @@ export default function RequesterHomeScreen() {
         fetchActiveSession();
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
-        console.log('[RequesterHome] PAYMENT_COMPLETE received:', payload);
         setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
-        console.log('[RequesterHome] SHIFT_CANCELLED received:', payload);
         setActiveSession(null);
       })
       .subscribe((status) => {
-        console.log('[RequesterHome] Session channel status:', channelName, status);
       });
 
     sessionChannelRef.current = ch;
 
     return () => {
-      console.log('[RequesterHome] Unsubscribing from session channel:', channelName);
       supabase.removeChannel(ch);
       sessionChannelRef.current = null;
     };
@@ -2075,28 +2003,16 @@ export default function RequesterHomeScreen() {
   // ─── Location on mount — animate map to user position + stream ───────────────
   useEffect(() => {
     (async () => {
-      console.log('[RequesterHome] Requesting location permission');
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
         // One-time immediate fix
-        console.log('[RequesterHome] Fetching immediate GPS fix');
         const immediatePos = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Highest,
         });
-        console.log('[RequesterHome][GPS-1] getCurrentPosition:', {
-          lat: immediatePos.coords.latitude,
-          lng: immediatePos.coords.longitude,
-          accuracy: immediatePos.coords.accuracy,
-          timestamp: new Date(immediatePos.timestamp).toISOString(),
-          mapRefReady: !!mapRef.current,
-          hasInitialFix: _hasInitialFix,
-        });
         if (!_hasInitialFix) {
           _hasInitialFix = true;
-          console.log('[RequesterHome] Immediate GPS fix:', immediatePos.coords.latitude, immediatePos.coords.longitude);
           _cachedRequesterCoords = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude };
           setUserCoords({ latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude });
-          console.log('[RequesterHome][MAP-ANIMATE] animateToRegion:', { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude, source: 'immediatePos' });
           mapRef.current?.animateToRegion({
             latitude: immediatePos.coords.latitude,
             longitude: immediatePos.coords.longitude,
@@ -2104,21 +2020,11 @@ export default function RequesterHomeScreen() {
             longitudeDelta: 0.12,
           }, 800);
         }
-        console.log('[RequesterHome] Starting watch stream');
         locationSub.current = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.Highest, timeInterval: 2000, distanceInterval: 1, mayShowUserSettingsDialog: true },
           (loc) => {
-            console.log('[RequesterHome][GPS-2] watchPosition update:', {
-              lat: loc.coords.latitude,
-              lng: loc.coords.longitude,
-              accuracy: loc.coords.accuracy,
-              timestamp: new Date(loc.timestamp).toISOString(),
-              hasInitialFix: _hasInitialFix,
-              mapRefReady: !!mapRef.current,
-            });
             if (!_hasInitialFix) {
               _hasInitialFix = true;
-              console.log('[RequesterHome][MAP-ANIMATE] animateToRegion:', { latitude: loc.coords.latitude, longitude: loc.coords.longitude, source: 'watchStream' });
               mapRef.current?.animateToRegion({
                 latitude: loc.coords.latitude,
                 longitude: loc.coords.longitude,
@@ -2131,7 +2037,6 @@ export default function RequesterHomeScreen() {
           }
         );
       } else {
-        console.log('[RequesterHome] Location permission denied, using Lagos fallback');
         setUserCoords({ latitude: LAGOS_REGION.latitude, longitude: LAGOS_REGION.longitude });
       }
     })();
@@ -2142,7 +2047,6 @@ export default function RequesterHomeScreen() {
 
   // ─── GPS diagnostic watcher ───────────────────────────────────────────────────
   useEffect(() => {
-    console.log('[RequesterHome][MARKER-STATE] userCoords changed:', userCoords);
   }, [userCoords]);
 
   // ─── Sheet height animation ───────────────────────────────────────────────────
@@ -2155,7 +2059,6 @@ export default function RequesterHomeScreen() {
   }, [sheetAnim]);
 
   const transitionTo = useCallback((state: SheetState) => {
-    console.log('[RequesterHome] Sheet state transition:', sheetState, '->', state);
     setSheetState(state);
     animateSheet(state);
   }, [sheetState, animateSheet]);
@@ -2181,7 +2084,6 @@ export default function RequesterHomeScreen() {
     }
     setSearchLoading(true);
     try {
-      console.log('[PlacesNew] Searching for:', input);
       const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
         method: 'POST',
         headers: {
@@ -2200,7 +2102,6 @@ export default function RequesterHomeScreen() {
         }),
       });
       const data = await response.json();
-      console.log('[PlacesNew] autocomplete response status:', response.status);
       if (data.suggestions) {
         setSearchResults(
           data.suggestions
@@ -2212,11 +2113,9 @@ export default function RequesterHomeScreen() {
             }))
         );
       } else {
-        console.log('[PlacesNew] No suggestions:', JSON.stringify(data));
         setSearchResults([]);
       }
     } catch (e: any) {
-      console.error('[PlacesNew] fetch error:', e.message);
       setSearchResults([]);
     } finally {
       setSearchLoading(false);
@@ -2230,7 +2129,6 @@ export default function RequesterHomeScreen() {
   }, [searchPlaces]);
 
   const handlePlaceResultSelect = useCallback(async (placeId: string, mainText: string) => {
-    console.log('[PlacesNew] Place result tapped:', mainText, placeId);
     Keyboard.dismiss();
     setSearchLoading(true);
     try {
@@ -2238,12 +2136,10 @@ export default function RequesterHomeScreen() {
         `https://places.googleapis.com/v1/places/${placeId}?fields=id,displayName,formattedAddress,location&key=${MAPS_KEY}`
       );
       const data = await response.json();
-      console.log('[PlacesNew] place details:', JSON.stringify(data));
       if (!data.location) throw new Error('No location in place details');
       const address = data.formattedAddress || mainText;
       // Client-side Lagos safety check
       if (!address.toLowerCase().includes('lagos')) {
-        console.log('[PlacesNew] Rejected non-Lagos result:', address);
         return;
       }
       const place: SelectedPlace = {
@@ -2252,18 +2148,15 @@ export default function RequesterHomeScreen() {
         lat: data.location.latitude,
         lng: data.location.longitude,
       };
-      console.log('[PlacesNew] Place selected:', place.name, { lat: place.lat, lng: place.lng });
       setSelectedPlace(place);
       setSearchText('');
       setSearchResults([]);
       // Save to recent
       SecureStore.setItemAsync(RECENT_PLACE_KEY, JSON.stringify(place)).then(() => {
-        console.log('[RequesterHome] Saved recent place:', place.name);
         setRecentPlace(place);
       });
       transitionTo('config');
     } catch (e: any) {
-      console.error('[PlacesNew] place details error:', e.message);
       Alert.alert('Error', 'Could not load place details. Please try again.');
     } finally {
       setSearchLoading(false);
@@ -2273,7 +2166,6 @@ export default function RequesterHomeScreen() {
   // ─── Recent place tap ─────────────────────────────────────────────────────────
   const handleRecentPlaceTap = useCallback(() => {
     if (!recentPlace) return;
-    console.log('[RequesterHome] Recent place tapped:', recentPlace.name);
     setSelectedPlace(recentPlace);
     SecureStore.setItemAsync(RECENT_PLACE_KEY, JSON.stringify(recentPlace));
     transitionTo('config');
@@ -2297,10 +2189,8 @@ export default function RequesterHomeScreen() {
   // ─── Realtime matching subscription + 180s timeout ───────────────────────────
   useEffect(() => {
     if (activeRequestId) {
-      console.log('[RequesterHome] Starting match timer and subscribing to requester channel:', activeRequestId);
 
       matchTimerRef.current = setTimeout(() => {
-        console.log('[RequesterHome] Match timeout — no doctor accepted in 180s');
         Alert.alert(
           'No Match Found',
           'No doctor accepted your request at this time. Please try again or adjust your request parameters.',
@@ -2311,20 +2201,16 @@ export default function RequesterHomeScreen() {
       const channelName = `requester:${activeRequestId}`;
       realtimeChannelRef.current = supabase.channel(channelName)
         .on('broadcast', { event: 'MATCH_CONFIRMED' }, (payload) => {
-          console.log('[RequesterHome] MATCH_CONFIRMED received:', JSON.stringify(payload));
           shouldPollRef.current = false;
           if (pollIntervalRef.current) {
-            console.log('[RequesterHome] MATCH_CONFIRMED — clearing poll timeout');
             clearTimeout(pollIntervalRef.current);
             pollIntervalRef.current = null;
           }
           if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
-          console.log('[RequesterHome] MATCH_CONFIRMED — fetching active session and resetting to idle');
           fetchActiveSessionRef.current();
           transitionToRef.current('idle');
         })
         .on('broadcast', { event: 'REQUEST_EXPIRED' }, () => {
-          console.log('[RequesterHome] REQUEST_EXPIRED received');
           shouldPollRef.current = false;
           if (pollIntervalRef.current) {
             clearTimeout(pollIntervalRef.current);
@@ -2335,7 +2221,6 @@ export default function RequesterHomeScreen() {
           transitionToRef.current('summary');
         })
         .subscribe((status) => {
-          console.log('[RequesterHome] Realtime channel status:', channelName, status);
           isRealtimeHealthyRef.current = status === 'SUBSCRIBED';
         });
 
@@ -2348,14 +2233,12 @@ export default function RequesterHomeScreen() {
             .eq('id', activeRequestId)
             .single();
           if (data?.status === 'matched' && data?.matched_doctor_id) {
-            console.log('[RequesterHome] Mount check: already matched, transitioning to idle');
             shouldPollRef.current = false;
             if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
             fetchActiveSessionRef.current();
             transitionToRef.current('idle');
           }
         } catch (e: any) {
-          console.log('[RequesterHome] Mount check error:', e.message);
         }
       })();
 
@@ -2372,7 +2255,6 @@ export default function RequesterHomeScreen() {
           return;
         }
         if (!shouldPollRef.current) return;
-        console.log('[RequesterHome] Polling for match status:', activeRequestId);
 
         try {
           const { data, error } = await supabase
@@ -2382,9 +2264,7 @@ export default function RequesterHomeScreen() {
             .single();
 
           if (error) {
-            console.log('[RequesterHome] Poll error:', error.message);
           } else if (data?.status === 'matched' && data?.matched_doctor_id) {
-            console.log('[RequesterHome] Poll detected match — fetching doctor details');
             shouldPollRef.current = false;
             if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
 
@@ -2395,7 +2275,6 @@ export default function RequesterHomeScreen() {
               .single();
 
             if (session) {
-              console.log('[RequesterHome] Poll match confirmed — fetching active session and resetting to idle');
               fetchActiveSessionRef.current();
               transitionToRef.current('idle');
             }
@@ -2405,12 +2284,10 @@ export default function RequesterHomeScreen() {
             data?.status === 'withdrawn' ||
             data?.status === 'expired'
           ) {
-            console.log('[RequesterHome] Poll detected cancellation/expiry:', data.status);
             shouldPollRef.current = false;
             return; // stop polling
           }
         } catch (e: any) {
-          console.log('[RequesterHome] Poll exception:', e.message);
         }
 
         // Schedule next poll if still active
@@ -2426,12 +2303,10 @@ export default function RequesterHomeScreen() {
         shouldPollRef.current = false;
         if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
         if (pollIntervalRef.current) {
-          console.log('[RequesterHome] Cleanup — clearing poll timeout');
           clearTimeout(pollIntervalRef.current);
           pollIntervalRef.current = null;
         }
         if (realtimeChannelRef.current) {
-          console.log('[RequesterHome] Removing realtime channel:', channelName);
           supabase.removeChannel(realtimeChannelRef.current);
           realtimeChannelRef.current = null;
         }
@@ -2456,7 +2331,6 @@ export default function RequesterHomeScreen() {
       const durationHours = durationMinutes / 60;
       const shiftType = coverageType === 'Home Care' ? 'Home Care' : 'Standard';
       const toHHMM = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-      console.log('[RequesterHome] Fetching price preview — coverage_type:', coverageType, 'shift_type:', shiftType, 'environment:', environment, 'duration_hours:', durationHours);
       setPreviewLoading(true);
       try {
         const res = await fetch(`${EDGE_BASE}/calculate-price`, {
@@ -2473,19 +2347,15 @@ export default function RequesterHomeScreen() {
             end_time: toHHMM(endTime),
           }),
         });
-        console.log('[RequesterHome] calculate-price response status:', res.status);
         if (!res.ok) {
           const errText = await res.text().catch(() => '');
-          console.log('[RequesterHome] calculate-price error:', errText);
           return;
         }
         const data = await res.json();
-        console.log('[RequesterHome] calculate-price result:', data);
         setPreviewPrice(data.price ?? 0);
         setPreviewHours(data.duration_hours ?? 0);
         setPreviewLabel(data.label ?? '');
       } catch (e: any) {
-        console.log('[RequesterHome] calculate-price fetch error:', e.message);
       } finally {
         setPreviewLoading(false);
       }
@@ -2505,14 +2375,12 @@ export default function RequesterHomeScreen() {
       onPanResponderMove: () => {},
       onPanResponderRelease: (_, gs) => {
         if (gs.dy > 15) {
-          console.log('[RequesterHome] Drag handle released — resetting');
           Keyboard.dismiss();
           handleResetRef.current();
         }
       },
       onPanResponderTerminate: (_, gs) => {
         if (gs.dy > 15) {
-          console.log('[RequesterHome] Drag handle terminated — resetting');
           Keyboard.dismiss();
           handleResetRef.current();
         }
@@ -2527,7 +2395,6 @@ export default function RequesterHomeScreen() {
       onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 5,
       onPanResponderRelease: (_, gs) => {
         if (gs.dy < -20) {
-          console.log('[RequesterHome] Idle drag handle swiped up — opening search');
           transitionTo('searching');
         }
       },
@@ -2536,23 +2403,19 @@ export default function RequesterHomeScreen() {
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
   const handleSearchTap = () => {
-    console.log('[RequesterHome] Search input tapped');
     transitionTo('searching');
   };
 
   const handleGoToSummary = () => {
-    console.log('[RequesterHome] Proceeding to summary');
     transitionTo('summary');
   };
 
   const handleRequestCoverage = async () => {
     if (!selectedPlace) return;
-    console.log('[RequesterHome] Request Coverage tapped — submitting to submit-request Edge Function');
     setSubmitting(true);
     try {
       const token = await getValidToken();
       if (!token) throw new Error('Not authenticated');
-      console.log('[RequesterHome] Calling submit-request for place:', selectedPlace.name);
 
       // Construct ISO datetime strings for start_date and end_date
       const shiftDateStr = shiftDate.toISOString().split('T')[0]; // YYYY-MM-DD
@@ -2568,7 +2431,6 @@ export default function RequesterHomeScreen() {
 
       const startDateISO = startDateObj.toISOString();
       const endDateISO = endDateObj.toISOString();
-      console.log('[RequesterHome] Constructed start_date:', startDateISO, 'end_date:', endDateISO);
 
       const res = await fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/submit-request', {
         method: 'POST',
@@ -2592,17 +2454,14 @@ export default function RequesterHomeScreen() {
           note: note || null,
         }),
       });
-      console.log('[RequesterHome] submit-request response status:', res.status);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error((err as any).error || 'Could not submit request');
       }
       const data = await res.json();
-      console.log('[RequesterHome] submit-request success, request_id:', data.request_id || data.id);
       setActiveRequestId(data.request_id || data.id || null);
       transitionTo('matching');
     } catch (e: any) {
-      console.log('[RequesterHome] Submit error:', e.message);
       Alert.alert('Error', e.message || 'Could not submit request. Please try again.');
     } finally {
       setSubmitting(false);
@@ -2610,7 +2469,6 @@ export default function RequesterHomeScreen() {
   };
 
   const handleReset = useCallback(() => {
-    console.log('[RequesterHome] Resetting to idle');
     setSelectedPlace(null);
     setCoverageType('Standard');
     setShiftDate(new Date());
@@ -2631,7 +2489,6 @@ export default function RequesterHomeScreen() {
   }, [handleReset]);
 
   const handleEditRequest = async () => {
-    console.log('[RequesterHome] Edit Request tapped — withdrawing in-flight request');
     if (activeRequestId) {
       const token = await getValidToken();
       if (token) {
@@ -2661,7 +2518,6 @@ export default function RequesterHomeScreen() {
   const [showPauseShiftModal, setShowPauseShiftModal] = useState(false);
 
   const handleCancelRequest = async () => {
-    console.log('[RequesterHome] Cancel tapped — showing modal and withdrawing in background');
     setShowCancelModal(true);
     // Immediately withdraw in background
     if (activeRequestId) {
@@ -2674,16 +2530,13 @@ export default function RequesterHomeScreen() {
             body: JSON.stringify({ request_id: activeRequestId }),
           });
           setCancelWithdrawn(true);
-          console.log('[RequesterHome] Request withdrawn while cancel modal is open');
         } catch (e) {
-          console.log('[RequesterHome] Withdraw failed silently:', e);
         }
       }
     }
   };
 
   const handleWaitForDoctor = async () => {
-    console.log('[RequesterHome] Wait for Doctor — re-broadcasting request');
     setShowCancelModal(false);
     if (activeRequestId && cancelWithdrawn) {
       const token = await getValidToken();
@@ -2694,9 +2547,7 @@ export default function RequesterHomeScreen() {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ request_id: activeRequestId }),
           });
-          console.log('[RequesterHome] Request re-broadcast successfully');
         } catch (e) {
-          console.log('[RequesterHome] Re-broadcast failed:', e);
         }
       }
     }
@@ -2709,7 +2560,6 @@ export default function RequesterHomeScreen() {
   };
 
   const handlePaymentConfirmed = useCallback(() => {
-    console.log('[RequesterHome] Payment confirmed — snapshotting session and showing success modal');
     const snap = activeSessionRef.current;
     if (snap) {
       setConfirmedSession(snap);
@@ -2719,15 +2569,13 @@ export default function RequesterHomeScreen() {
   }, []); // no deps — reads from ref so never goes stale
 
   const handleCancelReasonSelected = async (reason: string) => {
-    console.log('[RequesterHome] Cancel reason selected:', reason);
     // Update the request with cancellation reason
     if (activeRequestId) {
       const token = await getValidToken();
       if (token) {
         supabase.from('dispatch_requests')
           .update({ status: 'cancelled', cancellation_reason: reason, cancelled_by: 'requester' })
-          .eq('id', activeRequestId)
-          .then(() => console.log('[RequesterHome] Cancellation reason saved'));
+          .eq('id', activeRequestId);
       }
     }
     setShowCancelReasons(false);
@@ -2739,13 +2587,11 @@ export default function RequesterHomeScreen() {
   const callSessionEdge = useCallback(async (fn: string, sessionId: string) => {
     const token = await getValidToken();
     if (!token) throw new Error('Not authenticated');
-    console.log('[RequesterHome] Calling session edge function:', fn, 'session:', sessionId);
     const res = await fetch(`${EDGE_BASE}/${fn}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId }),
     });
-    console.log('[RequesterHome]', fn, 'response:', res.status);
     if (!res.ok) {
       let errMsg = `HTTP ${res.status}`;
       try {
@@ -2761,73 +2607,62 @@ export default function RequesterHomeScreen() {
 
   const handleStartShift = useCallback(async () => {
     if (!activeSession) return;
-    console.log('[RequesterHome] Start shift pressed for session:', activeSession.id);
     try {
       const data = await callSessionEdge('start-shift', activeSession.id);
       const updated = data?.session as Partial<CoverageSession>;
       if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
     } catch (e: any) {
-      console.log('[RequesterHome] Start shift error:', e.message);
       Alert.alert('Something went wrong', 'Please try again.');
     }
   }, [activeSession, callSessionEdge]);
 
   const handleResumeShift = useCallback(async () => {
     if (!activeSession) return;
-    console.log('[RequesterHome] Resume shift pressed for session:', activeSession.id);
     try {
       const data = await callSessionEdge('resume-shift', activeSession.id);
       const updated = data?.session as Partial<CoverageSession>;
       if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
     } catch (e: any) {
-      console.log('[RequesterHome] Resume shift error:', e.message);
       Alert.alert('Something went wrong', 'Please try again.');
     }
   }, [activeSession, callSessionEdge]);
 
   const handlePauseShift = useCallback(async () => {
     if (!activeSession) return;
-    console.log('[RequesterHome] Pause shift — showing confirmation modal');
     setShowPauseShiftModal(true);
   }, [activeSession]);
 
   const handleConfirmPauseShift = async () => {
     if (!activeSession) return;
     setShowPauseShiftModal(false);
-    console.log('[RequesterHome] Pause shift confirmed for session:', activeSession.id);
     try {
       const data = await callSessionEdge('pause-shift', activeSession.id);
       const updated = data?.session as Partial<CoverageSession>;
       if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
     } catch (e: any) {
-      console.log('[RequesterHome] Pause shift error:', e.message);
       Alert.alert('Pause Shift Failed', e.message || 'Something went wrong. Please try again.');
     }
   };
 
   const handleEndShift = useCallback(async () => {
     if (!activeSession) return;
-    console.log('[RequesterHome] End shift — showing confirmation modal');
     setShowEndShiftModal(true);
   }, [activeSession]);
 
   const handleConfirmEndShift = async () => {
     if (!activeSession) return;
     setShowEndShiftModal(false);
-    console.log('[RequesterHome] End shift confirmed for session:', activeSession.id);
     try {
       const data = await callSessionEdge('end-shift', activeSession.id);
       const updated = data?.session as Partial<CoverageSession>;
       if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
     } catch (e: any) {
-      console.log('[RequesterHome] End shift error:', e.message);
       Alert.alert('End Shift Failed', e.message || 'Something went wrong. Please try again.');
     }
   };
 
   const handleCancelActiveShift = useCallback(() => {
     if (!activeSession) return;
-    console.log('[RequesterHome] Cancel active shift — showing confirmation modal');
     setShowCancelActiveModal(true);
   }, [activeSession]);
 
@@ -2838,7 +2673,6 @@ export default function RequesterHomeScreen() {
 
   const handleCancelActiveReasonSelected = async (reason: string) => {
     if (!activeSession) return;
-    console.log('[RequesterHome] Cancel active shift reason selected:', reason);
     setShowCancelActiveReasons(false);
     const sessionId = activeSession.id;
     // Clear immediately so the search card appears right away
@@ -2851,13 +2685,11 @@ export default function RequesterHomeScreen() {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, status: 'cancelled', cancellation_reason: reason }),
       });
-      console.log('[RequesterHome] Cancel active shift response:', res.status);
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
         throw new Error(errText || 'Cancel failed');
       }
     } catch (e: any) {
-      console.log('[RequesterHome] Cancel active shift error:', e.message);
       Alert.alert('Error', e.message);
       // Re-fetch to restore correct state if the API call failed
       fetchActiveSession();
@@ -2869,7 +2701,6 @@ export default function RequesterHomeScreen() {
       Alert.alert('No phone number available');
       return;
     }
-    console.log('[RequesterHome] Call doctor pressed:', activeSession.doctor_phone);
     Linking.openURL(`tel:${activeSession.doctor_phone}`);
   }, [activeSession]);
 
@@ -2897,8 +2728,6 @@ export default function RequesterHomeScreen() {
   const isPlusDisabled = coverageLength >= 15;
 
   // ─── Render ───────────────────────────────────────────────────────────────────
-  console.log('[RequesterHome] RENDER — Platform:', Platform.OS, 'MapView type:', typeof MapView, 'MapView value:', MapView);
-  console.log('[RequesterHome] About to render MapView — provider:', PROVIDER_GOOGLE, 'ref:', !!mapRef);
   return (
     <View style={{ flex: 1, backgroundColor: '#F9F9F6' }}>
 
@@ -2911,7 +2740,7 @@ export default function RequesterHomeScreen() {
         customMapStyle={MINIMALIST_MAP_STYLE}
         minZoomLevel={10}
         maxZoomLevel={18}
-        onMapReady={() => console.log('[RequesterHome] MAP READY ✓')}
+        onMapReady={() => {}}
       >
         {userCoords && (
           <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
@@ -3179,7 +3008,6 @@ export default function RequesterHomeScreen() {
                 }}>
                   <TouchableOpacity
                     onPress={() => {
-                      console.log('[RequesterHome] Coverage type set to Standard');
                       setCoverageType('Standard');
                     }}
                     style={{
@@ -3195,7 +3023,6 @@ export default function RequesterHomeScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => {
-                      console.log('[RequesterHome] Coverage type set to Home Care');
                       setCoverageType('Home Care');
                     }}
                     style={{
@@ -3219,7 +3046,6 @@ export default function RequesterHomeScreen() {
               <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
                 <TouchableOpacity
                   onPress={() => {
-                    console.log('[RequesterHome] Start date picker opened');
                     setWatNow(new Date(Date.now() + 60 * 60 * 1000));
                     setShowDatePicker(true);
                   }}
@@ -3235,7 +3061,6 @@ export default function RequesterHomeScreen() {
 
                 <TouchableOpacity
                   onPress={() => {
-                    console.log('[RequesterHome] Start time picker opened');
                     setWatNow(new Date(Date.now() + 60 * 60 * 1000));
                     setShowStartTimePicker(true);
                   }}
@@ -3254,7 +3079,6 @@ export default function RequesterHomeScreen() {
               <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
                 <TouchableOpacity
                   onPress={() => {
-                    console.log('[RequesterHome] End time picker opened');
                     setWatNow(new Date(Date.now() + 60 * 60 * 1000));
                     setShowEndTimePicker(true);
                   }}
@@ -3277,7 +3101,6 @@ export default function RequesterHomeScreen() {
                     <TouchableOpacity
                       onPress={() => {
                         const next = Math.max(1, coverageLength - 1);
-                        console.log('[RequesterHome] Coverage length decremented to:', next);
                         setCoverageLength(next);
                       }}
                       style={{
@@ -3298,7 +3121,6 @@ export default function RequesterHomeScreen() {
                       onPress={() => {
                         if (isPlusDisabled) return;
                         const next = Math.min(15, coverageLength + 1);
-                        console.log('[RequesterHome] Coverage length incremented to:', next);
                         setCoverageLength(next);
                       }}
                       style={{
@@ -3336,7 +3158,6 @@ export default function RequesterHomeScreen() {
                   }}>
                     <TouchableOpacity
                       onPress={() => {
-                        console.log('[RequesterHome] Environment set to Normal');
                         setEnvironment('Normal');
                       }}
                       style={{
@@ -3352,7 +3173,6 @@ export default function RequesterHomeScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => {
-                        console.log('[RequesterHome] Environment set to Busy');
                         setEnvironment('Busy');
                       }}
                       style={{
@@ -3387,7 +3207,6 @@ export default function RequesterHomeScreen() {
                 <TextInput
                   value={note}
                   onChangeText={(v) => {
-                    console.log('[RequesterHome] Note updated');
                     setNote(v);
                   }}
                   multiline
@@ -3752,7 +3571,6 @@ export default function RequesterHomeScreen() {
         submittingRating={submittingRating}
         ratingError={ratingError}
         onDismiss={() => {
-          console.log('[RequesterHome] Payment success modal dismissed');
           if (confirmedSession?.id) markRequesterSessionPaid(confirmedSession.id);
           setShowPaymentSuccess(false);
           setConfirmedSession(null);
@@ -3763,15 +3581,12 @@ export default function RequesterHomeScreen() {
           setRatingError('');
         }}
         onRatingOverlayOpen={() => {
-          console.log('[RequesterHome] Rating overlay opened');
           setShowRatingOverlay(true);
         }}
         onRatingOverlayClose={() => {
-          console.log('[RequesterHome] Rating overlay closed without submitting');
           setShowRatingOverlay(false);
         }}
         onStarPress={(star) => {
-          console.log('[RequesterHome] Star rating selected:', star);
           setRatingStars(star);
           setRatingError('');
         }}
@@ -3782,7 +3597,6 @@ export default function RequesterHomeScreen() {
             return;
           }
           if (!confirmedSession) return;
-          console.log('[RequesterHome] Submitting review for session:', confirmedSession.id, 'stars:', ratingStars);
           setSubmittingRating(true);
           setRatingError('');
           try {
@@ -3792,13 +3606,11 @@ export default function RequesterHomeScreen() {
               headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({ session_id: confirmedSession.id, stars: ratingStars, comment: ratingComment || undefined, reviewer_role: 'requester' }),
             });
-            console.log('[RequesterHome] submit-review response:', res.status);
             if (!res.ok) {
               const errBody = await res.json().catch(() => ({}));
               throw new Error((errBody as any).error || 'Failed to submit review');
             }
             const data = await res.json();
-            console.log('[RequesterHome] Review submitted successfully:', data?.review?.id);
             if (confirmedSession?.id) markRequesterSessionPaid(confirmedSession.id);
             setShowRatingOverlay(false);
             setShowPaymentSuccess(false);   // close entire modal
@@ -3808,14 +3620,12 @@ export default function RequesterHomeScreen() {
             setRatingComment('');
             setRatingError('');
           } catch (e: any) {
-            console.log('[RequesterHome] Review submission error:', e.message);
             setRatingError(e.message || 'Failed to submit review');
           } finally {
             setSubmittingRating(false);
           }
         }}
         onSkipRating={() => {
-          console.log('[RequesterHome] Rating skipped — persisting guard');
           if (confirmedSession?.id) markRequesterSessionPaid(confirmedSession.id);
           setShowRatingOverlay(false);
           setShowPaymentSuccess(false);
@@ -3837,7 +3647,6 @@ export default function RequesterHomeScreen() {
               <View style={{ backgroundColor: '#1C1C1E', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 }}>
                   <TouchableOpacity onPress={() => {
-                    console.log('[RequesterHome] Date picker Done pressed');
                     setShowDatePicker(false);
                   }}>
                     <Text style={{ fontSize: 16, fontWeight: '600', color: '#FFFFFF' }}>Done</Text>
@@ -3852,7 +3661,6 @@ export default function RequesterHomeScreen() {
                   style={{ backgroundColor: '#1C1C1E' }}
                   textColor="#FFFFFF"
                   onChange={(event, date) => {
-                    console.log('[RequesterHome] Date picker changed:', event.type, date);
                     if (date) {
                       // WAT validation: snap back to today if before WAT today
                       const watTodayStr = watNow.toISOString().split('T')[0];
@@ -3901,12 +3709,10 @@ export default function RequesterHomeScreen() {
         shiftDate={shiftDate}
         watNow={watNow}
         onDone={(date) => {
-          console.log('[RequesterHome] Start time committed:', date.toTimeString().slice(0, 5));
           setStartTime(date);
           setShowStartTimePicker(false);
         }}
         onCancel={() => {
-          console.log('[RequesterHome] Start time picker cancelled');
           setShowStartTimePicker(false);
         }}
       />
@@ -3919,12 +3725,10 @@ export default function RequesterHomeScreen() {
         shiftDate={shiftDate}
         watNow={watNow}
         onDone={(date) => {
-          console.log('[RequesterHome] End time committed:', date.toTimeString().slice(0, 5));
           setEndTime(date);
           setShowEndTimePicker(false);
         }}
         onCancel={() => {
-          console.log('[RequesterHome] End time picker cancelled');
           setShowEndTimePicker(false);
         }}
       />

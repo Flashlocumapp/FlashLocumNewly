@@ -32,7 +32,6 @@ function NavigationGuard() {
   // Load last pathway from AsyncStorage once on mount
   useEffect(() => {
     SecureStore.getItemAsync(LAST_PATHWAY_KEY).then(val => {
-      console.log('[NavigationGuard] Loaded last pathway from storage:', val);
       setLastPathway((val as 'doctor' | 'requester') ?? null);
     }).catch(() => setLastPathway(null));
   }, []);
@@ -49,17 +48,14 @@ function NavigationGuard() {
 
     hasRouted.current = true;
     SplashScreen.hideAsync();
-    console.log('[NavigationGuard] Routing — session:', !!session, 'profile:', !!profile, 'lastPathway:', lastPathway);
 
     const alreadyInOnboarding = segments[0] === '(onboarding)';
     if (alreadyInOnboarding) {
-      console.log('[NavigationGuard] Already in onboarding — skipping re-route');
       return;
     }
 
     // 1. No session
     if (!session) {
-      console.log('[NavigationGuard] No session → /(auth)/intro');
       router.replace('/(auth)/intro' as any);
       return;
     }
@@ -70,7 +66,6 @@ function NavigationGuard() {
       const route = metaRole === 'requester'
         ? '/(onboarding)/requester/basic-profile'
         : '/(onboarding)/doctor/basic-profile';
-      console.log('[NavigationGuard] No profile → onboarding via metadata role:', metaRole, '→', route);
       router.replace(route as any);
       return;
     }
@@ -83,7 +78,6 @@ function NavigationGuard() {
       const route = profile.role === 'doctor'
         ? '/(onboarding)/doctor/basic-profile'
         : '/(onboarding)/requester/basic-profile';
-      console.log('[NavigationGuard] Neither complete → onboarding:', route);
       router.replace(route as any);
       return;
     }
@@ -92,7 +86,6 @@ function NavigationGuard() {
     if (doctorComplete && !requesterComplete) {
       const homeDest = '/(doctor)/(home)';
       const encodedDest = encodeURIComponent(homeDest);
-      console.log('[NavigationGuard] Doctor only → intro → /(doctor)/(home)');
       router.replace(`/(auth)/intro?dest=${encodedDest}` as any);
       return;
     }
@@ -101,7 +94,6 @@ function NavigationGuard() {
     if (requesterComplete && !doctorComplete) {
       const homeDest = '/(requester)/(home)';
       const encodedDest = encodeURIComponent(homeDest);
-      console.log('[NavigationGuard] Requester only → intro → /(requester)/(home)');
       router.replace(`/(auth)/intro?dest=${encodedDest}` as any);
       return;
     }
@@ -111,14 +103,12 @@ function NavigationGuard() {
     const pathway = lastPathway === 'doctor' ? 'doctor' : 'requester';
     SecureStore.setItemAsync(LAST_PATHWAY_KEY, pathway).catch(() => {});
     const encodedDest = encodeURIComponent(dest);
-    console.log('[NavigationGuard] Both complete → intro → last pathway:', dest);
     router.replace(`/(auth)/intro?dest=${encodedDest}` as any);
   }, [isReady, lastPathway, session, profile, profileLoading, segments]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sign-out watcher — only reset after session AND profile are both gone
   useEffect(() => {
     if (!session && !profile && hasRouted.current) {
-      console.log('[NavigationGuard] Session + profile both gone — resetting and going to role-select');
       hasRouted.current = false;
       router.replace('/(auth)/role-select' as any);
     }
@@ -133,10 +123,8 @@ function NavigationGuard() {
     const inRequester = segments[0] === '(requester)';
 
     if (inDoctor && !doctorComplete && requesterComplete) {
-      console.log('[NavigationGuard] Cross-portal block: requester in doctor route → redirecting');
       router.replace('/(requester)/(home)' as any);
     } else if (inRequester && !requesterComplete && doctorComplete) {
-      console.log('[NavigationGuard] Cross-portal block: doctor in requester route → redirecting');
       router.replace('/(doctor)/(home)' as any);
     }
   }, [segments, isReady, profile]); // eslint-disable-line react-hooks/exhaustive-deps

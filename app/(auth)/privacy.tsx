@@ -89,7 +89,6 @@ export default function PrivacyScreen() {
   const insets = useSafeAreaInsets();
 
   const handleBack = () => {
-    console.log('[Privacy] Back button pressed');
     router.back();
   };
 

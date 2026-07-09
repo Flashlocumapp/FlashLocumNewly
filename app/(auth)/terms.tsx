@@ -87,7 +87,6 @@ export default function TermsScreen() {
   const insets = useSafeAreaInsets();
 
   const handleBack = () => {
-    console.log('[Terms] Back button pressed');
     router.back();
   };
 

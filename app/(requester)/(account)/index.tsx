@@ -87,15 +87,12 @@ export default function RequesterAccountScreen() {
   useEffect(() => {
     if (!user) return;
     const fetchProfile = async () => {
-      console.log('[RequesterAccount] Fetching profile for user:', user.id);
       const { data, error } = await supabase
         .from('profiles')
         .select('first_name, last_name, phone, gender')
         .eq('id', user.id)
         .single();
-      if (error) {
-        console.log('[RequesterAccount] Profile fetch error:', error.message);
-      }
+
       setProfile({
         first_name: authProfile?.first_name ?? data?.first_name ?? null,
         last_name: authProfile?.last_name ?? data?.last_name ?? null,
@@ -121,7 +118,6 @@ export default function RequesterAccountScreen() {
   const genderValue = rawGender ? rawGender.charAt(0).toUpperCase() + rawGender.slice(1) : '—';
 
   const openPhoneModal = () => {
-    console.log('[RequesterAccount] Phone Number edit pressed');
     setEditPhone(profile?.phone ?? '');
     setPhoneError('');
     setPhoneModalVisible(true);
@@ -134,7 +130,6 @@ export default function RequesterAccountScreen() {
       return;
     }
     setSavingPhone(true);
-    console.log('[RequesterAccount] Saving phone number');
     const { error } = await supabase.from('profiles').update({ phone: cleaned }).eq('id', user!.id);
     setSavingPhone(false);
     if (error) { Alert.alert('Error', error.message); return; }
@@ -144,7 +139,6 @@ export default function RequesterAccountScreen() {
 
   const handleSaveGender = async (newGender: 'male' | 'female') => {
     setSavingGender(true);
-    console.log('[RequesterAccount] Saving gender:', newGender);
     const { error } = await supabase.from('profiles').update({ gender: newGender }).eq('id', user!.id);
     setSavingGender(false);
     if (error) { Alert.alert('Error', error.message); return; }
@@ -153,13 +147,11 @@ export default function RequesterAccountScreen() {
   };
 
   const handleSignOut = () => {
-    console.log('[RequesterAccount] Sign out pressed');
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign Out', style: 'destructive',
         onPress: async () => {
-          console.log('[RequesterAccount] Confirming sign out');
           await supabase.auth.signOut();
           router.replace('/(auth)/role-select' as any);
         },
@@ -168,7 +160,6 @@ export default function RequesterAccountScreen() {
   };
 
   const handleDeleteAccount = () => {
-    console.log('[RequesterAccount] Delete Account pressed');
     Alert.alert('Delete Account', 'This action is permanent and cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => Alert.alert('Coming Soon', 'Account deletion will be available soon.') },
@@ -203,20 +194,19 @@ export default function RequesterAccountScreen() {
         <Card>
           <EditableRow label="Phone Number" value={phoneValue} onPress={openPhoneModal} />
           <CardDivider />
-          <EditableRow label="Gender" value={genderValue} onPress={() => { console.log('[RequesterAccount] Gender edit pressed'); setGenderModalVisible(true); }} />
+          <EditableRow label="Gender" value={genderValue} onPress={() => { setGenderModalVisible(true); }} />
         </Card>
 
         <SectionHeader title="SUPPORT" />
         <Card>
-          <ActionRow label="Help Center" onPress={() => { console.log('[RequesterAccount] Help Center pressed'); router.push('/(requester)/(account)/help-center' as any); }} />
+          <ActionRow label="Help Center" onPress={() => { router.push('/(requester)/(account)/help-center' as any); }} />
           <CardDivider />
-          <ActionRow label="Contact Support" onPress={() => { console.log('[RequesterAccount] Contact Support pressed'); router.push('/(requester)/(account)/contact-support' as any); }} />
+          <ActionRow label="Contact Support" onPress={() => { router.push('/(requester)/(account)/contact-support' as any); }} />
         </Card>
 
         <SectionHeader title="ACCOUNT MANAGEMENT" />
         <Card>
           <ActionRow label="Switch to Cover & Earn" onPress={() => {
-            console.log('[RequesterAccount] Switch to Cover & Earn pressed');
             if (authProfile?.doctor_onboarding_complete) {
               router.replace('/(doctor)/(home)' as any);
             } else {

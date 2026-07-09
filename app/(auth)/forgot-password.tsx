@@ -26,7 +26,6 @@ export default function ForgotPasswordScreen() {
   const [error, setError] = useState('');
 
   const handleBack = () => {
-    console.log('[ForgotPassword] Back button pressed');
     router.back();
   };
 
@@ -37,7 +36,6 @@ export default function ForgotPasswordScreen() {
       return;
     }
 
-    console.log('[ForgotPassword] Send reset code pressed — email:', email.trim(), 'role:', role);
     setLoading(true);
     setError('');
 
@@ -48,10 +46,8 @@ export default function ForgotPasswordScreen() {
     setLoading(false);
 
     if (resetError) {
-      console.log('[ForgotPassword] Reset password error:', resetError.message);
       setError(resetError.message || 'Failed to send reset code. Please try again.');
     } else {
-      console.log('[ForgotPassword] Reset code sent successfully — navigating to reset-verify');
       router.push(
         `/(auth)/reset-verify?email=${encodeURIComponent(email.trim())}&role=${role}` as any
       );

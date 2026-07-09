@@ -41,7 +41,6 @@ const _doctorRatedSessions = new Set<string>();
 const _doctorRatingInFlight = new Set<string>();
 
 async function markDoctorSessionRated(sessionId: string) {
-  console.log('[DoctorLayout] markDoctorSessionRated:', sessionId);
   _doctorRatedSessions.add(sessionId);
   _doctorRatingInFlight.delete(sessionId);
   try {
@@ -263,16 +262,14 @@ export default function DoctorLayout() {
           .eq('id', user.id)
           .single();
         if (error) {
-          console.log('[DoctorLayout] Failed to fetch doctor scores:', error.message);
           return;
         }
         if (data) {
-          console.log('[DoctorLayout] Fetched doctor scores:', data.rating, data.reliability);
           setDoctorRatingScore(data.rating ?? 5.0);
           setDoctorReliabilityScore(data.reliability ?? 100);
         }
       } catch (e: any) {
-        console.log('[DoctorLayout] fetchDoctorScores error:', e.message);
+        // non-fatal
       }
     })();
   }, [user]);
@@ -291,7 +288,6 @@ export default function DoctorLayout() {
   const callEdge = useCallback(async (fn: string, body?: object) => {
     const token = await getValidToken();
     if (!token) return null;
-    console.log(`[DoctorLayout] Calling edge function: ${fn}`, body ?? '');
     const res = await fetch(`${EDGE_BASE}/${fn}`, {
       method: 'POST',
       headers: {
@@ -300,13 +296,11 @@ export default function DoctorLayout() {
       },
       body: body ? JSON.stringify(body) : undefined,
     });
-    console.log(`[DoctorLayout] ${fn} response status:`, res.status);
     return res;
   }, []);
 
   const forceSync = useCallback(async () => {
     if (!user) return;
-    console.log('[DoctorLayout] Force-syncing...');
     try {
       const res = await callEdge('force-sync');
       if (!res || !res.ok) return;
@@ -317,7 +311,6 @@ export default function DoctorLayout() {
         if (req.expiry_at && new Date(req.expiry_at) <= now) return false;
         return true;
       });
-      console.log('[DoctorLayout] Force-sync result — requests:', data.requests?.length ?? 0, 'fresh:', freshRequests.length);
       if (freshRequests.length > 0) {
         setRequestQueue(freshRequests);
         setDoctorScreenState('incoming');
@@ -326,7 +319,7 @@ export default function DoctorLayout() {
         setDoctorScreenState((prev) => prev === 'incoming' ? 'idle' : prev);
       }
     } catch (e: any) {
-      console.log('[DoctorLayout] Force-sync error:', e.message);
+      // non-fatal
     }
   }, [user, callEdge]);
 
@@ -335,7 +328,6 @@ export default function DoctorLayout() {
     if (!sessionId) return;
     // Synchronous check — blocks instantly before any async work
     if (_doctorRatedSessions.has(sessionId) || _doctorRatingInFlight.has(sessionId)) {
-      console.log('[DoctorLayout] Rating overlay suppressed (sync) — session:', sessionId);
       return;
     }
     // Mark in-flight immediately so concurrent calls are blocked
@@ -344,7 +336,6 @@ export default function DoctorLayout() {
     const alreadyHandled = await isDoctorSessionRated(sessionId);
     if (alreadyHandled) {
       _doctorRatingInFlight.delete(sessionId);
-      console.log('[DoctorLayout] Rating overlay suppressed (async) — session:', sessionId);
       return;
     }
     // Also check the database — ultimate source of truth, survives reinstalls
@@ -358,17 +349,14 @@ export default function DoctorLayout() {
           .eq('reviewer_role', 'doctor')
           .maybeSingle();
         if (data) {
-          console.log('[DoctorLayout] Rating overlay suppressed (DB) — review already exists for session:', sessionId);
           markDoctorSessionRated(sessionId); // backfill AsyncStorage
           _doctorRatingInFlight.delete(sessionId);
           return;
         }
       }
     } catch (e: any) {
-      console.log('[DoctorLayout] DB review check error (non-fatal):', e.message);
       _doctorRatingInFlight.delete(sessionId);
     }
-    console.log('[DoctorLayout] maybeShowDoctorRating: showing overlay for session:', sessionId);
     setDoctorRatingSessionId(sessionId);
     setDoctorRatingHospitalName(hospitalName);
     setDoctorRatingStars(0);
@@ -381,21 +369,16 @@ export default function DoctorLayout() {
   const fetchActiveSession = useCallback(async () => {
     const token = await getValidToken();
     if (!token) return;
-    console.log('[DoctorLayout] Fetching active session for doctor');
     try {
       const res = await fetch(`${EDGE_BASE}/get-active-session?role=doctor`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      console.log('[DoctorLayout] get-active-session response status:', res.status);
       if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        console.log('[DoctorLayout] get-active-session error:', errText);
         return;
       }
       const data = await res.json();
       const session: CoverageSession | null = data?.session ?? null;
       const jobCount: number = data?.active_job_count ?? 0;
-      console.log('[DoctorLayout] Active session fetched:', session?.id ?? 'none', 'job count:', jobCount);
       setActiveSession(session);
       setActiveJobCount(jobCount);
       // If session is already paid, use persistent guard to decide whether to show overlay
@@ -406,7 +389,7 @@ export default function DoctorLayout() {
         }
       }
     } catch (e: any) {
-      console.log('[DoctorLayout] fetchActiveSession error:', e.message);
+      // non-fatal
     }
   }, [maybeShowDoctorRating]);
 
@@ -417,7 +400,6 @@ export default function DoctorLayout() {
 
   // Go online with optional GPS coords from the home screen
   const goOnline = useCallback((coords?: { lat: number; lng: number }) => {
-    console.log('[DoctorLayout] goOnline called with coords:', coords ?? 'none');
     if (coords) {
       pendingGoOnlineCoordsRef.current = coords;
     }
@@ -427,7 +409,6 @@ export default function DoctorLayout() {
   // ─── Keep activeSessionId in sync — only set, never clear ───────────────────
   useEffect(() => {
     if (activeSession?.id) {
-      console.log('[DoctorLayout] activeSessionId updated to:', activeSession.id);
       setActiveSessionId(activeSession.id);
     }
     // Intentionally do NOT clear when activeSession becomes null —
@@ -450,28 +431,22 @@ export default function DoctorLayout() {
     prevIsOnlineRef.current = isOnline;
     const toggle = async () => {
       const fn = isOnline ? 'go-online' : 'go-offline';
-      console.log('[DoctorLayout] Toggling status:', fn);
       try {
         const goOnlineBody = isOnline
           ? (pendingGoOnlineCoordsRef.current ?? lastLocationRef.current ?? _layoutCachedCoords ?? undefined)
           : undefined;
-        if (isOnline) {
-          console.log('[DoctorLayout] go-online coords:', goOnlineBody ?? 'none');
-        }
         pendingGoOnlineCoordsRef.current = null;
         const res = await callEdgeRef.current(fn, goOnlineBody);
         if (isOnline) {
           if (!res || !res.ok) {
             if (res?.status === 409) {
               const body409 = await res.json().catch(() => ({}));
-              console.log('[DoctorLayout] go-online 409 — error code:', body409.error);
               if (body409.error === 'CAP_REACHED') {
                 Alert.alert('Max Shifts Reached', 'Complete a shift to go online again.');
                 setIsOnline(false);
               } else {
                 let body = '';
                 try { body = await res?.text() ?? ''; } catch (_) {}
-                console.log('[DoctorLayout] go-online failed — status:', res?.status, 'body:', body);
                 Alert.alert(
                   'Could not go online',
                   `Error ${res?.status ?? 'unknown'}: ${body || 'No response from server'}`,
@@ -481,7 +456,6 @@ export default function DoctorLayout() {
             } else {
               let body = '';
               try { body = await res?.text() ?? ''; } catch (_) {}
-              console.log('[DoctorLayout] go-online failed — status:', res?.status, 'body:', body);
               Alert.alert(
                 'Could not go online',
                 `Error ${res?.status ?? 'unknown'}: ${body || 'No response from server'}`,
@@ -489,13 +463,11 @@ export default function DoctorLayout() {
               );
             }
           } else {
-            console.log('[DoctorLayout] Went online — force-syncing queue');
             await forceSyncRef.current();
             // Explicitly trigger the card if the sync found requests.
             // Don't rely on the async React re-render cycle — read the ref directly.
             setRequestQueue((current) => {
               if (current.length > 0) {
-                console.log('[DoctorLayout] go-online: queue has items after sync, setting incoming');
                 setDoctorScreenState('incoming');
               }
               return current; // no change to queue itself
@@ -503,12 +475,11 @@ export default function DoctorLayout() {
 
           }
         } else {
-          console.log('[DoctorLayout] Went offline — clearing queue');
           setRequestQueue([]);
           setDoctorScreenState('idle');
         }
       } catch (e: any) {
-        console.log('[DoctorLayout] Toggle error:', e.message);
+        // non-fatal
       }
     };
     toggle();
@@ -521,7 +492,6 @@ export default function DoctorLayout() {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        console.log('[DoctorLayout] Location permission not granted');
         return;
       }
 
@@ -530,9 +500,8 @@ export default function DoctorLayout() {
         const immediate = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         lastLocationRef.current = { lat: immediate.coords.latitude, lng: immediate.coords.longitude };
         _layoutCachedCoords = { lat: immediate.coords.latitude, lng: immediate.coords.longitude };
-        console.log('[DoctorLayout] Immediate location fix:', lastLocationRef.current);
       } catch (e) {
-        console.log('[DoctorLayout] Immediate location fix failed:', e);
+        // non-fatal
       }
 
       sub = await Location.watchPositionAsync(
@@ -540,7 +509,6 @@ export default function DoctorLayout() {
         (loc) => {
           lastLocationRef.current = { lat: loc.coords.latitude, lng: loc.coords.longitude };
           _layoutCachedCoords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-          console.log('[DoctorLayout] Location updated:', lastLocationRef.current);
         }
       );
     })();
@@ -551,7 +519,6 @@ export default function DoctorLayout() {
   useEffect(() => {
     if (!isOnline || !user) return;
     const send = async () => {
-      console.log('[DoctorLayout] Sending heartbeat');
       const bestCoords = lastLocationRef.current ?? _layoutCachedCoords;
       const locPayload = bestCoords ? { lat: bestCoords.lat, lng: bestCoords.lng } : {};
       await callEdge('heartbeat', locPayload);
@@ -566,17 +533,8 @@ export default function DoctorLayout() {
     if (!isOnline || !user) return;
     const id = setInterval(() => {
       if (__DEV__ || !isRealtimeHealthyRef.current) {
-        // DEV: always poll (Expo Go / Newly preview WebSocket is unreliable)
-        // PROD: only poll when Realtime is actually down
-        if (!isRealtimeHealthyRef.current) {
-          console.log('[DoctorLayout] Poll tick — Realtime unhealthy, force-syncing');
-        } else {
-          console.log('[DoctorLayout] Poll tick — DEV mode, syncing as safety net');
-        }
         forceSyncRef.current();
         fetchActiveSession();
-      } else {
-        console.log('[DoctorLayout] Poll tick — Realtime healthy in production, skipping DB reads');
       }
     }, POLL_INTERVAL);
     return () => clearInterval(id);
@@ -585,16 +543,13 @@ export default function DoctorLayout() {
   // ── Realtime subscription — dispatch channel ──
   useEffect(() => {
     if (!user) return;
-    console.log('[DoctorLayout] Subscribing to dispatch:lagos channel');
     const channel = supabase.channel('dispatch:lagos')
       .on('broadcast', { event: 'NEW_REQUEST' }, (payload) => {
         const req = payload.payload as DispatchRequest;
         const now = new Date();
         if (req.expiry_at && new Date(req.expiry_at) <= now) {
-          console.log('[DoctorLayout] NEW_REQUEST already expired, ignoring:', req.id);
           return;
         }
-        console.log('[DoctorLayout] NEW_REQUEST received:', req.id, '— adding to queue unconditionally');
         setRequestQueue((prev) => {
           if (prev.some((r) => r.id === req.id)) return prev;
           return [...prev, req];
@@ -604,11 +559,9 @@ export default function DoctorLayout() {
       })
       .on('broadcast', { event: 'EVICT_REQUEST' }, (payload) => {
         const evictedId: string = payload.payload?.request_id;
-        console.log('[DoctorLayout] EVICT_REQUEST received:', evictedId);
         setRequestQueue((prev) => prev.filter((r) => r.id !== evictedId));
       })
       .subscribe((status) => {
-        console.log('[DoctorLayout] dispatch:lagos subscription status:', status);
         isRealtimeHealthyRef.current = status === 'SUBSCRIBED';
         if (status === 'SUBSCRIBED' && isOnlineRef.current) {
           forceSync();
@@ -616,7 +569,6 @@ export default function DoctorLayout() {
       });
     channelRef.current = channel;
     return () => {
-      console.log('[DoctorLayout] Unsubscribing from dispatch:lagos');
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
@@ -626,7 +578,6 @@ export default function DoctorLayout() {
   useEffect(() => {
     if (!activeSessionId) {
       if (sessionChannelRef.current) {
-        console.log('[DoctorLayout] No active session ID — removing session channel');
         supabase.removeChannel(sessionChannelRef.current);
         sessionChannelRef.current = null;
       }
@@ -634,7 +585,6 @@ export default function DoctorLayout() {
     }
 
     const channelName = `session:${activeSessionId}`;
-    console.log('[DoctorLayout] Subscribing to session channel:', channelName);
 
     // Remove old channel if any
     if (sessionChannelRef.current) {
@@ -644,7 +594,6 @@ export default function DoctorLayout() {
 
     const ch = supabase.channel(channelName)
       .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
-        console.log('[DoctorLayout] SHIFT_STARTED received:', payload);
         const updated = payload?.payload?.session as CoverageSession | undefined;
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
@@ -653,7 +602,6 @@ export default function DoctorLayout() {
         fetchActiveSession();
       })
       .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
-        console.log('[DoctorLayout] SHIFT_PAUSED received:', payload);
         const updated = payload?.payload?.session as CoverageSession | undefined;
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
@@ -662,7 +610,6 @@ export default function DoctorLayout() {
         fetchActiveSession();
       })
       .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
-        console.log('[DoctorLayout] SHIFT_RESUMED received:', payload);
         const updated = payload?.payload?.session as CoverageSession | undefined;
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
@@ -671,43 +618,37 @@ export default function DoctorLayout() {
         fetchActiveSession();
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
-        console.log('[DoctorLayout] SHIFT_ENDED received:', payload);
         const updated = payload?.payload?.session as CoverageSession | undefined;
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
         }
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        console.log('[DoctorLayout] PAYMENT_CONFIRMED received (session channel):', payload);
         const sessionId = payload?.payload?.session_id ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         maybeShowDoctorRating(sessionId ?? '', hospitalName);
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
-        console.log('[DoctorLayout] payment_confirmed received (session channel):', payload);
         const sessionId = payload?.payload?.session_id ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         maybeShowDoctorRating(sessionId ?? '', hospitalName);
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
-        console.log('[DoctorLayout] PAYMENT_COMPLETE received:', payload);
         setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
-        console.log('[DoctorLayout] SHIFT_CANCELLED received (session channel):', payload);
         setActiveSession(null);
         setActiveJobCount((prev) => Math.max(0, prev - 1));
       })
       .subscribe((status) => {
-        console.log('[DoctorLayout] Session channel status:', channelName, status);
+        // subscription status — no logging needed
       });
 
     sessionChannelRef.current = ch;
 
     return () => {
-      console.log('[DoctorLayout] Unsubscribing from session channel:', channelName);
       supabase.removeChannel(ch);
       sessionChannelRef.current = null;
     };
@@ -719,42 +660,35 @@ export default function DoctorLayout() {
   // Dependency on activeSessionId ensures the handler captures the latest session ID in its closure.
   useEffect(() => {
     if (!user) return;
-    console.log('[DoctorLayout] Subscribing to doctor-user channel for user:', user.id, 'activeSessionId:', activeSessionId);
     const ch = supabase.channel(`user:${user.id}`)
       .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
-        console.log('[DoctorLayout] RATING_UPDATED received:', JSON.stringify(payload));
         if (payload?.payload?.reviewer_role === 'requester') {
           const newRating = payload?.payload?.new_rating;
           if (newRating !== undefined) {
-            console.log('[DoctorLayout] Updating doctor rating to:', newRating);
             setDoctorRatingScore(Number(newRating));
           }
         }
       })
       .on('broadcast', { event: 'RELIABILITY_UPDATED' }, (payload) => {
-        console.log('[DoctorLayout] RELIABILITY_UPDATED received:', JSON.stringify(payload));
         const newReliability = payload?.payload?.new_reliability;
         if (newReliability !== undefined) {
-          console.log('[DoctorLayout] Updating doctor reliability to:', newReliability);
           setDoctorReliabilityScore(Number(newReliability));
         }
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        console.log('[DoctorLayout] PAYMENT_CONFIRMED received (user channel):', payload);
         const sessionId = payload?.payload?.session_id ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         maybeShowDoctorRating(sessionId ?? '', hospitalName);
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
-        console.log('[DoctorLayout] payment_confirmed received (user channel):', payload);
         const sessionId = payload?.payload?.session_id ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         maybeShowDoctorRating(sessionId ?? '', hospitalName);
       })
       .subscribe((status) => {
-        console.log('[DoctorLayout] user channel status:', status);
+        // subscription status — no logging needed
       });
     return () => { supabase.removeChannel(ch); };
   }, [user, activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -762,10 +696,8 @@ export default function DoctorLayout() {
   // ── Queue → state sync ──
   useEffect(() => {
     if (requestQueue.length > 0 && doctorScreenState === 'idle' && isOnlineRef.current) {
-      console.log('[DoctorLayout] Queue has items, transitioning to incoming');
       setDoctorScreenState('incoming');
     } else if (requestQueue.length === 0 && doctorScreenState === 'incoming') {
-      console.log('[DoctorLayout] Queue empty, transitioning to idle');
       setDoctorScreenState('idle');
     }
   }, [requestQueue, doctorScreenState]); // isOnline removed — use ref for live value
@@ -774,7 +706,6 @@ export default function DoctorLayout() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', async (state) => {
       if ((state === 'background' || state === 'inactive') && isOnlineRef.current) {
-        console.log('[DoctorLayout] App backgrounded while online — calling go-offline');
         // Fire-and-forget: mark doctor offline in DB immediately
         getValidToken().then((token) => {
           if (token) {
@@ -782,14 +713,13 @@ export default function DoctorLayout() {
               method: 'POST',
               headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({}),
-            }).catch((e) => console.log('[DoctorLayout] go-offline on background error:', e.message));
+            }).catch(() => {});
           }
         });
         // Also update local state so the toggle reflects offline when app resumes
         setIsOnline(false);
       }
       if (state === 'active' && isOnline && user) {
-        console.log('[DoctorLayout] App foregrounded — force-syncing');
         await forceSync();
       }
     });
@@ -800,7 +730,6 @@ export default function DoctorLayout() {
   useEffect(() => {
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active') {
-        console.log('[DoctorLayout] App foregrounded — re-fetching active session');
         fetchActiveSession();
       }
     };
@@ -812,7 +741,6 @@ export default function DoctorLayout() {
   const handleAccept = useCallback(async () => {
     const req = requestQueue[0];
     if (!req || !user) return;
-    console.log('[DoctorLayout] Accept button pressed for request:', req.id);
     setAccepting(true);
     try {
       const token = await getValidToken();
@@ -825,10 +753,8 @@ export default function DoctorLayout() {
         },
         body: JSON.stringify({ request_id: req.id }),
       });
-      console.log('[DoctorLayout] accept-request response status:', res.status);
       if (res.status === 409) {
         const body409 = await res.json().catch(() => ({}));
-        console.log('[DoctorLayout] 409 on accept — error code:', body409.error);
         if (body409.error === 'CAP_REACHED') {
           Alert.alert('Max Shifts Reached', 'You have been taken offline. Complete a shift to go online again.');
           setIsOnline(false);
@@ -846,23 +772,19 @@ export default function DoctorLayout() {
         const body = await res.text().catch(() => '');
         throw new Error(body || 'Accept failed');
       }
-      console.log('[DoctorLayout] Request accepted successfully — transitioning to idle');
       setConfirmedRequest(req);
       setDoctorScreenState('idle');
       setRequestQueue([]);
 
       // Fetch the newly created session
-      console.log('[DoctorLayout] Fetching active session after accept');
       await fetchActiveSession();
 
       // Auto-go-offline after accepting the 3rd shift
       if (activeJobCount + 1 >= 3) {
-        console.log('[DoctorLayout] Job cap reached after accept — going offline silently');
         callEdge('go-offline');
         setIsOnline(false);
       }
     } catch (e: any) {
-      console.log('[DoctorLayout] Accept error:', e.message);
       Alert.alert('Error', e.message);
     } finally {
       setAccepting(false);
@@ -873,7 +795,6 @@ export default function DoctorLayout() {
   const handleDecline = useCallback(async () => {
     const req = requestQueue[0];
     if (!req || !user) return;
-    console.log('[DoctorLayout] Decline button pressed for request:', req.id);
     try {
       await callEdge('decline-request', { request_id: req.id });
     } catch {}
@@ -882,7 +803,6 @@ export default function DoctorLayout() {
 
   // ── Doctor Rating — dismiss and navigate to summary ──
   const handleDoctorRatingDone = useCallback(() => {
-    console.log('[DoctorLayout] Doctor rating overlay dismissed, navigating to payment-summary');
     const sid = doctorRatingSessionId;
     if (sid) {
       _doctorRatingInFlight.delete(sid);
@@ -899,7 +819,6 @@ export default function DoctorLayout() {
 
   // ── Doctor Rating — submit review ──
   const handleSubmitDoctorRating = useCallback(async () => {
-    console.log('[DoctorLayout] Submit rating button pressed — stars:', doctorRatingStars);
     if (doctorRatingStars === 0) {
       setDoctorRatingError('Please select a star rating.');
       return;
@@ -908,7 +827,6 @@ export default function DoctorLayout() {
     setDoctorRatingError('');
     try {
       const token = await getValidToken();
-      console.log('[DoctorLayout] Submitting review to edge function — session:', doctorRatingSessionId, 'stars:', doctorRatingStars);
       const res = await fetch(`${EDGE_BASE}/submit-review`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -919,14 +837,11 @@ export default function DoctorLayout() {
           reviewer_role: 'doctor',
         }),
       });
-      console.log('[DoctorLayout] submit-review response status:', res.status);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to submit review');
-      console.log('[DoctorLayout] Review submitted successfully');
       if (doctorRatingSessionId) markDoctorSessionRated(doctorRatingSessionId);
       handleDoctorRatingDone();
     } catch (e: any) {
-      console.log('[DoctorLayout] submit-review error:', e.message);
       setDoctorRatingError(e.message);
     } finally {
       setSubmittingDoctorRating(false);
@@ -1077,7 +992,6 @@ export default function DoctorLayout() {
                       <TouchableOpacity
                         key={n}
                         onPress={() => {
-                          console.log('[DoctorLayout] Star rating selected:', n);
                           setDoctorRatingStars(n);
                           setDoctorRatingError('');
                         }}

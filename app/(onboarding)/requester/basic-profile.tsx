@@ -34,7 +34,6 @@ export default function RequesterBasicProfile() {
   const [submitError, setSubmitError] = useState('');
 
   const handleBack = () => {
-    console.log('[RequesterBasicProfile] Back button pressed, from:', from, 'requester_onboarding_complete:', profile?.requester_onboarding_complete);
     if (from === 'doctor-account') {
       router.replace('/(doctor)/(account)' as any);
     } else if (profile?.requester_onboarding_complete) {
@@ -45,7 +44,6 @@ export default function RequesterBasicProfile() {
   };
 
   const handleGenderSelect = (value: 'male' | 'female') => {
-    console.log('[RequesterBasicProfile] Gender selected:', value);
     setGender(value);
     setGenderError('');
     setGenderModalVisible(false);
@@ -58,8 +56,6 @@ export default function RequesterBasicProfile() {
 
   const handleSubmit = async () => {
     if (loading) return;
-
-    console.log('[RequesterBasicProfile] Submit pressed — phone:', phone, 'gender:', gender);
 
     let valid = true;
     setPhoneError('');
@@ -98,11 +94,9 @@ export default function RequesterBasicProfile() {
 
       if (requesterError) throw requesterError;
 
-      console.log('[RequesterBasicProfile] Profile saved, refreshing and navigating to home');
       await refreshProfile();
       router.replace('/(requester)/(home)' as any);
     } catch (err: any) {
-      console.log('[RequesterBasicProfile] Submit error:', err?.message);
       setSubmitError(err?.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
@@ -167,7 +161,6 @@ export default function RequesterBasicProfile() {
           <Text style={styles.fieldLabel}>Gender</Text>
           <AnimatedPressable
             onPress={() => {
-              console.log('[RequesterBasicProfile] Gender dropdown tapped');
               setGenderModalVisible(true);
             }}
             scaleValue={0.98}

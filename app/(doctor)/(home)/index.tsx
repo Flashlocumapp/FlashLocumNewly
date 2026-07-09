@@ -161,7 +161,6 @@ function DoctorUpcomingCard({
         {canCancel && (
           <TouchableOpacity
             onPress={() => {
-              console.log('[DoctorHome] Cancel shift pressed for session:', session.id);
               onCancel();
             }}
             activeOpacity={0.8}
@@ -172,7 +171,6 @@ function DoctorUpcomingCard({
         )}
         <TouchableOpacity
           onPress={() => {
-            console.log('[DoctorHome] Call requester pressed for session:', session.id);
             onCall();
           }}
           activeOpacity={0.8}
@@ -249,7 +247,7 @@ function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCal
       {/* Call button */}
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
         <TouchableOpacity
-          onPress={() => { console.log('[DoctorHome] Call requester pressed (active):', session.id); onCall(); }}
+          onPress={() => { onCall(); }}
           activeOpacity={0.8}
           style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
         >
@@ -285,16 +283,14 @@ export default function DoctorHomeScreen() {
           .eq('id', user.id)
           .single();
         if (error) {
-          console.log('[DoctorHome] Failed to fetch doctor scores:', error.message);
           return;
         }
         if (data) {
-          console.log('[DoctorHome] Fetched doctor scores:', data.rating, data.reliability);
           setDoctorRating(data.rating ?? 5.0);
           setDoctorReliability(data.reliability ?? 100);
         }
       } catch (e: any) {
-        console.log('[DoctorHome] fetchDoctorScores error:', e.message);
+        // ignore
       }
     })();
   }, [user]);
@@ -314,36 +310,22 @@ export default function DoctorHomeScreen() {
     let active = true;
 
     async function startWatching() {
-      console.log('[DoctorHome] Requesting location permission');
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        console.log('[DoctorHome] Location permission denied');
         return;
       }
-      console.log('[DoctorHome] Location permission granted, fetching immediate fix');
       const immediatePos = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Highest,
       });
-      console.log('[DoctorHome][GPS-1] getCurrentPosition:', {
-        lat: immediatePos.coords.latitude,
-        lng: immediatePos.coords.longitude,
-        accuracy: immediatePos.coords.accuracy,
-        timestamp: new Date(immediatePos.timestamp).toISOString(),
-        mapRefReady: !!mapRef.current,
-        hasAnimated: _hasAnimatedToUser,
-      });
       if (active) {
         const coords = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude };
-        console.log('[DoctorHome] Immediate GPS fix:', coords);
         _cachedDoctorCoords = coords;
         setUserLocation(coords);
         if (!_hasAnimatedToUser && mapRef.current) {
           _hasAnimatedToUser = true;
-          console.log('[DoctorHome] Animating map to immediate fix');
           mapRef.current.animateToRegion({ ...coords, latitudeDelta: 0.12, longitudeDelta: 0.12 }, 800);
         }
       }
-      console.log('[DoctorHome] Starting watch stream');
       locationSubscription.current = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.Highest,
@@ -387,24 +369,14 @@ export default function DoctorHomeScreen() {
     return () => clearTimeout(t);
   }, [showMarker]);
 
-  useEffect(() => {
-    console.log('[DoctorHome][MARKER-STATE] userLocation changed:', userLocation);
-  }, [userLocation]);
-
-  useEffect(() => {
-    console.log('[DoctorHome][ONLINE-STATE] isOnline:', isOnline);
-  }, [isOnline]);
-
   // ─── Toggle online/offline ───────────────────────────────────────────────────
   const handleToggleStatus = () => {
     if (isJobCapReached) return;
     const next = !isOnline;
-    console.log('[DoctorHome] Status pill pressed — toggling to:', next ? 'Online' : 'Offline');
     if (next) {
       const coords = userLocation
         ? { lat: userLocation.latitude, lng: userLocation.longitude }
         : undefined;
-      console.log('[DoctorHome] Going online with coords:', coords ?? 'none (userLocation is null)');
       goOnline(coords);
     } else {
       setIsOnline(false);
@@ -414,7 +386,6 @@ export default function DoctorHomeScreen() {
   // ─── Cancel shift ────────────────────────────────────────────────────────────
   const handleCancelShift = useCallback(() => {
     if (!activeSession) return;
-    console.log('[DoctorHome] Cancel shift — showing confirmation modal');
     setShowCancelModal(true);
   }, [activeSession]);
 
@@ -425,7 +396,6 @@ export default function DoctorHomeScreen() {
 
   const handleCancelReasonSelected = async (reason: string) => {
     if (!activeSession) return;
-    console.log('[DoctorHome] Cancel shift reason selected:', reason, 'session:', activeSession.id);
     setShowCancelReasons(false);
     try {
       const token = await getValidToken();
@@ -435,14 +405,12 @@ export default function DoctorHomeScreen() {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: activeSession.id, status: 'cancelled', cancellation_reason: reason, cancelled_by: 'doctor' }),
       });
-      console.log('[DoctorHome] Cancel shift response:', res.status);
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
         throw new Error(errText || 'Cancel failed');
       }
       setActiveSession(null);
     } catch (e: any) {
-      console.log('[DoctorHome] Cancel shift error:', e.message);
       Alert.alert('Error', e.message);
     }
   };
@@ -453,7 +421,6 @@ export default function DoctorHomeScreen() {
       Alert.alert('No phone number available');
       return;
     }
-    console.log('[DoctorHome] Call requester pressed:', activeSession.requester_phone);
     Linking.openURL(`tel:${activeSession.requester_phone}`);
   }, [activeSession]);
 

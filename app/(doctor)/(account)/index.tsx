@@ -140,7 +140,6 @@ export default function DoctorAccountScreen() {
   useEffect(() => {
     if (!user) return;
     const fetchProfile = async () => {
-      console.log('[DoctorAccount] Fetching profile for user:', user.id);
       const [profileRes, doctorProfileRes] = await Promise.all([
         supabase
           .from('profiles')
@@ -153,8 +152,7 @@ export default function DoctorAccountScreen() {
           .eq('id', user.id)
           .single(),
       ]);
-      if (profileRes.error) console.log('[DoctorAccount] Profile fetch error:', profileRes.error.message);
-      if (doctorProfileRes.error) console.log('[DoctorAccount] DoctorProfile fetch error:', doctorProfileRes.error.message);
+
       setProfile({
         first_name: authProfile?.first_name ?? profileRes.data?.first_name ?? null,
         last_name: authProfile?.last_name ?? profileRes.data?.last_name ?? null,
@@ -204,7 +202,6 @@ export default function DoctorAccountScreen() {
 
   // ── Phone edit ──
   const openPhoneModal = () => {
-    console.log('[DoctorAccount] Phone Number edit pressed');
     setEditPhone(profile?.phone ?? '');
     setPhoneError('');
     setPhoneModalVisible(true);
@@ -217,7 +214,6 @@ export default function DoctorAccountScreen() {
       return;
     }
     setSavingPhone(true);
-    console.log('[DoctorAccount] Saving phone number');
     const { error } = await supabase.from('profiles').update({ phone: cleaned }).eq('id', user!.id);
     setSavingPhone(false);
     if (error) {
@@ -231,7 +227,6 @@ export default function DoctorAccountScreen() {
   // ── Gender edit ──
   const handleSaveGender = async (newGender: 'male' | 'female') => {
     setSavingGender(true);
-    console.log('[DoctorAccount] Saving gender:', newGender);
     const { error } = await supabase.from('profiles').update({ gender: newGender }).eq('id', user!.id);
     setSavingGender(false);
     if (error) {
@@ -243,13 +238,11 @@ export default function DoctorAccountScreen() {
   };
 
   const handleSignOut = () => {
-    console.log('[DoctorAccount] Sign out pressed');
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign Out', style: 'destructive',
         onPress: async () => {
-          console.log('[DoctorAccount] Confirming sign out');
           await supabase.auth.signOut();
           router.replace('/(auth)/role-select' as any);
         },
@@ -258,7 +251,6 @@ export default function DoctorAccountScreen() {
   };
 
   const handleRetrySubaccount = async () => {
-    console.log('[DoctorAccount] Retry Payout Setup pressed');
     if (!profile?.bank_code || !profile?.account_number || !profile?.account_name || !profile?.bank_name) {
       setRetryError('Bank details are incomplete. Please contact support.');
       return;
@@ -271,7 +263,6 @@ export default function DoctorAccountScreen() {
       const token = session?.access_token;
       if (!token) throw new Error('Not authenticated');
 
-      console.log('[DoctorAccount] Calling create-subaccount for doctor:', user!.id);
       const res = await fetch(
         'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/create-subaccount',
         {
@@ -290,14 +281,12 @@ export default function DoctorAccountScreen() {
         }
       );
       const result = await res.json();
-      console.log('[DoctorAccount] create-subaccount response:', res.status, result);
       if (!res.ok || result.error) {
         throw new Error(result.error || 'Payout setup failed. Please try again.');
       }
       setRetrySuccess(true);
       setProfile(prev => prev ? { ...prev, subaccount_code: result.subAccountCode } : prev);
     } catch (err: unknown) {
-      console.log('[DoctorAccount] Retry subaccount error:', err instanceof Error ? err.message : err);
       setRetryError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
       setRetryingSubaccount(false);
@@ -305,7 +294,6 @@ export default function DoctorAccountScreen() {
   };
 
   const handleDeleteAccount = () => {
-    console.log('[DoctorAccount] Delete Account pressed');
     Alert.alert('Delete Account', 'This action is permanent and cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => Alert.alert('Coming Soon', 'Account deletion will be available soon.') },
@@ -352,7 +340,7 @@ export default function DoctorAccountScreen() {
           <CardDivider />
           {loading ? <SkeletonRow /> : <ReadOnlyRow label="MDCN Number" value={mdcnValue} />}
           <CardDivider />
-          <EditableRow label="Gender" value={genderValue} onPress={() => { console.log('[DoctorAccount] Gender edit pressed'); setGenderModalVisible(true); }} />
+          <EditableRow label="Gender" value={genderValue} onPress={() => { setGenderModalVisible(true); }} />
           <CardDivider />
           <View style={styles.cardRow}>
             <Text style={styles.rowLabel}>Verification Status</Text>
@@ -431,16 +419,15 @@ export default function DoctorAccountScreen() {
         {/* Section 3 — SUPPORT */}
         <SectionHeader title="SUPPORT" />
         <Card>
-          <ActionRow label="Help Center" onPress={() => { console.log('[DoctorAccount] Help Center pressed'); router.push('/(doctor)/(account)/help-center' as any); }} />
+          <ActionRow label="Help Center" onPress={() => { router.push('/(doctor)/(account)/help-center' as any); }} />
           <CardDivider />
-          <ActionRow label="Contact Support" onPress={() => { console.log('[DoctorAccount] Contact Support pressed'); router.push('/(doctor)/(account)/contact-support' as any); }} />
+          <ActionRow label="Contact Support" onPress={() => { router.push('/(doctor)/(account)/contact-support' as any); }} />
         </Card>
 
         {/* Section 4 — ACCOUNT MANAGEMENT */}
         <SectionHeader title="ACCOUNT MANAGEMENT" />
         <Card>
           <ActionRow label="Switch to Request Coverage" onPress={() => {
-            console.log('[DoctorAccount] Switch to Request Coverage pressed');
             if (authProfile?.requester_onboarding_complete) {
               router.replace('/(requester)/(home)' as any);
             } else {

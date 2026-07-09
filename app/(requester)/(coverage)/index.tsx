@@ -145,7 +145,6 @@ function HistoryCard({ session, onPress }: {
   return (
     <TouchableOpacity
       onPress={() => {
-        console.log('[RequesterCoverage] HistoryCard pressed for session:', session.id);
         onPress(session);
       }}
       activeOpacity={0.85}
@@ -250,7 +249,6 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
 
   const handleSubmit = async () => {
     if (stars === 0) { setError('Please select a star rating.'); return; }
-    console.log('[RequesterCoverage] Submitting review for session:', session.id, 'stars:', stars);
     setSubmitting(true); setError('');
     try {
       const token = await getValidToken();
@@ -259,13 +257,10 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: session.id, stars, comment: comment.trim() || undefined, reviewer_role: 'requester' }),
       });
-      console.log('[RequesterCoverage] submit-review response:', res.status);
       const data = await res.json();
       if (!res.ok) throw new Error((data as any).error ?? 'Failed to submit review');
-      console.log('[RequesterCoverage] Review submitted successfully:', (data as any)?.review?.id);
       onReviewSubmitted(session.id);
     } catch (e: any) {
-      console.log('[RequesterCoverage] Review submission error:', e.message);
       setError(e.message);
     } finally {
       setSubmitting(false);
@@ -369,7 +364,6 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
                           <TouchableOpacity
                             key={n}
                             onPress={() => {
-                              console.log('[RequesterCoverage] Star rating pressed:', n);
                               setStars(n);
                               setError('');
                             }}
@@ -390,7 +384,6 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
                       {!!error && <Text style={{ fontSize: 13, color: '#EF4444', marginBottom: 8 }}>{error}</Text>}
                       <TouchableOpacity
                         onPress={() => {
-                          console.log('[RequesterCoverage] Submit rating pressed, stars:', stars);
                           handleSubmit();
                         }}
                         disabled={submitting}
@@ -427,10 +420,8 @@ export default function RequesterCoverageScreen() {
   const { data: historySessions, loading, refreshing } = useTabData<CoverageSession[]>({
     cacheKey,
     fetcher: async () => {
-      console.log('[RequesterCoverage] Fetching history sessions');
       const token = await getValidToken();
       if (!token) {
-        console.log('[RequesterCoverage] No access token available');
         return [];
       }
       const res = await fetch(
@@ -438,13 +429,11 @@ export default function RequesterCoverageScreen() {
         { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
       );
       if (!res.ok) {
-        const errText = await res.text();
-        console.log('[RequesterCoverage] Fetch error:', res.status, errText);
+        await res.text();
         throw new Error('Failed to load coverage history');
       }
       const data = await res.json();
       const sessions: CoverageSession[] = data?.sessions ?? [];
-      console.log('[RequesterCoverage] History sessions fetched:', sessions.length);
 
       // Check which requester_paid sessions have already been reviewed
       const paidIds = sessions
@@ -452,18 +441,14 @@ export default function RequesterCoverageScreen() {
         .map((s) => s.id);
 
       if (paidIds.length > 0 && user?.id) {
-        console.log('[RequesterCoverage] Checking reviews for', paidIds.length, 'paid sessions');
         const { data: reviews, error: reviewErr } = await supabase
           .from('shift_reviews')
           .select('session_id')
           .eq('reviewer_id', user.id)
           .in('session_id', paidIds);
 
-        if (reviewErr) {
-          console.log('[RequesterCoverage] Error fetching reviews:', reviewErr.message);
-        } else {
+        if (!reviewErr) {
           const ids = new Set<string>((reviews ?? []).map((r: { session_id: string }) => r.session_id));
-          console.log('[RequesterCoverage] Already reviewed sessions:', ids.size);
           setReviewedIds(ids);
         }
       }
@@ -525,7 +510,6 @@ export default function RequesterCoverageScreen() {
           <TouchableOpacity
             key={key}
             onPress={() => {
-              console.log('[RequesterCoverage] Date range filter pressed:', key);
               setDateRange(key);
             }}
             activeOpacity={0.7}
@@ -562,7 +546,6 @@ export default function RequesterCoverageScreen() {
             key={session.id}
             session={session}
             onPress={(s) => {
-              console.log('[RequesterCoverage] Opening detail sheet for session:', s.id);
               setSelectedSession(s);
             }}
           />
@@ -573,12 +556,10 @@ export default function RequesterCoverageScreen() {
         session={selectedSession}
         visible={selectedSession !== null}
         onClose={() => {
-          console.log('[RequesterCoverage] HistoryDetailSheet dismissed');
           setSelectedSession(null);
         }}
         alreadyReviewed={alreadyReviewed}
         onReviewSubmitted={(id) => {
-          console.log('[RequesterCoverage] Review submitted, marking session:', id);
           setReviewedIds(prev => new Set([...prev, id]));
         }}
       />

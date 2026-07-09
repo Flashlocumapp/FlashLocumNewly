@@ -23,7 +23,6 @@ export default function DoctorHelpCenterScreen() {
   const [openId, setOpenId] = useState<number | null>(null);
 
   const toggle = (id: number) => {
-    console.log('[DoctorHelpCenter] Accordion toggled, section id:', id);
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setOpenId(prev => (prev === id ? null : id));
   };
@@ -360,7 +359,7 @@ export default function DoctorHelpCenterScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => { console.log('[DoctorHelpCenter] Back button pressed'); router.back(); }}
+          onPress={() => { router.back(); }}
           activeOpacity={0.7}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >

@@ -210,7 +210,6 @@ function UpcomingCoverageCard({ session, onCall, onCancel }: {
           {canCancel && (
             <TouchableOpacity
               onPress={() => {
-                console.log('[DoctorCoverage] UpcomingCard cancel pressed:', session.id);
                 onCancel(session);
               }}
               activeOpacity={0.8}
@@ -221,7 +220,6 @@ function UpcomingCoverageCard({ session, onCall, onCancel }: {
           )}
           <TouchableOpacity
             onPress={() => {
-              console.log('[DoctorCoverage] UpcomingCard call pressed:', session.id);
               onCall(session);
             }}
             activeOpacity={0.8}
@@ -252,7 +250,6 @@ function HistoryCoverageCard({ session, onPress }: {
   return (
     <TouchableOpacity
       onPress={() => {
-        console.log('[DoctorCoverage] HistoryCoverageCard pressed:', session.id, 'status:', session.status);
         onPress(session);
       }}
       activeOpacity={0.85}
@@ -312,7 +309,6 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
       onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
       onPanResponderRelease: (_, gs) => {
         if (gs.dy > 50) {
-          console.log('[DoctorCoverage] Drag-down gesture closed HistoryDetailSheet');
           onClose();
         }
       },
@@ -351,7 +347,6 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
 
   const handleSubmit = async () => {
     if (stars === 0) { setError('Please select a star rating.'); return; }
-    console.log('[DoctorCoverage] Submitting review for session:', session.id, 'stars:', stars);
     setSubmitting(true); setError('');
     try {
       const token = await getValidToken();
@@ -362,10 +357,8 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to submit rating');
-      console.log('[DoctorCoverage] Review submitted successfully for session:', session.id);
       onReviewSubmitted(session.id);
     } catch (e: any) {
-      console.log('[DoctorCoverage] Review submission error:', e.message);
       setError(e.message);
     } finally {
       setSubmitting(false);
@@ -457,7 +450,6 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
                       <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
                         {[1, 2, 3, 4, 5].map(n => (
                           <TouchableOpacity key={n} onPress={() => {
-                            console.log('[DoctorCoverage] Star rating selected:', n, 'for session:', session.id);
                             setStars(n);
                           }} activeOpacity={0.7}>
                             <Text style={{ fontSize: 32, color: n <= stars ? '#F4A261' : '#D1D1D6' }}>{'★'}</Text>
@@ -517,10 +509,8 @@ export default function DoctorCoverageScreen() {
   } = useTabData<CoverageSession[]>({
     cacheKey: upcomingKey,
     fetcher: async () => {
-      console.log('[DoctorCoverage] Fetching upcoming sessions');
       const token = await getAccessToken();
       if (!token) {
-        console.log('[DoctorCoverage] No access token available');
         return [];
       }
       const res = await fetch(
@@ -528,12 +518,9 @@ export default function DoctorCoverageScreen() {
         { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
       );
       if (!res.ok) {
-        const errText = await res.text();
-        console.log('[DoctorCoverage] Upcoming fetch error:', res.status, errText);
         throw new Error('Failed to load upcoming sessions');
       }
       const data = await res.json();
-      console.log('[DoctorCoverage] Upcoming sessions fetched:', data?.sessions?.length ?? 0);
       return data?.sessions ?? [];
     },
     alwaysRefresh: true,
@@ -546,10 +533,8 @@ export default function DoctorCoverageScreen() {
   } = useTabData<CoverageSession[]>({
     cacheKey: historyKey,
     fetcher: async () => {
-      console.log('[DoctorCoverage] Fetching history sessions');
       const token = await getAccessToken();
       if (!token) {
-        console.log('[DoctorCoverage] No access token available');
         return [];
       }
       const res = await fetch(
@@ -557,12 +542,9 @@ export default function DoctorCoverageScreen() {
         { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
       );
       if (!res.ok) {
-        const errText = await res.text();
-        console.log('[DoctorCoverage] History fetch error:', res.status, errText);
         throw new Error('Failed to load history sessions');
       }
       const data = await res.json();
-      console.log('[DoctorCoverage] History sessions fetched:', data?.sessions?.length ?? 0);
       return data?.sessions ?? [];
     },
     alwaysRefresh: true,
@@ -595,7 +577,6 @@ export default function DoctorCoverageScreen() {
   }, [historyData, user?.id]);
 
   const updateSessionStatus = useCallback(async (sessionId: string, status: string) => {
-    console.log('[DoctorCoverage] Updating session status:', sessionId, '->', status);
     const token = await getAccessToken();
     if (!token) return false;
     const res = await fetch(`${SUPABASE_URL}/functions/v1/update-shift-status`, {
@@ -604,11 +585,8 @@ export default function DoctorCoverageScreen() {
       body: JSON.stringify({ session_id: sessionId, status }),
     });
     if (!res.ok) {
-      const errText = await res.text();
-      console.log('[DoctorCoverage] Status update error:', res.status, errText);
       return false;
     }
-    console.log('[DoctorCoverage] Status update success:', sessionId, status);
     return true;
   }, [getAccessToken]);
 
@@ -641,7 +619,6 @@ export default function DoctorCoverageScreen() {
       const ch = supabase
         .channel(`coverage:${session.id}`)
         .on('broadcast', { event: 'STATUS_CHANGED' }, (payload) => {
-          console.log('[DoctorCoverage] Realtime STATUS_CHANGED:', session.id, payload);
           const newStatus = payload?.payload?.status as CoverageSession['status'];
           if (newStatus) handleStatusChange(session.id, newStatus);
         })
@@ -652,7 +629,6 @@ export default function DoctorCoverageScreen() {
     const doctorCh = supabase
       .channel(`doctor:${userId}`)
       .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
-        console.log('[DoctorCoverage] Realtime SESSION_CREATED:', payload);
         const newSession = payload?.payload?.session as CoverageSession;
         if (newSession) {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -661,7 +637,6 @@ export default function DoctorCoverageScreen() {
         }
       })
       .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
-        console.log('[DoctorCoverage] Realtime SHIFT_PAUSED:', payload);
         const updatedSession = payload?.payload?.session as CoverageSession;
         if (updatedSession) {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -673,7 +648,6 @@ export default function DoctorCoverageScreen() {
         }
       })
       .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
-        console.log('[DoctorCoverage] Realtime SHIFT_STARTED:', payload);
         const sessionId = payload?.payload?.session?.id;
         if (sessionId) {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -681,7 +655,6 @@ export default function DoctorCoverageScreen() {
         }
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
-        console.log('[DoctorCoverage] Realtime SHIFT_ENDED:', payload);
         const updatedSession = payload?.payload?.session as CoverageSession;
         if (updatedSession) {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -689,7 +662,6 @@ export default function DoctorCoverageScreen() {
         }
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        console.log('[DoctorCoverage] Realtime PAYMENT_CONFIRMED:', payload);
         const sessionId = payload?.payload?.session_id as string ?? payload?.payload?.session?.id as string;
         if (sessionId) {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -697,7 +669,6 @@ export default function DoctorCoverageScreen() {
         }
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
-        console.log('[DoctorCoverage] Realtime PAYMENT_COMPLETE:', payload);
         const sessionId = payload?.payload?.session_id as string ?? payload?.payload?.session?.id as string;
         if (sessionId) {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -715,13 +686,11 @@ export default function DoctorCoverageScreen() {
 
   useEffect(() => {
     return () => {
-      console.log('[DoctorCoverage] Cleaning up realtime channels');
       channelsRef.current.forEach(ch => supabase.removeChannel(ch));
     };
   }, []);
 
   const handleCall = useCallback((session: CoverageSession) => {
-    console.log('[DoctorCoverage] Call action:', session.id, 'phone:', session.requester_phone);
     if (!session.requester_phone) {
       Alert.alert('No phone number available');
       return;
@@ -730,14 +699,12 @@ export default function DoctorCoverageScreen() {
   }, []);
 
   const handleCancel = useCallback((session: CoverageSession) => {
-    console.log('[DoctorCoverage] Cancel action initiated:', session.id);
     Alert.alert('Cancel Shift?', 'This will cancel the booking.', [
       { text: 'Keep', style: 'cancel' },
       {
         text: 'Cancel Shift',
         style: 'destructive',
         onPress: async () => {
-          console.log('[DoctorCoverage] Cancel confirmed:', session.id);
           const ok = await updateSessionStatus(session.id, 'cancelled');
           if (ok) handleStatusChange(session.id, 'cancelled');
         },
@@ -746,7 +713,6 @@ export default function DoctorCoverageScreen() {
   }, [updateSessionStatus, handleStatusChange]);
 
   const handleReviewSubmitted = useCallback((sessionId: string) => {
-    console.log('[DoctorCoverage] Review submitted, marking session as reviewed:', sessionId);
     setReviewedIds(prev => new Set([...prev, sessionId]));
   }, []);
 
@@ -815,7 +781,6 @@ export default function DoctorCoverageScreen() {
             <TouchableOpacity
               key={tab}
               onPress={() => {
-                console.log('[DoctorCoverage] Tab pressed:', tab);
                 setActiveTab(tab);
               }}
               activeOpacity={0.7}
@@ -853,7 +818,6 @@ export default function DoctorCoverageScreen() {
             <TouchableOpacity
               key={key}
               onPress={() => {
-                console.log('[DoctorCoverage] Date range filter pressed:', key);
                 setDateRange(key);
               }}
               activeOpacity={0.7}
@@ -892,7 +856,6 @@ export default function DoctorCoverageScreen() {
               key={session.id}
               session={session}
               onPress={(s) => {
-                console.log('[DoctorCoverage] History session selected:', s.id);
                 setSelectedHistorySession(s);
               }}
             />

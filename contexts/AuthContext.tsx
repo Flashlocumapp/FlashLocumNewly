@@ -35,14 +35,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Safety net: if auth doesn't resolve in 10s, unblock the app
     const authTimeout = setTimeout(() => {
-      console.log('[AuthContext] Auth timeout fired after 10s — unblocking app with no session');
       setLoading(false);
       setIsReady(true);
     }, 10000);
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       clearTimeout(authTimeout);
-      console.log('[AuthContext] getSession resolved — session:', session ? 'present' : 'null');
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -59,8 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
         // Session is already updated in the Supabase client's internal cache.
-        // No action needed — just log for debugging.
-        console.log('[AuthContext] Auth event:', event, 'session expires_at:', session?.expires_at);
+        // No action needed.
       }
       setSession(session);
       setUser(session?.user ?? null);
@@ -79,21 +76,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
-    console.log('[AuthContext] signIn called for:', email);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    console.log('[AuthContext] signIn result — error:', error?.message ?? 'none');
     return { error };
   };
 
   const signUp = async (email: string, password: string, metadata?: Record<string, string>) => {
-    console.log('[AuthContext] signUp called for:', email);
     const { error } = await supabase.auth.signUp({ email, password, options: { data: metadata } });
-    console.log('[AuthContext] signUp result — error:', error?.message ?? 'none');
     return { error };
   };
 
   const signOut = async () => {
-    console.log('[AuthContext] signOut called');
     await supabase.auth.signOut();
     setProfile(null);
   };

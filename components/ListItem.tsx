@@ -33,7 +33,6 @@ export default function ListItem({ listId }: { listId: string }) {
           if (process.env.EXPO_OS === "ios") {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           }
-          console.log("delete");
         }}
       >
         <Reanimated.View style={[styleAnimation, styles.rightAction]}>

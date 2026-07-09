@@ -91,18 +91,15 @@ export default function SignUpScreen() {
   };
 
   const switchMode = (next: Mode) => {
-    console.log('[SignUp] Mode switched to:', next);
     clearForm();
     setMode(next);
   };
 
   const handleBack = () => {
-    console.log('[SignUp] Back button pressed');
     router.back();
   };
 
   const handleTogglePassword = () => {
-    console.log('[SignUp] Password visibility toggled');
     setShowPassword(prev => !prev);
   };
 
@@ -122,7 +119,6 @@ export default function SignUpScreen() {
     setError('');
 
     if (mode === 'signup') {
-      console.log('[SignUp] Create account pressed — email:', email, 'role:', role);
       const { error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -135,24 +131,19 @@ export default function SignUpScreen() {
       });
       setLoading(false);
       if (signUpError) {
-        console.log('[SignUp] Sign up error:', signUpError.message);
         setError(signUpError.message || 'Sign up failed. Please try again.');
       } else {
-        console.log('[SignUp] Sign up success, navigating to OTP verify — email:', email, 'role:', role);
         router.push(`/(auth)/verify?email=${encodeURIComponent(email.trim())}&role=${role}`);
       }
     } else {
-      console.log('[SignUp] Sign in pressed — email:', email);
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
       setLoading(false);
       if (signInError) {
-        console.log('[SignUp] Sign in error:', signInError.message);
         setError(signInError.message || 'Sign in failed. Please try again.');
       } else {
-        console.log('[SignUp] Sign in success, fetching profile for role-aware routing');
         // Sign-in success — fetch profile
         const { data: profileData } = await supabase
           .from('profiles')
@@ -163,13 +154,10 @@ export default function SignUpScreen() {
         const doctorComplete = profileData?.doctor_onboarding_complete === true;
         const requesterComplete = profileData?.requester_onboarding_complete === true;
 
-        console.log('[SignUp] Profile data — doctorComplete:', doctorComplete, 'requesterComplete:', requesterComplete, 'portal (role param):', role);
-
         // Portal-vs-role enforcement
         // role = the portal the user entered from ('doctor' = Cover & Earn, 'requester' = Request Coverage)
         if (role === 'doctor' && !doctorComplete && requesterComplete) {
           // They're a requester who tapped the wrong card — silently route to requester portal
-          console.log('[SignUp] Cross-portal: doctor portal selected but user is a requester — redirecting to requester portal');
           await SecureStore.setItemAsync('flashlocum_last_pathway', 'requester');
           router.replace('/(requester)/(home)' as any);
           return;
@@ -177,7 +165,6 @@ export default function SignUpScreen() {
 
         if (role === 'requester' && !requesterComplete && doctorComplete) {
           // They're a doctor who tapped the wrong card — silently route to doctor portal
-          console.log('[SignUp] Cross-portal: requester portal selected but user is a doctor — redirecting to doctor portal');
           await SecureStore.setItemAsync('flashlocum_last_pathway', 'doctor');
           router.replace('/(doctor)/(home)' as any);
           return;
@@ -185,14 +172,12 @@ export default function SignUpScreen() {
 
         // Passed validation — write lastPathway to AsyncStorage
         await SecureStore.setItemAsync('flashlocum_last_pathway', role);
-        console.log('[SignUp] lastPathway written:', role);
 
         // Route directly to destination
         const dest = role === 'doctor'
           ? (doctorComplete ? '/(doctor)/(home)' : '/(onboarding)/doctor/basic-profile')
           : (requesterComplete ? '/(requester)/(home)' : '/(onboarding)/requester/basic-profile');
 
-        console.log('[SignUp] Routing directly to dest:', dest);
         router.replace(dest as any);
       }
     }
@@ -330,7 +315,6 @@ export default function SignUpScreen() {
         {!isSignup ? (
           <AnimatedPressable
             onPress={() => {
-              console.log('[SignUp] Forgot password pressed — role:', role);
               router.push(`/(auth)/forgot-password?role=${role}` as any);
             }}
             scaleValue={0.97}
@@ -366,7 +350,6 @@ export default function SignUpScreen() {
               {'By creating an account, you agree to our '}
               <AnimatedPressable
                 onPress={() => {
-                  console.log('[SignUp] Terms of Service link pressed');
                   router.push('/(auth)/terms' as any);
                 }}
                 scaleValue={0.97}
@@ -376,7 +359,6 @@ export default function SignUpScreen() {
               {' and '}
               <AnimatedPressable
                   onPress={() => {
-                    console.log('[SignUp] Privacy Policy link pressed');
                     router.push('/(auth)/privacy' as any);
                   }}
                   scaleValue={0.97}

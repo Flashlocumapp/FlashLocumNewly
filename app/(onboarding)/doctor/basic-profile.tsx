@@ -35,7 +35,6 @@ export default function DoctorBasicProfile() {
   const [submitError, setSubmitError] = useState('');
 
   const handleBack = () => {
-    console.log('[DoctorBasicProfile] Back button pressed, from:', from, 'doctor_onboarding_complete:', profile?.doctor_onboarding_complete);
     if (from === 'requester-account') {
       router.replace('/(requester)/(account)' as any);
     } else if (profile?.doctor_onboarding_complete) {
@@ -57,7 +56,6 @@ export default function DoctorBasicProfile() {
 
   const handleContinue = async () => {
     if (loading) return;
-    console.log('[DoctorBasicProfile] Continue pressed');
 
     let valid = true;
     setPhoneError('');
@@ -78,7 +76,6 @@ export default function DoctorBasicProfile() {
     if (!valid) return;
 
     setLoading(true);
-    console.log('[DoctorBasicProfile] Submitting profile upsert for user:', user?.id);
 
     try {
       // Split full_name from auth metadata into first/last

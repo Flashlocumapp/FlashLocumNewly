@@ -48,7 +48,6 @@ export default function VerifyScreen() {
   };
 
   const handleBack = () => {
-    console.log('[Verify] Back button pressed');
     router.back();
   };
 
@@ -59,7 +58,6 @@ export default function VerifyScreen() {
       return;
     }
 
-    console.log('[Verify] Verify & continue pressed — email:', email, 'role:', role);
     setLoading(true);
     setError('');
 
@@ -72,10 +70,8 @@ export default function VerifyScreen() {
     setLoading(false);
 
     if (verifyError) {
-      console.log('[Verify] OTP verification error:', verifyError.message);
       setError(verifyError.message || 'Invalid code. Please try again.');
     } else {
-      console.log('[Verify] OTP verification success, routing through intro — role:', role);
       const dest = role === 'doctor'
         ? '/(onboarding)/doctor/basic-profile'
         : '/(onboarding)/requester/basic-profile';
@@ -85,21 +81,17 @@ export default function VerifyScreen() {
 
   const handleResend = async () => {
     if (resendCooldown > 0) return;
-    console.log('[Verify] Resend code pressed — email:', email);
     startCooldown();
     const { error: resendError } = await supabase.auth.resend({
       type: 'signup',
       email,
     });
     if (resendError) {
-      console.log('[Verify] Resend error:', resendError.message);
-    } else {
-      console.log('[Verify] Resend success');
+      // resend failed silently
     }
   };
 
   const handleBackToSignIn = () => {
-    console.log('[Verify] Back to sign in pressed');
     router.replace('/(auth)/sign-up');
   };
 

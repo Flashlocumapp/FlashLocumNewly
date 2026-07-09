@@ -19,7 +19,6 @@ export default function RequesterLayout() {
   const TAB_BAR_TOTAL = TAB_BAR_HEIGHT + insets.bottom;
 
   const setTabBarVisible = (visible: boolean) => {
-    console.log('[RequesterLayout] setTabBarVisible:', visible);
     Animated.timing(tabBarAnim, {
       toValue: visible ? 0 : TAB_BAR_TOTAL,
       duration: 260,
@@ -53,7 +52,6 @@ export default function RequesterLayout() {
                 <Pressable
                   key={tab.name}
                   onPress={() => {
-                    console.log('[RequesterLayout] Tab pressed:', tab.label);
                     router.replace(tab.route);
                   }}
                   style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}

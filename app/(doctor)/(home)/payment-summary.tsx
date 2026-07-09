@@ -100,7 +100,6 @@ export default function PaymentSummaryScreen() {
       setLoading(false);
       return;
     }
-    console.log('[PaymentSummary] Fetching session data for session_id:', session_id);
     setLoading(true);
     setError(null);
 
@@ -122,9 +121,6 @@ export default function PaymentSummaryScreen() {
           .single(),
       ]);
 
-      console.log('[PaymentSummary] coverage_sessions query status:', sessionResult.error?.message ?? 'ok');
-      console.log('[PaymentSummary] payment_intents query status:', intentResult.error?.message ?? 'ok');
-
       if (sessionResult.error) {
         setError('Could not load session details.');
         return;
@@ -133,15 +129,12 @@ export default function PaymentSummaryScreen() {
       setSession(sessionResult.data as CoverageSession);
 
       if (!intentResult.error && intentResult.data) {
-        console.log('[PaymentSummary] Amount paid from payment_intents:', intentResult.data.amount_naira);
         setAmountPaid(intentResult.data.amount_naira);
       } else {
         // Fall back to session price
-        console.log('[PaymentSummary] No paid intent found — falling back to session price:', sessionResult.data?.price);
         setAmountPaid(sessionResult.data?.price ?? 0);
       }
     } catch (e: any) {
-      console.log('[PaymentSummary] fetchData exception:', e.message);
       setError('Something went wrong loading payment details.');
     } finally {
       setLoading(false);
@@ -155,7 +148,6 @@ export default function PaymentSummaryScreen() {
   useEffect(() => {
     if (!session) return;
     const timer = setTimeout(() => {
-      console.log('[PaymentSummary] Auto-showing rating overlay for session:', session_id);
       setShowRatingOverlay(true);
     }, 1000);
     return () => clearTimeout(timer);
@@ -166,7 +158,6 @@ export default function PaymentSummaryScreen() {
       setRatingError('Please select a star rating');
       return;
     }
-    console.log('[PaymentSummary] Submitting review — stars:', ratingStars, 'session_id:', session_id);
     setSubmittingRating(true);
     setRatingError('');
     try {
@@ -178,10 +169,8 @@ export default function PaymentSummaryScreen() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to submit review');
-      console.log('[PaymentSummary] Review submitted successfully');
       setShowRatingOverlay(false);
     } catch (e: any) {
-      console.log('[PaymentSummary] Review submission error:', e.message);
       setRatingError(e.message);
     } finally {
       setSubmittingRating(false);
@@ -189,7 +178,6 @@ export default function PaymentSummaryScreen() {
   };
 
   const handleDone = () => {
-    console.log('[PaymentSummary] Done button pressed — navigating to doctor home');
     router.replace('/(doctor)/(home)');
   };
 
@@ -365,7 +353,6 @@ export default function PaymentSummaryScreen() {
         statusBarTranslucent
       >
         <TouchableWithoutFeedback onPress={() => {
-          console.log('[PaymentSummary] Rating overlay dismissed via backdrop');
           setShowRatingOverlay(false);
         }}>
           <View style={styles.ratingBackdrop}>
@@ -387,7 +374,6 @@ export default function PaymentSummaryScreen() {
                       <TouchableOpacity
                         key={star}
                         onPress={() => {
-                          console.log('[PaymentSummary] Star selected:', star);
                           setRatingStars(star);
                           setRatingError('');
                         }}
@@ -417,7 +403,6 @@ export default function PaymentSummaryScreen() {
                 <View style={styles.ratingButtonRow}>
                   <TouchableOpacity
                     onPress={() => {
-                      console.log('[PaymentSummary] Rating skipped');
                       setShowRatingOverlay(false);
                     }}
                     activeOpacity={0.8}

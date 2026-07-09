@@ -13,22 +13,18 @@ export default function RoleSelectScreen() {
   const insets = useSafeAreaInsets();
 
   const handleRequestCoverage = () => {
-    console.log('[RoleSelect] Request Coverage card pressed');
     router.push('/(auth)/sign-up?role=requester');
   };
 
   const handleCoverAndEarn = () => {
-    console.log('[RoleSelect] Cover & Earn card pressed');
     router.push('/(auth)/sign-up?role=doctor');
   };
 
   const handleTerms = () => {
-    console.log('[RoleSelect] Terms link pressed');
     router.push('/(auth)/terms');
   };
 
   const handlePrivacy = () => {
-    console.log('[RoleSelect] Privacy link pressed');
   };
 
   const topPadding = insets.top + 72;

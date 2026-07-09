@@ -142,7 +142,6 @@ function TransactionCard({
       style={styles.card}
       activeOpacity={0.85}
       onPress={() => {
-        console.log('[EarningsScreen] Transaction card toggled — session_id:', row.session_id, 'expanded:', !expanded);
         onToggle();
       }}
     >
@@ -208,7 +207,6 @@ export default function DoctorEarningsScreen() {
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
   const fetchEarnings = useCallback(async () => {
-    console.log('[EarningsScreen] Fetching doctor_earnings from Supabase');
     // Only show full-screen spinner on the very first load when list is empty
     if (isFirstLoadRef.current && earnings.length === 0) {
       setLoading(true);
@@ -220,16 +218,13 @@ export default function DoctorEarningsScreen() {
         .order('paid_at', { ascending: false });
 
       if (fetchError) {
-        console.log('[EarningsScreen] Fetch error:', fetchError.message);
         setError(fetchError.message);
         return;
       }
 
-      console.log('[EarningsScreen] Fetched', data?.length ?? 0, 'earnings rows');
       setEarnings((data as DoctorEarning[]) ?? []);
       setError(null);
     } catch (e: any) {
-      console.log('[EarningsScreen] Unexpected fetch error:', e.message);
       setError(e.message);
     } finally {
       setLoading(false);
@@ -245,7 +240,6 @@ export default function DoctorEarningsScreen() {
 
   // ── Pull-to-refresh ─────────────────────────────────────────────────────────
   const handleRefresh = useCallback(async () => {
-    console.log('[EarningsScreen] Pull-to-refresh triggered');
     setRefreshing(true);
     await fetchEarnings();
     setRefreshing(false);
@@ -256,20 +250,15 @@ export default function DoctorEarningsScreen() {
     if (!user) return;
 
     const userChannelName = `user:${user.id}`;
-    console.log('[EarningsScreen] Subscribing to realtime channel:', userChannelName);
 
     const ch = supabase
       .channel(userChannelName)
-      .on('broadcast', { event: 'disbursement_confirmed' }, (payload) => {
-        console.log('[EarningsScreen] disbursement_confirmed received:', payload);
+      .on('broadcast', { event: 'disbursement_confirmed' }, () => {
         fetchEarnings();
       })
-      .subscribe((status) => {
-        console.log('[EarningsScreen] Realtime channel status:', userChannelName, status);
-      });
+      .subscribe();
 
     return () => {
-      console.log('[EarningsScreen] Unsubscribing from realtime channel:', userChannelName);
       supabase.removeChannel(ch);
     };
   }, [user, fetchEarnings]);
@@ -332,7 +321,6 @@ export default function DoctorEarningsScreen() {
                 style={[styles.pill, isActive ? styles.pillActive : styles.pillInactive]}
                 activeOpacity={0.75}
                 onPress={() => {
-                  console.log('[EarningsScreen] Period pill pressed:', p);
                   setPeriod(p);
                   setExpandedId(null);
                 }}

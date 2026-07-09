@@ -76,17 +76,14 @@ export default function NewPasswordScreen() {
   const confirmRef = useRef<TextInput>(null);
 
   const handleBack = () => {
-    console.log('[NewPassword] Back button pressed');
     router.back();
   };
 
   const handleTogglePassword = () => {
-    console.log('[NewPassword] Password visibility toggled');
     setShowPassword(prev => !prev);
   };
 
   const handleToggleConfirm = () => {
-    console.log('[NewPassword] Confirm password visibility toggled');
     setShowConfirm(prev => !prev);
   };
 
@@ -106,7 +103,6 @@ export default function NewPasswordScreen() {
       return;
     }
 
-    console.log('[NewPassword] Update password pressed — email:', email, 'role:', role);
     setLoading(true);
     setError('');
 
@@ -115,10 +111,8 @@ export default function NewPasswordScreen() {
     setLoading(false);
 
     if (updateError) {
-      console.log('[NewPassword] Update password error:', updateError.message);
       setError(updateError.message || 'Failed to update password. Please try again.');
     } else {
-      console.log('[NewPassword] Password updated successfully — navigating to sign in after 1.5s');
       setSuccess(true);
       setTimeout(() => {
         router.replace(`/(auth)/sign-up?mode=signin&role=${role}` as any);

@@ -110,8 +110,6 @@ export default function DoctorPayout() {
       });
       const result = await response.json();
       if (!response.ok || result.error) {
-        // Log the real reason for debugging
-        console.warn('[Monnify] Verification failed:', result?.message || result);
         throw new Error(ACCOUNT_VERIFY_ERROR);
       }
 
@@ -120,7 +118,6 @@ export default function DoctorPayout() {
       const rawRegistrationName = String(
         profile?.full_name || user?.user_metadata?.full_name || user?.email || ''
       ).toLowerCase();
-      console.log('[DoctorPayout] Name match — registration:', rawRegistrationName, 'returned:', returnedName);
 
       const stripTitles = (s: string) =>
         s.replace(/\b(dr|mr|mrs|ms|prof|sir)\b\.?\s*/gi, '').trim();
@@ -132,7 +129,6 @@ export default function DoctorPayout() {
       // Take only first 2 meaningful tokens (first name, last name)
       const coreTokens = regTokens.slice(0, 2);
       const matchCount = coreTokens.filter((token: string) => cleanReturned.includes(token)).length;
-      console.log('[DoctorPayout] coreTokens:', coreTokens, 'matchCount:', matchCount);
 
       if (coreTokens.length > 0 && matchCount === 0) {
         setAccountNameError(ACCOUNT_MISMATCH_ERROR);
@@ -140,11 +136,7 @@ export default function DoctorPayout() {
       } else {
         setAccountName(String(result.accountName || ''));
       }
-    } catch (err: unknown) {
-      const isAlreadyFriendly = err instanceof Error && err.message === ACCOUNT_VERIFY_ERROR;
-      if (!isAlreadyFriendly) {
-        console.warn('[Monnify] Unexpected error:', err);
-      }
+    } catch {
       setAccountNameError(ACCOUNT_VERIFY_ERROR);
     } finally {
       setAccountNameLoading(false);
@@ -162,7 +154,6 @@ export default function DoctorPayout() {
   }, [selectedBank, accountNumber]);
 
   const handleBack = () => {
-    console.log('[DoctorPayout] Back button pressed, onboarding_complete:', profile?.onboarding_complete);
     if (profile?.onboarding_complete) {
       router.replace('/(doctor)/(home)' as any);
     } else {
@@ -172,7 +163,6 @@ export default function DoctorPayout() {
 
   const handleSubmit = async () => {
     if (loading) return;
-    console.log('[DoctorPayout] Submit pressed — bank:', selectedBank?.name, 'account:', accountNumber);
 
     let valid = true;
     setBankError('');
@@ -218,7 +208,6 @@ export default function DoctorPayout() {
       const token = await getValidToken();
       if (!token) throw new Error('Authentication error. Please sign in again.');
 
-      console.log('[DoctorPayout] Calling create-subaccount for doctor:', userId);
       const subaccountResponse = await fetch(
         'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/create-subaccount',
         {
@@ -238,7 +227,6 @@ export default function DoctorPayout() {
       );
 
       const subaccountResult = await subaccountResponse.json();
-      console.log('[DoctorPayout] create-subaccount response:', subaccountResponse.status, subaccountResult);
 
       if (!subaccountResponse.ok || subaccountResult.error) {
         throw new Error(
@@ -249,7 +237,6 @@ export default function DoctorPayout() {
 
       // Step 2b: Provision Monnify reserved account for this doctor
       setLoadingLabel('Setting up payment account...');
-      console.log('[DoctorPayout] Calling provision-reserved-account for doctor:', userId);
       try {
         const provisionResponse = await fetch(
           'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/provision-reserved-account',
@@ -262,15 +249,9 @@ export default function DoctorPayout() {
             body: JSON.stringify({}),
           }
         );
-        const provisionResult = await provisionResponse.json();
-        console.log('[DoctorPayout] provision-reserved-account response:', provisionResponse.status, provisionResult);
-        // Non-blocking: log error but don't fail onboarding if this step fails
-        // The end-shift function has an inline fallback for this case
-        if (!provisionResponse.ok) {
-          console.warn('[DoctorPayout] provision-reserved-account failed (non-fatal):', provisionResult?.error);
-        }
-      } catch (provErr) {
-        console.warn('[DoctorPayout] provision-reserved-account error (non-fatal):', provErr);
+        await provisionResponse.json();
+      } catch {
+        // Non-blocking: don't fail onboarding if this step fails
       }
 
       // Step 3: Mark onboarding complete — only reached if subaccount succeeded

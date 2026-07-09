@@ -26,7 +26,6 @@ interface NotificationProviderProps {
 
 export function NotificationProvider({ children }: NotificationProviderProps) {
   const requestPermission = useCallback(async (): Promise<boolean> => {
-    console.log("[Notifications] requestPermission called (OneSignal disabled for Expo Go)");
     return false;
   }, []);
 
