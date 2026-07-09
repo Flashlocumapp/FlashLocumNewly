@@ -788,6 +788,7 @@ function RequesterPaymentCard({
 
   // Payment intent state — always sourced from backend
   const [paymentIntent, setPaymentIntent] = useState<import('@/types').PaymentIntent | null>(null);
+  const paymentIntentRef = useRef<import('@/types').PaymentIntent | null>(null);
   const [loadingIntent, setLoadingIntent] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -903,15 +904,16 @@ function RequesterPaymentCard({
       const payment = data?.payment;
       console.log('[RequesterPaymentCard] refresh-payment success:', payment?.id, 'new expiry:', payment?.expiry_at);
       if (payment) {
-        setPaymentIntent((prev) => prev ? {
-          ...prev,
-          id: payment.id ?? prev.id,
-          amount_naira: payment.amount_naira ?? prev.amount_naira,
-          monnify_account_number: payment.account_number ?? prev.monnify_account_number,
-          monnify_bank_name: payment.bank_name ?? prev.monnify_bank_name,
-          monnify_account_reference: payment.account_reference ?? prev.monnify_account_reference,
-          expiry_at: payment.expiry_at ?? prev.expiry_at,
-        } : prev);
+        const snap = paymentIntentRef.current;
+        setPaymentIntent(snap ? {
+          ...snap,
+          id: payment.id ?? snap.id,
+          amount_naira: payment.amount_naira ?? snap.amount_naira,
+          monnify_account_number: payment.account_number ?? snap.monnify_account_number,
+          monnify_bank_name: payment.bank_name ?? snap.monnify_bank_name,
+          monnify_account_reference: payment.account_reference ?? snap.monnify_account_reference,
+          expiry_at: payment.expiry_at ?? snap.expiry_at,
+        } : snap);
         if (payment.expiry_at) {
           startCountdown(payment.expiry_at);
         }
@@ -922,6 +924,9 @@ function RequesterPaymentCard({
       setRefreshing(false);
     }
   }, [session.id, refreshing, startCountdown]);
+
+  // Keep paymentIntentRef in sync so updaters can read the latest value without stale closures.
+  useEffect(() => { paymentIntentRef.current = paymentIntent; }, [paymentIntent]);
 
   // Keep ref in sync with latest handleRefreshPayment so startCountdown's tick
   // always calls the version that has the current paymentIntent in scope.
@@ -987,15 +992,16 @@ function RequesterPaymentCard({
         console.log('[RequesterPaymentCard] payment_refreshed received:', payload);
         const payment = payload?.payload?.payment;
         if (payment) {
-          setPaymentIntent((prev) => prev ? {
-            ...prev,
-            id: payment.id ?? prev.id,
-            amount_naira: payment.amount_naira ?? prev.amount_naira,
-            monnify_account_number: payment.account_number ?? prev.monnify_account_number,
-            monnify_bank_name: payment.bank_name ?? prev.monnify_bank_name,
-            monnify_account_reference: payment.account_reference ?? prev.monnify_account_reference,
-            expiry_at: payment.expiry_at ?? prev.expiry_at,
-          } : prev);
+          const snap = paymentIntentRef.current;
+          setPaymentIntent(snap ? {
+            ...snap,
+            id: payment.id ?? snap.id,
+            amount_naira: payment.amount_naira ?? snap.amount_naira,
+            monnify_account_number: payment.account_number ?? snap.monnify_account_number,
+            monnify_bank_name: payment.bank_name ?? snap.monnify_bank_name,
+            monnify_account_reference: payment.account_reference ?? snap.monnify_account_reference,
+            expiry_at: payment.expiry_at ?? snap.expiry_at,
+          } : snap);
           if (payment.expiry_at) {
             startCountdown(payment.expiry_at);
           }
