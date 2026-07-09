@@ -158,11 +158,12 @@ function NavigationGuard() {
   // Sign-out watcher — only reset after session AND profile are both gone
   useEffect(() => {
     if (!session && !profile && hasRouted.current) {
+      if (segments[0] === '(auth)') return; // already in auth flow — don't redirect
       hasRouted.current = false;
       skipIntroRef.current = true;
       router.replace('/(auth)/role-select' as any);
     }
-  }, [session, profile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session, profile, segments]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cross-portal redirect guard — fires on segment changes after initial routing
   useEffect(() => {
