@@ -127,8 +127,8 @@ type SelectedPlace = {
 
 const MINIMALIST_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#dde0e3' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#dde0e3' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#000000' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
   { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
   { featureType: 'administrative.neighborhood', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi', stylers: [{ visibility: 'off' }] },
@@ -136,9 +136,9 @@ const MINIMALIST_MAP_STYLE = [
   { featureType: 'poi.park', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
   { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#cdd0d4' }] },
   { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+  { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#000000' }] },
   { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#c4c8cc' }] },
-  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#000000' }] },
   { featureType: 'road.local', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
   { featureType: 'road.local', elementType: 'labels', stylers: [{ visibility: 'off' }] },
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },

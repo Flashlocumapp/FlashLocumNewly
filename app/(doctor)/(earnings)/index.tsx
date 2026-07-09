@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
   RefreshControl,
   ScrollView,
   TouchableOpacity,
@@ -198,21 +197,14 @@ export default function DoctorEarningsScreen() {
   const { user } = useAuth();
 
   const [earnings, setEarnings] = useState<DoctorEarning[]>([]);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('this_week');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const isFirstLoadRef = useRef(true);
-  const hasDataRef = useRef(false);
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
   const fetchEarnings = useCallback(async () => {
     console.log('[Earnings] fetchEarnings called');
-    // Only show full-screen spinner on the very first load when list is empty
-    if (isFirstLoadRef.current && !hasDataRef.current) {
-      setLoading(true);
-    }
     try {
       console.log('[Earnings] Fetching doctor_earnings from Supabase');
       const { data, error: fetchError } = await supabase
@@ -228,17 +220,13 @@ export default function DoctorEarningsScreen() {
 
       const rows = (data as DoctorEarning[]) ?? [];
       console.log('[Earnings] Fetched', rows.length, 'rows');
-      hasDataRef.current = rows.length > 0;
       setEarnings(rows);
       setError(null);
     } catch (e: any) {
       console.log('[Earnings] Fetch exception:', e.message);
       setError(e.message);
-    } finally {
-      setLoading(false);
-      isFirstLoadRef.current = false;
     }
-  }, []); // empty deps — no earnings.length
+  }, []);
 
   // ── Initial load ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -248,6 +236,7 @@ export default function DoctorEarningsScreen() {
 
   // ── Pull-to-refresh ─────────────────────────────────────────────────────────
   const handleRefresh = useCallback(async () => {
+    console.log('[Earnings] Pull-to-refresh triggered');
     setRefreshing(true);
     await fetchEarnings();
     setRefreshing(false);
@@ -329,6 +318,7 @@ export default function DoctorEarningsScreen() {
                 style={[styles.pill, isActive ? styles.pillActive : styles.pillInactive]}
                 activeOpacity={0.75}
                 onPress={() => {
+                  console.log('[Earnings] Period selected:', p);
                   setPeriod(p);
                   setExpandedId(null);
                 }}
@@ -344,11 +334,7 @@ export default function DoctorEarningsScreen() {
         {/* Summary card */}
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>{summaryLabel}</Text>
-          {loading ? (
-            <ActivityIndicator color="#1C1C1E" size="small" style={{ marginVertical: 8 }} />
-          ) : (
-            <Text style={styles.summaryAmount}>{settledDisplay}</Text>
-          )}
+          <Text style={styles.summaryAmount}>{settledDisplay}</Text>
           {pendingAmount > 0 && (
             <View style={styles.pendingRow}>
               <View style={styles.pendingDot} />
@@ -371,16 +357,8 @@ export default function DoctorEarningsScreen() {
           </View>
         )}
 
-        {/* Loading */}
-        {loading && !error && earnings.length === 0 && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={styles.loadingText}>Loading earnings…</Text>
-          </View>
-        )}
-
         {/* Empty state */}
-        {!loading && !error && filteredRows.length === 0 && (
+        {!error && filteredRows.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyText}>No transactions in this period.</Text>
           </View>
@@ -394,7 +372,10 @@ export default function DoctorEarningsScreen() {
                 key={row.session_id}
                 row={row}
                 expanded={expandedId === row.session_id}
-                onToggle={() => setExpandedId(prev => prev === row.session_id ? null : row.session_id)}
+                onToggle={() => {
+                  console.log('[Earnings] Transaction card toggled:', row.session_id);
+                  setExpandedId(prev => prev === row.session_id ? null : row.session_id);
+                }}
               />
             ))}
           </View>
@@ -624,18 +605,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     color: '#8E8E93',
     textAlign: 'center',
-  },
-
-  // Loading
-  loadingContainer: {
-    alignItems: 'center',
-    paddingTop: SPACING.xxxl,
-    gap: SPACING.md,
-  },
-  loadingText: {
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    color: '#8E8E93',
   },
 
   // Error
