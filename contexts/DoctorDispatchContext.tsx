@@ -70,6 +70,7 @@ export type CoverageSession = {
   requester_name: string;
   requester_phone: string | null;
   requester_rating?: number | null;
+  requester_reliability?: number | null;
   created_at: string;
 };
 

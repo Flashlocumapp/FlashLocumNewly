@@ -172,7 +172,7 @@ function HistoryCard({ session, onPress }: {
         <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 8 }}>{'|'}</Text>
         <Text style={{ fontSize: 13, color: '#F4A261' }}>{'★ '}</Text>
         <Text style={{ fontSize: 13, color: '#1C1C1E', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
-        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759', marginHorizontal: 5 }} />
+        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#34C759', marginHorizontal: 5 }} />
         <Text style={{ fontSize: 13, color: '#1C1C1E', fontFamily: 'Inter_600SemiBold' }}>{reliabilityDisplay}{'%'}</Text>
       </View>
 
@@ -313,7 +313,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
                   <Text style={{ fontSize: 14, color: '#8E8E93', marginHorizontal: 8 }}>{'|'}</Text>
                   <Text style={{ fontSize: 14, color: '#F4A261' }}>{'★ '}</Text>
                   <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#F4A261' }}>{ratingDisplay}</Text>
-                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759', marginHorizontal: 5 }} />
+                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#34C759', marginHorizontal: 5 }} />
                   <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#34C759' }}>{reliabilityDisplay}{'%'}</Text>
                 </View>
 

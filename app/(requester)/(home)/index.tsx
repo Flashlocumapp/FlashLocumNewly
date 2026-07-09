@@ -523,10 +523,35 @@ function RequesterUpcomingCard({
   const cleanName = rawDoctorName.replace(/^dr\.?\s*/i, '').trim();
   const doctorName = cleanName && !cleanName.includes('@') ? `Dr. ${cleanName}` : 'Doctor';
   const initials = cleanName ? getSessionInitials(cleanName) : 'DR';
+
+  const [liveRating, setLiveRating] = useState<number | null>(null);
+  const [liveReliability, setLiveReliability] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!session.doctor_id) return;
+    console.log('[Requester Home] Fetching live doctor stats for doctor_id:', session.doctor_id);
+    supabase
+      .from('doctor_profiles')
+      .select('rating, reliability')
+      .eq('id', session.doctor_id)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          console.log('[Requester Home] Live doctor stats fetched (upcoming):', data);
+          setLiveRating(data.rating ?? null);
+          setLiveReliability(data.reliability ?? null);
+        }
+      });
+  }, [session.doctor_id]);
+
   const ratingRaw = Number(session.doctor_rating);
-  const ratingDisplay = (!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '5.0' : ratingRaw.toFixed(1);
+  const ratingDisplay = liveRating != null
+    ? liveRating.toFixed(1)
+    : ((!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '5.0' : ratingRaw.toFixed(1));
   const reliabilityRaw = Number(session.doctor_reliability);
-  const reliabilityDisplay = (!session.doctor_reliability || isNaN(reliabilityRaw) || reliabilityRaw === 0) ? '100' : String(Math.round(reliabilityRaw));
+  const reliabilityDisplay = liveReliability != null
+    ? String(Math.round(liveReliability))
+    : ((!session.doctor_reliability || isNaN(reliabilityRaw) || reliabilityRaw === 0) ? '100' : String(Math.round(reliabilityRaw)));
 
   return (
     <View style={{
@@ -569,7 +594,7 @@ function RequesterUpcomingCard({
             <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 5 }}>{'|'}</Text>
             <Text style={{ fontSize: 12, color: '#F4A261' }}>{'★ '}</Text>
             <Text style={{ fontSize: 12, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759', marginHorizontal: 5 }} />
+            <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#34C759', marginHorizontal: 5 }} />
             <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>
               {reliabilityDisplay}
             </Text>
@@ -663,10 +688,35 @@ function RequesterActiveCard({
   const cleanName = rawDoctorName.replace(/^dr\.?\s*/i, '').trim();
   const doctorName = cleanName && !cleanName.includes('@') ? `Dr. ${cleanName}` : 'Doctor';
   const initials = cleanName ? getSessionInitials(cleanName) : 'DR';
+
+  const [liveRatingActive, setLiveRatingActive] = useState<number | null>(null);
+  const [liveReliabilityActive, setLiveReliabilityActive] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!session.doctor_id) return;
+    console.log('[Requester Home] Fetching live doctor stats for active session, doctor_id:', session.doctor_id);
+    supabase
+      .from('doctor_profiles')
+      .select('rating, reliability')
+      .eq('id', session.doctor_id)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          console.log('[Requester Home] Live doctor stats fetched (active):', data);
+          setLiveRatingActive(data.rating ?? null);
+          setLiveReliabilityActive(data.reliability ?? null);
+        }
+      });
+  }, [session.doctor_id]);
+
   const ratingRaw = Number(session.doctor_rating);
-  const ratingDisplay = (!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '5.0' : ratingRaw.toFixed(1);
+  const ratingDisplay = liveRatingActive != null
+    ? liveRatingActive.toFixed(1)
+    : ((!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '5.0' : ratingRaw.toFixed(1));
   const reliabilityRaw = Number(session.doctor_reliability);
-  const reliabilityDisplay = (!session.doctor_reliability || isNaN(reliabilityRaw) || reliabilityRaw === 0) ? '100' : String(Math.round(reliabilityRaw));
+  const reliabilityDisplay = liveReliabilityActive != null
+    ? String(Math.round(liveReliabilityActive))
+    : ((!session.doctor_reliability || isNaN(reliabilityRaw) || reliabilityRaw === 0) ? '100' : String(Math.round(reliabilityRaw)));
   const shiftPillText = buildShiftPillText(session);
   const showDayPill = session.coverage_length > 1;
   const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;
@@ -714,7 +764,7 @@ function RequesterActiveCard({
             <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 5 }}>{'|'}</Text>
             <Text style={{ fontSize: 12, color: '#F4A261' }}>{'★ '}</Text>
             <Text style={{ fontSize: 12, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#34C759', marginHorizontal: 5 }} />
+            <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#34C759', marginHorizontal: 5 }} />
             <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>
               {reliabilityDisplay}
             </Text>
