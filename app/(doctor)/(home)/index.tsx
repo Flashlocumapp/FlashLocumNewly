@@ -317,8 +317,8 @@ export default function DoctorHomeScreen() {
 
   // Live rating/reliability state — seeded from cache to avoid flicker
   const _cachedScores = getCached<{ rating: number; reliability: number }>('doctor_scores');
-  const [doctorRating, setDoctorRating] = useState<number>(_cachedScores?.rating ?? 5.0);
-  const [doctorReliability, setDoctorReliability] = useState<number>(_cachedScores?.reliability ?? 100);
+  const [doctorRating, setDoctorRating] = useState<number | null>(_cachedScores?.rating ?? null);
+  const [doctorReliability, setDoctorReliability] = useState<number | null>(_cachedScores?.reliability ?? null);
 
   // ─── Fetch doctor scores on mount ────────────────────────────────────────────
   useEffect(() => {
@@ -334,8 +334,8 @@ export default function DoctorHomeScreen() {
           return;
         }
         if (data) {
-          setDoctorRating(data.rating ?? 5.0);
-          setDoctorReliability(data.reliability ?? 100);
+          setDoctorRating(data.rating ?? null);
+          setDoctorReliability(data.reliability ?? null);
           setCached('doctor_scores', { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
         }
       } catch (e: any) {
@@ -577,7 +577,7 @@ export default function DoctorHomeScreen() {
                 </TouchableOpacity>
               </View>
               <View style={styles.ratingValueRow}>
-                <Text style={styles.statValue}>{doctorRating.toFixed(1)}</Text>
+                <Text style={styles.statValue}>{doctorRating !== null ? doctorRating.toFixed(1) : '--'}</Text>
                 <Text style={styles.starIcon}>★</Text>
               </View>
             </View>
@@ -590,7 +590,7 @@ export default function DoctorHomeScreen() {
                   <Feather name="info" size={12} color="#8E8E93" />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.statValue}>{Math.round(doctorReliability)}{'%'}</Text>
+              <Text style={styles.statValue}>{doctorReliability !== null ? `${Math.round(doctorReliability)}%` : '--'}</Text>
             </View>
           </View>
         </ScrollView>

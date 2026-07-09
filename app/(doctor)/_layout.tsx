@@ -22,7 +22,7 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase, getValidToken, fetchWithAuth } from '@/lib/supabase';
+import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
 import { DoctorDispatchContext, CoverageSession } from '@/contexts/DoctorDispatchContext';
@@ -251,8 +251,8 @@ export default function DoctorLayout() {
 
   // Live doctor scores — seeded from cache to avoid flicker
   const _cachedScores = getCached<{ rating: number; reliability: number }>('doctor_scores');
-  const [doctorRatingScore, setDoctorRatingScore] = useState<number>(_cachedScores?.rating ?? 5.0);
-  const [doctorReliabilityScore, setDoctorReliabilityScore] = useState<number>(_cachedScores?.reliability ?? 100);
+  const [doctorRatingScore, setDoctorRatingScore] = useState<number | null>(_cachedScores?.rating ?? null);
+  const [doctorReliabilityScore, setDoctorReliabilityScore] = useState<number | null>(_cachedScores?.reliability ?? null);
 
   // ─── Fetch doctor scores on mount ────────────────────────────────────────────
   useEffect(() => {
@@ -268,8 +268,8 @@ export default function DoctorLayout() {
           return;
         }
         if (data) {
-          setDoctorRatingScore(data.rating ?? 5.0);
-          setDoctorReliabilityScore(data.reliability ?? 100);
+          setDoctorRatingScore(data.rating ?? null);
+          setDoctorReliabilityScore(data.reliability ?? null);
           setCached('doctor_scores', { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
         }
       } catch (e: any) {
@@ -342,24 +342,24 @@ export default function DoctorLayout() {
       return;
     }
     // Also check the database — ultimate source of truth, survives reinstalls
+    // Token check is only needed for the DB query — if token unavailable, show card anyway
+    // (the DB check is a best-effort dedup, not a hard gate)
     try {
-      const token = await getValidToken();
-      if (token) {
-        const { data } = await supabase
-          .from('shift_reviews')
-          .select('id')
-          .eq('session_id', sessionId)
-          .eq('reviewer_role', 'doctor')
-          .maybeSingle();
-        if (data) {
-          markDoctorSessionRated(sessionId); // backfill AsyncStorage
-          _doctorRatingInFlight.delete(sessionId);
-          return;
-        }
+      const { data } = await supabase
+        .from('shift_reviews')
+        .select('id')
+        .eq('session_id', sessionId)
+        .eq('reviewer_role', 'doctor')
+        .maybeSingle();
+      if (data) {
+        markDoctorSessionRated(sessionId); // backfill AsyncStorage
+        _doctorRatingInFlight.delete(sessionId);
+        return;
       }
     } catch (e: any) {
-      _doctorRatingInFlight.delete(sessionId);
+      // Non-fatal — fall through to show card
     }
+    _doctorRatingInFlight.delete(sessionId);
     setDoctorRatingSessionId(sessionId);
     setDoctorRatingHospitalName(hospitalName);
     setDoctorRatingStars(0);
@@ -915,11 +915,11 @@ export default function DoctorLayout() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={styles.badgeText}>
                   <Text style={{ color: '#F4A261' }}>★</Text>
-                  {' '}5.0
+                  {' '}{doctorRatingScore !== null ? doctorRatingScore.toFixed(1) : '--'}
                 </Text>
                 <Text style={styles.badgeText}>
                   <Text style={{ color: '#34C759' }}>●</Text>
-                  {' '}100%
+                  {' '}{doctorReliabilityScore !== null ? `${doctorReliabilityScore}%` : '--'}
                 </Text>
                 <View style={styles.envBadge}>
                   <Text style={styles.envText}>{currentEnvironment}</Text>

@@ -65,7 +65,9 @@ async function markRequesterSessionPaid(sessionId: string) {
 async function isRequesterSessionPaid(sessionId: string): Promise<boolean> {
   // Synchronous check first — no async gap
   if (_requesterPaidSessions.has(sessionId)) return true;
-  if (_requesterRatingInFlight.has(sessionId)) return true;
+  // NOTE: do NOT check _requesterRatingInFlight here — the in-flight lock is checked
+  // at every call site before calling this function. Checking it inside would cause
+  // the first trigger to return "already handled" and permanently block the card.
   try {
     const existing = await AsyncStorage.getItem(REQUESTER_PAID_SESSIONS_KEY);
     const arr: string[] = existing ? JSON.parse(existing) : [];
@@ -1371,8 +1373,8 @@ export default function RequesterHomeScreen() {
 
   // Live requester scores — seeded from cache to avoid flicker
   const _cachedRScores = getCached<{ rating: number; reliability: number }>('requester_scores');
-  const [requesterRating, setRequesterRating] = useState<number>(_cachedRScores?.rating ?? 5.0);
-  const [requesterReliability, setRequesterReliability] = useState<number>(_cachedRScores?.reliability ?? 100);
+  const [requesterRating, setRequesterRating] = useState<number | null>(_cachedRScores?.rating ?? null);
+  const [requesterReliability, setRequesterReliability] = useState<number | null>(_cachedRScores?.reliability ?? null);
   const [tooltipVisible, setTooltipVisible] = useState<'rating' | 'reliability' | null>(null);
 
   // ─── Fetch requester scores on mount ─────────────────────────────────────────
@@ -1389,8 +1391,8 @@ export default function RequesterHomeScreen() {
           return;
         }
         if (data) {
-          setRequesterRating(data.rating ?? 5.0);
-          setRequesterReliability(data.reliability ?? 100);
+          setRequesterRating(data.rating ?? null);
+          setRequesterReliability(data.reliability ?? null);
           setCached('requester_scores', { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
         }
       } catch (e: any) {
@@ -1424,47 +1426,45 @@ export default function RequesterHomeScreen() {
       })
       // From channel 6 (payment confirmed on user channel)
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+        console.log('[Requester] user channel payment_confirmed received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
-        setActiveSession((prev) => {
-          if (prev) {
-            const sid = sessionId ?? prev.id;
-            if (!_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
-              _requesterRatingInFlight.add(sid);
-              isRequesterSessionPaid(sid).then((alreadyHandled) => {
-                if (!alreadyHandled) {
-                  _requesterRatingInFlight.delete(sid);
-                  setConfirmedSession(prev);
-                  setShowPaymentSuccess(true);
-                } else {
-                  _requesterRatingInFlight.delete(sid);
-                }
-              }).catch(() => { _requesterRatingInFlight.delete(sid); });
+        // Capture current session synchronously via ref
+        const currentSession = activeSessionRef.current;
+        const sid = sessionId ?? currentSession?.id;
+        // Update status synchronously
+        setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
+        // Run async check OUTSIDE the updater
+        if (sid && currentSession && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
+          _requesterRatingInFlight.add(sid);
+          isRequesterSessionPaid(sid).then((alreadyHandled) => {
+            _requesterRatingInFlight.delete(sid);
+            if (!alreadyHandled) {
+              setConfirmedSession(currentSession);
+              setShowPaymentSuccess(true);
             }
-          }
-          return prev ? { ...prev, status: 'requester_paid' } : prev;
-        });
+          }).catch(() => { _requesterRatingInFlight.delete(sid); });
+        }
         fetchActiveSession();
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+        console.log('[Requester] user channel PAYMENT_CONFIRMED received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
-        setActiveSession((prev) => {
-          if (prev) {
-            const sid = sessionId ?? prev.id;
-            if (!_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
-              _requesterRatingInFlight.add(sid);
-              isRequesterSessionPaid(sid).then((alreadyHandled) => {
-                if (!alreadyHandled) {
-                  _requesterRatingInFlight.delete(sid);
-                  setConfirmedSession(prev);
-                  setShowPaymentSuccess(true);
-                } else {
-                  _requesterRatingInFlight.delete(sid);
-                }
-              }).catch(() => { _requesterRatingInFlight.delete(sid); });
+        // Capture current session synchronously via ref
+        const currentSession = activeSessionRef.current;
+        const sid = sessionId ?? currentSession?.id;
+        // Update status synchronously
+        setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
+        // Run async check OUTSIDE the updater
+        if (sid && currentSession && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
+          _requesterRatingInFlight.add(sid);
+          isRequesterSessionPaid(sid).then((alreadyHandled) => {
+            _requesterRatingInFlight.delete(sid);
+            if (!alreadyHandled) {
+              setConfirmedSession(currentSession);
+              setShowPaymentSuccess(true);
             }
-          }
-          return prev ? { ...prev, status: 'requester_paid' } : prev;
-        });
+          }).catch(() => { _requesterRatingInFlight.delete(sid); });
+        }
         fetchActiveSession();
       })
       // From channel 7 (shift cancelled on requester channel)
@@ -1809,47 +1809,45 @@ export default function RequesterHomeScreen() {
         }
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+        console.log('[Requester] session channel PAYMENT_CONFIRMED received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
-        setActiveSession((prev) => {
-          if (prev) {
-            const sid = sessionId ?? prev.id;
-            if (!_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
-              _requesterRatingInFlight.add(sid);
-              isRequesterSessionPaid(sid).then((alreadyHandled) => {
-                if (!alreadyHandled) {
-                  _requesterRatingInFlight.delete(sid);
-                  setConfirmedSession(prev);
-                  setShowPaymentSuccess(true);
-                } else {
-                  _requesterRatingInFlight.delete(sid);
-                }
-              }).catch(() => { _requesterRatingInFlight.delete(sid); });
+        // Capture current session synchronously via ref
+        const currentSession = activeSessionRef.current;
+        const sid = sessionId ?? currentSession?.id;
+        // Update status synchronously
+        setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
+        // Run async check OUTSIDE the updater
+        if (sid && currentSession && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
+          _requesterRatingInFlight.add(sid);
+          isRequesterSessionPaid(sid).then((alreadyHandled) => {
+            _requesterRatingInFlight.delete(sid);
+            if (!alreadyHandled) {
+              setConfirmedSession(currentSession);
+              setShowPaymentSuccess(true);
             }
-          }
-          return prev ? { ...prev, status: 'requester_paid' } : prev;
-        });
+          }).catch(() => { _requesterRatingInFlight.delete(sid); });
+        }
         fetchActiveSession();
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+        console.log('[Requester] session channel payment_confirmed received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
-        setActiveSession((prev) => {
-          if (prev) {
-            const sid = sessionId ?? prev.id;
-            if (!_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
-              _requesterRatingInFlight.add(sid);
-              isRequesterSessionPaid(sid).then((alreadyHandled) => {
-                if (!alreadyHandled) {
-                  _requesterRatingInFlight.delete(sid);
-                  setConfirmedSession(prev);
-                  setShowPaymentSuccess(true);
-                } else {
-                  _requesterRatingInFlight.delete(sid);
-                }
-              }).catch(() => { _requesterRatingInFlight.delete(sid); });
+        // Capture current session synchronously via ref
+        const currentSession = activeSessionRef.current;
+        const sid = sessionId ?? currentSession?.id;
+        // Update status synchronously
+        setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
+        // Run async check OUTSIDE the updater
+        if (sid && currentSession && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
+          _requesterRatingInFlight.add(sid);
+          isRequesterSessionPaid(sid).then((alreadyHandled) => {
+            _requesterRatingInFlight.delete(sid);
+            if (!alreadyHandled) {
+              setConfirmedSession(currentSession);
+              setShowPaymentSuccess(true);
             }
-          }
-          return prev ? { ...prev, status: 'requester_paid' } : prev;
-        });
+          }).catch(() => { _requesterRatingInFlight.delete(sid); });
+        }
         fetchActiveSession();
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
@@ -3367,7 +3365,7 @@ export default function RequesterHomeScreen() {
                     {'★ '}
                   </Text>
                   <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>
-                    {requesterRating.toFixed(1)}
+                    {requesterRating !== null ? requesterRating.toFixed(1) : '--'}
                   </Text>
                   <TouchableOpacity onPress={() => { console.log('[Requester] Info icon pressed: rating tooltip'); setTooltipVisible('rating'); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 3 }}>
                     <Feather name="info" size={11} color="#8E8E93" />
@@ -3375,7 +3373,7 @@ export default function RequesterHomeScreen() {
                   <Text style={{ fontSize: 13, color: '#8E8E93', marginHorizontal: 6 }}>{'·'}</Text>
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759', marginRight: 4 }} />
                   <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>
-                    {requesterReliability.toFixed(0)}
+                    {requesterReliability !== null ? requesterReliability.toFixed(0) : '--'}
                   </Text>
                   <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{'%'}</Text>
                   <TouchableOpacity onPress={() => { console.log('[Requester] Info icon pressed: reliability tooltip'); setTooltipVisible('reliability'); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 3 }}>
