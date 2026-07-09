@@ -374,7 +374,15 @@ export default function SignUpScreen() {
                 <Text style={styles.legalLink}>Terms of Service</Text>
               </AnimatedPressable>
               {' and '}
-              <Text style={styles.legalLink}>Privacy Policy</Text>
+              <AnimatedPressable
+                  onPress={() => {
+                    console.log('[SignUp] Privacy Policy link pressed');
+                    router.push('/(auth)/privacy' as any);
+                  }}
+                  scaleValue={0.97}
+                >
+                  <Text style={styles.legalLink}>Privacy Policy</Text>
+                </AnimatedPressable>
               {'.'}
             </Text>
           </View>

@@ -12,6 +12,7 @@ export default function AuthLayout() {
       <Stack.Screen name="reset-verify" />
       <Stack.Screen name="new-password" />
       <Stack.Screen name="terms" />
+      <Stack.Screen name="privacy" />
     </Stack>
   );
 }
