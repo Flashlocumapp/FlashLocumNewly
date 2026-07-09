@@ -1642,24 +1642,24 @@ export default function RequesterHomeScreen() {
 
   const locationSub = useRef<Location.LocationSubscription | null>(null);
 
+  const fetchOnlineDoctors = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('doctor_profiles')
+      .select('id, lat, lng')
+      .eq('is_online', true)
+      .not('lat', 'is', null)
+      .not('lng', 'is', null);
+    if (error) {
+      console.log('[RequesterHome] fetchOnlineDoctors error:', error.message);
+      return;
+    }
+    console.log('[RequesterHome] Online doctors fetched:', data?.length ?? 0);
+    setOnlineDoctors((data ?? []) as { id: string; lat: number; lng: number }[]);
+  }, [user]);
+
   // ── Online doctors realtime ──
   useEffect(() => {
     if (!user) return;
-
-    const fetchOnlineDoctors = async () => {
-      const { data, error } = await supabase
-        .from('doctor_profiles')
-        .select('id, lat, lng')
-        .eq('is_online', true)
-        .not('lat', 'is', null)
-        .not('lng', 'is', null);
-      if (error) {
-        console.log('[RequesterHome] fetchOnlineDoctors error:', error.message);
-        return;
-      }
-      console.log('[RequesterHome] Online doctors fetched:', data?.length ?? 0);
-      setOnlineDoctors((data ?? []) as { id: string; lat: number; lng: number }[]);
-    };
 
     fetchOnlineDoctors();
 
@@ -1714,13 +1714,10 @@ export default function RequesterHomeScreen() {
         console.log('[RequesterHome] online-doctors channel status:', status);
       });
 
-    const refreshInterval = setInterval(fetchOnlineDoctors, 30000);
-
     return () => {
       supabase.removeChannel(ch);
-      clearInterval(refreshInterval);
     };
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchOnlineDoctors, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sheet state
   const [sheetState, setSheetState] = useState<SheetState>('idle');
@@ -1924,11 +1921,12 @@ export default function RequesterHomeScreen() {
       if (nextState === 'active') {
         console.log('[RequesterHome] App foregrounded — re-fetching active session');
         fetchActiveSession();
+        fetchOnlineDoctors();
       }
     };
     const sub = AppState.addEventListener('change', handleAppStateChange);
     return () => sub.remove();
-  }, [fetchActiveSession]);
+  }, [fetchActiveSession, fetchOnlineDoctors]);
 
   // ─── Session realtime subscription ───────────────────────────────────────────
   useEffect(() => {
