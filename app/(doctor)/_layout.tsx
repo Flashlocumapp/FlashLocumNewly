@@ -224,7 +224,7 @@ const TABS: DoctorTabItem[] = [
 
 export default function DoctorLayout() {
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const router = useRouter();
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
 
@@ -243,6 +243,20 @@ export default function DoctorLayout() {
   // Ref always kept in sync with activeSessionId so broadcast handler closures can read the latest value.
   const activeSessionIdRef = useRef<string | null>(null);
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
+
+  // Guard 1 — Reactive: force offline when verification_status changes to non-verified
+  useEffect(() => {
+    const status = profile?.verification_status;
+    if (status && status !== 'verified' && isOnline) {
+      console.log('[DoctorLayout] verification_status changed to', status, '— forcing offline');
+      setIsOnline(false);
+      fetchWithAuth(`${EDGE_BASE}/go-offline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      }).catch(() => {});
+    }
+  }, [profile?.verification_status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Doctor rating overlay state
   const [showDoctorRating, setShowDoctorRating] = useState(false);
@@ -424,7 +438,19 @@ export default function DoctorLayout() {
   useEffect(() => {
     if (!user) return;
     warmDoctorRatedCache();
-    fetchActiveSession();
+    fetchActiveSession().then(() => {
+      // Guard 2 — Boot-time: force offline if doctor is not verified
+      const bootStatus = profile?.verification_status;
+      if (bootStatus && bootStatus !== 'verified') {
+        console.log('[DoctorLayout] boot-time verification gate — status is', bootStatus, '— forcing offline');
+        setIsOnline(false);
+        fetchWithAuth(`${EDGE_BASE}/go-offline`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        }).catch(() => {});
+      }
+    });
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Register reset callback so AuthContext can clear dispatch state on sign-out
