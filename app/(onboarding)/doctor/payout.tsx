@@ -30,7 +30,6 @@ const FALLBACK_BANKS = [
   { name: 'First Bank', code: '011' },
   { name: 'FCMB', code: '214' },
   { name: 'GTBank', code: '058' },
-  { name: 'Heritage Bank', code: '030' },
   { name: 'Keystone Bank', code: '082' },
   { name: 'Polaris Bank', code: '076' },
   { name: 'Providus Bank', code: '101' },
@@ -85,7 +84,7 @@ export default function DoctorPayout() {
           const normalised = json.map((b: any) => ({
             name: b.name || b.bankName || '',
             code: b.code || b.bankCode || '',
-          })).filter(b => b.name && b.code);
+          })).filter(b => b.name && b.code && b.code.length === 3);
           if (normalised.length > 0) setBanks(normalised);
         }
       } catch {
