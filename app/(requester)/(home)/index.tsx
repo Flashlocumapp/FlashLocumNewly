@@ -547,14 +547,8 @@ function RequesterUpcomingCard({
       });
   }, [session.doctor_id]);
 
-  const ratingRaw = Number(session.doctor_rating);
-  const ratingDisplay = liveRating != null
-    ? liveRating.toFixed(1)
-    : ((!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '5.0' : ratingRaw.toFixed(1));
-  const reliabilityRaw = Number(session.doctor_reliability);
-  const reliabilityDisplay = liveReliability != null
-    ? String(Math.round(liveReliability))
-    : ((!session.doctor_reliability || isNaN(reliabilityRaw) || reliabilityRaw === 0) ? '100' : String(Math.round(reliabilityRaw)));
+  const ratingDisplay = liveRating != null ? liveRating.toFixed(1) : '--';
+  const reliabilityDisplay = liveReliability != null ? `${Math.round(liveReliability)}` : '--';
 
   return (
     <View style={{
@@ -712,14 +706,8 @@ function RequesterActiveCard({
       });
   }, [session.doctor_id]);
 
-  const ratingRaw = Number(session.doctor_rating);
-  const ratingDisplay = liveRatingActive != null
-    ? liveRatingActive.toFixed(1)
-    : ((!session.doctor_rating || isNaN(ratingRaw) || ratingRaw === 0) ? '5.0' : ratingRaw.toFixed(1));
-  const reliabilityRaw = Number(session.doctor_reliability);
-  const reliabilityDisplay = liveReliabilityActive != null
-    ? String(Math.round(liveReliabilityActive))
-    : ((!session.doctor_reliability || isNaN(reliabilityRaw) || reliabilityRaw === 0) ? '100' : String(Math.round(reliabilityRaw)));
+  const ratingDisplay = liveRatingActive != null ? liveRatingActive.toFixed(1) : '--';
+  const reliabilityDisplay = liveReliabilityActive != null ? `${Math.round(liveReliabilityActive)}` : '--';
   const shiftPillText = buildShiftPillText(session);
   const showDayPill = session.coverage_length > 1;
   const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;

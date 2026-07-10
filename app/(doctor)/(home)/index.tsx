@@ -145,12 +145,8 @@ function DoctorUpcomingCard({
       });
   }, [session.requester_id]);
 
-  const requesterRatingDisplay = liveRequesterRating != null
-    ? liveRequesterRating.toFixed(1)
-    : (session.requester_rating != null ? Number(session.requester_rating).toFixed(1) : '5.0');
-  const reliabilityDisplay = liveRequesterReliability != null
-    ? Math.round(liveRequesterReliability)
-    : (session.requester_reliability != null ? Math.round(Number(session.requester_reliability)) : 100);
+  const requesterRatingDisplay = liveRequesterRating != null ? liveRequesterRating.toFixed(1) : '--';
+  const reliabilityDisplay = liveRequesterReliability != null ? `${Math.round(liveRequesterReliability)}` : '--';
   const shiftPillText = buildShiftPillText(session);
   const canCancel = session.status === 'upcoming' && session.current_day === 1;
 
@@ -241,12 +237,8 @@ function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCal
       });
   }, [session.requester_id]);
 
-  const requesterRatingDisplay = liveRequesterRating != null
-    ? liveRequesterRating.toFixed(1)
-    : (session.requester_rating != null ? Number(session.requester_rating).toFixed(1) : '5.0');
-  const reliabilityDisplay = liveRequesterReliability != null
-    ? Math.round(liveRequesterReliability)
-    : (session.requester_reliability != null ? Math.round(Number(session.requester_reliability)) : 100);
+  const requesterRatingDisplay = liveRequesterRating != null ? liveRequesterRating.toFixed(1) : '--';
+  const reliabilityDisplay = liveRequesterReliability != null ? `${Math.round(liveRequesterReliability)}` : '--';
   const shiftPillText = buildShiftPillText(session);
   const showDayPill = session.coverage_length > 1;
   const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;

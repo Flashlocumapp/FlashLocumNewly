@@ -115,8 +115,28 @@ function HistoryCard({ session, onPress }: {
   session: CoverageSession;
   onPress: (session: CoverageSession) => void;
 }) {
-  const ratingDisplay = Number(session.doctor_rating ?? 0).toFixed(1);
-  const reliabilityDisplay = Math.round(Number(session.doctor_reliability ?? 100));
+  const [liveRating, setLiveRating] = useState<number | null>(null);
+  const [liveReliability, setLiveReliability] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!session.doctor_id) return;
+    console.log('[Requester Coverage] Fetching live doctor stats for doctor_id:', session.doctor_id);
+    supabase
+      .from('doctor_profiles')
+      .select('rating, reliability')
+      .eq('id', session.doctor_id)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          console.log('[Requester Coverage] Live doctor stats fetched:', data);
+          setLiveRating(data.rating ?? null);
+          setLiveReliability(data.reliability ?? null);
+        }
+      });
+  }, [session.doctor_id]);
+
+  const ratingDisplay = liveRating != null ? liveRating.toFixed(1) : '--';
+  const reliabilityDisplay = liveReliability != null ? `${Math.round(liveReliability)}` : '--';
 
   const shiftStart = formatTime(session.shift_start);
   const shiftEnd = formatTime(session.shift_end);
@@ -219,10 +239,30 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
     })
   ).current;
 
+  const [liveRating, setLiveRating] = useState<number | null>(null);
+  const [liveReliability, setLiveReliability] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!session?.doctor_id) return;
+    console.log('[Requester Coverage] Fetching live doctor stats for detail sheet, doctor_id:', session.doctor_id);
+    supabase
+      .from('doctor_profiles')
+      .select('rating, reliability')
+      .eq('id', session.doctor_id)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          console.log('[Requester Coverage] Live doctor stats fetched (detail sheet):', data);
+          setLiveRating(data.rating ?? null);
+          setLiveReliability(data.reliability ?? null);
+        }
+      });
+  }, [session?.doctor_id]);
+
   if (!session) return null;
 
-  const ratingDisplay = Number(session.doctor_rating ?? 0).toFixed(1);
-  const reliabilityDisplay = Math.round(Number(session.doctor_reliability ?? 100));
+  const ratingDisplay = liveRating != null ? liveRating.toFixed(1) : '--';
+  const reliabilityDisplay = liveReliability != null ? `${Math.round(liveReliability)}` : '--';
   const doctorFirstName = (session.doctor_name ?? '').replace(/^Dr\.?\s*/i, '').split(' ')[0];
 
   const shiftStart = formatTime(session.shift_start);
