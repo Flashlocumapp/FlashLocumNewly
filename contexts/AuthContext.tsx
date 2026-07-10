@@ -63,6 +63,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null);
     });
 
+    let profileChannel: ReturnType<typeof supabase.channel> | null = null;
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       clearTimeout(authTimeout);
       setSession(session);
@@ -72,6 +74,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
           setIsReady(true);
         });
+        // Set up realtime subscription synchronously here so cleanup can always remove it
+        profileChannel = supabase
+          .channel(`profile-verif-${session.user.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'profiles',
+              filter: `id=eq.${session.user.id}`,
+            },
+            (payload) => {
+              console.log('[AuthContext] profiles realtime UPDATE received', payload.new);
+              const newStatus = (payload.new as Record<string, unknown>)?.verification_status;
+              if (newStatus !== undefined) {
+                setProfile((prev) => prev ? { ...prev, verification_status: newStatus as string | null } : prev);
+              }
+            }
+          )
+          .subscribe((status, err) => {
+            console.log('[AuthContext] profile channel status:', status, err ?? '');
+          });
       } else {
         setLoading(false);
         setIsReady(true);
@@ -91,32 +115,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null);
       }
       setLoading(false);
-    });
-
-    // Subscribe to verification_status changes on the doctor's own profiles row
-    let profileChannel: ReturnType<typeof supabase.channel> | null = null;
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      const currentUser = currentSession?.user;
-      if (!currentUser) return;
-      profileChannel = supabase
-        .channel(`profile-verif-${currentUser.id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'profiles',
-            filter: `id=eq.${currentUser.id}`,
-          },
-          (payload) => {
-            console.log('[AuthContext] profiles realtime UPDATE received', payload.new);
-            const newStatus = (payload.new as Record<string, unknown>)?.verification_status;
-            if (newStatus !== undefined) {
-              setProfile((prev) => prev ? { ...prev, verification_status: newStatus as string | null } : prev);
+      // Re-subscribe profile channel for the new user
+      if (profileChannel) {
+        supabase.removeChannel(profileChannel);
+        profileChannel = null;
+      }
+      if (session?.user) {
+        profileChannel = supabase
+          .channel(`profile-verif-${session.user.id}`)
+          .on(
+            'postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${session.user.id}` },
+            (payload) => {
+              const newStatus = (payload.new as Record<string, unknown>)?.verification_status;
+              if (newStatus !== undefined) {
+                setProfile((prev) => prev ? { ...prev, verification_status: newStatus as string | null } : prev);
+              }
             }
-          }
-        )
-        .subscribe();
+          )
+          .subscribe((status, err) => {
+            console.log('[AuthContext] profile channel status (re-sub):', status, err ?? '');
+          });
+      }
     });
 
     const handleAppStateChange = async (nextState: AppStateStatus) => {
