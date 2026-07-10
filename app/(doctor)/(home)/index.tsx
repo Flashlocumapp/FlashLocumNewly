@@ -312,7 +312,10 @@ export default function DoctorHomeScreen() {
   const verificationStatus = profile?.verification_status ?? 'pending';
   const isVerified = verificationStatus === 'verified';
   const isPending = verificationStatus === 'pending' || verificationStatus == null;
+  const isUnderReview = verificationStatus === 'under_review';
   const isRejected = verificationStatus === 'rejected';
+  const isSuspended = verificationStatus === 'suspended';
+  const isBlocked = !isVerified; // covers all non-verified states
 
   const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached } = useDoctorDispatch();
 
@@ -529,6 +532,16 @@ export default function DoctorHomeScreen() {
             Your account is currently under review.{'\n'}This process usually takes 24–48hrs.
           </Text>
         </View>
+      ) : isUnderReview ? (
+        <View style={[styles.pill, { top: pillTop, backgroundColor: '#1C1C1E', flexDirection: 'column', alignItems: 'center', gap: 4, paddingHorizontal: 16, paddingVertical: 10 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <MaterialCommunityIcons name="shield-search" size={14} color="#FF9F0A" />
+            <Text style={[styles.pillText, { color: '#FF9F0A' }]}>Account Under Review</Text>
+          </View>
+          <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#8E8E93', textAlign: 'center' }}>
+            Your account is being reviewed by{'\n'}FlashLocum administrators.
+          </Text>
+        </View>
       ) : isRejected ? (
         <View style={[styles.pill, { top: pillTop, backgroundColor: '#1C1C1E', flexDirection: 'column', alignItems: 'center', gap: 4, paddingHorizontal: 16, paddingVertical: 10 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -537,6 +550,16 @@ export default function DoctorHomeScreen() {
           </View>
           <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#8E8E93', textAlign: 'center' }}>
             Please contact support to resolve this.
+          </Text>
+        </View>
+      ) : isSuspended ? (
+        <View style={[styles.pill, { top: pillTop, backgroundColor: '#1C1C1E', flexDirection: 'column', alignItems: 'center', gap: 4, paddingHorizontal: 16, paddingVertical: 10 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <MaterialCommunityIcons name="account-cancel-outline" size={14} color="#FF3B30" />
+            <Text style={[styles.pillText, { color: '#FF3B30' }]}>Account Suspended</Text>
+          </View>
+          <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#8E8E93', textAlign: 'center' }}>
+            Your account has been temporarily suspended.{'\n'}Please contact support for assistance.
           </Text>
         </View>
       ) : (

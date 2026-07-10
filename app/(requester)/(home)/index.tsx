@@ -1371,7 +1371,11 @@ function RequesterRatingCard({
 export default function RequesterHomeScreen() {
   const insets = useSafeAreaInsets();
   const { setTabBarVisible } = useTabBarVisibility();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const accountStatus = profile?.verification_status ?? 'verified'; // default verified for requesters until explicitly set
+  const isAccountBlocked = accountStatus === 'under_review' || accountStatus === 'suspended';
+  const isUnderReview = accountStatus === 'under_review';
+  const isSuspended = accountStatus === 'suspended';
 
   // Live requester scores — seeded from cache to avoid flicker
   const _cachedRScores = getCached<{ rating: number; reliability: number }>('requester_scores');
@@ -2318,6 +2322,8 @@ export default function RequesterHomeScreen() {
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
   const handleSearchTap = () => {
+    console.log('[Requester Home] Search tap — accountStatus:', accountStatus);
+    if (isAccountBlocked) return; // status gate
     transitionTo('searching');
   };
 
@@ -3429,14 +3435,34 @@ export default function RequesterHomeScreen() {
                   </TouchableOpacity>
                 </View>
                 {/* Search capsule */}
-                <TouchableOpacity
-                  onPress={handleSearchTap}
-                  activeOpacity={0.8}
-                  style={{ backgroundColor: '#2C2C2E', borderRadius: 28, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}
-                >
-                  <Search size={18} color="#8E8E93" />
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFFFFF' }}>Where is coverage needed?</Text>
-                </TouchableOpacity>
+                {isAccountBlocked ? (
+                  <View style={{ backgroundColor: '#2C2C2E', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {isSuspended ? (
+                        <MaterialCommunityIcons name="account-cancel-outline" size={16} color="#FF3B30" />
+                      ) : (
+                        <MaterialCommunityIcons name="shield-search" size={16} color="#FF9F0A" />
+                      )}
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: isSuspended ? '#FF3B30' : '#FF9F0A', fontFamily: 'Inter_700Bold' }}>
+                        {isSuspended ? 'Account Suspended' : 'Account Under Review'}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular', textAlign: 'center' }}>
+                      {isSuspended
+                        ? 'Your account has been temporarily suspended.\nPlease contact support for assistance.'
+                        : 'Your account is being reviewed by FlashLocum administrators.\nYou cannot create new requests at this time.'}
+                    </Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={handleSearchTap}
+                    activeOpacity={0.8}
+                    style={{ backgroundColor: '#2C2C2E', borderRadius: 28, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                  >
+                    <Search size={18} color="#8E8E93" />
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFFFFF' }}>Where is coverage needed?</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           )}

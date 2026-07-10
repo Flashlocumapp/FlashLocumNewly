@@ -111,6 +111,15 @@ export default function RequesterAccountScreen() {
     fetchProfile();
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const verifStatus = authProfile?.verification_status;
+  const verifBadge = !verifStatus || verifStatus === 'verified'
+    ? null
+    : verifStatus === 'under_review'
+    ? { label: '⏳ Under Review', bg: '#2C2200', border: '#FF9F0A', color: '#FF9F0A' }
+    : verifStatus === 'suspended'
+    ? { label: '⊘ Suspended', bg: '#2C1010', border: '#FF3B30', color: '#FF3B30' }
+    : null;
+
   const firstName = profile?.first_name ?? '';
   const lastName = profile?.last_name ?? '';
   const fullName = [firstName, lastName].filter(Boolean).join(' ')
@@ -237,6 +246,11 @@ export default function RequesterAccountScreen() {
             <Text style={styles.avatarInitials}>{initials}</Text>
           </View>
           <Text style={styles.displayName}>{fullName}</Text>
+          {verifBadge && (
+            <View style={{ backgroundColor: verifBadge.bg, borderColor: verifBadge.border, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, marginTop: 6 }}>
+              <Text style={{ fontSize: 13, color: verifBadge.color, fontWeight: '600' }}>{verifBadge.label}</Text>
+            </View>
+          )}
           <Text style={styles.emailText}>{userEmail}</Text>
         </View>
 

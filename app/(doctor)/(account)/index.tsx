@@ -204,6 +204,16 @@ export default function DoctorAccountScreen() {
   const rawGender = profile?.gender ?? '';
   const genderValue = rawGender ? rawGender.charAt(0).toUpperCase() + rawGender.slice(1) : '—';
   const isVerified = profile?.verification_status === 'verified';
+  const verifStatus = profile?.verification_status ?? 'pending';
+  const verifBadge = verifStatus === 'verified'
+    ? { label: '✓ Verified', bg: '#1A3A2A', border: '#34C759', color: '#34C759' }
+    : verifStatus === 'under_review'
+    ? { label: '⏳ Under Review', bg: '#2C2200', border: '#FF9F0A', color: '#FF9F0A' }
+    : verifStatus === 'rejected'
+    ? { label: '✕ Rejected', bg: '#2C1010', border: '#FF3B30', color: '#FF3B30' }
+    : verifStatus === 'suspended'
+    ? { label: '⊘ Suspended', bg: '#2C1010', border: '#FF3B30', color: '#FF3B30' }
+    : { label: '⏳ Pending Review', bg: '#2C2200', border: '#FF9F0A', color: '#FF9F0A' };
   const bankName = profile?.bank_name ?? '—';
   const accountNumber = profile?.account_number ?? '—';
   const accountName = profile?.account_name ?? '—';
@@ -390,10 +400,10 @@ export default function DoctorAccountScreen() {
             <Text style={styles.rowLabel}>Verification Status</Text>
             {loading ? (
               <Animated.View style={{ width: 80, height: 26, borderRadius: 999, backgroundColor: '#E5E5E5' }} />
-            ) : isVerified ? (
-              <View style={styles.verifiedBadge}><Text style={styles.verifiedText}>✓ Verified</Text></View>
             ) : (
-              <View style={styles.pendingBadge}><Text style={styles.pendingText}>Pending</Text></View>
+              <View style={[styles.verifiedBadge, { backgroundColor: verifBadge.bg, borderColor: verifBadge.border }]}>
+                <Text style={[styles.verifiedText, { color: verifBadge.color }]}>{verifBadge.label}</Text>
+              </View>
             )}
           </View>
         </Card>
