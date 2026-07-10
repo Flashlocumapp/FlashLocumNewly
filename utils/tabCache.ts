@@ -25,3 +25,8 @@ export function isStale(key: string): boolean {
 export function invalidate(key: string): void {
   cache.delete(key);
 }
+
+export function clearAll(): void {
+  console.log('[tabCache] clearAll — wiping all cached tab data');
+  cache.clear();
+}

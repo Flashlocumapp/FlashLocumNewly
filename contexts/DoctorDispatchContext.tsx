@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+
+// Module-level reset callback — allows AuthContext to reset dispatch state on sign-out
+let _resetCallback: (() => void) | null = null;
+export function registerResetCallback(fn: () => void): void { _resetCallback = fn; }
+export function triggerDispatchReset(): void {
+  console.log('[DoctorDispatchContext] triggerDispatchReset called');
+  _resetCallback?.();
+}
 
 type DoctorScreenState = 'idle' | 'incoming' | 'confirmed';
 

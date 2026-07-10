@@ -433,7 +433,9 @@ export default function RequesterCoverageScreen() {
 
   const { data: historySessions, loading, refreshing } = useTabData<CoverageSession[]>({
     cacheKey,
-    fetcher: async () => {
+    fetcher: useCallback(async () => {
+      if (!user?.id) return [];
+      console.log('[RequesterCoverage] fetching coverage history for', user.id);
       const res = await fetchWithAuth(
         `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=requester&status=completed,cancelled,requester_paid`,
         { headers: { 'Content-Type': 'application/json' } },
@@ -464,7 +466,7 @@ export default function RequesterCoverageScreen() {
       }
 
       return sessions;
-    },
+    }, [user?.id]), // eslint-disable-line react-hooks/exhaustive-deps
     alwaysRefresh: true,
   });
 

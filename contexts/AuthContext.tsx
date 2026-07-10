@@ -3,6 +3,8 @@ import { AppState, AppStateStatus } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, getValidToken, setForegroundRefreshPromise } from '@/lib/supabase';
 import { AuthContextType, Profile } from '@/types';
+import { clearAll } from '@/utils/tabCache';
+import { triggerDispatchReset } from '@/contexts/DoctorDispatchContext';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -99,6 +101,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    console.log('[AuthContext] signOut — clearing tab cache and dispatch state');
+    clearAll();
+    triggerDispatchReset();
     await supabase.auth.signOut();
     setProfile(null);
   };

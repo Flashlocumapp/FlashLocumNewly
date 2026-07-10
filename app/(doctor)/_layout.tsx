@@ -25,7 +25,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
-import { DoctorDispatchContext, CoverageSession } from '@/contexts/DoctorDispatchContext';
+import { DoctorDispatchContext, CoverageSession, registerResetCallback } from '@/contexts/DoctorDispatchContext';
 import { getCached, setCached } from '@/utils/tabCache';
 
 
@@ -421,6 +421,30 @@ export default function DoctorLayout() {
     warmDoctorRatedCache();
     fetchActiveSession();
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Register reset callback so AuthContext can clear dispatch state on sign-out
+  useEffect(() => {
+    registerResetCallback(() => {
+      console.log('[DoctorLayout] reset — clearing active session and job count');
+      setActiveSession(null);
+      setActiveJobCount(0);
+      setIsOnline(false);
+      setDoctorScreenState('idle');
+      setRequestQueue([]);
+      setConfirmedRequest(null);
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-fetch active session on SIGNED_IN (handles login after logout)
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN') {
+        console.log('[DoctorLayout] SIGNED_IN — re-fetching active session');
+        fetchActiveSession();
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [fetchActiveSession]);
 
 
 

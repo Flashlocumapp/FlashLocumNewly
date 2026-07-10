@@ -537,7 +537,9 @@ export default function DoctorCoverageScreen() {
     refresh: refreshUpcoming,
   } = useTabData<CoverageSession[]>({
     cacheKey: upcomingKey,
-    fetcher: async () => {
+    fetcher: useCallback(async () => {
+      if (!user?.id) return [];
+      console.log('[DoctorCoverage] fetching upcoming sessions for', user.id);
       const res = await fetchWithAuth(
         `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=upcoming,paused,payment_pending,settled,payment_complete`,
         { headers: { 'Content-Type': 'application/json' } },
@@ -547,7 +549,7 @@ export default function DoctorCoverageScreen() {
       }
       const data = await res.json();
       return data?.sessions ?? [];
-    },
+    }, [user?.id]), // eslint-disable-line react-hooks/exhaustive-deps
     alwaysRefresh: true,
   });
 
@@ -557,7 +559,9 @@ export default function DoctorCoverageScreen() {
     refreshing: historyRefreshing,
   } = useTabData<CoverageSession[]>({
     cacheKey: historyKey,
-    fetcher: async () => {
+    fetcher: useCallback(async () => {
+      if (!user?.id) return [];
+      console.log('[DoctorCoverage] fetching history sessions for', user.id);
       const res = await fetchWithAuth(
         `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=completed,cancelled,requester_paid`,
         { headers: { 'Content-Type': 'application/json' } },
@@ -567,7 +571,7 @@ export default function DoctorCoverageScreen() {
       }
       const data = await res.json();
       return data?.sessions ?? [];
-    },
+    }, [user?.id]), // eslint-disable-line react-hooks/exhaustive-deps
     alwaysRefresh: true,
   });
 
