@@ -1615,6 +1615,7 @@ export default function RequesterHomeScreen() {
   const activeSessionRef = useRef<CoverageSession | null>(null);
   const isFirstLoadRef = useRef(true);
   const [sessionLoading, setSessionLoading] = useState(false); // kept for any remaining uses but never set true again after first load
+  const [sessionFetched, setSessionFetched] = useState(false);
   // Stable session ID — only set when a real ID arrives, never cleared when session becomes null.
   // This prevents the session channel from re-subscribing to 'session:undefined' after payment_confirmed.
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -1717,6 +1718,7 @@ export default function RequesterHomeScreen() {
     } catch (e: any) {
     } finally {
       isFirstLoadRef.current = false;
+      setSessionFetched(true); // mark that at least one fetch has completed
       setSessionLoading(false);
     }
   }, []);
@@ -3336,7 +3338,7 @@ export default function RequesterHomeScreen() {
           )}
 
           {/* No active session OR unhandled status — show search card */}
-          {(activeSession === null ||
+          {sessionFetched && (activeSession === null ||
             activeSession.status === 'completed' ||
             activeSession.status === 'cancelled' ||
             activeSession.status === 'requester_paid' ||
