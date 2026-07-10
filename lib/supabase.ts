@@ -83,6 +83,15 @@ export function clearRefreshPromise(): void {
   _refreshPromise = null;
 }
 
+let _authFailureCallback: (() => void) | null = null;
+export function registerAuthFailureCallback(fn: () => void): void {
+  _authFailureCallback = fn;
+}
+function triggerAuthFailure(): void {
+  console.log('[supabase] Session unrecoverable — triggering forced sign-out');
+  _authFailureCallback?.();
+}
+
 export async function getValidToken(): Promise<string | null> {
   // If there is already an in-flight refresh (e.g. foreground warm-up), await it
   if (_refreshPromise) {
@@ -123,6 +132,7 @@ export async function getValidToken(): Promise<string | null> {
         }
       }
       console.log('[supabase] getValidToken: all refresh attempts failed');
+      triggerAuthFailure();
       return null;
     })().finally(() => { _refreshPromise = null; });
   }
@@ -196,6 +206,8 @@ export async function fetchWithAuth(
       const retryRes = await makeRequest(newToken);
       console.log('[fetchWithAuth] Retry response:', retryRes.status, url);
       return retryRes;
+    } else {
+      triggerAuthFailure(); // session unrecoverable after auth error
     }
   }
 

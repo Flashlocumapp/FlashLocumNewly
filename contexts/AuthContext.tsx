@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase, getValidToken, setForegroundRefreshPromise, clearRefreshPromise } from '@/lib/supabase';
+import { supabase, getValidToken, setForegroundRefreshPromise, clearRefreshPromise, registerAuthFailureCallback } from '@/lib/supabase';
 import { AuthContextType, Profile } from '@/types';
 import { clearAll } from '@/utils/tabCache';
 import { triggerDispatchReset } from '@/contexts/DoctorDispatchContext';
@@ -14,20 +14,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
 
   const fetchProfile = useCallback(async (userId: string) => {
     setProfileLoading(true);
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    if (!error && data) {
-      setProfile(data as Profile);
-    } else {
-      setProfile(null);
+    const MAX_ATTEMPTS = 3;
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      if (attempt > 1) await new Promise(r => setTimeout(r, 1000 * attempt));
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      if (!error && data) {
+        setProfile(data as Profile);
+        setProfileError(null);
+        setProfileLoading(false);
+        return;
+      }
+      lastError = error;
+      console.log(`[AuthContext] fetchProfile attempt ${attempt} failed:`, (error as { message?: string })?.message);
     }
+    console.log('[AuthContext] fetchProfile: all attempts failed', lastError);
+    setProfile(null);
+    setProfileError('Failed to load profile. Please check your connection.');
     setProfileLoading(false);
   }, []);
 
@@ -41,6 +53,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       setIsReady(true);
     }, 10000);
+
+    registerAuthFailureCallback(async () => {
+      // Force sign-out — SIGNED_OUT event will route user to login via pathway guard
+      clearRefreshPromise();
+      clearAll();
+      triggerDispatchReset();
+      await supabase.auth.signOut();
+      setProfile(null);
+    });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       clearTimeout(authTimeout);
@@ -110,7 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, profileLoading, isReady, signIn, signUp, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, profileLoading, profileError, isReady, signIn, signUp, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
