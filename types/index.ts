@@ -27,6 +27,7 @@ export interface Profile {
   last_name: string | null;
   phone: string | null;
   gender: 'male' | 'female' | null;
+  verification_status?: string | null;
   created_at: string;
   updated_at: string;
 }

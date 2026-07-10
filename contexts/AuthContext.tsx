@@ -93,6 +93,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
+    // Subscribe to verification_status changes on the doctor's own profiles row
+    let profileChannel: ReturnType<typeof supabase.channel> | null = null;
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      const currentUser = currentSession?.user;
+      if (!currentUser) return;
+      profileChannel = supabase
+        .channel(`profile-verif-${currentUser.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'profiles',
+            filter: `id=eq.${currentUser.id}`,
+          },
+          (payload) => {
+            console.log('[AuthContext] profiles realtime UPDATE received', payload.new);
+            const newStatus = (payload.new as Record<string, unknown>)?.verification_status;
+            if (newStatus !== undefined) {
+              setProfile((prev) => prev ? { ...prev, verification_status: newStatus as string | null } : prev);
+            }
+          }
+        )
+        .subscribe();
+    });
+
     const handleAppStateChange = async (nextState: AppStateStatus) => {
       if (nextState === 'active') {
         console.log('[AuthContext] App foregrounded — checking session before warming up token');
@@ -115,6 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(authTimeout);
       subscription.unsubscribe();
       appStateSubscription.remove();
+      if (profileChannel) supabase.removeChannel(profileChannel);
     };
   }, [fetchProfile]);
 

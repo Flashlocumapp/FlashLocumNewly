@@ -308,7 +308,11 @@ function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCal
 export default function DoctorHomeScreen() {
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const verificationStatus = profile?.verification_status ?? 'pending';
+  const isVerified = verificationStatus === 'verified';
+  const isPending = verificationStatus === 'pending' || verificationStatus == null;
+  const isRejected = verificationStatus === 'rejected';
 
   const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached } = useDoctorDispatch();
 
@@ -421,6 +425,8 @@ export default function DoctorHomeScreen() {
 
   // ─── Toggle online/offline ───────────────────────────────────────────────────
   const handleToggleStatus = () => {
+    console.log('[DoctorHome] handleToggleStatus pressed — verificationStatus:', verificationStatus, 'isOnline:', isOnline);
+    if (!isVerified) return; // verification gate
     if (isJobCapReached) return;
     const next = !isOnline;
     if (next) {
@@ -512,25 +518,47 @@ export default function DoctorHomeScreen() {
         )}
       </MapView>
 
-      {/* Online/Offline pill */}
-      <TouchableOpacity
-        onPress={handleToggleStatus}
-        activeOpacity={isJobCapReached ? 1 : 0.85}
-        style={[styles.pill, { top: pillTop, backgroundColor: pillBg, flexDirection: showCapSubtext ? 'column' : 'row', alignItems: 'center', gap: showCapSubtext ? 2 : 8 }]}
-        disabled={isJobCapReached}
-      >
-        {showCapSubtext ? (
-          <>
-            <Text style={styles.pillText}>{statusText}</Text>
-            <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#8E8E93' }}>Complete a shift to go online</Text>
-          </>
-        ) : (
-          <>
-            <View style={[styles.pillDot, { backgroundColor: dotBg }]} />
-            <Text style={styles.pillText}>{statusText}</Text>
-          </>
-        )}
-      </TouchableOpacity>
+      {/* Verification gate / Online-Offline pill */}
+      {isPending ? (
+        <View style={[styles.pill, { top: pillTop, backgroundColor: '#1C1C1E', flexDirection: 'column', alignItems: 'center', gap: 4, paddingHorizontal: 16, paddingVertical: 10 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <MaterialCommunityIcons name="clock-outline" size={14} color="#FF9F0A" />
+            <Text style={[styles.pillText, { color: '#FF9F0A' }]}>Under Review</Text>
+          </View>
+          <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#8E8E93', textAlign: 'center' }}>
+            Your account is currently under review.{'\n'}This process usually takes 24–48hrs.
+          </Text>
+        </View>
+      ) : isRejected ? (
+        <View style={[styles.pill, { top: pillTop, backgroundColor: '#1C1C1E', flexDirection: 'column', alignItems: 'center', gap: 4, paddingHorizontal: 16, paddingVertical: 10 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <MaterialCommunityIcons name="close-circle-outline" size={14} color="#FF3B30" />
+            <Text style={[styles.pillText, { color: '#FF3B30' }]}>Verification Unsuccessful</Text>
+          </View>
+          <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#8E8E93', textAlign: 'center' }}>
+            Please contact support to resolve this.
+          </Text>
+        </View>
+      ) : (
+        <TouchableOpacity
+          onPress={handleToggleStatus}
+          activeOpacity={isJobCapReached ? 1 : 0.85}
+          style={[styles.pill, { top: pillTop, backgroundColor: pillBg, flexDirection: showCapSubtext ? 'column' : 'row', alignItems: 'center', gap: showCapSubtext ? 2 : 8 }]}
+          disabled={isJobCapReached}
+        >
+          {showCapSubtext ? (
+            <>
+              <Text style={styles.pillText}>{statusText}</Text>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_400Regular', color: '#8E8E93' }}>Complete a shift to go online</Text>
+            </>
+          ) : (
+            <>
+              <View style={[styles.pillDot, { backgroundColor: dotBg }]} />
+              <Text style={styles.pillText}>{statusText}</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      )}
 
       {/* Bottom sheet */}
       <View style={styles.sheet}>
