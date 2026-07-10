@@ -61,6 +61,7 @@ supabase.auth.getSession().then(({ data: { session } }) => {
 // Re-schedule on every token refresh event
 supabase.auth.onAuthStateChange((event, session) => {
   if ((event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') && session?.expires_at) {
+    _refreshPromise = null; // clear any stale promise from the sign-out/sign-in transition
     scheduleProactiveRefresh(session.expires_at);
   }
   if (event === 'SIGNED_OUT') {
@@ -96,7 +97,16 @@ export async function getValidToken(): Promise<string | null> {
   // If there is already an in-flight refresh (e.g. foreground warm-up), await it
   if (_refreshPromise) {
     console.log('[supabase] getValidToken: awaiting in-flight refresh promise');
-    return _refreshPromise;
+    const timeout = new Promise<null>(resolve =>
+      setTimeout(() => {
+        console.log('[supabase] getValidToken: refresh promise timed out — clearing and retrying');
+        _refreshPromise = null;
+        resolve(null);
+      }, 10000)
+    );
+    const result = await Promise.race([_refreshPromise, timeout]);
+    if (result !== null) return result; // promise resolved with a token
+    // timeout fired — fall through to fast/slow path below
   }
 
   // Fast path — return cached token if it expires more than 120s from now

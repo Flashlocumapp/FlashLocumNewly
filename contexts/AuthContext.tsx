@@ -93,13 +93,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
-    const handleAppStateChange = (nextState: AppStateStatus) => {
+    const handleAppStateChange = async (nextState: AppStateStatus) => {
       if (nextState === 'active') {
-        console.log('[AuthContext] App foregrounded — warming up token');
-        // Store the warm-up promise so fetchWithAuth can await it instead of racing
-        const p = getValidToken();
-        setForegroundRefreshPromise(p);
-        p.catch(() => {});
+        console.log('[AuthContext] App foregrounded — checking session before warming up token');
+        // Small delay to let any in-flight SIGNED_IN event clear _refreshPromise first
+        await new Promise(r => setTimeout(r, 500));
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (currentSession?.access_token) {
+          console.log('[AuthContext] Session confirmed — warming up token');
+          const p = getValidToken();
+          setForegroundRefreshPromise(p);
+          p.catch(() => {});
+        } else {
+          console.log('[AuthContext] No active session — skipping foreground warm-up');
+        }
       }
     };
     const appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
