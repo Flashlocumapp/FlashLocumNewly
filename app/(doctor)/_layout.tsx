@@ -11,6 +11,8 @@ import {
   Modal,
   TextInput,
   TouchableWithoutFeedback,
+  Keyboard,
+  Pressable,
 } from 'react-native';
 import { Stack, Href, useRouter } from 'expo-router';
 import * as Location from 'expo-location';
@@ -26,7 +28,7 @@ import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
 import { DoctorDispatchContext, CoverageSession, registerResetCallback } from '@/contexts/DoctorDispatchContext';
-import { getCached, setCached } from '@/utils/tabCache';
+import { getCached, setCached, invalidate } from '@/utils/tabCache';
 
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
@@ -238,6 +240,9 @@ export default function DoctorLayout() {
   // Stable session ID — only set when a real ID arrives, never cleared when session becomes null.
   // This prevents the session channel from re-subscribing to 'session:undefined' after payment_confirmed.
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  // Ref always kept in sync with activeSessionId so broadcast handler closures can read the latest value.
+  const activeSessionIdRef = useRef<string | null>(null);
+  useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
 
   // Doctor rating overlay state
   const [showDoctorRating, setShowDoctorRating] = useState(false);
@@ -657,20 +662,24 @@ export default function DoctorLayout() {
         }
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        const sessionId = payload?.payload?.session_id ?? activeSessionId;
+        const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] PAYMENT_CONFIRMED broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        invalidate('coverage_doctor_completed');
+        invalidate('coverage_doctor_upcoming');
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
-        const sessionId = payload?.payload?.session_id ?? activeSessionId;
+        const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] payment_confirmed broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        invalidate('coverage_doctor_completed');
+        invalidate('coverage_doctor_upcoming');
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
         setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
@@ -713,20 +722,24 @@ export default function DoctorLayout() {
         }
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        const sessionId = payload?.payload?.session_id ?? activeSessionId;
+        const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] user channel PAYMENT_CONFIRMED received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        invalidate('coverage_doctor_completed');
+        invalidate('coverage_doctor_upcoming');
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
-        const sessionId = payload?.payload?.session_id ?? activeSessionId;
+        const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] user channel payment_confirmed received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        invalidate('coverage_doctor_completed');
+        invalidate('coverage_doctor_upcoming');
       })
       .subscribe((status) => {
         // subscription status — no logging needed
@@ -999,9 +1012,9 @@ export default function DoctorLayout() {
           animationType="fade"
           onRequestClose={handleDoctorRatingDone}
         >
-          <TouchableWithoutFeedback onPress={handleDoctorRatingDone}>
+          <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); handleDoctorRatingDone(); }}>
             <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-              <TouchableWithoutFeedback onPress={() => {}}>
+              <Pressable onPress={() => Keyboard.dismiss()}>
                 <View style={{ backgroundColor: '#2C2C2E', borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 }}>
                   {/* Payment confirmation banner */}
                   <View style={{ backgroundColor: '#1A3A2A', borderRadius: 12, padding: 14, marginBottom: 20 }}>
@@ -1084,7 +1097,7 @@ export default function DoctorLayout() {
                     </TouchableOpacity>
                   </View>
                 </View>
-              </TouchableWithoutFeedback>
+              </Pressable>
             </View>
           </TouchableWithoutFeedback>
         </Modal>

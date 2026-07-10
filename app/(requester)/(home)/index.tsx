@@ -38,7 +38,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { useTabBarVisibility, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
-import { getCached, setCached } from '@/utils/tabCache';
+import { getCached, setCached, invalidate } from '@/utils/tabCache';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
@@ -1263,7 +1263,10 @@ function RequesterRatingCard({
 }: RequesterRatingCardProps) {
   if (!visible || !session) return null;
 
-  const doctorName = session.doctor_name ?? 'the doctor';
+  const rawName = session.doctor_name ?? '';
+  const doctorName = rawName
+    ? (rawName.toLowerCase().startsWith('dr') ? rawName : `Dr. ${rawName}`)
+    : 'the doctor';
   const displayAmount = amount > 0 ? amount : (session.price ?? 0);
 
   return (
@@ -1273,9 +1276,9 @@ function RequesterRatingCard({
       animationType="fade"
       onRequestClose={onDismiss}
     >
-      <TouchableWithoutFeedback onPress={onDismiss}>
+      <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); onDismiss(); }}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <TouchableWithoutFeedback onPress={() => {}}>
+          <Pressable onPress={() => Keyboard.dismiss()}>
             <View style={{ backgroundColor: '#2C2C2E', borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 }}>
               {/* Payment confirmation banner */}
               <View style={{ backgroundColor: '#1A3A2A', borderRadius: 12, padding: 14, marginBottom: 20 }}>
@@ -1356,7 +1359,7 @@ function RequesterRatingCard({
                 </TouchableOpacity>
               </View>
             </View>
-          </TouchableWithoutFeedback>
+          </Pressable>
         </View>
       </TouchableWithoutFeedback>
     </Modal>
@@ -1429,11 +1432,19 @@ export default function RequesterHomeScreen() {
         const sessionId = payload?.payload?.session_id;
         // Capture current session synchronously via ref
         const currentSession = activeSessionRef.current;
+        // If ref is null, we still have the session ID from the payload —
+        // call fetchActiveSession() immediately and show the card after
+        if (!currentSession) {
+          fetchActiveSession();
+          invalidate('coverage_requester_completed');
+          invalidate('coverage_requester_upcoming');
+          return;
+        }
         const sid = sessionId ?? currentSession?.id;
         // Update status synchronously
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
         // Run async check OUTSIDE the updater
-        if (sid && currentSession && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
+        if (sid && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
           _requesterRatingInFlight.add(sid);
           isRequesterSessionPaid(sid).then((alreadyHandled) => {
             _requesterRatingInFlight.delete(sid);
@@ -1444,17 +1455,27 @@ export default function RequesterHomeScreen() {
           }).catch(() => { _requesterRatingInFlight.delete(sid); });
         }
         fetchActiveSession();
+        invalidate('coverage_requester_completed');
+        invalidate('coverage_requester_upcoming');
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[Requester] user channel PAYMENT_CONFIRMED received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
         // Capture current session synchronously via ref
         const currentSession = activeSessionRef.current;
+        // If ref is null, we still have the session ID from the payload —
+        // call fetchActiveSession() immediately and show the card after
+        if (!currentSession) {
+          fetchActiveSession();
+          invalidate('coverage_requester_completed');
+          invalidate('coverage_requester_upcoming');
+          return;
+        }
         const sid = sessionId ?? currentSession?.id;
         // Update status synchronously
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
         // Run async check OUTSIDE the updater
-        if (sid && currentSession && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
+        if (sid && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
           _requesterRatingInFlight.add(sid);
           isRequesterSessionPaid(sid).then((alreadyHandled) => {
             _requesterRatingInFlight.delete(sid);
@@ -1465,6 +1486,8 @@ export default function RequesterHomeScreen() {
           }).catch(() => { _requesterRatingInFlight.delete(sid); });
         }
         fetchActiveSession();
+        invalidate('coverage_requester_completed');
+        invalidate('coverage_requester_upcoming');
       })
       // From channel 7 (shift cancelled on requester channel)
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
