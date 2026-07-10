@@ -65,6 +65,7 @@ supabase.auth.onAuthStateChange((event, session) => {
   }
   if (event === 'SIGNED_OUT') {
     if (_proactiveTimer) { clearTimeout(_proactiveTimer); _proactiveTimer = null; }
+    _refreshPromise = null; // clear stale promise so post-login fetches don't hang
   }
 });
 
@@ -76,6 +77,10 @@ let _refreshPromise: Promise<string | null> | null = null;
 // allowing fetchWithAuth to await it instead of starting a competing refresh.
 export function setForegroundRefreshPromise(p: Promise<string | null>): void {
   if (!_refreshPromise) _refreshPromise = p.finally(() => { _refreshPromise = null; });
+}
+
+export function clearRefreshPromise(): void {
+  _refreshPromise = null;
 }
 
 export async function getValidToken(): Promise<string | null> {
