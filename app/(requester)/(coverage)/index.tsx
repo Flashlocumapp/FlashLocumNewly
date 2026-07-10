@@ -488,9 +488,11 @@ export default function RequesterCoverageScreen() {
     });
   }
 
-  const sessions = [...(historySessions ?? [])].sort(
-    (a, b) => new Date(b.shift_date).getTime() - new Date(a.shift_date).getTime()
-  );
+  const sessions = [...(historySessions ?? [])].sort((a, b) => {
+    const aTime = new Date(a.ended_at ?? a.created_at ?? a.shift_date).getTime();
+    const bTime = new Date(b.ended_at ?? b.created_at ?? b.shift_date).getTime();
+    return bTime - aTime;
+  });
   const filteredSessions = filterByDateRange(sessions, dateRange);
 
   const alreadyReviewed = selectedSession ? reviewedIds.has(selectedSession.id) : false;

@@ -264,7 +264,7 @@ function HistoryCoverageCard({ session, onPress }: {
 
   const reliabilityDisplay = session.final_requester_reliability != null
     ? `${Math.round(Number(session.final_requester_reliability))}`
-    : '100';
+    : '—';
   const shiftPillText = buildShiftPillText(session);
 
   const statusLabel = session.status === 'cancelled'
@@ -353,7 +353,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
 
   const reliabilityDisplay = session.final_requester_reliability != null
     ? `${Math.round(Number(session.final_requester_reliability))}`
-    : '100';
+    : '—';
 
   const shiftStart = new Date(session.shift_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   const shiftEnd = new Date(session.shift_end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -795,9 +795,11 @@ export default function DoctorCoverageScreen() {
   }, [activeTab]);
 
   const isHistoryTab = activeTab === 'History';
-  const sortedHistory = [...historySessions].sort(
-    (a, b) => new Date(b.shift_date).getTime() - new Date(a.shift_date).getTime()
-  );
+  const sortedHistory = [...historySessions].sort((a, b) => {
+    const aTime = new Date(a.ended_at ?? a.created_at ?? a.shift_date).getTime();
+    const bTime = new Date(b.ended_at ?? b.created_at ?? b.shift_date).getTime();
+    return bTime - aTime;
+  });
   const filteredHistory = filterByDateRange(sortedHistory, dateRange);
   const currentSessions = isHistoryTab ? filteredHistory : upcomingSessions;
   const currentLoading = isHistoryTab ? historyLoading : upcomingLoading;
