@@ -13,7 +13,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.placeholder.app",
+      "bundleIdentifier": "com.flashlocum.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
@@ -29,7 +29,7 @@
         "foregroundImage": "./assets/images/d86ec9d4-7414-4b16-87f4-dcb5e0fcab2e.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.placeholder.app",
+      "package": "com.flashlocum.app",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU"
