@@ -91,6 +91,9 @@ async function warmRequesterPaidCache() {
 let _hasInitialFix = false;
 // Module-level coord cache — survives tab switches (screen remounts)
 let _cachedRequesterCoords: { latitude: number; longitude: number } | null = null;
+// Module-level session cache — survives tab switches / screen remounts
+let _cachedActiveSession: CoverageSession | null = undefined as any; // undefined = never fetched, null = fetched but no session
+let _sessionCachePopulated = false;
 
 const ANDROID_KEY = 'AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU';
 const IOS_KEY = 'AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk';
@@ -1611,11 +1614,13 @@ export default function RequesterHomeScreen() {
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
 
   // Active session state
-  const [activeSession, setActiveSession] = useState<CoverageSession | null>(null);
+  const [activeSession, setActiveSession] = useState<CoverageSession | null>(
+    _sessionCachePopulated ? _cachedActiveSession : null
+  );
   const activeSessionRef = useRef<CoverageSession | null>(null);
   const isFirstLoadRef = useRef(true);
   const [sessionLoading, setSessionLoading] = useState(false); // kept for any remaining uses but never set true again after first load
-  const [sessionFetched, setSessionFetched] = useState(false);
+  const [sessionFetched, setSessionFetched] = useState(_sessionCachePopulated);
   // Stable session ID — only set when a real ID arrives, never cleared when session becomes null.
   // This prevents the session channel from re-subscribing to 'session:undefined' after payment_confirmed.
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -1669,6 +1674,8 @@ export default function RequesterHomeScreen() {
       const data = await res.json();
       const session: CoverageSession | null = data?.session ?? null;
       setActiveSession(session);
+      _cachedActiveSession = session;
+      _sessionCachePopulated = true;
       // If session is already paid, use persistent guard to decide whether to show modal
       if (session && session.status === 'requester_paid') {
         // Synchronous check first — avoids async gap
@@ -1745,8 +1752,12 @@ export default function RequesterHomeScreen() {
         console.log('[RequesterHome] SIGNED_IN — re-fetching active session');
         fetchActiveSession();
       } else if (event === 'SIGNED_OUT') {
-        console.log('[RequesterHome] SIGNED_OUT — clearing activeSessionId');
+        console.log('[RequesterHome] SIGNED_OUT — clearing activeSessionId and session cache');
         setActiveSessionId(null);
+        setActiveSession(null);
+        setSessionFetched(false);
+        _cachedActiveSession = null;
+        _sessionCachePopulated = false;
       }
     });
     return () => subscription.unsubscribe();
