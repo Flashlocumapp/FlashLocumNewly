@@ -234,7 +234,8 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const bookedPrice = displayBookedPrice ? `₦${Number(displayBookedPrice).toLocaleString()}` : '';
   const shiftSummaryLine = `${session.shift_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd}${bookedPrice ? ` · ${bookedPrice}` : ''}`;
 
-  const settlementStatus = session.status === 'requester_paid' || session.status === 'completed' ? 'Paid' : 'Pending';
+  const settlementStatus = session.status === 'cancelled' ? 'Cancelled' : (session.status === 'requester_paid' || session.status === 'completed' ? 'Paid' : 'Pending');
+  const settlementColor = settlementStatus === 'Cancelled' ? '#EF4444' : settlementStatus === 'Paid' ? '#34C759' : '#FFFFFF';
 
   const formatDateTime = (iso: string | null | undefined) => {
     if (!iso) return '—';
@@ -273,8 +274,8 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const amountValue = `₦${Number(session.total_cost ?? session.price ?? 0).toLocaleString()}`;
 
   const detailRows = [
-    { label: 'Amount', value: amountValue },
-    { label: 'Payment Status', value: settlementStatus },
+    { label: 'Amount', value: amountValue, valueColor: undefined as string | undefined },
+    { label: 'Payment Status', value: settlementStatus, valueColor: settlementColor },
     { label: 'Started', value: formatDateTime(session.started_at) },
     { label: 'Ended', value: formatDateTime(session.ended_at) },
     { label: 'Completed', value: formatDate(session.ended_at) },
@@ -339,7 +340,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
                   {detailRows.map((row, i) => (
                     <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: i < detailRows.length - 1 ? 1 : 0, borderBottomColor: '#48484A' }}>
                       <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>{row.label}</Text>
-                      <Text style={{ fontSize: 14, color: '#FFFFFF', fontFamily: 'Inter_700Bold', flexShrink: 1, textAlign: 'right', marginLeft: 12 }}>{row.value}</Text>
+                      <Text style={{ fontSize: 14, color: (row as any).valueColor ?? '#FFFFFF', fontFamily: 'Inter_700Bold', flexShrink: 1, textAlign: 'right', marginLeft: 12 }}>{row.value}</Text>
                     </View>
                   ))}
                 </View>

@@ -15,6 +15,7 @@ import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import Feather from '@expo/vector-icons/Feather';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
 import {
   useFonts,
@@ -504,7 +505,9 @@ export default function DoctorHomeScreen() {
             anchor={{ x: 0.5, y: 0.5 }}
             tracksViewChanges={markerTracksViews}
           >
-            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#34C759', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#34C759', borderWidth: 2.5, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialCommunityIcons name="stethoscope" size={20} color="#FFFFFF" />
+              </View>
           </Marker>
         )}
       </MapView>

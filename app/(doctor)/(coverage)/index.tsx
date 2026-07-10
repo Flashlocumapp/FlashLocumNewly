@@ -397,7 +397,8 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
   const shiftSummaryLine = `${session.shift_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd} · ${hoursDisplay} · ₦${Number(session.booked_price ?? session.price ?? 0).toLocaleString()}`;
 
-  const settlementStatus = session.status === 'requester_paid' || session.status === 'completed' || session.status === 'disbursed' ? 'Paid' : 'Pending';
+  const settlementStatus = session.status === 'cancelled' ? 'Cancelled' : (session.status === 'requester_paid' || session.status === 'completed' || session.status === 'disbursed' ? 'Paid' : 'Pending');
+  const settlementColor = settlementStatus === 'Cancelled' ? '#EF4444' : settlementStatus === 'Paid' ? '#34C759' : '#FFFFFF';
 
   const formatDateTime = (iso: string | null | undefined) => {
     if (!iso) return '—';
@@ -433,10 +434,10 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
     ? (session.cancelled_by === 'doctor' ? 'YOU CANCELLED THIS SHIFT' : 'CANCELLED SHIFT')
     : 'COMPLETED SHIFT';
   const financialRows = [
-    { label: 'Amount', value: `₦${Number((session as any).total_cost ?? session.price ?? 0).toLocaleString()}`, bold: true },
-    { label: 'Settlement', value: settlementStatus, bold: true },
-    { label: 'Started', value: formatDateTime(session.started_at), bold: true },
-    { label: 'Ended', value: formatDateTime(session.ended_at), bold: true },
+    { label: 'Amount', value: `₦${Number((session as any).total_cost ?? session.price ?? 0).toLocaleString()}`, bold: true, valueColor: undefined as string | undefined },
+    { label: 'Settlement', value: settlementStatus, bold: true, valueColor: settlementColor },
+    { label: 'Started', value: formatDateTime(session.started_at), bold: true, valueColor: undefined as string | undefined },
+    { label: 'Ended', value: formatDateTime(session.ended_at), bold: true, valueColor: undefined as string | undefined },
     { label: 'Completed', value: formatDate(session.ended_at ?? session.updated_at), bold: true },
   ];
 
@@ -491,7 +492,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
                   {financialRows.map((row, i) => (
                     <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: i < 4 ? 1 : 0, borderBottomColor: '#48484A' }}>
                       <Text style={{ fontSize: 14, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>{row.label}</Text>
-                      <Text style={{ fontSize: 14, color: '#FFFFFF', fontFamily: 'Inter_700Bold' }}>{row.value}</Text>
+                      <Text style={{ fontSize: 14, color: (row as any).valueColor ?? '#FFFFFF', fontFamily: 'Inter_700Bold' }}>{row.value}</Text>
                     </View>
                   ))}
                 </View>
