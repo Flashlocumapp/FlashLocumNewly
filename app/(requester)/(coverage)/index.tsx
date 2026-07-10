@@ -52,6 +52,10 @@ type CoverageSession = {
   booked_price?: number | null;
   total_cost?: number;
   coverage_length?: number | null;
+  final_doctor_rating?: number | null;
+  final_doctor_reliability?: number | null;
+  final_requester_rating?: number | null;
+  final_requester_reliability?: number | null;
 };
 
 function formatTime(iso: string) {
@@ -115,32 +119,13 @@ function HistoryCard({ session, onPress }: {
   session: CoverageSession;
   onPress: (session: CoverageSession) => void;
 }) {
-  const [liveRating, setLiveRating] = useState<number | null>(null);
-  const [liveReliability, setLiveReliability] = useState<number | null>(null);
+  const ratingDisplay = session.final_doctor_rating != null
+    ? Number(session.final_doctor_rating).toFixed(1)
+    : (session.doctor_rating != null ? Number(session.doctor_rating).toFixed(1) : '5.0');
 
-  useEffect(() => {
-    if (!session.doctor_id) return;
-    console.log('[Requester Coverage] Fetching live doctor stats for doctor_id:', session.doctor_id);
-    supabase
-      .from('doctor_profiles')
-      .select('rating, reliability_score')
-      .eq('id', session.doctor_id)
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) {
-          console.log('[Requester Coverage] Doctor stats fetch failed, using defaults:', error?.message);
-          setLiveRating(5.0);
-          setLiveReliability(100);
-        } else {
-          console.log('[Requester Coverage] Live doctor stats fetched:', data);
-          setLiveRating(data.rating ?? 5.0);
-          setLiveReliability(data.reliability_score ?? 100);
-        }
-      });
-  }, [session.doctor_id]);
-
-  const ratingDisplay = liveRating != null ? liveRating.toFixed(1) : '--';
-  const reliabilityDisplay = liveReliability != null ? `${Math.round(liveReliability)}` : '--';
+  const reliabilityDisplay = session.final_doctor_reliability != null
+    ? `${Math.round(Number(session.final_doctor_reliability))}`
+    : (session.doctor_reliability != null ? `${Math.round(Number(session.doctor_reliability))}` : '100');
 
   const shiftStart = formatTime(session.shift_start);
   const shiftEnd = formatTime(session.shift_end);
@@ -243,34 +228,15 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
     })
   ).current;
 
-  const [liveRating, setLiveRating] = useState<number | null>(null);
-  const [liveReliability, setLiveReliability] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!session?.doctor_id) return;
-    console.log('[Requester Coverage] Fetching live doctor stats for detail sheet, doctor_id:', session.doctor_id);
-    supabase
-      .from('doctor_profiles')
-      .select('rating, reliability_score')
-      .eq('id', session.doctor_id)
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) {
-          console.log('[Requester Coverage] Doctor stats fetch failed (detail sheet), using defaults:', error?.message);
-          setLiveRating(5.0);
-          setLiveReliability(100);
-        } else {
-          console.log('[Requester Coverage] Live doctor stats fetched (detail sheet):', data);
-          setLiveRating(data.rating ?? 5.0);
-          setLiveReliability(data.reliability_score ?? 100);
-        }
-      });
-  }, [session?.doctor_id]);
-
   if (!session) return null;
 
-  const ratingDisplay = liveRating != null ? liveRating.toFixed(1) : '--';
-  const reliabilityDisplay = liveReliability != null ? `${Math.round(liveReliability)}` : '--';
+  const ratingDisplay = session.final_doctor_rating != null
+    ? Number(session.final_doctor_rating).toFixed(1)
+    : (session.doctor_rating != null ? Number(session.doctor_rating).toFixed(1) : '5.0');
+
+  const reliabilityDisplay = session.final_doctor_reliability != null
+    ? `${Math.round(Number(session.final_doctor_reliability))}`
+    : (session.doctor_reliability != null ? `${Math.round(Number(session.doctor_reliability))}` : '100');
   const doctorFirstName = (session.doctor_name ?? '').replace(/^Dr\.?\s*/i, '').split(' ')[0];
 
   const shiftStart = formatTime(session.shift_start);

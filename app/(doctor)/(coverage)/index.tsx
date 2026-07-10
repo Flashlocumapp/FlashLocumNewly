@@ -258,29 +258,13 @@ function HistoryCoverageCard({ session, onPress }: {
   session: CoverageSession;
   onPress: (session: CoverageSession) => void;
 }) {
-  const [liveRating, setLiveRating] = useState<number | null>(null);
-  const [liveReliability, setLiveReliability] = useState<number | null>(null);
+  const ratingDisplay = session.final_requester_rating != null
+    ? Number(session.final_requester_rating).toFixed(1)
+    : (session.requester_rating != null ? Number(session.requester_rating).toFixed(1) : '5.0');
 
-  useEffect(() => {
-    if (!session.requester_id) return;
-    supabase
-      .from('requester_profiles')
-      .select('rating, reliability')
-      .eq('id', session.requester_id)
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) {
-          setLiveRating(5.0);
-          setLiveReliability(100);
-        } else {
-          setLiveRating(data.rating ?? 5.0);
-          setLiveReliability(data.reliability ?? 100);
-        }
-      });
-  }, [session.requester_id]);
-
-  const ratingDisplay = liveRating != null ? liveRating.toFixed(1) : '--';
-  const reliabilityDisplay = liveReliability != null ? `${Math.round(liveReliability)}` : '--';
+  const reliabilityDisplay = session.final_requester_reliability != null
+    ? `${Math.round(Number(session.final_requester_reliability))}`
+    : '100';
   const shiftPillText = buildShiftPillText(session);
 
   const statusLabel = session.status === 'cancelled'
@@ -344,26 +328,6 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [liveRating, setLiveRating] = useState<number | null>(null);
-  const [liveReliability, setLiveReliability] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!session?.requester_id) return;
-    supabase
-      .from('requester_profiles')
-      .select('rating, reliability')
-      .eq('id', session.requester_id)
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) {
-          setLiveRating(5.0);
-          setLiveReliability(100);
-        } else {
-          setLiveRating(data.rating ?? 5.0);
-          setLiveReliability(data.reliability ?? 100);
-        }
-      });
-  }, [session?.requester_id]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -383,8 +347,13 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
 
   if (!session) return null;
 
-  const ratingDisplay = liveRating != null ? liveRating.toFixed(1) : '--';
-  const reliabilityDisplay = liveReliability != null ? `${Math.round(liveReliability)}` : '--';
+  const ratingDisplay = session.final_requester_rating != null
+    ? Number(session.final_requester_rating).toFixed(1)
+    : (session.requester_rating != null ? Number(session.requester_rating).toFixed(1) : '5.0');
+
+  const reliabilityDisplay = session.final_requester_reliability != null
+    ? `${Math.round(Number(session.final_requester_reliability))}`
+    : '100';
 
   const shiftStart = new Date(session.shift_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   const shiftEnd = new Date(session.shift_end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
