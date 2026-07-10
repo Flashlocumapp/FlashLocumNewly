@@ -25,7 +25,7 @@ import {
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Feather from '@expo/vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -2675,7 +2675,9 @@ export default function RequesterHomeScreen() {
             anchor={{ x: 0.5, y: 0.5 }}
             tracksViewChanges={false}
           >
-            <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#EF4444', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
+            <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: '#34C759', borderWidth: 2, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialCommunityIcons name="stethoscope" size={14} color="#FFFFFF" />
+            </View>
           </Marker>
         ))}
       </MapView>
