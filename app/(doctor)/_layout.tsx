@@ -261,7 +261,7 @@ export default function DoctorLayout() {
       try {
         const { data, error } = await supabase
           .from('doctor_profiles')
-          .select('rating, reliability')
+          .select('rating, reliability_score')
           .eq('id', user.id)
           .single();
         if (error) {
@@ -269,8 +269,8 @@ export default function DoctorLayout() {
         }
         if (data) {
           setDoctorRatingScore(data.rating ?? null);
-          setDoctorReliabilityScore(data.reliability ?? null);
-          setCached('doctor_scores', { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
+          setDoctorReliabilityScore(data.reliability_score ?? null);
+          setCached('doctor_scores', { rating: data.rating ?? 5.0, reliability: data.reliability_score ?? 100 });
         }
       } catch (e: any) {
         // non-fatal

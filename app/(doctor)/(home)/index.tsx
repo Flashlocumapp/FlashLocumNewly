@@ -136,11 +136,15 @@ function DoctorUpcomingCard({
       .select('rating, reliability')
       .eq('id', session.requester_id)
       .single()
-      .then(({ data }) => {
-        if (data) {
+      .then(({ data, error }) => {
+        if (error || !data) {
+          console.log('[Doctor Home] Requester stats fetch failed, using defaults:', error?.message);
+          setLiveRequesterRating(5.0);
+          setLiveRequesterReliability(100);
+        } else {
           console.log('[Doctor Home] Live requester stats fetched:', data);
-          setLiveRequesterRating(data.rating ?? null);
-          setLiveRequesterReliability(data.reliability ?? null);
+          setLiveRequesterRating(data.rating ?? 5.0);
+          setLiveRequesterReliability(data.reliability ?? 100);
         }
       });
   }, [session.requester_id]);
@@ -228,11 +232,15 @@ function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCal
       .select('rating, reliability')
       .eq('id', session.requester_id)
       .single()
-      .then(({ data }) => {
-        if (data) {
+      .then(({ data, error }) => {
+        if (error || !data) {
+          console.log('[Doctor Home] Requester stats fetch failed (active), using defaults:', error?.message);
+          setLiveRequesterRating(5.0);
+          setLiveRequesterReliability(100);
+        } else {
           console.log('[Doctor Home] Live requester stats fetched (active):', data);
-          setLiveRequesterRating(data.rating ?? null);
-          setLiveRequesterReliability(data.reliability ?? null);
+          setLiveRequesterRating(data.rating ?? 5.0);
+          setLiveRequesterReliability(data.reliability ?? 100);
         }
       });
   }, [session.requester_id]);

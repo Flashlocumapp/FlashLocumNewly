@@ -155,10 +155,13 @@ function UpcomingCoverageCard({ session, onCall, onCancel }: {
       .select('rating, reliability')
       .eq('id', session.requester_id)
       .single()
-      .then(({ data }) => {
-        if (data) {
-          setLiveRating(data.rating ?? null);
-          setLiveReliability(data.reliability ?? null);
+      .then(({ data, error }) => {
+        if (error || !data) {
+          setLiveRating(5.0);
+          setLiveReliability(100);
+        } else {
+          setLiveRating(data.rating ?? 5.0);
+          setLiveReliability(data.reliability ?? 100);
         }
       });
   }, [session.requester_id]);
@@ -265,10 +268,13 @@ function HistoryCoverageCard({ session, onPress }: {
       .select('rating, reliability')
       .eq('id', session.requester_id)
       .single()
-      .then(({ data }) => {
-        if (data) {
-          setLiveRating(data.rating ?? null);
-          setLiveReliability(data.reliability ?? null);
+      .then(({ data, error }) => {
+        if (error || !data) {
+          setLiveRating(5.0);
+          setLiveReliability(100);
+        } else {
+          setLiveRating(data.rating ?? 5.0);
+          setLiveReliability(data.reliability ?? 100);
         }
       });
   }, [session.requester_id]);
@@ -348,10 +354,13 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
       .select('rating, reliability')
       .eq('id', session.requester_id)
       .single()
-      .then(({ data }) => {
-        if (data) {
-          setLiveRating(data.rating ?? null);
-          setLiveReliability(data.reliability ?? null);
+      .then(({ data, error }) => {
+        if (error || !data) {
+          setLiveRating(5.0);
+          setLiveReliability(100);
+        } else {
+          setLiveRating(data.rating ?? 5.0);
+          setLiveReliability(data.reliability ?? 100);
         }
       });
   }, [session?.requester_id]);

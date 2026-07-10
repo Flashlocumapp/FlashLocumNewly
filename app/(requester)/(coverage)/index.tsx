@@ -123,14 +123,18 @@ function HistoryCard({ session, onPress }: {
     console.log('[Requester Coverage] Fetching live doctor stats for doctor_id:', session.doctor_id);
     supabase
       .from('doctor_profiles')
-      .select('rating, reliability')
+      .select('rating, reliability_score')
       .eq('id', session.doctor_id)
       .single()
-      .then(({ data }) => {
-        if (data) {
+      .then(({ data, error }) => {
+        if (error || !data) {
+          console.log('[Requester Coverage] Doctor stats fetch failed, using defaults:', error?.message);
+          setLiveRating(5.0);
+          setLiveReliability(100);
+        } else {
           console.log('[Requester Coverage] Live doctor stats fetched:', data);
-          setLiveRating(data.rating ?? null);
-          setLiveReliability(data.reliability ?? null);
+          setLiveRating(data.rating ?? 5.0);
+          setLiveReliability(data.reliability_score ?? 100);
         }
       });
   }, [session.doctor_id]);
@@ -247,14 +251,18 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
     console.log('[Requester Coverage] Fetching live doctor stats for detail sheet, doctor_id:', session.doctor_id);
     supabase
       .from('doctor_profiles')
-      .select('rating, reliability')
+      .select('rating, reliability_score')
       .eq('id', session.doctor_id)
       .single()
-      .then(({ data }) => {
-        if (data) {
+      .then(({ data, error }) => {
+        if (error || !data) {
+          console.log('[Requester Coverage] Doctor stats fetch failed (detail sheet), using defaults:', error?.message);
+          setLiveRating(5.0);
+          setLiveReliability(100);
+        } else {
           console.log('[Requester Coverage] Live doctor stats fetched (detail sheet):', data);
-          setLiveRating(data.rating ?? null);
-          setLiveReliability(data.reliability ?? null);
+          setLiveRating(data.rating ?? 5.0);
+          setLiveReliability(data.reliability_score ?? 100);
         }
       });
   }, [session?.doctor_id]);

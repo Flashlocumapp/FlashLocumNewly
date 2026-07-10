@@ -535,14 +535,18 @@ function RequesterUpcomingCard({
     console.log('[Requester Home] Fetching live doctor stats for doctor_id:', session.doctor_id);
     supabase
       .from('doctor_profiles')
-      .select('rating, reliability')
+      .select('rating, reliability_score')
       .eq('id', session.doctor_id)
       .single()
-      .then(({ data }) => {
-        if (data) {
+      .then(({ data, error }) => {
+        if (error || !data) {
+          console.log('[Requester Home] Doctor stats fetch failed (upcoming), using defaults:', error?.message);
+          setLiveRating(5.0);
+          setLiveReliability(100);
+        } else {
           console.log('[Requester Home] Live doctor stats fetched (upcoming):', data);
-          setLiveRating(data.rating ?? null);
-          setLiveReliability(data.reliability ?? null);
+          setLiveRating(data.rating ?? 5.0);
+          setLiveReliability(data.reliability_score ?? 100);
         }
       });
   }, [session.doctor_id]);
@@ -694,14 +698,18 @@ function RequesterActiveCard({
     console.log('[Requester Home] Fetching live doctor stats for active session, doctor_id:', session.doctor_id);
     supabase
       .from('doctor_profiles')
-      .select('rating, reliability')
+      .select('rating, reliability_score')
       .eq('id', session.doctor_id)
       .single()
-      .then(({ data }) => {
-        if (data) {
+      .then(({ data, error }) => {
+        if (error || !data) {
+          console.log('[Requester Home] Doctor stats fetch failed (active), using defaults:', error?.message);
+          setLiveRatingActive(5.0);
+          setLiveReliabilityActive(100);
+        } else {
           console.log('[Requester Home] Live doctor stats fetched (active):', data);
-          setLiveRatingActive(data.rating ?? null);
-          setLiveReliabilityActive(data.reliability ?? null);
+          setLiveRatingActive(data.rating ?? 5.0);
+          setLiveReliabilityActive(data.reliability_score ?? 100);
         }
       });
   }, [session.doctor_id]);
