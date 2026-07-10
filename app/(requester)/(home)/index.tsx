@@ -1736,6 +1736,20 @@ export default function RequesterHomeScreen() {
     fetchActiveSession();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── Re-fetch on SIGNED_IN (handles login after logout) ──────────────────────
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN') {
+        console.log('[RequesterHome] SIGNED_IN — re-fetching active session');
+        fetchActiveSession();
+      } else if (event === 'SIGNED_OUT') {
+        console.log('[RequesterHome] SIGNED_OUT — clearing activeSessionId');
+        setActiveSessionId(null);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [fetchActiveSession]);
+
   // ─── AppState reconnection safety net ────────────────────────────────────────
   useEffect(() => {
     const handleAppStateChange = (nextState: AppStateStatus) => {

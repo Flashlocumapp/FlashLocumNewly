@@ -427,6 +427,7 @@ export default function DoctorLayout() {
     registerResetCallback(() => {
       console.log('[DoctorLayout] reset — clearing active session and job count');
       setActiveSession(null);
+      setActiveSessionId(null); // clear stale ID so ghost subscriptions don't form on next login
       setActiveJobCount(0);
       setIsOnline(false);
       setDoctorScreenState('idle');
