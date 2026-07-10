@@ -64,7 +64,7 @@ const SECTIONS: Section[] = [
   },
   {
     heading: '6. Your Rights',
-    body: 'Subject to applicable law, you may request to:\n\n· Access your personal information\n· Correct inaccurate information\n· Update your account details\n· Delete information that is no longer required\n· Close your FlashLocum account\n\nCertain information may need to be retained where required by law or for regulatory, fraud prevention, security, or dispute resolution purposes.',
+    body: 'Subject to applicable law, you may request to:\n\n· Access your personal information\n· Correct inaccurate information\n· Update your account details\n· Delete information that is no longer required\n· Close your FlashLocum account\n\nCertain information may need to be retained where required by law or for regulatory, fraud prevention, security, or dispute resolution purposes.\n\nHow to Request Account Deletion\n\nYou can request the deletion of your account and associated personal data at any time:\n\nIn-App: Navigate to the \'Settings\' menu within the FlashLocum app and select the \'Delete Account\' option.\n\nVia Web: Send an email to support@flashlocum.com with the subject line "Account Deletion Request" and the email address associated with your account. Our support team will process your request and confirm the permanent deletion of your data from our systems.',
   },
   {
     heading: '7. Third-Party Services',
