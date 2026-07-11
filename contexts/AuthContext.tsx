@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, getValidToken, setForegroundRefreshPromise, clearRefreshPromise, registerAuthFailureCallback } from '@/lib/supabase';
@@ -16,6 +16,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
+
+  // Background recovery refs
+  const backgroundedAtRef = useRef<number>(0);
+  // Ref to the profile-verification channel so the AppState handler can inspect/re-subscribe it
+  const profileChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const fetchProfile = useCallback(async (userId: string) => {
     setProfileLoading(true);
@@ -63,7 +68,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null);
     });
 
-    let profileChannel: ReturnType<typeof supabase.channel> | null = null;
+    const subscribeProfileChannel = (userId: string): ReturnType<typeof supabase.channel> => {
+      const ch = supabase
+        .channel(`profile-verif-${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'profiles',
+            filter: `id=eq.${userId}`,
+          },
+          (payload) => {
+            console.log('[AuthContext] profiles realtime UPDATE received', payload.new);
+            const newStatus = (payload.new as Record<string, unknown>)?.verification_status;
+            if (newStatus !== undefined) {
+              setProfile((prev) => prev ? { ...prev, verification_status: newStatus as string | null } : prev);
+            }
+          }
+        )
+        .subscribe((status, err) => {
+          console.log('[AuthContext] profile channel status:', status, err ?? '');
+        });
+      return ch;
+    };
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       clearTimeout(authTimeout);
@@ -74,28 +102,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false);
           setIsReady(true);
         });
-        // Set up realtime subscription synchronously here so cleanup can always remove it
-        profileChannel = supabase
-          .channel(`profile-verif-${session.user.id}`)
-          .on(
-            'postgres_changes',
-            {
-              event: 'UPDATE',
-              schema: 'public',
-              table: 'profiles',
-              filter: `id=eq.${session.user.id}`,
-            },
-            (payload) => {
-              console.log('[AuthContext] profiles realtime UPDATE received', payload.new);
-              const newStatus = (payload.new as Record<string, unknown>)?.verification_status;
-              if (newStatus !== undefined) {
-                setProfile((prev) => prev ? { ...prev, verification_status: newStatus as string | null } : prev);
-              }
-            }
-          )
-          .subscribe((status, err) => {
-            console.log('[AuthContext] profile channel status:', status, err ?? '');
-          });
+        // Set up realtime subscription and store in ref for AppState recovery
+        const ch = subscribeProfileChannel(session.user.id);
+        profileChannelRef.current = ch;
       } else {
         setLoading(false);
         setIsReady(true);
@@ -103,55 +112,83 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
-        // Session is already updated in the Supabase client's internal cache.
-        // No action needed.
-      }
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
+      // Only fetch profile on meaningful user-state changes — NOT on token refreshes
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          fetchProfile(session.user.id);
+        } else {
+          setProfile(null);
+        }
+        // Re-subscribe profile channel for the new user
+        if (profileChannelRef.current) {
+          supabase.removeChannel(profileChannelRef.current);
+          profileChannelRef.current = null;
+        }
+        if (session?.user) {
+          profileChannelRef.current = subscribeProfileChannel(session.user.id);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setSession(null);
+        setUser(null);
         setProfile(null);
+        if (profileChannelRef.current) {
+          supabase.removeChannel(profileChannelRef.current);
+          profileChannelRef.current = null;
+        }
+      } else {
+        // TOKEN_REFRESHED, INITIAL_SESSION, PASSWORD_RECOVERY, etc.
+        // Update session/user state but do NOT re-fetch profile — it hasn't changed
+        setSession(session);
+        setUser(session?.user ?? null);
       }
       setLoading(false);
-      // Re-subscribe profile channel for the new user
-      if (profileChannel) {
-        supabase.removeChannel(profileChannel);
-        profileChannel = null;
-      }
-      if (session?.user) {
-        profileChannel = supabase
-          .channel(`profile-verif-${session.user.id}`)
-          .on(
-            'postgres_changes',
-            { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${session.user.id}` },
-            (payload) => {
-              const newStatus = (payload.new as Record<string, unknown>)?.verification_status;
-              if (newStatus !== undefined) {
-                setProfile((prev) => prev ? { ...prev, verification_status: newStatus as string | null } : prev);
-              }
-            }
-          )
-          .subscribe((status, err) => {
-            console.log('[AuthContext] profile channel status (re-sub):', status, err ?? '');
-          });
-      }
     });
 
     const handleAppStateChange = async (nextState: AppStateStatus) => {
+      if (nextState === 'background') {
+        backgroundedAtRef.current = Date.now();
+        console.log('[AuthContext] App backgrounded — recording timestamp');
+      }
+
       if (nextState === 'active') {
-        console.log('[AuthContext] App foregrounded — checking session before warming up token');
-        // Small delay to let any in-flight SIGNED_IN event clear _refreshPromise first
-        await new Promise(r => setTimeout(r, 500));
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        if (currentSession?.access_token) {
-          console.log('[AuthContext] Session confirmed — warming up token');
-          const p = getValidToken();
-          setForegroundRefreshPromise(p);
-          p.catch(() => {});
+        const elapsed = Date.now() - backgroundedAtRef.current;
+        const FIVE_MINUTES = 5 * 60 * 1000;
+
+        if (backgroundedAtRef.current > 0 && elapsed > FIVE_MINUTES) {
+          console.log('[AuthContext] App foregrounded after', Math.round(elapsed / 1000), 's — running background recovery');
+
+          // 1. Silently validate/refresh the auth token
+          getValidToken().catch(() => {});
+
+          // 2. Check profile channel health — re-subscribe if not SUBSCRIBED
+          const ch = profileChannelRef.current;
+          if (ch) {
+            const state = ch.state;
+            if (state !== 'joined') {
+              console.log('[AuthContext] Profile channel not subscribed (state:', state, ') — re-subscribing');
+              supabase.removeChannel(ch);
+              profileChannelRef.current = null;
+              const currentUser = (await supabase.auth.getSession()).data.session?.user;
+              if (currentUser) {
+                profileChannelRef.current = subscribeProfileChannel(currentUser.id);
+              }
+            }
+          }
         } else {
-          console.log('[AuthContext] No active session — skipping foreground warm-up');
+          // Short foreground — just warm up the token as before
+          console.log('[AuthContext] App foregrounded — checking session before warming up token');
+          await new Promise(r => setTimeout(r, 500));
+          const { data: { session: currentSession } } = await supabase.auth.getSession();
+          if (currentSession?.access_token) {
+            console.log('[AuthContext] Session confirmed — warming up token');
+            const p = getValidToken();
+            setForegroundRefreshPromise(p);
+            p.catch(() => {});
+          } else {
+            console.log('[AuthContext] No active session — skipping foreground warm-up');
+          }
         }
       }
     };
@@ -161,7 +198,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(authTimeout);
       subscription.unsubscribe();
       appStateSubscription.remove();
-      if (profileChannel) supabase.removeChannel(profileChannel);
+      if (profileChannelRef.current) {
+        supabase.removeChannel(profileChannelRef.current);
+        profileChannelRef.current = null;
+      }
     };
   }, [fetchProfile]);
 

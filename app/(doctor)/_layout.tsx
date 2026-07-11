@@ -307,6 +307,9 @@ export default function DoctorLayout() {
   const lastLocationRef = useRef<{ lat: number; lng: number } | null>(null);
   // Coords passed from home screen when going online
   const pendingGoOnlineCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  // Background recovery refs
+  const wasOnlineRef = useRef(false);
+  const doctorBackgroundedAtRef = useRef<number>(0);
 
   const callEdge = useCallback(async (fn: string, body?: object) => {
     try {
@@ -785,23 +788,105 @@ export default function DoctorLayout() {
   // ── AppState handler (merged) ──
   useEffect(() => {
     const sub = AppState.addEventListener('change', async (state: AppStateStatus) => {
-      if (state === 'background' && isOnlineRef.current) {
-        console.log('[AppState] background — going offline');
-        fetchWithAuth(`${EDGE_BASE}/go-offline`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        }).catch(() => {});
-        setIsOnline(false);
+      if (state === 'background') {
+        // Record online state and timestamp before going to background
+        wasOnlineRef.current = isOnlineRef.current;
+        doctorBackgroundedAtRef.current = Date.now();
+        if (isOnlineRef.current) {
+          console.log('[AppState] background — going offline');
+          fetchWithAuth(`${EDGE_BASE}/go-offline`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          }).catch(() => {});
+          setIsOnline(false);
+        }
       }
       if (state === 'active') {
-        console.log('[AppState] active — syncing session');
-        if (isOnlineRef.current && user) await forceSync();
-        fetchActiveSession();
+        const elapsed = Date.now() - doctorBackgroundedAtRef.current;
+        const FIVE_MINUTES = 5 * 60 * 1000;
+
+        if (doctorBackgroundedAtRef.current > 0 && elapsed > FIVE_MINUTES) {
+          console.log('[AppState] active after', Math.round(elapsed / 1000), 's — running doctor background recovery');
+
+          // 1. Channel health check — dispatch channel
+          if (channelRef.current && channelRef.current.state !== 'joined') {
+            console.log('[AppState] dispatch channel unhealthy (state:', channelRef.current.state, ') — re-subscribing');
+            supabase.removeChannel(channelRef.current);
+            channelRef.current = null;
+            const newChannel = supabase.channel('dispatch:lagos')
+              .on('broadcast', { event: 'NEW_REQUEST' }, (payload) => {
+                const req = payload.payload as DispatchRequest;
+                const now = new Date();
+                if (req.expiry_at && new Date(req.expiry_at) <= now) return;
+                setRequestQueue((prev) => {
+                  if (prev.some((r) => r.id === req.id)) return prev;
+                  return [...prev, req];
+                });
+              })
+              .on('broadcast', { event: 'EVICT_REQUEST' }, (payload) => {
+                const evictedId: string = payload.payload?.request_id;
+                setRequestQueue((prev) => prev.filter((r) => r.id !== evictedId));
+              })
+              .subscribe((status) => {
+                isRealtimeHealthyRef.current = status === 'SUBSCRIBED';
+                if (status === 'SUBSCRIBED' && isOnlineRef.current) {
+                  forceSyncRef.current();
+                }
+              });
+            channelRef.current = newChannel;
+          }
+
+          // Session channel health check
+          if (activeSessionIdRef.current && sessionChannelRef.current && sessionChannelRef.current.state !== 'joined') {
+            console.log('[AppState] session channel unhealthy (state:', sessionChannelRef.current.state, ') — re-subscribing');
+            supabase.removeChannel(sessionChannelRef.current);
+            sessionChannelRef.current = null;
+            const sid = activeSessionIdRef.current;
+            const newSessionChannel = supabase.channel(`session:${sid}`)
+              .on('broadcast', { event: 'SHIFT_STARTED' }, () => { fetchActiveSession(); })
+              .on('broadcast', { event: 'SHIFT_PAUSED' }, () => { fetchActiveSession(); })
+              .on('broadcast', { event: 'SHIFT_RESUMED' }, () => { fetchActiveSession(); })
+              .on('broadcast', { event: 'SHIFT_ENDED' }, () => { fetchActiveSession(); })
+              .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+                const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? sid;
+                const hospitalName = payload?.payload?.hospital_name ?? '';
+                const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
+                setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
+                maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+              })
+              .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+                const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? sid;
+                const hospitalName = payload?.payload?.hospital_name ?? '';
+                const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
+                setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
+                maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+              })
+              .subscribe(() => {});
+            sessionChannelRef.current = newSessionChannel;
+          }
+
+          // 2. Session reconciliation
+          await fetchActiveSession();
+
+          // 3. Presence re-establishment — only if doctor was online and is verified
+          if (wasOnlineRef.current && profile?.verification_status === 'verified') {
+            console.log('[AppState] re-establishing presence via heartbeat');
+            callEdge('heartbeat', lastLocationRef.current ?? {}).catch(() => {});
+          }
+
+          // 4. Dispatch reconciliation
+          if (user) await forceSync();
+        } else {
+          // Short foreground — existing behaviour
+          console.log('[AppState] active — syncing session');
+          if (isOnlineRef.current && user) await forceSync();
+          fetchActiveSession();
+        }
       }
     });
     return () => sub.remove();
-  }, [user, forceSync, fetchActiveSession]);
+  }, [user, profile?.verification_status, forceSync, fetchActiveSession, callEdge, maybeShowDoctorRating]);
 
   // ── Accept ──
   const handleAccept = useCallback(async () => {

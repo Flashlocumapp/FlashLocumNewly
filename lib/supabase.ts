@@ -1,7 +1,7 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 const ExpoSecureStoreAdapter = Platform.OS === 'web'
   ? {
@@ -30,8 +30,11 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // ─── Proactive refresh scheduler ─────────────────────────────────────────────
 
 let _proactiveTimer: ReturnType<typeof setTimeout> | null = null;
+// Tracks the token expiry (unix seconds) so the AppState listener can check staleness
+let _tokenExpiresAt: number = 0;
 
 function scheduleProactiveRefresh(expiresAt: number): void {
+  _tokenExpiresAt = expiresAt;
   if (_proactiveTimer) clearTimeout(_proactiveTimer);
   const nowSeconds = Math.floor(Date.now() / 1000);
   // Fire 120s before expiry (widened from 60s — gives more headroom)
@@ -43,12 +46,14 @@ function scheduleProactiveRefresh(expiresAt: number): void {
       const { data, error } = await supabase.auth.refreshSession();
       if (!error && data.session?.expires_at) {
         console.log('[supabase] Proactive token refresh succeeded');
+        _tokenExpiresAt = data.session.expires_at;
         scheduleProactiveRefresh(data.session.expires_at);
       } else {
-        console.log('[supabase] Proactive token refresh failed', error?.message);
+        console.log('[supabase] Proactive token refresh failed — will retry on foreground', error?.message);
+        // No fixed retry timer — the AppState 'active' listener will retry when the user returns
       }
     } catch {
-      // silent — getValidToken will handle it on next call
+      // silent — AppState 'active' listener will retry
     }
   }, secondsUntilRefresh * 1000);
 }
@@ -62,13 +67,31 @@ supabase.auth.getSession().then(({ data: { session } }) => {
 supabase.auth.onAuthStateChange((event, session) => {
   if ((event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') && session?.expires_at) {
     _refreshPromise = null; // clear any stale promise from the sign-out/sign-in transition
+    _tokenExpiresAt = session.expires_at;
     scheduleProactiveRefresh(session.expires_at);
   }
   if (event === 'SIGNED_OUT') {
     if (_proactiveTimer) { clearTimeout(_proactiveTimer); _proactiveTimer = null; }
+    _tokenExpiresAt = 0;
     _refreshPromise = null; // clear stale promise so post-login fetches don't hang
   }
 });
+
+// ─── AppState listener — event-driven proactive refresh retry ────────────────
+// When the app returns to foreground, if the token is stale or near expiry,
+// immediately attempt getValidToken() to refresh. No fixed timer — purely event-driven.
+if (Platform.OS !== 'web') {
+  AppState.addEventListener('change', async (nextState) => {
+    if (nextState === 'active') {
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      // If token expires within 120s of now (stale or about to expire), refresh immediately
+      if (_tokenExpiresAt > 0 && _tokenExpiresAt - nowSeconds <= 120) {
+        console.log('[supabase] AppState active — token stale/near-expiry, triggering getValidToken');
+        getValidToken().catch(() => {});
+      }
+    }
+  });
+}
 
 // ─── getValidToken ────────────────────────────────────────────────────────────
 
@@ -134,7 +157,10 @@ export async function getValidToken(): Promise<string | null> {
           const { data, error } = await supabase.auth.refreshSession();
           if (!error && data.session?.access_token) {
             console.log('[supabase] getValidToken: refresh succeeded on attempt', i + 1);
-            if (data.session.expires_at) scheduleProactiveRefresh(data.session.expires_at);
+            if (data.session.expires_at) {
+              _tokenExpiresAt = data.session.expires_at;
+              scheduleProactiveRefresh(data.session.expires_at);
+            }
             return data.session.access_token;
           }
         } catch {
@@ -206,18 +232,39 @@ export async function fetchWithAuth(
 
   // Check for auth errors (including non-401 status codes with auth error bodies)
   if (await isAuthError(res)) {
-    console.log('[fetchWithAuth] Auth error detected (status', res.status, '), retrying with fresh token');
-    // Force a fresh refresh
-    if (_refreshPromise) await _refreshPromise;
-    const { data } = await supabase.auth.refreshSession();
-    const newToken = data.session?.access_token;
+    console.log('[fetchWithAuth] Auth error detected (status', res.status, '), retrying with deduplicated refresh');
+
+    // Deduplicated 3-attempt refresh — same logic as getValidToken's slow path
+    if (!_refreshPromise) {
+      _refreshPromise = (async (): Promise<string | null> => {
+        const delays = [0, 1000, 2000];
+        for (let i = 0; i < delays.length; i++) {
+          if (delays[i] > 0) await new Promise(r => setTimeout(r, delays[i]));
+          try {
+            const { data, error } = await supabase.auth.refreshSession();
+            if (!error && data.session?.access_token) {
+              console.log('[fetchWithAuth] Refresh succeeded on attempt', i + 1);
+              if (data.session.expires_at) {
+                _tokenExpiresAt = data.session.expires_at;
+                scheduleProactiveRefresh(data.session.expires_at);
+              }
+              return data.session.access_token;
+            }
+          } catch {
+            // try next attempt
+          }
+        }
+        return null;
+      })().finally(() => { _refreshPromise = null; });
+    }
+
+    const newToken = await _refreshPromise;
     if (newToken) {
-      if (data.session?.expires_at) scheduleProactiveRefresh(data.session.expires_at);
       const retryRes = await makeRequest(newToken);
       console.log('[fetchWithAuth] Retry response:', retryRes.status, url);
       return retryRes;
     } else {
-      triggerAuthFailure(); // session unrecoverable after auth error
+      triggerAuthFailure(); // session unrecoverable after all retry attempts
     }
   }
 
