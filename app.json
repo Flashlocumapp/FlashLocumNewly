@@ -7,9 +7,9 @@
     "icon": "./assets/images/d86ec9d4-7414-4b16-87f4-dcb5e0fcab2e.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/cb747b9b-1071-4164-92e8-77d3aeee418a.png",
-      "resizeMode": "native",
-      "backgroundColor": "#111315"
+      "image": "./assets/images/97ee5e17-f7fa-4301-8cc2-00f8121a76cf.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a1a"
     },
     "ios": {
       "supportsTablet": true,
