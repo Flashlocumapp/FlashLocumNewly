@@ -9,3 +9,6 @@ node_modules/
 # Ignore build artifacts
 *.bundle.js
 *.bundle.js.map
+
+# Ignore Supabase edge functions (Deno — ESM imports not resolvable by Node ESLint)
+supabase/functions/

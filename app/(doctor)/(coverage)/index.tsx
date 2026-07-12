@@ -792,7 +792,7 @@ export default function DoctorCoverageScreen() {
       duration: 200,
       useNativeDriver: true,
     }).start();
-  }, [activeTab]);
+  }, [activeTab, tabUnderlineX]);
 
   const isHistoryTab = activeTab === 'History';
   const sortedHistory = [...historySessions].sort((a, b) => {

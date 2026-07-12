@@ -24,7 +24,7 @@ import {
   AppStateStatus,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-native';
+import { Search, MapPin, ArrowRight, X, History, ArrowLeft, Navigation } from 'lucide-react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Feather from '@expo/vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1538,7 +1538,8 @@ export default function RequesterHomeScreen() {
       return;
     }
     setOnlineDoctors((data ?? []) as { id: string; lat: number; lng: number }[]);
-  }, [user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Online doctors realtime ──
   useEffect(() => {
@@ -2006,7 +2007,7 @@ export default function RequesterHomeScreen() {
   const transitionTo = useCallback((state: SheetState) => {
     setSheetState(state);
     animateSheet(state);
-  }, [sheetState, animateSheet]);
+  }, [animateSheet]);
 
   // ─── Keep stable refs in sync with latest callbacks ──────────────────────────
   useEffect(() => { fetchActiveSessionRef.current = fetchActiveSession; }, [fetchActiveSession]);
@@ -2028,25 +2029,26 @@ export default function RequesterHomeScreen() {
       return;
     }
     setSearchLoading(true);
+    console.log('[Places] autocomplete request', { input });
     try {
-      const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token ?? '';
+      const response = await fetch(`${EDGE_BASE}/places-proxy`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Goog-Api-Key': MAPS_KEY,
+          'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          input,
-          locationRestriction: {
-            rectangle: {
-              low: { latitude: 6.35, longitude: 2.68 },
-              high: { latitude: 6.70, longitude: 3.75 },
-            },
-          },
-          includedRegionCodes: ['ng'],
-        }),
+        body: JSON.stringify({ action: 'autocomplete', input }),
       });
+      if (!response.ok) {
+        const errText = await response.text();
+        console.log('[Places] autocomplete error', { status: response.status, body: errText });
+        setSearchResults([]);
+        return;
+      }
       const data = await response.json();
+      console.log('[Places] autocomplete response', { suggestionCount: data.suggestions?.length ?? 0 });
       if (data.suggestions) {
         setSearchResults(
           data.suggestions
@@ -2061,6 +2063,7 @@ export default function RequesterHomeScreen() {
         setSearchResults([]);
       }
     } catch (e: any) {
+      console.log('[Places] autocomplete exception', { error: e.message });
       setSearchResults([]);
     } finally {
       setSearchLoading(false);
@@ -2076,11 +2079,25 @@ export default function RequesterHomeScreen() {
   const handlePlaceResultSelect = useCallback(async (placeId: string, mainText: string) => {
     Keyboard.dismiss();
     setSearchLoading(true);
+    console.log('[Places] details request', { placeId, mainText });
     try {
-      const response = await fetch(
-        `https://places.googleapis.com/v1/places/${placeId}?fields=id,displayName,formattedAddress,location&key=${MAPS_KEY}`
-      );
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token ?? '';
+      const response = await fetch(`${EDGE_BASE}/places-proxy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: 'details', placeId }),
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        console.log('[Places] details error', { status: response.status, body: errText });
+        throw new Error('Could not load place details');
+      }
       const data = await response.json();
+      console.log('[Places] details response', { placeId, hasLocation: !!data.location });
       if (!data.location) throw new Error('No location in place details');
       const address = data.formattedAddress || mainText;
       // Client-side Lagos safety check
@@ -2803,7 +2820,39 @@ export default function RequesterHomeScreen() {
         ))}
       </MapView>
 
-
+      {/* ── LOCATE ME BUTTON ── */}
+      {sheetState === 'idle' && (
+        <TouchableOpacity
+          onPress={() => {
+            console.log('[Map] Locate me pressed', { userCoords });
+            if (userCoords) {
+              mapRef.current?.animateToRegion(
+                { latitude: userCoords.latitude, longitude: userCoords.longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 },
+                600
+              );
+            }
+          }}
+          activeOpacity={0.85}
+          style={{
+            position: 'absolute',
+            top: insets.top + 12,
+            right: 16,
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: '#FFFFFF',
+            justifyContent: 'center',
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.12,
+            shadowRadius: 8,
+            elevation: 5,
+          }}
+        >
+          <Navigation size={20} color="#1C1C1E" />
+        </TouchableOpacity>
+      )}
 
       {/* ── SUMMARY BACK BUTTON ── */}
       {sheetState === 'summary' && (
@@ -3621,72 +3670,120 @@ export default function RequesterHomeScreen() {
         }}
       />
 
-      {/* Date picker modal — ITEM 5.2 maximumDate */}
-      <Modal
-        visible={showDatePicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowDatePicker(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
-          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
-            <TouchableWithoutFeedback>
-              <View style={{ backgroundColor: '#1C1C1E', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 }}>
-                  <TouchableOpacity onPress={() => {
-                    setShowDatePicker(false);
-                  }}>
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#FFFFFF' }}>Done</Text>
-                  </TouchableOpacity>
-                </View>
-                <DateTimePicker
-                  value={shiftDate}
-                  mode="date"
-                  display="spinner"
-                  minimumDate={new Date()}
-                  maximumDate={maxDate}
-                  style={{ backgroundColor: '#1C1C1E' }}
-                  textColor="#FFFFFF"
-                  onChange={(event, date) => {
-                    if (date) {
-                      // WAT validation: snap back to today if before WAT today
-                      const watTodayStr = watNow.toISOString().split('T')[0];
-                      const selectedStr = date.toISOString().split('T')[0];
-                      if (selectedStr < watTodayStr) {
-                        const todayWAT = new Date(watNow);
-                        todayWAT.setUTCHours(0, 0, 0, 0);
-                        setShiftDate(todayWAT);
-                        setStartTime(prev => {
-                          const updated = new Date(todayWAT);
-                          updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
-                          return updated;
-                        });
-                        setEndTime(prev => {
-                          const updated = new Date(todayWAT);
-                          updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
-                          return updated;
-                        });
-                      } else {
-                        setShiftDate(date);
-                        setStartTime(prev => {
-                          const updated = new Date(date);
-                          updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
-                          return updated;
-                        });
-                        setEndTime(prev => {
-                          const updated = new Date(date);
-                          updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
-                          return updated;
-                        });
+      {/* Date picker — Android: inline (no Modal wrapper) */}
+      {Platform.OS === 'android' && showDatePicker && (
+        <DateTimePicker
+          value={shiftDate}
+          mode="date"
+          display="default"
+          minimumDate={new Date()}
+          maximumDate={maxDate}
+          onChange={(event, date) => {
+            setShowDatePicker(false);
+            if (event.type === 'set' && date) {
+              console.log('[DatePicker] Android date selected', { date: date.toISOString() });
+              const watTodayStr = watNow.toISOString().split('T')[0];
+              const selectedStr = date.toISOString().split('T')[0];
+              if (selectedStr < watTodayStr) {
+                const todayWAT = new Date(watNow);
+                todayWAT.setUTCHours(0, 0, 0, 0);
+                setShiftDate(todayWAT);
+                setStartTime(prev => {
+                  const updated = new Date(todayWAT);
+                  updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                  return updated;
+                });
+                setEndTime(prev => {
+                  const updated = new Date(todayWAT);
+                  updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                  return updated;
+                });
+              } else {
+                setShiftDate(date);
+                setStartTime(prev => {
+                  const updated = new Date(date);
+                  updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                  return updated;
+                });
+                setEndTime(prev => {
+                  const updated = new Date(date);
+                  updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                  return updated;
+                });
+              }
+            }
+          }}
+        />
+      )}
+
+      {/* Date picker modal — iOS only (ITEM 5.2 maximumDate) */}
+      {Platform.OS === 'ios' && (
+        <Modal
+          visible={showDatePicker}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
+            <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+              <TouchableWithoutFeedback>
+                <View style={{ backgroundColor: '#1C1C1E', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 }}>
+                    <TouchableOpacity onPress={() => {
+                      setShowDatePicker(false);
+                    }}>
+                      <Text style={{ fontSize: 16, fontWeight: '600', color: '#FFFFFF' }}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <DateTimePicker
+                    value={shiftDate}
+                    mode="date"
+                    display="spinner"
+                    minimumDate={new Date()}
+                    maximumDate={maxDate}
+                    style={{ backgroundColor: '#1C1C1E' }}
+                    textColor="#FFFFFF"
+                    onChange={(event, date) => {
+                      if (date) {
+                        // WAT validation: snap back to today if before WAT today
+                        const watTodayStr = watNow.toISOString().split('T')[0];
+                        const selectedStr = date.toISOString().split('T')[0];
+                        if (selectedStr < watTodayStr) {
+                          const todayWAT = new Date(watNow);
+                          todayWAT.setUTCHours(0, 0, 0, 0);
+                          setShiftDate(todayWAT);
+                          setStartTime(prev => {
+                            const updated = new Date(todayWAT);
+                            updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                            return updated;
+                          });
+                          setEndTime(prev => {
+                            const updated = new Date(todayWAT);
+                            updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                            return updated;
+                          });
+                        } else {
+                          setShiftDate(date);
+                          setStartTime(prev => {
+                            const updated = new Date(date);
+                            updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                            return updated;
+                          });
+                          setEndTime(prev => {
+                            const updated = new Date(date);
+                            updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                            return updated;
+                          });
+                        }
                       }
-                    }
-                  }}
-                />
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+                    }}
+                  />
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      )}
 
       {/* Start time picker modal — ITEM 4: custom picker */}
       <CustomTimePicker
