@@ -103,6 +103,8 @@ type DispatchRequest = {
   note?: string | null;
   price: number;
   expiry_at?: string;
+  requester_rating?: number | null;
+  requester_reliability?: number | null;
 };
 
 function formatHHMM(hhmm: string): string {
@@ -1088,11 +1090,11 @@ export default function DoctorLayout() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={styles.badgeText}>
                   <Text style={{ color: '#F4A261' }}>★</Text>
-                  {' '}{doctorRatingScore !== null ? doctorRatingScore.toFixed(1) : '--'}
+                  {' '}{currentRequest?.requester_rating != null ? Number(currentRequest.requester_rating).toFixed(1) : '--'}
                 </Text>
                 <Text style={styles.badgeText}>
                   <Text style={{ color: '#34C759' }}>●</Text>
-                  {' '}{doctorReliabilityScore !== null ? `${doctorReliabilityScore}%` : '--'}
+                  {' '}{currentRequest?.requester_reliability != null ? `${Math.round(Number(currentRequest.requester_reliability))}%` : '--'}
                 </Text>
                 <View style={styles.envBadge}>
                   <Text style={styles.envText}>{currentEnvironment}</Text>
