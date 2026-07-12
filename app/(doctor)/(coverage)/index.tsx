@@ -264,7 +264,7 @@ function HistoryCoverageCard({ session, onPress }: {
 
   const reliabilityDisplay = session.final_requester_reliability != null
     ? `${Math.round(Number(session.final_requester_reliability))}`
-    : '—';
+    : (session.requester_reliability != null ? `${Math.round(Number(session.requester_reliability))}` : '100');
   const shiftPillText = buildShiftPillText(session);
 
   const statusLabel = session.status === 'cancelled'
@@ -353,7 +353,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
 
   const reliabilityDisplay = session.final_requester_reliability != null
     ? `${Math.round(Number(session.final_requester_reliability))}`
-    : '—';
+    : (session.requester_reliability != null ? `${Math.round(Number(session.requester_reliability))}` : '100');
 
   const shiftStart = new Date(session.shift_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   const shiftEnd = new Date(session.shift_end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });

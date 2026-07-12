@@ -751,7 +751,7 @@ export default function DoctorLayout() {
         }
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? activeSessionId;
+        const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] user channel PAYMENT_CONFIRMED received', { sessionId, hospitalName, amount });
@@ -761,7 +761,7 @@ export default function DoctorLayout() {
         invalidate('coverage_doctor_upcoming');
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
-        const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? activeSessionId;
+        const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] user channel payment_confirmed received', { sessionId, hospitalName, amount });
@@ -774,7 +774,7 @@ export default function DoctorLayout() {
         // subscription status — no logging needed
       });
     return () => { supabase.removeChannel(ch); };
-  }, [user, activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Queue → state sync ──
   useEffect(() => {
