@@ -28,6 +28,7 @@ import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 import { getCached, setCached } from '@/utils/tabCache';
+import PollingManager from '../../../utils/pollingManager';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
@@ -455,18 +456,29 @@ export default function DoctorHomeScreen() {
 
   const handleCancelReasonSelected = async (reason: string) => {
     if (!activeSession) return;
+    const sessionId = activeSession.id;
     setShowCancelReasons(false);
     try {
+      console.log('[Doctor] handleCancelReasonSelected: cancelling session', sessionId, 'reason:', reason);
       const res = await fetchWithAuth(`${EDGE_BASE}/update-shift-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: activeSession.id, status: 'cancelled', cancellation_reason: reason, cancelled_by: 'doctor' }),
+        body: JSON.stringify({ session_id: sessionId, status: 'cancelled', cancellation_reason: reason, cancelled_by: 'doctor' }),
       });
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
         throw new Error(errText || 'Cancel failed');
       }
       setActiveSession(null);
+      console.log('[Doctor] Starting cancel poll for session:', sessionId);
+      PollingManager.start('cancel', async () => {
+        const { data: s } = await supabase
+          .from('coverage_sessions')
+          .select('status')
+          .eq('id', sessionId)
+          .maybeSingle();
+        return s?.status === 'cancelled';
+      });
     } catch (e: any) {
       Alert.alert('Error', e.message);
     }

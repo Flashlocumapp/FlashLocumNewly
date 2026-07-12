@@ -39,6 +39,7 @@ import { useTabBarVisibility, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibility
 import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 import { getCached, setCached, invalidate } from '@/utils/tabCache';
+import PollingManager from '../../../utils/pollingManager';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
@@ -1495,7 +1496,23 @@ export default function RequesterHomeScreen() {
       })
       // From channel 7 (shift cancelled on requester channel)
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+        PollingManager.stop('cancel');
         setActiveSession(null);
+        fetchActiveSessionRef.current();
+      })
+      .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
+        // A session was created — if we're in matching state, confirm the match
+        PollingManager.stop('match');
+        if (shouldPollRef.current) {
+          shouldPollRef.current = false;
+          if (pollIntervalRef.current) {
+            clearTimeout(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+          if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+        }
+        fetchActiveSessionRef.current();
+        transitionToRef.current('idle');
       })
       .subscribe((status) => {
       });
@@ -1772,6 +1789,11 @@ export default function RequesterHomeScreen() {
     fetchActiveSession();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── Cleanup PollingManager on unmount ───────────────────────────────────────
+  useEffect(() => {
+    return () => { PollingManager.stopAll(); };
+  }, []);
+
   // ─── Re-fetch on SIGNED_IN (handles login after logout) ──────────────────────
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -1821,10 +1843,12 @@ export default function RequesterHomeScreen() {
 
     const ch = supabase.channel(channelName)
       .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
+        PollingManager.stop('start-shift');
         const updated = payload?.payload?.session as Partial<CoverageSession>;
         setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
       })
       .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
+        PollingManager.stop('pause-shift');
         const updated = payload?.payload?.session as Partial<CoverageSession>;
         setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
       })
@@ -1833,6 +1857,7 @@ export default function RequesterHomeScreen() {
         setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
+        PollingManager.stop('end-shift');
         const updated = payload?.payload?.session as Partial<CoverageSession>;
         setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
       })
@@ -1904,6 +1929,7 @@ export default function RequesterHomeScreen() {
         setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+        PollingManager.stop('cancel');
         setActiveSession(null);
       })
       .subscribe((status) => {
@@ -2120,6 +2146,7 @@ export default function RequesterHomeScreen() {
       const channelName = `requester:${activeRequestId}`;
       realtimeChannelRef.current = supabase.channel(channelName)
         .on('broadcast', { event: 'MATCH_CONFIRMED' }, (payload) => {
+          PollingManager.stop('match');
           shouldPollRef.current = false;
           if (pollIntervalRef.current) {
             clearTimeout(pollIntervalRef.current);
@@ -2166,13 +2193,6 @@ export default function RequesterHomeScreen() {
       shouldPollRef.current = true;
 
       const doPoll = async () => {
-        if (!__DEV__ && isRealtimeHealthyRef.current) {
-          // Realtime is healthy in production — skip this poll tick
-          if (shouldPollRef.current) {
-            pollIntervalRef.current = setTimeout(doPoll, 5000) as any;
-          }
-          return;
-        }
         if (!shouldPollRef.current) return;
 
         try {
@@ -2374,8 +2394,27 @@ export default function RequesterHomeScreen() {
         throw new Error((err as any).error || 'Could not submit request');
       }
       const data = await res.json();
-      setActiveRequestId(data.request_id || data.id || null);
+      const reqId = data.request_id || data.id || null;
+      setActiveRequestId(reqId);
       transitionTo('matching');
+      if (reqId) {
+        console.log('[Requester] Starting match poll for request:', reqId);
+        PollingManager.start('match', async () => {
+          const { data: req } = await supabase
+            .from('coverage_requests')
+            .select('status, matched_doctor_id')
+            .eq('id', reqId)
+            .maybeSingle();
+          if (req?.status === 'matched' && req?.matched_doctor_id) {
+            shouldPollRef.current = false;
+            if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+            fetchActiveSessionRef.current();
+            transitionToRef.current('idle');
+            return true; // confirmed
+          }
+          return false;
+        });
+      }
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Could not submit request. Please try again.');
     } finally {
@@ -2519,10 +2558,25 @@ export default function RequesterHomeScreen() {
 
   const handleStartShift = useCallback(async () => {
     if (!activeSession) return;
+    const sid = activeSession.id;
     try {
-      const data = await callSessionEdge('start-shift', activeSession.id);
+      console.log('[Requester] handleStartShift for session:', sid);
+      const data = await callSessionEdge('start-shift', sid);
       const updated = data?.session as Partial<CoverageSession>;
       if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      console.log('[Requester] Starting start-shift poll for session:', sid);
+      PollingManager.start('start-shift', async () => {
+        const { data: s } = await supabase
+          .from('coverage_sessions')
+          .select('status')
+          .eq('id', sid)
+          .maybeSingle();
+        if (s?.status === 'active') {
+          fetchActiveSessionRef.current();
+          return true;
+        }
+        return false;
+      });
     } catch (e: any) {
       Alert.alert('Something went wrong', 'Please try again.');
     }
@@ -2546,11 +2600,26 @@ export default function RequesterHomeScreen() {
 
   const handleConfirmPauseShift = async () => {
     if (!activeSession) return;
+    const sid = activeSession.id;
     setShowPauseShiftModal(false);
     try {
-      const data = await callSessionEdge('pause-shift', activeSession.id);
+      console.log('[Requester] handleConfirmPauseShift for session:', sid);
+      const data = await callSessionEdge('pause-shift', sid);
       const updated = data?.session as Partial<CoverageSession>;
       if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      console.log('[Requester] Starting pause-shift poll for session:', sid);
+      PollingManager.start('pause-shift', async () => {
+        const { data: s } = await supabase
+          .from('coverage_sessions')
+          .select('status')
+          .eq('id', sid)
+          .maybeSingle();
+        if (s?.status === 'paused' || s?.status === 'upcoming') {
+          fetchActiveSessionRef.current();
+          return true;
+        }
+        return false;
+      });
     } catch (e: any) {
       Alert.alert('Pause Shift Failed', e.message || 'Something went wrong. Please try again.');
     }
@@ -2563,10 +2632,11 @@ export default function RequesterHomeScreen() {
 
   const handleConfirmEndShift = async () => {
     if (!activeSession) return;
-    console.log('[Requester] handleConfirmEndShift: ending shift for session', activeSession.id);
+    const sid = activeSession.id;
+    console.log('[Requester] handleConfirmEndShift: ending shift for session', sid);
     setShowEndShiftModal(false);
     try {
-      const data = await callSessionEdge('end-shift', activeSession.id);
+      const data = await callSessionEdge('end-shift', sid);
       console.log('[Requester] end-shift response:', JSON.stringify(data));
       const updated = data?.session as Partial<CoverageSession>;
       if (updated) {
@@ -2576,6 +2646,19 @@ export default function RequesterHomeScreen() {
         }
         setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
       }
+      console.log('[Requester] Starting end-shift poll for session:', sid);
+      PollingManager.start('end-shift', async () => {
+        const { data: s } = await supabase
+          .from('coverage_sessions')
+          .select('status, payment_status')
+          .eq('id', sid)
+          .maybeSingle();
+        if (s?.status === 'payment_pending' || s?.status === 'completed' || s?.status === 'requester_paid') {
+          fetchActiveSessionRef.current();
+          return true;
+        }
+        return false;
+      });
     } catch (e: any) {
       console.error('[Requester] end-shift failed:', e.message);
       Alert.alert('End Shift Failed', e.message || 'Something went wrong. Please try again.');
@@ -2639,6 +2722,15 @@ export default function RequesterHomeScreen() {
         const errText = await res.text().catch(() => '');
         throw new Error(errText || 'Cancel failed');
       }
+      console.log('[Requester] Starting cancel poll for session:', sessionId);
+      PollingManager.start('cancel', async () => {
+        const { data: s } = await supabase
+          .from('coverage_sessions')
+          .select('status')
+          .eq('id', sessionId)
+          .maybeSingle();
+        return s?.status === 'cancelled';
+      });
     } catch (e: any) {
       Alert.alert('Error', e.message);
       // Re-fetch to restore correct state if the API call failed

@@ -29,6 +29,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
 import { DoctorDispatchContext, CoverageSession, registerResetCallback } from '@/contexts/DoctorDispatchContext';
 import { getCached, setCached, invalidate } from '@/utils/tabCache';
+import PollingManager from '../../utils/pollingManager';
 
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
@@ -470,6 +471,11 @@ export default function DoctorLayout() {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── Cleanup PollingManager on unmount ───────────────────────────────────────
+  useEffect(() => {
+    return () => { PollingManager.stopAll(); };
+  }, []);
+
   // Re-fetch active session on SIGNED_IN (handles login after logout)
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -661,6 +667,7 @@ export default function DoctorLayout() {
 
     const ch = supabase.channel(channelName)
       .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
+        PollingManager.stop('accept');
         const updated = payload?.payload?.session as CoverageSession | undefined;
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
@@ -714,6 +721,7 @@ export default function DoctorLayout() {
         setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+        PollingManager.stop('cancel');
         setActiveSession(null);
         setActiveJobCount((prev) => Math.max(0, prev - 1));
       })
@@ -924,6 +932,22 @@ export default function DoctorLayout() {
 
       // Fetch the newly created session
       await fetchActiveSession();
+
+      // Start accept poll to confirm session creation
+      const acceptedReqId = req.id;
+      console.log('[Doctor] Starting accept poll for request:', acceptedReqId);
+      PollingManager.start('accept', async () => {
+        const { data: s } = await supabase
+          .from('coverage_sessions')
+          .select('id, status')
+          .eq('request_id', acceptedReqId)
+          .maybeSingle();
+        if (s?.status === 'upcoming') {
+          await fetchActiveSession();
+          return true;
+        }
+        return false;
+      });
 
       // Auto-go-offline after accepting the 3rd shift
       if (activeJobCount + 1 >= 3) {
