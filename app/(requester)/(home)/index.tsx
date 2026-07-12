@@ -2633,7 +2633,7 @@ export default function RequesterHomeScreen() {
       const res = await fetchWithAuth(`${EDGE_BASE}/update-shift-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, status: 'cancelled', cancellation_reason: reason }),
+        body: JSON.stringify({ session_id: sessionId, status: 'cancelled', cancellation_reason: reason, cancelled_by: 'requester' }),
       });
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
