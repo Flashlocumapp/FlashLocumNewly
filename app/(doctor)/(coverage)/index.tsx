@@ -541,7 +541,7 @@ export default function DoctorCoverageScreen() {
       if (!user?.id) return [];
       console.log('[DoctorCoverage] fetching upcoming sessions for', user.id);
       const res = await fetchWithAuth(
-        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=upcoming,paused,payment_pending,settled,payment_complete`,
+        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=upcoming,paused,payment_pending`,
         { headers: { 'Content-Type': 'application/json' } },
       );
       if (!res.ok) {
@@ -563,7 +563,7 @@ export default function DoctorCoverageScreen() {
       if (!user?.id) return [];
       console.log('[DoctorCoverage] fetching history sessions for', user.id);
       const res = await fetchWithAuth(
-        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=completed,cancelled,requester_paid`,
+        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=completed,cancelled,requester_paid,settled,payment_complete`,
         { headers: { 'Content-Type': 'application/json' } },
       );
       if (!res.ok) {
@@ -689,20 +689,38 @@ export default function DoctorCoverageScreen() {
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         const sessionId = payload?.payload?.session_id as string ?? payload?.payload?.session?.id as string;
         if (sessionId) {
+          console.log('[DoctorCoverage] PAYMENT_CONFIRMED received, moving session to history:', sessionId);
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setUpcomingSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status: 'settled' as const } : s));
+          setUpcomingSessions(prev => {
+            const found = prev.find(s => s.id === sessionId);
+            if (found) {
+              setHistorySessions(hist => [{ ...found, status: 'requester_paid' as const }, ...hist]);
+              invalidate(upcomingKey);
+              invalidate(historyKey);
+            }
+            return prev.filter(s => s.id !== sessionId);
+          });
         }
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
         const sessionId = payload?.payload?.session_id as string ?? payload?.payload?.session?.id as string;
         if (sessionId) {
+          console.log('[DoctorCoverage] PAYMENT_COMPLETE received, moving session to history:', sessionId);
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setUpcomingSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status: 'payment_complete' as const } : s));
+          setUpcomingSessions(prev => {
+            const found = prev.find(s => s.id === sessionId);
+            if (found) {
+              setHistorySessions(hist => [{ ...found, status: 'requester_paid' as const }, ...hist]);
+              invalidate(upcomingKey);
+              invalidate(historyKey);
+            }
+            return prev.filter(s => s.id !== sessionId);
+          });
         }
       })
       .subscribe();
     channelsRef.current.push(doctorCh);
-  }, [handleStatusChange, upcomingKey]);
+  }, [handleStatusChange, upcomingKey, historyKey]);
 
   useEffect(() => {
     if (!user?.id) return;

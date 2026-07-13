@@ -1127,13 +1127,20 @@ export default function DoctorLayout() {
                       <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#34C759', letterSpacing: 0.5 }}>PAYMENT RECEIVED</Text>
                     </View>
                     {doctorRatingAmount > 0 && (
-                      <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 2 }}>
-                        {'₦'}{doctorRatingAmount.toLocaleString()}
+                      <>
+                        <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 2 }}>
+                          {'₦'}{doctorRatingAmount.toLocaleString()}
+                        </Text>
+                        <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>
+                          {'₦'}{Math.round(doctorRatingAmount * 0.85).toLocaleString()} to be remitted to your account by 10PM today.
+                        </Text>
+                      </>
+                    )}
+                    {doctorRatingAmount === 0 && (
+                      <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>
+                        To be remitted to your account by 10PM today.
                       </Text>
                     )}
-                    <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>
-                      To be remitted to your account by 10PM today.
-                    </Text>
                   </View>
 
                   {/* Rating prompt */}
