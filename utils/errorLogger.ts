@@ -91,9 +91,6 @@ const getLogServerUrl = (): string | null => {
 // Track if we've logged fetch errors to avoid spam
 let fetchErrorLogged = false;
 
-// Safe log reference captured in setupErrorLogging to avoid __proto__ usage on native
-let _safeLog: ((...args: any[]) => void) | null = null;
-
 // Flush the log queue to server
 const flushLogs = async () => {
   if (logQueue.length === 0) return;
@@ -119,7 +116,9 @@ const flushLogs = async () => {
         if (!fetchErrorLogged) {
           fetchErrorLogged = true;
           // Use a different method to avoid recursion - write directly without going through our intercept
-          (_safeLog || console.log)('[Newly] Fetch error (will not repeat):', e.message || e);
+          if (typeof window !== 'undefined' && window.console) {
+            (window.console as any).__proto__.log.call(console, '[Newly] Fetch error (will not repeat):', e.message || e);
+          }
         }
       });
     } catch (e) {
@@ -296,7 +295,6 @@ export const setupErrorLogging = () => {
 
   // Store original console methods BEFORE any modifications
   const originalConsoleLog = console.log;
-  _safeLog = originalConsoleLog;
   const originalConsoleWarn = console.warn;
   const originalConsoleError = console.error;
 
