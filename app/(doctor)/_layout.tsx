@@ -599,7 +599,7 @@ export default function DoctorLayout() {
   useEffect(() => {
     if (!isOnline || !user) return;
     const id = setInterval(() => {
-      if (__DEV__ || !isRealtimeHealthyRef.current) {
+      if (!isRealtimeHealthyRef.current) {
         forceSyncRef.current();
       }
     }, POLL_INTERVAL);
