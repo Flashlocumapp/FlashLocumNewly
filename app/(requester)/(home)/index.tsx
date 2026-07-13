@@ -24,7 +24,7 @@ import {
   AppState,
   AppStateStatus,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Feather from '@expo/vector-icons/Feather';
@@ -106,8 +106,8 @@ const RECENT_PLACE_KEY = 'flashlocum_recent_place';
 const LAGOS_REGION = {
   latitude: 6.5244,
   longitude: 3.3792,
-  latitudeDelta: Platform.OS === 'android' ? 0.05 : 0.12,
-  longitudeDelta: Platform.OS === 'android' ? 0.05 : 0.12,
+  latitudeDelta: 0.12,
+  longitudeDelta: 0.12,
 };
 
 const LAGOS_BOUNDS = {
@@ -1987,8 +1987,8 @@ export default function RequesterHomeScreen() {
           mapRef.current?.animateToRegion({
             latitude: immediatePos.coords.latitude,
             longitude: immediatePos.coords.longitude,
-            latitudeDelta: Platform.OS === 'android' ? 0.05 : 0.12,
-            longitudeDelta: Platform.OS === 'android' ? 0.05 : 0.12,
+            latitudeDelta: 0.12,
+            longitudeDelta: 0.12,
           }, 800);
         }
         locationSub.current = await Location.watchPositionAsync(
@@ -1999,8 +1999,8 @@ export default function RequesterHomeScreen() {
               mapRef.current?.animateToRegion({
                 latitude: loc.coords.latitude,
                 longitude: loc.coords.longitude,
-                latitudeDelta: Platform.OS === 'android' ? 0.05 : 0.12,
-                longitudeDelta: Platform.OS === 'android' ? 0.05 : 0.12,
+                latitudeDelta: 0.12,
+                longitudeDelta: 0.12,
               }, 800);
             }
             _cachedRequesterCoords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
@@ -2819,7 +2819,6 @@ export default function RequesterHomeScreen() {
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
-        provider={PROVIDER_GOOGLE}
         initialRegion={LAGOS_REGION}
         customMapStyle={MINIMALIST_MAP_STYLE}
         minZoomLevel={10}
@@ -2837,36 +2836,23 @@ export default function RequesterHomeScreen() {
             />
           </Marker>
         )}
-        {onlineDoctors.map((doc) =>
-          Platform.OS === 'android' ? (
-            <Marker
-              key={doc.id}
-              coordinate={{ latitude: doc.lat, longitude: doc.lng }}
-              anchor={{ x: 0.5, y: 0.5 }}
-              tracksViewChanges={!markersReady}
+        {onlineDoctors.map((doc) => (
+          <Marker
+            key={doc.id}
+            coordinate={{ latitude: doc.lat, longitude: doc.lng }}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={!markersReady}
+          >
+            <View
+              renderToHardwareTextureAndroid
+              needsOffscreenAlphaCompositing
+              collapsable={false}
+              style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: '#34C759', borderWidth: 2, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}
             >
-              <View
-                renderToHardwareTextureAndroid
-                needsOffscreenAlphaCompositing
-                collapsable={false}
-                style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: '#34C759', borderWidth: 2, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}
-              >
-                <MaterialCommunityIcons name="stethoscope" size={14} color="#FFFFFF" />
-              </View>
-            </Marker>
-          ) : (
-            <Marker
-              key={doc.id}
-              coordinate={{ latitude: doc.lat, longitude: doc.lng }}
-              anchor={{ x: 0.5, y: 0.5 }}
-              tracksViewChanges={false}
-            >
-              <View collapsable={false} style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: '#34C759', borderWidth: 2, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
-                <MaterialCommunityIcons name="stethoscope" size={14} color="#FFFFFF" />
-              </View>
-            </Marker>
-          )
-        )}
+              <MaterialCommunityIcons name="stethoscope" size={14} color="#FFFFFF" />
+            </View>
+          </Marker>
+        ))}
       </MapView>
 
 
