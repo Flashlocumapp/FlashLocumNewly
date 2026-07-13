@@ -178,6 +178,7 @@ function CustomTimePicker({
   isForDate,
   shiftDate,
   watNow,
+  isEndTime = false,
 }: {
   visible: boolean;
   initialTime: Date;
@@ -186,6 +187,7 @@ function CustomTimePicker({
   isForDate: Date;
   shiftDate: Date;
   watNow: Date;
+  isEndTime?: boolean;
 }) {
   const [selectedHour, setSelectedHour] = useState(() => {
     const h = initialTime.getHours();
@@ -233,15 +235,17 @@ function CustomTimePicker({
     } else {
       h24 = selectedHour === 12 ? 12 : selectedHour + 12;
     }
-    // WAT validation
-    const shiftDateStr = shiftDate.toISOString().split('T')[0];
-    const watTodayStr = watNow.toISOString().split('T')[0];
-    if (shiftDateStr === watTodayStr) {
-      const watHour = watNow.getUTCHours();
-      const watMinute = watNow.getUTCMinutes();
-      if (h24 < watHour || (h24 === watHour && selectedMinute <= watMinute)) {
-        Alert.alert('Invalid Time', 'Please select a future time.');
-        return;
+    // WAT validation (only for start time, not end time — end time can be next day)
+    if (!isEndTime) {
+      const shiftDateStr = shiftDate.toISOString().split('T')[0];
+      const watTodayStr = watNow.toISOString().split('T')[0];
+      if (shiftDateStr === watTodayStr) {
+        const watHour = watNow.getUTCHours();
+        const watMinute = watNow.getUTCMinutes();
+        if (h24 < watHour || (h24 === watHour && selectedMinute <= watMinute)) {
+          Alert.alert('Invalid Time', 'Please select a future time.');
+          return;
+        }
       }
     }
     const result = new Date(isForDate);
@@ -3750,6 +3754,7 @@ export default function RequesterHomeScreen() {
         isForDate={shiftDate}
         shiftDate={shiftDate}
         watNow={watNow}
+        isEndTime={true}
         onDone={(date) => {
           setEndTime(date);
           setShowEndTimePicker(false);
