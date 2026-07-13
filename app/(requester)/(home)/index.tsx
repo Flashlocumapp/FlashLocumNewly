@@ -1277,14 +1277,20 @@ function RequesterRatingCard({
       animationType="fade"
       onRequestClose={onDismiss}
     >
-      {/* Backdrop — tap to dismiss keyboard + card */}
-      <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); onDismiss(); }}>
-        <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' }} />
-      </TouchableWithoutFeedback>
-      {/* Card container — tap inside dismisses keyboard only, not the card */}
-      <View pointerEvents="box-none" style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-        <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
-          <View style={{ backgroundColor: '#2C2C2E', borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 }}>
+      {/* Full-screen container — pointerEvents="box-none" so touches pass through to backdrop */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        {/* Backdrop — tap closes the card */}
+        <Pressable
+          style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' }}
+          onPress={() => { console.log('[Requester] Rating backdrop pressed — dismissing'); Keyboard.dismiss(); onDismiss(); }}
+        />
+        {/* Card container — centred, pointerEvents="box-none" so backdrop behind it stays tappable */}
+        <View pointerEvents="box-none" style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          {/* Card — tap inside dismisses keyboard only */}
+          <Pressable
+            onPress={() => Keyboard.dismiss()}
+            style={{ backgroundColor: '#2C2C2E', borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 }}
+          >
             {/* Payment confirmation banner */}
             <View style={{ backgroundColor: '#1A3A2A', borderRadius: 12, padding: 14, marginBottom: 20 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
@@ -1363,8 +1369,8 @@ function RequesterRatingCard({
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </TouchableWithoutFeedback>
+          </Pressable>
+        </View>
       </View>
     </Modal>
   );

@@ -40,6 +40,8 @@ let _layoutCachedCoords: { lat: number; lng: number } | null = null;
 const DOCTOR_RATED_SESSIONS_KEY = 'doctor_rated_sessions_v1';
 // Layer 1: synchronous in-memory Set — blocks concurrent triggers instantly
 const _doctorRatedSessions = new Set<string>();
+// Layer 1b: dismissed-without-rating sessions — overlay will NOT re-appear for these
+const _doctorDismissedSessions = new Set<string>();
 
 async function markDoctorSessionRated(sessionId: string) {
   _doctorRatedSessions.add(sessionId);
@@ -358,6 +360,8 @@ export default function DoctorLayout() {
 
     // Synchronous dedup — if already rated, skip immediately
     if (_doctorRatedSessions.has(resolvedSessionId)) return;
+    // If the doctor already dismissed this overlay once, do not re-show it
+    if (_doctorDismissedSessions.has(resolvedSessionId)) return;
 
     // Show the overlay immediately — same pattern as requester side
     setDoctorRatingSessionId(resolvedSessionId);
@@ -926,8 +930,8 @@ export default function DoctorLayout() {
   // ── Doctor Rating — dismiss ──
   const handleDoctorRatingDone = useCallback(() => {
     const sid = doctorRatingSessionId;
-    // Do NOT call markDoctorSessionRated here — only successful submission marks as rated.
-    // Dismissing without submitting should allow the overlay to re-appear on next poll.
+    // Record this session as dismissed so the overlay never re-appears for it
+    if (sid) _doctorDismissedSessions.add(sid);
     console.log('[Doctor] Rating card dismissed', { sessionId: sid });
     setShowDoctorRating(false);
     setDoctorRatingSessionId(null);
