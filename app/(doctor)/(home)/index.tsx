@@ -358,7 +358,6 @@ export default function DoctorHomeScreen() {
   );
 
   const mapRef = useRef<MapView>(null);
-  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
   // ─── tracksViewChanges fix for stethoscope blank on first toggle ────────────
   const [markerTracksViews, setMarkerTracksViews] = useState(true);
@@ -367,55 +366,33 @@ export default function DoctorHomeScreen() {
   useEffect(() => {
     let active = true;
 
-    async function startWatching() {
+    async function fetchLocation() {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        return;
-      }
-      const immediatePos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Highest,
-      });
-      if (active) {
-        const coords = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude };
+      if (status !== 'granted') return;
+
+      try {
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        if (!active) return;
+        const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
         _cachedDoctorCoords = coords;
         setUserLocation(coords);
         if (!_hasAnimatedToUser && mapRef.current) {
           _hasAnimatedToUser = true;
-          mapRef.current.animateToRegion({ ...coords, latitudeDelta: 0.12, longitudeDelta: 0.12 }, 800);
+          mapRef.current.animateToRegion(
+            { ...coords, latitudeDelta: 0.12, longitudeDelta: 0.12 },
+            800,
+          );
         }
+      } catch {
+        // non-fatal — map still works without location
       }
-      locationSubscription.current = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.Highest,
-          timeInterval: 2000,
-          distanceInterval: 1,
-          mayShowUserSettingsDialog: true,
-        },
-        (loc) => {
-          if (!active) return;
-          const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-          _cachedDoctorCoords = coords;
-          setUserLocation(coords);
-          if (!_hasAnimatedToUser && mapRef.current) {
-            _hasAnimatedToUser = true;
-            mapRef.current.animateToRegion(
-              { ...coords, latitudeDelta: 0.12, longitudeDelta: 0.12 },
-              800,
-            );
-          }
-        },
-      );
     }
 
-    startWatching();
+    fetchLocation();
 
-    return () => {
-      active = false;
-      if (locationSubscription.current) {
-        locationSubscription.current.remove();
-        locationSubscription.current = null;
-      }
-    };
+    return () => { active = false; };
   }, []);
 
   // ─── tracksViewChanges: reset to true briefly when marker appears ───────────

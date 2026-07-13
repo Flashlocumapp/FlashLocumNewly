@@ -553,43 +553,11 @@ export default function DoctorLayout() {
     toggle();
   }, [isOnline, user]);
 
-  // ── Location watcher while online ──
-  useEffect(() => {
-    if (!isOnline || !user) return;
-    let sub: Location.LocationSubscription | null = null;
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        return;
-      }
-
-      // Get immediate fix so we have coords right away (don't wait for first watcher tick)
-      try {
-        const immediate = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        lastLocationRef.current = { lat: immediate.coords.latitude, lng: immediate.coords.longitude };
-        _layoutCachedCoords = { lat: immediate.coords.latitude, lng: immediate.coords.longitude };
-      } catch (e) {
-        // non-fatal
-      }
-
-      sub = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.Balanced, timeInterval: 10000, distanceInterval: 10 },
-        (loc) => {
-          lastLocationRef.current = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-          _layoutCachedCoords = { lat: loc.coords.latitude, lng: loc.coords.longitude };
-        }
-      );
-    })();
-    return () => { sub?.remove(); };
-  }, [isOnline, user]);
-
   // ── Heartbeat every 60s while online ──
   useEffect(() => {
     if (!isOnline || !user) return;
     const send = async () => {
-      const bestCoords = lastLocationRef.current ?? _layoutCachedCoords;
-      const locPayload = bestCoords ? { lat: bestCoords.lat, lng: bestCoords.lng } : {};
-      await callEdge('heartbeat', locPayload);
+      await callEdge('heartbeat', {});
     };
     send();
     const id = setInterval(send, 60000);
@@ -935,7 +903,7 @@ export default function DoctorLayout() {
           // 3. Presence re-establishment — only if doctor was online and is verified
           if (wasOnlineRef.current && profile?.verification_status === 'verified') {
             console.log('[AppState] re-establishing presence via heartbeat');
-            callEdge('heartbeat', lastLocationRef.current ?? {}).catch(() => {});
+            callEdge('heartbeat', {}).catch(() => {});
           }
 
           // 4. Dispatch reconciliation
