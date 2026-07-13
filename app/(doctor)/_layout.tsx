@@ -978,7 +978,8 @@ export default function DoctorLayout() {
     const sid = doctorRatingSessionId;
     if (sid) {
       _doctorRatingInFlight.delete(sid);
-      markDoctorSessionRated(sid); // persist — never show again for this session
+      // Do NOT call markDoctorSessionRated here — only successful submission marks as rated.
+      // Dismissing without submitting should allow the overlay to re-appear on next poll.
     }
     console.log('[Doctor] Rating card dismissed', { sessionId: sid });
     setShowDoctorRating(false);
@@ -1149,94 +1150,97 @@ export default function DoctorLayout() {
           animationType="fade"
           onRequestClose={handleDoctorRatingDone}
         >
+          {/* Backdrop — tap to dismiss keyboard + card */}
           <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); handleDoctorRatingDone(); }}>
-            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-              <Pressable onPress={() => Keyboard.dismiss()}>
-                <View style={{ backgroundColor: '#2C2C2E', borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 }}>
-                  {/* Payment confirmation banner */}
-                  <View style={{ backgroundColor: '#1A3A2A', borderRadius: 12, padding: 14, marginBottom: 20 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759', marginRight: 8 }} />
-                      <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#34C759', letterSpacing: 0.5 }}>PAYMENT RECEIVED</Text>
-                    </View>
-                    {doctorRatingAmount > 0 && (
-                      <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 2 }}>
-                        {'₦'}{doctorRatingAmount.toLocaleString()}
-                      </Text>
-                    )}
-                    <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>
-                      To be remitted to your account by 10PM today.
-                    </Text>
-                  </View>
-
-                  {/* Rating prompt */}
-                  <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 4 }}>
-                    {`How was your shift with ${doctorRatingHospitalName || 'this hospital'}?`}
-                  </Text>
-                  <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 20 }}>
-                    Share your feedback and help us improve.
-                  </Text>
-
-                  {/* Stars */}
-                  <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <TouchableOpacity
-                        key={n}
-                        onPress={() => { console.log('[Doctor] Rating star pressed', { star: n }); setDoctorRatingStars(n); setDoctorRatingError(''); }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{ fontSize: 36, color: n <= doctorRatingStars ? '#F4A261' : '#48484A' }}>★</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Comment */}
-                  <TextInput
-                    value={doctorRatingComment}
-                    onChangeText={setDoctorRatingComment}
-                    placeholder="Write a comment (optional)..."
-                    placeholderTextColor="#636366"
-                    multiline
-                    style={{
-                      backgroundColor: '#1C1C1E',
-                      borderRadius: 12,
-                      padding: 12,
-                      fontSize: 14,
-                      color: '#FFFFFF',
-                      minHeight: 80,
-                      textAlignVertical: 'top',
-                      marginBottom: 12,
-                    }}
-                  />
-
-                  {!!doctorRatingError && (
-                    <Text style={{ fontSize: 13, color: '#EF4444', marginBottom: 8 }}>{doctorRatingError}</Text>
-                  )}
-
-                  {/* Buttons */}
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <TouchableOpacity
-                      onPress={handleDoctorRatingDone}
-                      activeOpacity={0.8}
-                      style={{ flex: 1, backgroundColor: '#3A3A3C', borderRadius: 999, paddingVertical: 13, alignItems: 'center' }}
-                    >
-                      <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>Dismiss</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={handleSubmitDoctorRating}
-                      disabled={submittingDoctorRating}
-                      activeOpacity={0.85}
-                      style={{ flex: 2, backgroundColor: submittingDoctorRating ? '#636366' : '#FFFFFF', borderRadius: 999, paddingVertical: 13, alignItems: 'center' }}
-                    >
-                      <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>
-                        {submittingDoctorRating ? 'Submitting...' : 'Submit Rating'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </Pressable>
-            </View>
+            <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' }} />
           </TouchableWithoutFeedback>
+          {/* Card container — tap inside dismisses keyboard only, not the card */}
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, pointerEvents: 'box-none' }}>
+            <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
+              <View style={{ backgroundColor: '#2C2C2E', borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 }}>
+                {/* Payment confirmation banner */}
+                <View style={{ backgroundColor: '#1A3A2A', borderRadius: 12, padding: 14, marginBottom: 20 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759', marginRight: 8 }} />
+                    <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#34C759', letterSpacing: 0.5 }}>PAYMENT RECEIVED</Text>
+                  </View>
+                  {doctorRatingAmount > 0 && (
+                    <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 2 }}>
+                      {'₦'}{doctorRatingAmount.toLocaleString()}
+                    </Text>
+                  )}
+                  <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>
+                    To be remitted to your account by 10PM today.
+                  </Text>
+                </View>
+
+                {/* Rating prompt */}
+                <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF', marginBottom: 4 }}>
+                  {`How was your shift with ${doctorRatingHospitalName || 'this hospital'}?`}
+                </Text>
+                <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginBottom: 20 }}>
+                  Share your feedback and help us improve.
+                </Text>
+
+                {/* Stars */}
+                <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <TouchableOpacity
+                      key={n}
+                      onPress={() => { console.log('[Doctor] Rating star pressed', { star: n }); setDoctorRatingStars(n); setDoctorRatingError(''); }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ fontSize: 36, color: n <= doctorRatingStars ? '#F4A261' : '#48484A' }}>★</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Comment */}
+                <TextInput
+                  value={doctorRatingComment}
+                  onChangeText={setDoctorRatingComment}
+                  placeholder="Write a comment (optional)..."
+                  placeholderTextColor="#636366"
+                  multiline
+                  style={{
+                    backgroundColor: '#1C1C1E',
+                    borderRadius: 12,
+                    padding: 12,
+                    fontSize: 14,
+                    color: '#FFFFFF',
+                    minHeight: 80,
+                    textAlignVertical: 'top',
+                    marginBottom: 12,
+                  }}
+                />
+
+                {!!doctorRatingError && (
+                  <Text style={{ fontSize: 13, color: '#EF4444', marginBottom: 8 }}>{doctorRatingError}</Text>
+                )}
+
+                {/* Buttons */}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity
+                    onPress={handleDoctorRatingDone}
+                    activeOpacity={0.8}
+                    style={{ flex: 1, backgroundColor: '#3A3A3C', borderRadius: 999, paddingVertical: 13, alignItems: 'center' }}
+                  >
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>Dismiss</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleSubmitDoctorRating}
+                    disabled={submittingDoctorRating}
+                    activeOpacity={0.85}
+                    style={{ flex: 2, backgroundColor: submittingDoctorRating ? '#636366' : '#FFFFFF', borderRadius: 999, paddingVertical: 13, alignItems: 'center' }}
+                  >
+                    <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>
+                      {submittingDoctorRating ? 'Submitting...' : 'Submit Rating'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
         </Modal>
       </View>
     </DoctorDispatchContext.Provider>
