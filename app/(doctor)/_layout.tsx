@@ -437,6 +437,17 @@ export default function DoctorLayout() {
   // On mount — restore session state after app restart
   useEffect(() => {
     if (!user) return;
+    // Seed online status from DB — ensures 2AM reset is reflected on next app open
+    supabase
+      .from('doctor_profiles')
+      .select('is_online')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data && typeof data.is_online === 'boolean') {
+          setIsOnline(data.is_online);
+        }
+      });
     warmDoctorRatedCache();
     fetchActiveSession().then(() => {
       // Guard 2 — Boot-time: force offline if doctor is not verified
@@ -452,6 +463,32 @@ export default function DoctorLayout() {
       }
     });
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Realtime: live is_online sync (catches 2AM daily reset while app is open) ──
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`doctor-online-status:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'doctor_profiles',
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newRow = payload.new as { is_online?: boolean };
+          if (typeof newRow.is_online === 'boolean') {
+            setIsOnline(newRow.is_online);
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   // Register reset callback so AuthContext can clear dispatch state on sign-out
   useEffect(() => {
@@ -545,17 +582,6 @@ export default function DoctorLayout() {
     };
     toggle();
   }, [isOnline, user]);
-
-  // ── Heartbeat every 60s while online ──
-  useEffect(() => {
-    if (!isOnline || !user) return;
-    const send = async () => {
-      await callEdge('heartbeat', {});
-    };
-    send();
-    const id = setInterval(send, 60000);
-    return () => clearInterval(id);
-  }, [isOnline, user, callEdge]);
 
   // ── Polling fallback — dispatch poll (online only) ──
   useEffect(() => {
@@ -832,12 +858,6 @@ export default function DoctorLayout() {
 
           // 2. Session reconciliation
           await fetchActiveSession();
-
-          // 3. Presence re-establishment — only if doctor was online and is verified
-          if (wasOnlineRef.current && profile?.verification_status === 'verified') {
-            console.log('[AppState] re-establishing presence via heartbeat');
-            callEdge('heartbeat', {}).catch(() => {});
-          }
 
           // 4. Dispatch reconciliation
           if (user) await forceSync();
