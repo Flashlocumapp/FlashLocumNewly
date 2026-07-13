@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   View,
   Text,
@@ -1524,6 +1525,13 @@ export default function RequesterHomeScreen() {
     _cachedRequesterCoords
   );
   const [onlineDoctors, setOnlineDoctors] = useState<{ id: string; lat: number; lng: number }[]>([]);
+  const [markersReady, setMarkersReady] = useState(false);
+  useEffect(() => {
+    if (onlineDoctors.length > 0 && !markersReady) {
+      const t = setTimeout(() => setMarkersReady(true), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [onlineDoctors.length, markersReady]);
 
   const locationSub = useRef<Location.LocationSubscription | null>(null);
 
@@ -1542,63 +1550,65 @@ export default function RequesterHomeScreen() {
   }, []);
 
   // ── Online doctors realtime ──
-  useEffect(() => {
-    if (!user) return;
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
 
-    fetchOnlineDoctors();
+      fetchOnlineDoctors();
 
-    const ch = supabase
-      .channel('online-doctors')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'doctor_profiles' },
-        (payload) => {
-          const row = payload.new as { id?: string; lat?: number; lng?: number; is_online?: boolean } | null;
-          const doctorId = row?.id ?? (payload.old as any)?.id;
-          if (!doctorId) return;
+      const channelName = `online-doctors-${Date.now()}`;
+      const ch = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'doctor_profiles' },
+          (payload) => {
+            const row = payload.new as { id?: string; lat?: number; lng?: number; is_online?: boolean } | null;
+            const doctorId = row?.id ?? (payload.old as any)?.id;
+            if (!doctorId) return;
 
-          // If we have a complete row, handle it directly
-          if (row && row.id && row.is_online !== undefined && (row.lat !== undefined || row.lng !== undefined)) {
-            if (row.is_online && row.lat != null && row.lng != null) {
-              setOnlineDoctors((prev) => {
-                const filtered = prev.filter((d) => d.id !== row.id);
-                return [...filtered, { id: row.id!, lat: row.lat!, lng: row.lng! }];
-              });
-            } else {
-              setOnlineDoctors((prev) => prev.filter((d) => d.id !== doctorId));
-            }
-            return;
-          }
-
-          // Partial row — re-fetch this doctor's full current state
-          supabase
-            .from('doctor_profiles')
-            .select('id, lat, lng, is_online')
-            .eq('id', doctorId)
-            .single()
-            .then(({ data }) => {
-              if (!data) {
-                setOnlineDoctors((prev) => prev.filter((d) => d.id !== doctorId));
-                return;
-              }
-              if (data.is_online && data.lat != null && data.lng != null) {
+            // If we have a complete row, handle it directly
+            if (row && row.id && row.is_online !== undefined && (row.lat !== undefined || row.lng !== undefined)) {
+              if (row.is_online && row.lat != null && row.lng != null) {
                 setOnlineDoctors((prev) => {
-                  const filtered = prev.filter((d) => d.id !== data.id);
-                  return [...filtered, { id: data.id, lat: data.lat!, lng: data.lng! }];
+                  const filtered = prev.filter((d) => d.id !== row.id);
+                  return [...filtered, { id: row.id!, lat: row.lat!, lng: row.lng! }];
                 });
               } else {
-                setOnlineDoctors((prev) => prev.filter((d) => d.id !== data.id));
+                setOnlineDoctors((prev) => prev.filter((d) => d.id !== doctorId));
               }
-            });
-        }
-      )
-      .subscribe((status) => {
-      });
+              return;
+            }
 
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [fetchOnlineDoctors, user]); // eslint-disable-line react-hooks/exhaustive-deps
+            // Partial row — re-fetch this doctor's full current state
+            supabase
+              .from('doctor_profiles')
+              .select('id, lat, lng, is_online')
+              .eq('id', doctorId)
+              .single()
+              .then(({ data }) => {
+                if (!data) {
+                  setOnlineDoctors((prev) => prev.filter((d) => d.id !== doctorId));
+                  return;
+                }
+                if (data.is_online && data.lat != null && data.lng != null) {
+                  setOnlineDoctors((prev) => {
+                    const filtered = prev.filter((d) => d.id !== data.id);
+                    return [...filtered, { id: data.id, lat: data.lat!, lng: data.lng! }];
+                  });
+                } else {
+                  setOnlineDoctors((prev) => prev.filter((d) => d.id !== data.id));
+                }
+              });
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(ch);
+      };
+    }, [fetchOnlineDoctors, user]) // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // Sheet state
   const [sheetState, setSheetState] = useState<SheetState>('idle');
@@ -2814,9 +2824,18 @@ export default function RequesterHomeScreen() {
             <Marker
               key={doc.id}
               coordinate={{ latitude: doc.lat, longitude: doc.lng }}
-              pinColor="#34C759"
-              tracksViewChanges={false}
-            />
+              anchor={{ x: 0.5, y: 0.5 }}
+              tracksViewChanges={!markersReady}
+            >
+              <View
+                renderToHardwareTextureAndroid
+                needsOffscreenAlphaCompositing
+                collapsable={false}
+                style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: '#34C759', borderWidth: 2, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <MaterialCommunityIcons name="stethoscope" size={14} color="#FFFFFF" />
+              </View>
+            </Marker>
           ) : (
             <Marker
               key={doc.id}
