@@ -2809,18 +2809,27 @@ export default function RequesterHomeScreen() {
             <View collapsable={false} style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#F59E0B', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
           </Marker>
         )}
-        {onlineDoctors.map((doc) => (
-          <Marker
-            key={doc.id}
-            coordinate={{ latitude: doc.lat, longitude: doc.lng }}
-            anchor={{ x: 0.5, y: 0.5 }}
-            tracksViewChanges={false}
-          >
-            <View collapsable={false} style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: '#34C759', borderWidth: 2, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
-              <MaterialCommunityIcons name="stethoscope" size={14} color="#FFFFFF" />
-            </View>
-          </Marker>
-        ))}
+        {onlineDoctors.map((doc) =>
+          Platform.OS === 'android' ? (
+            <Marker
+              key={doc.id}
+              coordinate={{ latitude: doc.lat, longitude: doc.lng }}
+              pinColor="#34C759"
+              tracksViewChanges={false}
+            />
+          ) : (
+            <Marker
+              key={doc.id}
+              coordinate={{ latitude: doc.lat, longitude: doc.lng }}
+              anchor={{ x: 0.5, y: 0.5 }}
+              tracksViewChanges={false}
+            >
+              <View collapsable={false} style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: '#34C759', borderWidth: 2, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialCommunityIcons name="stethoscope" size={14} color="#FFFFFF" />
+              </View>
+            </Marker>
+          )
+        )}
       </MapView>
 
 

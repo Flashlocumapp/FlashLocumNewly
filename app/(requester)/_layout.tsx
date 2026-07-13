@@ -29,7 +29,7 @@ export default function RequesterLayout() {
   return (
     <TabBarVisibilityContext.Provider value={{ setTabBarVisible }}>
       <View style={{ flex: 1, backgroundColor: '#F9F9F6' }}>
-        <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
+        <Stack screenOptions={{ headerShown: false, animation: 'none' }} detachInactiveScreens={false}>
           <Stack.Screen name="(home)" />
           <Stack.Screen name="(coverage)" />
           <Stack.Screen name="(account)" />
@@ -51,7 +51,7 @@ export default function RequesterLayout() {
               return (
                 <Pressable
                   key={tab.name}
-                  onPress={() => { router.replace(tab.route); }}
+                  onPress={() => { console.log('[RequesterLayout] tab press:', tab.name); router.navigate(tab.route); }}
                   android_ripple={{ color: 'transparent' }}
                   style={({ pressed }) => ({ flex: 1, alignItems: 'center', paddingVertical: 10, opacity: 1 })}
                 >
