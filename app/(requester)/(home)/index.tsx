@@ -24,7 +24,7 @@ import {
   AppStateStatus,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { Search, MapPin, ArrowRight, X, History, ArrowLeft, Navigation } from 'lucide-react-native';
+import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Feather from '@expo/vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -2800,8 +2800,11 @@ export default function RequesterHomeScreen() {
         minZoomLevel={10}
         maxZoomLevel={18}
         onMapReady={() => {}}
+        showsUserLocation={Platform.OS === 'android'}
+        showsMyLocationButton={Platform.OS === 'android'}
+        {...(Platform.OS === 'ios' ? { followsUserLocation: false } : {})}
       >
-        {userCoords && (
+        {userCoords && Platform.OS === 'ios' && (
           <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
             <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#F59E0B', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
           </Marker>
@@ -2820,39 +2823,7 @@ export default function RequesterHomeScreen() {
         ))}
       </MapView>
 
-      {/* ── LOCATE ME BUTTON ── */}
-      {sheetState === 'idle' && (
-        <TouchableOpacity
-          onPress={() => {
-            console.log('[Map] Locate me pressed', { userCoords });
-            if (userCoords) {
-              mapRef.current?.animateToRegion(
-                { latitude: userCoords.latitude, longitude: userCoords.longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 },
-                600
-              );
-            }
-          }}
-          activeOpacity={0.85}
-          style={{
-            position: 'absolute',
-            top: insets.top + 12,
-            right: 16,
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: '#FFFFFF',
-            justifyContent: 'center',
-            alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.12,
-            shadowRadius: 8,
-            elevation: 5,
-          }}
-        >
-          <Navigation size={20} color="#1C1C1E" />
-        </TouchableOpacity>
-      )}
+
 
       {/* ── SUMMARY BACK BUTTON ── */}
       {sheetState === 'summary' && (
