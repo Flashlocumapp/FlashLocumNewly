@@ -1521,6 +1521,7 @@ export default function RequesterHomeScreen() {
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mapRef = useRef<MapView>(null);
+  const lastRegionRef = useRef<{ latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number } | null>(null);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(
     _cachedRequesterCoords
   );
@@ -1548,6 +1549,20 @@ export default function RequesterHomeScreen() {
     setOnlineDoctors((data ?? []) as { id: string; lat: number; lng: number }[]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Restore map region on tab focus ──
+  useFocusEffect(
+    useCallback(() => {
+      if (lastRegionRef.current && mapRef.current) {
+        const t = setTimeout(() => {
+          if (lastRegionRef.current) {
+            mapRef.current?.animateToRegion(lastRegionRef.current, 0);
+          }
+        }, 100);
+        return () => clearTimeout(t);
+      }
+    }, [])
+  );
 
   // ── Online doctors realtime ──
   useFocusEffect(
@@ -2810,13 +2825,16 @@ export default function RequesterHomeScreen() {
         minZoomLevel={10}
         maxZoomLevel={18}
         onMapReady={() => {}}
-        showsUserLocation={Platform.OS === 'android'}
-        showsMyLocationButton={Platform.OS === 'android'}
-        {...(Platform.OS === 'ios' ? { followsUserLocation: false } : {})}
+        onRegionChangeComplete={(region) => { lastRegionRef.current = region; }}
       >
-        {userCoords && Platform.OS === 'ios' && (
+        {userCoords && (
           <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
-            <View collapsable={false} style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#F59E0B', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
+            <View
+              collapsable={false}
+              renderToHardwareTextureAndroid
+              needsOffscreenAlphaCompositing
+              style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#F59E0B', borderWidth: 2.5, borderColor: '#FFFFFF' }}
+            />
           </Marker>
         )}
         {onlineDoctors.map((doc) =>
