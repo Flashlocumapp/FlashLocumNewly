@@ -477,7 +477,11 @@ export default function DoctorHomeScreen() {
           .select('status')
           .eq('id', sessionId)
           .maybeSingle();
-        return s?.status === 'cancelled';
+        if (s?.status === 'cancelled') {
+          setActiveSession(null);
+          return true;
+        }
+        return false;
       });
     } catch (e: any) {
       Alert.alert('Error', e.message);

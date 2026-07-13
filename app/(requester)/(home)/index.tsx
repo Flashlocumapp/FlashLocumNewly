@@ -1856,6 +1856,7 @@ export default function RequesterHomeScreen() {
         setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
       })
       .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
+        PollingManager.stop('resume-shift');
         const updated = payload?.payload?.session as Partial<CoverageSession>;
         setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
       })
@@ -2587,10 +2588,23 @@ export default function RequesterHomeScreen() {
 
   const handleResumeShift = useCallback(async () => {
     if (!activeSession) return;
+    const sid = activeSession.id;
     try {
-      const data = await callSessionEdge('resume-shift', activeSession.id);
+      const data = await callSessionEdge('resume-shift', sid);
       const updated = data?.session as Partial<CoverageSession>;
       if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      PollingManager.start('resume-shift', async () => {
+        const { data: s } = await supabase
+          .from('coverage_sessions')
+          .select('status')
+          .eq('id', sid)
+          .maybeSingle();
+        if (s?.status === 'active') {
+          fetchActiveSessionRef.current();
+          return true;
+        }
+        return false;
+      });
     } catch (e: any) {
       Alert.alert('Something went wrong', 'Please try again.');
     }
@@ -2732,7 +2746,11 @@ export default function RequesterHomeScreen() {
           .select('status')
           .eq('id', sessionId)
           .maybeSingle();
-        return s?.status === 'cancelled';
+        if (s?.status === 'cancelled') {
+          fetchActiveSessionRef.current();
+          return true;
+        }
+        return false;
       });
     } catch (e: any) {
       Alert.alert('Error', e.message);
