@@ -49,6 +49,8 @@ const REQUESTER_PAID_SESSIONS_KEY = 'requester_paid_sessions_v1';
 const _requesterPaidSessions = new Set<string>();
 // Layer 2: in-flight lock — prevents two async checks racing each other
 const _requesterRatingInFlight = new Set<string>();
+// Sessions dismissed without rating — overlay will NOT re-appear for these
+const _requesterDismissedSessions = new Set<string>();
 
 async function markRequesterSessionPaid(sessionId: string) {
   _requesterPaidSessions.add(sessionId);
@@ -1458,7 +1460,7 @@ export default function RequesterHomeScreen() {
         // Update status synchronously
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
         // Run async check OUTSIDE the updater
-        if (sid && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
+        if (sid && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid) && !_requesterDismissedSessions.has(sid)) {
           _requesterRatingInFlight.add(sid);
           isRequesterSessionPaid(sid).then((alreadyHandled) => {
             _requesterRatingInFlight.delete(sid);
@@ -1489,7 +1491,7 @@ export default function RequesterHomeScreen() {
         // Update status synchronously
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
         // Run async check OUTSIDE the updater
-        if (sid && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
+        if (sid && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid) && !_requesterDismissedSessions.has(sid)) {
           _requesterRatingInFlight.add(sid);
           isRequesterSessionPaid(sid).then((alreadyHandled) => {
             _requesterRatingInFlight.delete(sid);
@@ -1732,7 +1734,7 @@ export default function RequesterHomeScreen() {
       // If session is already paid, use persistent guard to decide whether to show modal
       if (session && session.status === 'requester_paid') {
         // Synchronous check first — avoids async gap
-        if (_requesterPaidSessions.has(session.id) || _requesterRatingInFlight.has(session.id)) {
+        if (_requesterPaidSessions.has(session.id) || _requesterRatingInFlight.has(session.id) || _requesterDismissedSessions.has(session.id)) {
         } else {
           _requesterRatingInFlight.add(session.id);
           // Check AsyncStorage first
@@ -1902,7 +1904,7 @@ export default function RequesterHomeScreen() {
         // Update status synchronously
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
         // Run async check OUTSIDE the updater
-        if (sid && currentSession && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
+        if (sid && currentSession && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid) && !_requesterDismissedSessions.has(sid)) {
           _requesterRatingInFlight.add(sid);
           isRequesterSessionPaid(sid).then((alreadyHandled) => {
             _requesterRatingInFlight.delete(sid);
@@ -1923,7 +1925,7 @@ export default function RequesterHomeScreen() {
         // Update status synchronously
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
         // Run async check OUTSIDE the updater
-        if (sid && currentSession && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid)) {
+        if (sid && currentSession && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid) && !_requesterDismissedSessions.has(sid)) {
           _requesterRatingInFlight.add(sid);
           isRequesterSessionPaid(sid).then((alreadyHandled) => {
             _requesterRatingInFlight.delete(sid);
@@ -2517,7 +2519,7 @@ export default function RequesterHomeScreen() {
 
   const handlePaymentConfirmed = useCallback(() => {
     const snap = activeSessionRef.current;
-    if (snap) {
+    if (snap && !_requesterPaidSessions.has(snap.id) && !_requesterRatingInFlight.has(snap.id) && !_requesterDismissedSessions.has(snap.id)) {
       setConfirmedSession(snap);
       setShowPaymentSuccess(true);
     }
@@ -3598,9 +3600,10 @@ export default function RequesterHomeScreen() {
         ratingError={ratingError}
         submittingRating={submittingRating}
         onDismiss={() => {
-          console.log('[Requester] Rating card dismissed', { sessionId: confirmedSession?.id });
-          // Do NOT call markRequesterSessionPaid here — only successful submission marks as paid.
-          // Dismissing without submitting should allow the overlay to re-appear on next poll.
+          const sid = confirmedSession?.id;
+          console.log('[Requester] Rating card dismissed', { sessionId: sid });
+          // Record as dismissed so the overlay never re-appears for this session
+          if (sid) _requesterDismissedSessions.add(sid);
           setShowPaymentSuccess(false);
           setConfirmedSession(null);
           setActiveSession(null);
