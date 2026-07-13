@@ -907,7 +907,7 @@ const DESATURATED_MAP_STYLE = [
   { featureType: 'road.highway.controlled_access', elementType: 'geometry', stylers: [{ color: '#BCC3CA' }] },
   { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#000000' }] },
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#4169E1' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#728FCE' }] },
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#000000' }] },
   { featureType: 'transit.line', stylers: [{ visibility: 'off' }] },
   { featureType: 'water', elementType: 'geometry.stroke', stylers: [{ color: '#4169E1' }] },
