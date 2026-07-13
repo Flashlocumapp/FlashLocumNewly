@@ -353,17 +353,18 @@ export default function DoctorLayout() {
 
   // ── Central guard: show rating overlay only if session not already rated/dismissed ──
   const maybeShowDoctorRating = useCallback(async (sessionId: string, hospitalName: string, amount?: number) => {
-    if (!sessionId) return;
+    const resolvedSessionId = sessionId || activeSessionIdRef.current || '';
+    if (!resolvedSessionId) return;
     // Synchronous check — blocks instantly before any async work
-    if (_doctorRatedSessions.has(sessionId) || _doctorRatingInFlight.has(sessionId)) {
+    if (_doctorRatedSessions.has(resolvedSessionId) || _doctorRatingInFlight.has(resolvedSessionId)) {
       return;
     }
     // Mark in-flight immediately so concurrent calls are blocked
-    _doctorRatingInFlight.add(sessionId);
+    _doctorRatingInFlight.add(resolvedSessionId);
     // Async check — covers AsyncStorage (survives restarts)
-    const alreadyHandled = await isDoctorSessionRated(sessionId);
+    const alreadyHandled = await isDoctorSessionRated(resolvedSessionId);
     if (alreadyHandled) {
-      _doctorRatingInFlight.delete(sessionId);
+      _doctorRatingInFlight.delete(resolvedSessionId);
       return;
     }
     // Also check the database — ultimate source of truth, survives reinstalls
@@ -373,19 +374,19 @@ export default function DoctorLayout() {
       const { data } = await supabase
         .from('shift_reviews')
         .select('id')
-        .eq('session_id', sessionId)
+        .eq('session_id', resolvedSessionId)
         .eq('reviewer_role', 'doctor')
         .maybeSingle();
       if (data) {
-        markDoctorSessionRated(sessionId); // backfill AsyncStorage
-        _doctorRatingInFlight.delete(sessionId);
+        markDoctorSessionRated(resolvedSessionId); // backfill AsyncStorage
+        _doctorRatingInFlight.delete(resolvedSessionId);
         return;
       }
     } catch (e: any) {
       // Non-fatal — fall through to show card
     }
-    _doctorRatingInFlight.delete(sessionId);
-    setDoctorRatingSessionId(sessionId);
+    _doctorRatingInFlight.delete(resolvedSessionId);
+    setDoctorRatingSessionId(resolvedSessionId);
     setDoctorRatingHospitalName(hospitalName);
     setDoctorRatingStars(0);
     setDoctorRatingComment('');
@@ -739,6 +740,66 @@ export default function DoctorLayout() {
     };
   }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Payment polling safety net — triggers doctor rating overlay if broadcast was missed ──
+  useEffect(() => {
+    if (!activeSessionId || !user) return;
+
+    let stopped = false;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const checkPayment = async () => {
+      if (stopped) return;
+      try {
+        const { data: session } = await supabase
+          .from('coverage_sessions')
+          .select('id, status, hospital_name, total_cost, price')
+          .eq('id', activeSessionId)
+          .maybeSingle();
+
+        if (!session) return;
+
+        if (session.status === 'requester_paid' || session.status === 'settled' || session.status === 'disbursed') {
+          if (intervalId) clearInterval(intervalId);
+          stopped = true;
+          const amount = Number(session.total_cost ?? session.price ?? 0);
+          maybeShowDoctorRating(session.id, session.hospital_name ?? '', amount);
+        }
+      } catch {}
+    };
+
+    // Only start polling if session is in payment_pending or later terminal state
+    const startPolling = async () => {
+      try {
+        const { data: session } = await supabase
+          .from('coverage_sessions')
+          .select('id, status, hospital_name, total_cost, price')
+          .eq('id', activeSessionId)
+          .maybeSingle();
+
+        if (!session) return;
+
+        // If already in a paid state, trigger immediately
+        if (session.status === 'requester_paid' || session.status === 'settled' || session.status === 'disbursed') {
+          const amount = Number(session.total_cost ?? session.price ?? 0);
+          maybeShowDoctorRating(session.id, session.hospital_name ?? '', amount);
+          return;
+        }
+
+        // If in payment_pending, start polling
+        if (session.status === 'payment_pending' || session.status === 'shift_ended') {
+          intervalId = setInterval(checkPayment, 5000);
+        }
+      } catch {}
+    };
+
+    startPolling();
+
+    return () => {
+      stopped = true;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [activeSessionId, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Merged doctor-user channel: scores + payment confirmation via user:{user.id} ──
   // The backend broadcasts PAYMENT_CONFIRMED to user:{doctor_id} (not doctor-user:{id}),
   // so we subscribe to user:{user.id} here as a reliable fallback alongside the session channel.
@@ -802,15 +863,7 @@ export default function DoctorLayout() {
         // Record online state and timestamp before going to background
         wasOnlineRef.current = isOnlineRef.current;
         doctorBackgroundedAtRef.current = Date.now();
-        if (isOnlineRef.current) {
-          console.log('[AppState] background — going offline');
-          fetchWithAuth(`${EDGE_BASE}/go-offline`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}),
-          }).catch(() => {});
-          setIsOnline(false);
-        }
+        console.log('[AppState] background — recording state, staying online');
       }
       if (state === 'active') {
         const elapsed = Date.now() - doctorBackgroundedAtRef.current;
