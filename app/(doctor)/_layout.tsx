@@ -41,12 +41,9 @@ let _layoutCachedCoords: { lat: number; lng: number } | null = null;
 const DOCTOR_RATED_SESSIONS_KEY = 'doctor_rated_sessions_v1';
 // Layer 1: synchronous in-memory Set — blocks concurrent triggers instantly
 const _doctorRatedSessions = new Set<string>();
-// Layer 2: in-flight lock — prevents two async checks racing each other
-const _doctorRatingInFlight = new Set<string>();
 
 async function markDoctorSessionRated(sessionId: string) {
   _doctorRatedSessions.add(sessionId);
-  _doctorRatingInFlight.delete(sessionId);
   try {
     const existing = await AsyncStorage.getItem(DOCTOR_RATED_SESSIONS_KEY);
     const arr: string[] = existing ? JSON.parse(existing) : [];
@@ -60,7 +57,6 @@ async function markDoctorSessionRated(sessionId: string) {
 async function isDoctorSessionRated(sessionId: string): Promise<boolean> {
   // Synchronous check first — no async gap
   if (_doctorRatedSessions.has(sessionId)) return true;
-  if (_doctorRatingInFlight.has(sessionId)) return true;
   try {
     const existing = await AsyncStorage.getItem(DOCTOR_RATED_SESSIONS_KEY);
     const arr: string[] = existing ? JSON.parse(existing) : [];
@@ -352,40 +348,14 @@ export default function DoctorLayout() {
   }, [user, callEdge]);
 
   // ── Central guard: show rating overlay only if session not already rated/dismissed ──
-  const maybeShowDoctorRating = useCallback(async (sessionId: string, hospitalName: string, amount?: number) => {
+  const maybeShowDoctorRating = useCallback((sessionId: string, hospitalName: string, amount?: number) => {
     const resolvedSessionId = sessionId || activeSessionIdRef.current || '';
     if (!resolvedSessionId) return;
-    // Synchronous check — blocks instantly before any async work
-    if (_doctorRatedSessions.has(resolvedSessionId) || _doctorRatingInFlight.has(resolvedSessionId)) {
-      return;
-    }
-    // Mark in-flight immediately so concurrent calls are blocked
-    _doctorRatingInFlight.add(resolvedSessionId);
-    // Async check — covers AsyncStorage (survives restarts)
-    const alreadyHandled = await isDoctorSessionRated(resolvedSessionId);
-    if (alreadyHandled) {
-      _doctorRatingInFlight.delete(resolvedSessionId);
-      return;
-    }
-    // Also check the database — ultimate source of truth, survives reinstalls
-    // Token check is only needed for the DB query — if token unavailable, show card anyway
-    // (the DB check is a best-effort dedup, not a hard gate)
-    try {
-      const { data } = await supabase
-        .from('shift_reviews')
-        .select('id')
-        .eq('session_id', resolvedSessionId)
-        .eq('reviewer_role', 'doctor')
-        .maybeSingle();
-      if (data) {
-        markDoctorSessionRated(resolvedSessionId); // backfill AsyncStorage
-        _doctorRatingInFlight.delete(resolvedSessionId);
-        return;
-      }
-    } catch (e: any) {
-      // Non-fatal — fall through to show card
-    }
-    _doctorRatingInFlight.delete(resolvedSessionId);
+
+    // Synchronous dedup — if already rated, skip immediately
+    if (_doctorRatedSessions.has(resolvedSessionId)) return;
+
+    // Show the overlay immediately — same pattern as requester side
     setDoctorRatingSessionId(resolvedSessionId);
     setDoctorRatingHospitalName(hospitalName);
     setDoctorRatingStars(0);
@@ -393,7 +363,25 @@ export default function DoctorLayout() {
     setDoctorRatingError('');
     setDoctorRatingAmount(amount ?? 0);
     setShowDoctorRating(true);
-  }, []);
+
+    // Background dedup check — if a review already exists in the DB, dismiss silently
+    void Promise.resolve(
+      supabase
+        .from('shift_reviews')
+        .select('id')
+        .eq('session_id', resolvedSessionId)
+        .eq('reviewer_role', 'doctor')
+        .maybeSingle()
+    ).then(({ data }) => {
+      if (data) {
+        // Review already submitted — dismiss the overlay and mark as rated
+        markDoctorSessionRated(resolvedSessionId);
+        setShowDoctorRating(false);
+      }
+    }).catch(() => {
+      // Non-fatal — leave overlay visible
+    });
+  }, [activeSessionIdRef]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch active session from edge function
   const fetchActiveSession = useCallback(async () => {
@@ -409,10 +397,7 @@ export default function DoctorLayout() {
       setActiveJobCount(jobCount);
       // If session is already paid, use persistent guard to decide whether to show overlay
       if (session && (session.status === 'requester_paid' || session.status === 'settled')) {
-        // Synchronous check before entering async maybeShowDoctorRating
-        if (!_doctorRatedSessions.has(session.id) && !_doctorRatingInFlight.has(session.id)) {
-          maybeShowDoctorRating(session.id, session.hospital_name ?? '', session.price ?? 0);
-        }
+        maybeShowDoctorRating(session.id, session.hospital_name ?? '', session.price ?? 0);
       }
     } catch (e: any) {
       // non-fatal
@@ -708,66 +693,6 @@ export default function DoctorLayout() {
     };
   }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Payment polling safety net — triggers doctor rating overlay if broadcast was missed ──
-  useEffect(() => {
-    if (!activeSessionId || !user) return;
-
-    let stopped = false;
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-
-    const checkPayment = async () => {
-      if (stopped) return;
-      try {
-        const { data: session } = await supabase
-          .from('coverage_sessions')
-          .select('id, status, hospital_name, total_cost, price')
-          .eq('id', activeSessionId)
-          .maybeSingle();
-
-        if (!session) return;
-
-        if (session.status === 'requester_paid' || session.status === 'settled' || session.status === 'disbursed') {
-          if (intervalId) clearInterval(intervalId);
-          stopped = true;
-          const amount = Number(session.total_cost ?? session.price ?? 0);
-          maybeShowDoctorRating(session.id, session.hospital_name ?? '', amount);
-        }
-      } catch {}
-    };
-
-    // Only start polling if session is in payment_pending or later terminal state
-    const startPolling = async () => {
-      try {
-        const { data: session } = await supabase
-          .from('coverage_sessions')
-          .select('id, status, hospital_name, total_cost, price')
-          .eq('id', activeSessionId)
-          .maybeSingle();
-
-        if (!session) return;
-
-        // If already in a paid state, trigger immediately
-        if (session.status === 'requester_paid' || session.status === 'settled' || session.status === 'disbursed') {
-          const amount = Number(session.total_cost ?? session.price ?? 0);
-          maybeShowDoctorRating(session.id, session.hospital_name ?? '', amount);
-          return;
-        }
-
-        // If in payment_pending, start polling
-        if (session.status === 'payment_pending' || session.status === 'shift_ended') {
-          intervalId = setInterval(checkPayment, 5000);
-        }
-      } catch {}
-    };
-
-    startPolling();
-
-    return () => {
-      stopped = true;
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [activeSessionId, user]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── Merged doctor-user channel: scores + payment confirmation via user:{user.id} ──
   // The backend broadcasts PAYMENT_CONFIRMED to user:{doctor_id} (not doctor-user:{id}),
   // so we subscribe to user:{user.id} here as a reliable fallback alongside the session channel.
@@ -997,11 +922,8 @@ export default function DoctorLayout() {
   // ── Doctor Rating — dismiss ──
   const handleDoctorRatingDone = useCallback(() => {
     const sid = doctorRatingSessionId;
-    if (sid) {
-      _doctorRatingInFlight.delete(sid);
-      // Do NOT call markDoctorSessionRated here — only successful submission marks as rated.
-      // Dismissing without submitting should allow the overlay to re-appear on next poll.
-    }
+    // Do NOT call markDoctorSessionRated here — only successful submission marks as rated.
+    // Dismissing without submitting should allow the overlay to re-appear on next poll.
     console.log('[Doctor] Rating card dismissed', { sessionId: sid });
     setShowDoctorRating(false);
     setDoctorRatingSessionId(null);
