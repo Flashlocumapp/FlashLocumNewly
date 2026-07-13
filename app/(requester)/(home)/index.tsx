@@ -1522,6 +1522,7 @@ export default function RequesterHomeScreen() {
 
   const mapRef = useRef<MapView>(null);
   const lastRegionRef = useRef<{ latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number } | null>(null);
+  const [mapRegion, setMapRegion] = useState(LAGOS_REGION);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(
     _cachedRequesterCoords
   );
@@ -1557,8 +1558,9 @@ export default function RequesterHomeScreen() {
         const t = setTimeout(() => {
           if (lastRegionRef.current) {
             mapRef.current?.animateToRegion(lastRegionRef.current, 0);
+            setMapRegion(lastRegionRef.current);
           }
-        }, 100);
+        }, 300);
         return () => clearTimeout(t);
       }
     }, [])
@@ -1984,24 +1986,28 @@ export default function RequesterHomeScreen() {
           _hasInitialFix = true;
           _cachedRequesterCoords = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude };
           setUserCoords({ latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude });
-          mapRef.current?.animateToRegion({
+          const initialRegion = {
             latitude: immediatePos.coords.latitude,
             longitude: immediatePos.coords.longitude,
             latitudeDelta: 0.12,
             longitudeDelta: 0.12,
-          }, 800);
+          };
+          mapRef.current?.animateToRegion(initialRegion, 800);
+          setMapRegion(initialRegion);
         }
         locationSub.current = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.Highest, timeInterval: 2000, distanceInterval: 1, mayShowUserSettingsDialog: true },
           (loc) => {
             if (!_hasInitialFix) {
               _hasInitialFix = true;
-              mapRef.current?.animateToRegion({
+              const watchRegion = {
                 latitude: loc.coords.latitude,
                 longitude: loc.coords.longitude,
                 latitudeDelta: 0.12,
                 longitudeDelta: 0.12,
-              }, 800);
+              };
+              mapRef.current?.animateToRegion(watchRegion, 800);
+              setMapRegion(watchRegion);
             }
             _cachedRequesterCoords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
             setUserCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
@@ -2819,22 +2825,23 @@ export default function RequesterHomeScreen() {
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
-        initialRegion={LAGOS_REGION}
+        region={mapRegion}
         customMapStyle={MINIMALIST_MAP_STYLE}
         minZoomLevel={10}
         maxZoomLevel={18}
         onMapReady={() => {}}
-        onRegionChangeComplete={(region) => { lastRegionRef.current = region; }}
+        onRegionChangeComplete={(region) => {
+          lastRegionRef.current = region;
+          setMapRegion(region);
+        }}
       >
         {userCoords && (
-          <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
-            <View
-              collapsable={false}
-              renderToHardwareTextureAndroid
-              needsOffscreenAlphaCompositing
-              style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#F59E0B', borderWidth: 2.5, borderColor: '#FFFFFF' }}
-            />
-          </Marker>
+          <Marker
+            coordinate={userCoords}
+            anchor={{ x: 0.5, y: 0.5 }}
+            tracksViewChanges={false}
+            image={require('../../../assets/images/amber-dot.png')}
+          />
         )}
         {onlineDoctors.map((doc) => (
           <Marker
