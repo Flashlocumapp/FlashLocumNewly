@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { View, Text, Pressable, Animated, Platform } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { TabBarVisibilityContext, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 
@@ -39,29 +39,28 @@ export default function RequesterLayout() {
           <Animated.View style={{
             position: 'absolute',
             bottom: 0, left: 0, right: 0,
-            backgroundColor: '#F9F9F6',
-            flexDirection: 'row',
-            paddingBottom: insets.bottom,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
             transform: [{ translateY: tabBarAnim }],
           }}>
-            {REQUESTER_TABS.map((tab) => {
-              const isActive = (segments as string[]).includes(tab.name);
-              return (
-                <Pressable
-                  key={tab.name}
-                  onPress={() => { router.replace(tab.route); }}
-                  android_ripple={{ color: 'transparent' }}
-                  style={({ pressed }) => ({ flex: 1, alignItems: 'center', paddingVertical: 10, opacity: 1 })}
-                >
-                  <MaterialIcons name={tab.icon} size={24} color={isActive ? '#1C1C1E' : '#8E8E93'} />
-                  <Text style={{ fontSize: 10, fontWeight: isActive ? '600' : '400', color: isActive ? '#1C1C1E' : '#8E8E93', marginTop: 3 }}>
-                    {tab.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            <SafeAreaView edges={['bottom']} style={{ backgroundColor: '#F9F9F6', borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+              <View style={{ flexDirection: 'row', backgroundColor: '#F9F9F6', borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+                {REQUESTER_TABS.map((tab) => {
+                  const isActive = (segments as string[]).includes(tab.name);
+                  return (
+                    <Pressable
+                      key={tab.name}
+                      onPress={() => { router.replace(tab.route); }}
+                      android_ripple={{ color: 'transparent' }}
+                      style={({ pressed }) => ({ flex: 1, alignItems: 'center', paddingVertical: 10, opacity: 1 })}
+                    >
+                      <MaterialIcons name={tab.icon} size={24} color={isActive ? '#1C1C1E' : '#8E8E93'} />
+                      <Text style={{ fontSize: 10, fontWeight: isActive ? '600' : '400', color: isActive ? '#1C1C1E' : '#8E8E93', marginTop: 3 }}>
+                        {tab.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </SafeAreaView>
           </Animated.View>
         )}
       </View>

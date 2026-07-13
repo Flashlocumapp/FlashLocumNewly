@@ -539,7 +539,7 @@ function RequesterUpcomingCard({
     console.log('[Requester Home] Fetching live doctor stats for doctor_id:', session.doctor_id);
     supabase
       .from('doctor_profiles')
-      .select('rating, reliability_score')
+      .select('rating, reliability')
       .eq('id', session.doctor_id)
       .single()
       .then(({ data, error }) => {
@@ -550,7 +550,7 @@ function RequesterUpcomingCard({
         } else {
           console.log('[Requester Home] Live doctor stats fetched (upcoming):', data);
           setLiveRating(data.rating ?? 5.0);
-          setLiveReliability(data.reliability_score ?? 100);
+          setLiveReliability(data.reliability ?? 100);
         }
       });
   }, [session.doctor_id]);
@@ -702,7 +702,7 @@ function RequesterActiveCard({
     console.log('[Requester Home] Fetching live doctor stats for active session, doctor_id:', session.doctor_id);
     supabase
       .from('doctor_profiles')
-      .select('rating, reliability_score')
+      .select('rating, reliability')
       .eq('id', session.doctor_id)
       .single()
       .then(({ data, error }) => {
@@ -713,7 +713,7 @@ function RequesterActiveCard({
         } else {
           console.log('[Requester Home] Live doctor stats fetched (active):', data);
           setLiveRatingActive(data.rating ?? 5.0);
-          setLiveReliabilityActive(data.reliability_score ?? 100);
+          setLiveReliabilityActive(data.reliability ?? 100);
         }
       });
   }, [session.doctor_id]);
@@ -1282,7 +1282,7 @@ function RequesterRatingCard({
         <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' }} />
       </TouchableWithoutFeedback>
       {/* Card container — tap inside dismisses keyboard only, not the card */}
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, pointerEvents: 'box-none' }}>
+      <View pointerEvents="box-none" style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
         <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
           <View style={{ backgroundColor: '#2C2C2E', borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 }}>
             {/* Payment confirmation banner */}

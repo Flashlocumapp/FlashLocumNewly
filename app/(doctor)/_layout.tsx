@@ -283,7 +283,7 @@ export default function DoctorLayout() {
       try {
         const { data, error } = await supabase
           .from('doctor_profiles')
-          .select('rating, reliability_score')
+          .select('rating, reliability')
           .eq('id', user.id)
           .single();
         if (error) {
@@ -291,8 +291,8 @@ export default function DoctorLayout() {
         }
         if (data) {
           setDoctorRatingScore(data.rating ?? null);
-          setDoctorReliabilityScore(data.reliability_score ?? null);
-          setCached('doctor_scores', { rating: data.rating ?? 5.0, reliability: data.reliability_score ?? 100 });
+          setDoctorReliabilityScore(data.reliability ?? null);
+          setCached('doctor_scores', { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
         }
       } catch (e: any) {
         // non-fatal
@@ -1155,7 +1155,7 @@ export default function DoctorLayout() {
             <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' }} />
           </TouchableWithoutFeedback>
           {/* Card container — tap inside dismisses keyboard only, not the card */}
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, pointerEvents: 'box-none' }}>
+          <View pointerEvents="box-none" style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
             <TouchableWithoutFeedback onPress={() => Keyboard.dismiss()}>
               <View style={{ backgroundColor: '#2C2C2E', borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 }}>
                 {/* Payment confirmation banner */}
