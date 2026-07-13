@@ -409,13 +409,13 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={onClose}
-        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}
-      >
-        <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={onClose}
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
             <View style={{ backgroundColor: '#2C2C2E', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40 }}>
               {/* Drag handle — tapping or dragging down closes */}
               <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
@@ -425,7 +425,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
                 />
               </TouchableOpacity>
 
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 24, paddingTop: 8 }}>
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 24, paddingTop: 8 }}>
                 {/* Label */}
                 <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 10 }}>
                   {statusSheetLabel}
@@ -495,6 +495,8 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
                         placeholderTextColor="#636366"
                         multiline
                         numberOfLines={3}
+                        scrollEnabled={false}
+                        blurOnSubmit={false}
                         style={{ backgroundColor: '#1C1C1E', borderRadius: 12, padding: 12, fontSize: 14, color: '#FFFFFF', fontFamily: 'Inter_400Regular', minHeight: 80, textAlignVertical: 'top', marginBottom: 12 }}
                       />
                       {!!error && <Text style={{ fontSize: 13, color: '#EF4444', marginBottom: 8 }}>{error}</Text>}
@@ -514,9 +516,9 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
                 )}
               </ScrollView>
             </View>
-          </KeyboardAvoidingView>
+          </TouchableOpacity>
         </TouchableOpacity>
-      </TouchableOpacity>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
