@@ -3668,10 +3668,11 @@ export default function RequesterHomeScreen() {
       >
         <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
           <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
-            <TouchableWithoutFeedback>
+            <Pressable onPress={e => e.stopPropagation()}>
               <View style={{ backgroundColor: '#1C1C1E', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 }}>
                   <TouchableOpacity onPress={() => {
+                    console.log('[DatePicker] Done button pressed');
                     setShowDatePicker(false);
                   }}>
                     <Text style={{ fontSize: 16, fontWeight: '600', color: '#FFFFFF' }}>Done</Text>
@@ -3686,6 +3687,11 @@ export default function RequesterHomeScreen() {
                   style={{ backgroundColor: '#1C1C1E' }}
                   textColor="#FFFFFF"
                   onChange={(event, date) => {
+                    if (event.type === 'dismissed') {
+                      console.log('[DatePicker] Android dismissed');
+                      setShowDatePicker(false);
+                      return;
+                    }
                     if (date) {
                       // WAT validation: snap back to today if before WAT today
                       const watTodayStr = watNow.toISOString().split('T')[0];
@@ -3721,7 +3727,7 @@ export default function RequesterHomeScreen() {
                   }}
                 />
               </View>
-            </TouchableWithoutFeedback>
+            </Pressable>
           </View>
         </TouchableWithoutFeedback>
       </Modal>
