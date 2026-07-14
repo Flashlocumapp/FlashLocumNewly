@@ -1941,7 +1941,7 @@ export default function RequesterHomeScreen() {
         _cachedRequesterRegion = region;
         mapRef.current.setCamera({
         center: { latitude: _cachedRequesterCoords!.latitude, longitude: _cachedRequesterCoords!.longitude },
-        zoom: 13,
+        zoom: 12,
       });
       }
       return () => {

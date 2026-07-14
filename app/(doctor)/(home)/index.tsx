@@ -388,7 +388,7 @@ export default function DoctorHomeScreen() {
           _cachedDoctorRegion = region;
           mapRef.current.setCamera({
         center: { latitude: _cachedDoctorCoords!.latitude, longitude: _cachedDoctorCoords!.longitude },
-        zoom: 13,
+        zoom: 12,
       });
         }
       } catch {
@@ -417,7 +417,7 @@ export default function DoctorHomeScreen() {
         _cachedDoctorRegion = { ..._cachedDoctorCoords, latitudeDelta: 0.12, longitudeDelta: 0.12 };
         mapRef.current.setCamera({
           center: { latitude: _cachedDoctorCoords.latitude, longitude: _cachedDoctorCoords.longitude },
-          zoom: 13,
+          zoom: 12,
         });
       }
       return () => {
