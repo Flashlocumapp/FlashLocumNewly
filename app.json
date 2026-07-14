@@ -2,7 +2,7 @@
   "expo": {
     "name": "FlashLocum",
     "slug": "flashlocum",
-    "version": "1.0.3",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
@@ -34,7 +34,7 @@
         "backgroundColor": "#1a1a1a"
       },
       "package": "com.flashlocum.app",
-      "versionCode": 4,
+      "versionCode": 1,
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU"
