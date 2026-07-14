@@ -3659,78 +3659,126 @@ export default function RequesterHomeScreen() {
         }}
       />
 
-      {/* Date picker modal — ITEM 5.2 maximumDate */}
-      <Modal
-        visible={showDatePicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowDatePicker(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
-          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
-            <Pressable onPress={e => e.stopPropagation()}>
-              <View style={{ backgroundColor: '#1C1C1E', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 }}>
-                  <TouchableOpacity onPress={() => {
-                    console.log('[DatePicker] Done button pressed');
-                    setShowDatePicker(false);
-                  }}>
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: '#FFFFFF' }}>Done</Text>
-                  </TouchableOpacity>
-                </View>
-                <DateTimePicker
-                  value={shiftDate}
-                  mode="date"
-                  display="spinner"
-                  minimumDate={new Date()}
-                  maximumDate={maxDate}
-                  style={{ backgroundColor: '#1C1C1E' }}
-                  textColor="#FFFFFF"
-                  onChange={(event, date) => {
-                    if (event.type === 'dismissed') {
-                      console.log('[DatePicker] Android dismissed');
+      {/* Date picker — platform split */}
+      {Platform.OS === 'android' ? (
+        showDatePicker && (
+          <DateTimePicker
+            value={shiftDate}
+            mode="date"
+            display="default"
+            minimumDate={new Date()}
+            maximumDate={maxDate}
+            onChange={(event, date) => {
+              // Always close first on Android
+              setShowDatePicker(false);
+              console.log('[DatePicker] Android onChange', event.type, date);
+              if (event.type === 'dismissed' || !date) return;
+              // WAT validation: snap back to today if before WAT today
+              const watTodayStr = watNow.toISOString().split('T')[0];
+              const selectedStr = date.toISOString().split('T')[0];
+              if (selectedStr < watTodayStr) {
+                const todayWAT = new Date(watNow);
+                todayWAT.setUTCHours(0, 0, 0, 0);
+                setShiftDate(todayWAT);
+                setStartTime(prev => {
+                  const updated = new Date(todayWAT);
+                  updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                  return updated;
+                });
+                setEndTime(prev => {
+                  const updated = new Date(todayWAT);
+                  updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                  return updated;
+                });
+              } else {
+                setShiftDate(date);
+                setStartTime(prev => {
+                  const updated = new Date(date);
+                  updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                  return updated;
+                });
+                setEndTime(prev => {
+                  const updated = new Date(date);
+                  updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                  return updated;
+                });
+              }
+            }}
+          />
+        )
+      ) : (
+        <Modal
+          visible={showDatePicker}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setShowDatePicker(false)}>
+            <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+              <Pressable onPress={e => e.stopPropagation()}>
+                <View style={{ backgroundColor: '#1C1C1E', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: insets.bottom + 8 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 }}>
+                    <TouchableOpacity onPress={() => {
+                      console.log('[DatePicker] Done button pressed');
                       setShowDatePicker(false);
-                      return;
-                    }
-                    if (date) {
-                      // WAT validation: snap back to today if before WAT today
-                      const watTodayStr = watNow.toISOString().split('T')[0];
-                      const selectedStr = date.toISOString().split('T')[0];
-                      if (selectedStr < watTodayStr) {
-                        const todayWAT = new Date(watNow);
-                        todayWAT.setUTCHours(0, 0, 0, 0);
-                        setShiftDate(todayWAT);
-                        setStartTime(prev => {
-                          const updated = new Date(todayWAT);
-                          updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
-                          return updated;
-                        });
-                        setEndTime(prev => {
-                          const updated = new Date(todayWAT);
-                          updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
-                          return updated;
-                        });
-                      } else {
-                        setShiftDate(date);
-                        setStartTime(prev => {
-                          const updated = new Date(date);
-                          updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
-                          return updated;
-                        });
-                        setEndTime(prev => {
-                          const updated = new Date(date);
-                          updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
-                          return updated;
-                        });
+                    }}>
+                      <Text style={{ fontSize: 16, fontWeight: '600', color: '#FFFFFF' }}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <DateTimePicker
+                    value={shiftDate}
+                    mode="date"
+                    display="spinner"
+                    minimumDate={new Date()}
+                    maximumDate={maxDate}
+                    style={{ backgroundColor: '#1C1C1E' }}
+                    textColor="#FFFFFF"
+                    onChange={(event, date) => {
+                      console.log('[DatePicker] iOS onChange', event.type, date);
+                      if (event.type === 'dismissed') {
+                        setShowDatePicker(false);
+                        return;
                       }
-                    }
-                  }}
-                />
-              </View>
-            </Pressable>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+                      if (date) {
+                        // WAT validation: snap back to today if before WAT today
+                        const watTodayStr = watNow.toISOString().split('T')[0];
+                        const selectedStr = date.toISOString().split('T')[0];
+                        if (selectedStr < watTodayStr) {
+                          const todayWAT = new Date(watNow);
+                          todayWAT.setUTCHours(0, 0, 0, 0);
+                          setShiftDate(todayWAT);
+                          setStartTime(prev => {
+                            const updated = new Date(todayWAT);
+                            updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                            return updated;
+                          });
+                          setEndTime(prev => {
+                            const updated = new Date(todayWAT);
+                            updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                            return updated;
+                          });
+                        } else {
+                          setShiftDate(date);
+                          setStartTime(prev => {
+                            const updated = new Date(date);
+                            updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                            return updated;
+                          });
+                          setEndTime(prev => {
+                            const updated = new Date(date);
+                            updated.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+                            return updated;
+                          });
+                        }
+                      }
+                    }}
+                  />
+                </View>
+              </Pressable>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      )}
 
       {/* Start time picker modal — ITEM 4: custom picker */}
       <CustomTimePicker
