@@ -66,6 +66,9 @@
       "typedRoutes": true
     },
     "extra": {
+      "eas": {
+        "projectId": "2e1c9549-69cf-4cd3-b5ca-4b922181897b"
+      },
       "router": {},
       "backendUrl": "https://bm7mn4rkap7zw8ax5ddfbmfaz9q8m3ru.app.specular.dev",
       "oneSignalAppId": "e865db07-c6ae-412a-ba03-d139e934eeb0",
