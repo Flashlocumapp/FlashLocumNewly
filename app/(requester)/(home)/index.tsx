@@ -1567,6 +1567,52 @@ export default function RequesterHomeScreen() {
     setOnlineDoctors((data ?? []) as { id: string; lat: number; lng: number }[]);
   }, [user]);
 
+  const fetchDoctorWithRetry = useCallback(async (doctorId: string) => {
+    // Wait for both DB writes to land before reading
+    await new Promise(resolve => setTimeout(resolve, 800));
+    const { data: first } = await supabase
+      .from('doctor_profiles')
+      .select('id, lat, lng, is_online')
+      .eq('id', doctorId)
+      .single();
+
+    if (!first) {
+      setOnlineDoctors((prev) => prev.filter((d) => d.id !== doctorId));
+      return;
+    }
+    if (first.is_online && first.lat != null && first.lng != null) {
+      setOnlineDoctors((prev) => {
+        const filtered = prev.filter((d) => d.id !== first.id);
+        return [...filtered, { id: first.id, lat: first.lat!, lng: first.lng! }];
+      });
+      return;
+    }
+    if (!first.is_online) {
+      // Explicitly offline — remove immediately
+      setOnlineDoctors((prev) => prev.filter((d) => d.id !== doctorId));
+      return;
+    }
+    // is_online=true but lat still null — second write hasn't landed yet, retry
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    const { data: second } = await supabase
+      .from('doctor_profiles')
+      .select('id, lat, lng, is_online')
+      .eq('id', doctorId)
+      .single();
+    if (!second) {
+      setOnlineDoctors((prev) => prev.filter((d) => d.id !== doctorId));
+      return;
+    }
+    if (second.is_online && second.lat != null && second.lng != null) {
+      setOnlineDoctors((prev) => {
+        const filtered = prev.filter((d) => d.id !== second.id);
+        return [...filtered, { id: second.id, lat: second.lat!, lng: second.lng! }];
+      });
+    } else {
+      setOnlineDoctors((prev) => prev.filter((d) => d.id !== second.id));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Online doctors realtime ──
   useEffect(() => {
     if (!user) return;
@@ -1596,26 +1642,8 @@ export default function RequesterHomeScreen() {
             return;
           }
 
-          // Partial row — re-fetch this doctor's full current state
-          supabase
-            .from('doctor_profiles')
-            .select('id, lat, lng, is_online')
-            .eq('id', doctorId)
-            .single()
-            .then(({ data }) => {
-              if (!data) {
-                setOnlineDoctors((prev) => prev.filter((d) => d.id !== doctorId));
-                return;
-              }
-              if (data.is_online && data.lat != null && data.lng != null) {
-                setOnlineDoctors((prev) => {
-                  const filtered = prev.filter((d) => d.id !== data.id);
-                  return [...filtered, { id: data.id, lat: data.lat!, lng: data.lng! }];
-                });
-              } else {
-                setOnlineDoctors((prev) => prev.filter((d) => d.id !== data.id));
-              }
-            });
+          // Partial row — re-fetch with retry to handle Android two-write race
+          fetchDoctorWithRetry(doctorId);
         }
       )
       .subscribe((status) => {
@@ -1624,7 +1652,7 @@ export default function RequesterHomeScreen() {
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [fetchOnlineDoctors, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchOnlineDoctors, fetchDoctorWithRetry, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sheet state
   const [sheetState, setSheetState] = useState<SheetState>('idle');
