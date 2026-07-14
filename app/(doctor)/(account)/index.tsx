@@ -319,17 +319,16 @@ export default function DoctorAccountScreen() {
             setDeleting(true);
             try {
               console.log('[Doctor Account] Calling delete-account edge function');
-              try {
-                const res = await fetchWithAuth(
-                  'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/delete-account',
-                  {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                  },
-                );
-                console.log('[Doctor Account] delete-account response status:', res.status);
-              } catch (fetchErr) {
-                console.warn('[Doctor Account] delete-account fetch error (continuing with signOut):', fetchErr);
+              const res = await fetchWithAuth(
+                'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/delete-account',
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                },
+              );
+              console.log('[Doctor Account] delete-account response status:', res.status);
+              if (!res.ok) {
+                throw new Error('Account deletion failed on server. Please try again.');
               }
               console.log('[Doctor Account] Signing out after delete');
               await supabase.auth.signOut();

@@ -33,7 +33,15 @@ export default function IntroScreen() {
   useEffect(() => {
     unmountedRef.current = false;
 
-    const destination = dest ? decodeURIComponent(dest) : '/(auth)/role-select';
+    const ALLOWED_DESTINATIONS = [
+      '/(auth)/role-select',
+      '/(doctor)/(home)',
+      '/(requester)/(home)',
+      '/(onboarding)/doctor/basic-profile',
+      '/(onboarding)/requester/basic-profile',
+    ];
+    const decoded = dest ? decodeURIComponent(dest) : '/(auth)/role-select';
+    const destination = ALLOWED_DESTINATIONS.includes(decoded) ? decoded : '/(auth)/role-select';
 
     const runPhrase = (index: number) => {
       if (unmountedRef.current) return;
