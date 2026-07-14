@@ -1549,6 +1549,7 @@ export default function RequesterHomeScreen() {
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(
     _cachedRequesterCoords
   );
+  const [userMarkerTracksViews, setUserMarkerTracksViews] = useState(true);
   const [onlineDoctors, setOnlineDoctors] = useState<{ id: string; lat: number; lng: number }[]>([]);
 
   const locationSub = useRef<Location.LocationSubscription | null>(null);
@@ -2011,6 +2012,13 @@ export default function RequesterHomeScreen() {
 
   // ─── GPS diagnostic watcher ───────────────────────────────────────────────────
   useEffect(() => {
+  }, [userCoords]);
+
+  useEffect(() => {
+    if (!userCoords) return;
+    setUserMarkerTracksViews(true);
+    const t = setTimeout(() => setUserMarkerTracksViews(false), 500);
+    return () => clearTimeout(t);
   }, [userCoords]);
 
   // ─── Re-focus map on tab return ──────────────────────────────────────────────
@@ -2838,7 +2846,7 @@ export default function RequesterHomeScreen() {
         onMapReady={() => {}}
       >
         {userCoords && (
-          <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+          <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={userMarkerTracksViews}>
             <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#F59E0B', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
           </Marker>
         )}
