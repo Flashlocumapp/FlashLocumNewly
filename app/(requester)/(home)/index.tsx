@@ -132,6 +132,9 @@ const LAGOS_REGION = {
   longitudeDelta: 0.12,
 };
 
+const MAP_LAT_OFFSET = -0.03;  // shifts centre south → pin appears higher
+const MAP_LNG_OFFSET = 0.03;   // shifts centre east → pin appears to the left
+
 const LAGOS_BOUNDS = {
   northeast: { lat: 6.7027, lng: 3.7042 },
   southwest: { lat: 6.3933, lng: 2.7076 },
@@ -1897,7 +1900,7 @@ export default function RequesterHomeScreen() {
           _hasInitialFix = true;
           _cachedRequesterCoords = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude };
           setUserCoords({ latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude });
-          _cachedRequesterRegion = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude, latitudeDelta: 0.12, longitudeDelta: 0.12 };
+          _cachedRequesterRegion = { latitude: immediatePos.coords.latitude + MAP_LAT_OFFSET, longitude: immediatePos.coords.longitude + MAP_LNG_OFFSET, latitudeDelta: 0.12, longitudeDelta: 0.12 };
           mapRef.current?.animateToRegion(_cachedRequesterRegion, 800);
         }
         locationSub.current = await Location.watchPositionAsync(
@@ -1905,7 +1908,7 @@ export default function RequesterHomeScreen() {
           (loc) => {
             if (!_hasInitialFix) {
               _hasInitialFix = true;
-              _cachedRequesterRegion = { latitude: loc.coords.latitude, longitude: loc.coords.longitude, latitudeDelta: 0.12, longitudeDelta: 0.12 };
+              _cachedRequesterRegion = { latitude: loc.coords.latitude + MAP_LAT_OFFSET, longitude: loc.coords.longitude + MAP_LNG_OFFSET, latitudeDelta: 0.12, longitudeDelta: 0.12 };
               mapRef.current?.animateToRegion(_cachedRequesterRegion, 800);
             }
             _cachedRequesterCoords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
@@ -1937,10 +1940,9 @@ export default function RequesterHomeScreen() {
     React.useCallback(() => {
       // On focus: snap map back to user position if we have coords
       if (_cachedRequesterCoords && mapRef.current) {
-        const region = { ..._cachedRequesterCoords, latitudeDelta: 0.12, longitudeDelta: 0.12 };
-        _cachedRequesterRegion = region;
+        _cachedRequesterRegion = { latitude: _cachedRequesterCoords.latitude + MAP_LAT_OFFSET, longitude: _cachedRequesterCoords.longitude + MAP_LNG_OFFSET, latitudeDelta: 0.12, longitudeDelta: 0.12 };
         mapRef.current.setCamera({
-        center: { latitude: _cachedRequesterCoords!.latitude, longitude: _cachedRequesterCoords!.longitude },
+        center: { latitude: _cachedRequesterCoords!.latitude + MAP_LAT_OFFSET, longitude: _cachedRequesterCoords!.longitude + MAP_LNG_OFFSET },
         zoom: 12,
       });
       }

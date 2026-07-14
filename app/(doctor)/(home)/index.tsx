@@ -51,6 +51,9 @@ const LAGOS_REGION = {
   longitudeDelta: 0.12,
 };
 
+const MAP_LAT_OFFSET = -0.03; // shifts centre south → pin appears higher
+const MAP_LNG_OFFSET = 0.03;  // shifts centre east → pin appears to the left
+
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', {
     hour: '2-digit',
@@ -384,12 +387,20 @@ export default function DoctorHomeScreen() {
         setUserLocation(coords);
         if (!_hasAnimatedToUser && mapRef.current) {
           _hasAnimatedToUser = true;
-          const region = { ...coords, latitudeDelta: 0.12, longitudeDelta: 0.12 };
+          const region = {
+            latitude: coords.latitude + MAP_LAT_OFFSET,
+            longitude: coords.longitude + MAP_LNG_OFFSET,
+            latitudeDelta: 0.12,
+            longitudeDelta: 0.12,
+          };
           _cachedDoctorRegion = region;
           mapRef.current.setCamera({
-        center: { latitude: _cachedDoctorCoords!.latitude, longitude: _cachedDoctorCoords!.longitude },
-        zoom: 12,
-      });
+            center: {
+              latitude: _cachedDoctorCoords!.latitude + MAP_LAT_OFFSET,
+              longitude: _cachedDoctorCoords!.longitude + MAP_LNG_OFFSET,
+            },
+            zoom: 12,
+          });
         }
       } catch {
         // non-fatal — map still works without location
@@ -414,9 +425,17 @@ export default function DoctorHomeScreen() {
   useFocusEffect(
     React.useCallback(() => {
       if (_cachedDoctorCoords && mapRef.current) {
-        _cachedDoctorRegion = { ..._cachedDoctorCoords, latitudeDelta: 0.12, longitudeDelta: 0.12 };
+        _cachedDoctorRegion = {
+          latitude: _cachedDoctorCoords.latitude + MAP_LAT_OFFSET,
+          longitude: _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
+          latitudeDelta: 0.12,
+          longitudeDelta: 0.12,
+        };
         mapRef.current.setCamera({
-          center: { latitude: _cachedDoctorCoords.latitude, longitude: _cachedDoctorCoords.longitude },
+          center: {
+            latitude: _cachedDoctorCoords.latitude + MAP_LAT_OFFSET,
+            longitude: _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
+          },
           zoom: 12,
         });
       }
