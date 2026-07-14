@@ -1461,64 +1461,16 @@ export default function RequesterHomeScreen() {
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[Requester] user channel payment_confirmed received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
-        // Capture current session synchronously via ref
-        const currentSession = activeSessionRef.current;
-        // If ref is null, we still have the session ID from the payload —
-        // call fetchActiveSession() immediately and show the card after
-        if (!currentSession) {
-          fetchActiveSession();
-          invalidate('coverage_requester_completed');
-          invalidate('coverage_requester_upcoming');
-          return;
-        }
-        const sid = sessionId ?? currentSession?.id;
-        // Update status synchronously
-        setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        // Run async check OUTSIDE the updater
-        if (sid && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid) && !_requesterDismissedSessions.has(sid)) {
-          _requesterRatingInFlight.add(sid);
-          isRequesterSessionPaid(sid).then((alreadyHandled) => {
-            _requesterRatingInFlight.delete(sid);
-            if (!alreadyHandled) {
-              setConfirmedSession(currentSession);
-              setShowPaymentSuccess(true);
-            }
-          }).catch(() => { _requesterRatingInFlight.delete(sid); });
-        }
-        fetchActiveSession();
         invalidate('coverage_requester_completed');
         invalidate('coverage_requester_upcoming');
+        handlePaymentConfirmedWithFallback(sessionId);
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[Requester] user channel PAYMENT_CONFIRMED received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
-        // Capture current session synchronously via ref
-        const currentSession = activeSessionRef.current;
-        // If ref is null, we still have the session ID from the payload —
-        // call fetchActiveSession() immediately and show the card after
-        if (!currentSession) {
-          fetchActiveSession();
-          invalidate('coverage_requester_completed');
-          invalidate('coverage_requester_upcoming');
-          return;
-        }
-        const sid = sessionId ?? currentSession?.id;
-        // Update status synchronously
-        setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        // Run async check OUTSIDE the updater
-        if (sid && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid) && !_requesterDismissedSessions.has(sid)) {
-          _requesterRatingInFlight.add(sid);
-          isRequesterSessionPaid(sid).then((alreadyHandled) => {
-            _requesterRatingInFlight.delete(sid);
-            if (!alreadyHandled) {
-              setConfirmedSession(currentSession);
-              setShowPaymentSuccess(true);
-            }
-          }).catch(() => { _requesterRatingInFlight.delete(sid); });
-        }
-        fetchActiveSession();
         invalidate('coverage_requester_completed');
         invalidate('coverage_requester_upcoming');
+        handlePaymentConfirmedWithFallback(sessionId);
       })
       // From channel 7 (shift cancelled on requester channel)
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
@@ -1543,7 +1495,7 @@ export default function RequesterHomeScreen() {
       .subscribe((status) => {
       });
     return () => { supabase.removeChannel(ch); };
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, handlePaymentConfirmedWithFallback]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mapRef = useRef<MapView>(null);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(
@@ -1942,44 +1894,12 @@ export default function RequesterHomeScreen() {
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[Requester] session channel PAYMENT_CONFIRMED received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
-        // Capture current session synchronously via ref
-        const currentSession = activeSessionRef.current;
-        const sid = sessionId ?? currentSession?.id;
-        // Update status synchronously
-        setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        // Run async check OUTSIDE the updater
-        if (sid && currentSession && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid) && !_requesterDismissedSessions.has(sid)) {
-          _requesterRatingInFlight.add(sid);
-          isRequesterSessionPaid(sid).then((alreadyHandled) => {
-            _requesterRatingInFlight.delete(sid);
-            if (!alreadyHandled) {
-              setConfirmedSession(currentSession);
-              setShowPaymentSuccess(true);
-            }
-          }).catch(() => { _requesterRatingInFlight.delete(sid); });
-        }
-        fetchActiveSession();
+        handlePaymentConfirmedWithFallback(sessionId);
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[Requester] session channel payment_confirmed received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
-        // Capture current session synchronously via ref
-        const currentSession = activeSessionRef.current;
-        const sid = sessionId ?? currentSession?.id;
-        // Update status synchronously
-        setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        // Run async check OUTSIDE the updater
-        if (sid && currentSession && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid) && !_requesterDismissedSessions.has(sid)) {
-          _requesterRatingInFlight.add(sid);
-          isRequesterSessionPaid(sid).then((alreadyHandled) => {
-            _requesterRatingInFlight.delete(sid);
-            if (!alreadyHandled) {
-              setConfirmedSession(currentSession);
-              setShowPaymentSuccess(true);
-            }
-          }).catch(() => { _requesterRatingInFlight.delete(sid); });
-        }
-        fetchActiveSession();
+        handlePaymentConfirmedWithFallback(sessionId);
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
         setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
@@ -1997,7 +1917,7 @@ export default function RequesterHomeScreen() {
       supabase.removeChannel(ch);
       sessionChannelRef.current = null;
     };
-  }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeSessionId, handlePaymentConfirmedWithFallback]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Channels 6 and 7 merged into requester-user channel above
 
@@ -2587,6 +2507,59 @@ export default function RequesterHomeScreen() {
     }
     setActiveSession(null);
   }, []); // no deps — reads from ref so never goes stale
+
+  const handlePaymentConfirmedWithFallback = useCallback(async (sessionIdFromPayload?: string) => {
+    const currentSession = activeSessionRef.current;
+    const sid = sessionIdFromPayload ?? currentSession?.id;
+
+    if (currentSession) {
+      // Happy path — ref is populated, show card immediately
+      if (sid && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid) && !_requesterDismissedSessions.has(sid)) {
+        _requesterRatingInFlight.add(sid);
+        isRequesterSessionPaid(sid).then((alreadyHandled) => {
+          _requesterRatingInFlight.delete(sid);
+          if (!alreadyHandled) {
+            setConfirmedSession(currentSession);
+            setShowPaymentSuccess(true);
+          }
+        }).catch(() => { _requesterRatingInFlight.delete(sid); });
+      }
+      setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
+      fetchActiveSession();
+    } else {
+      // Android timing gap — ref is null, fetch session then show card
+      setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
+      try {
+        const res = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=requester`, {});
+        if (!res.ok) return;
+        const data = await res.json();
+        const session = data?.session ?? null;
+        if (!session) return;
+        setActiveSession(session);
+        _cachedActiveSession = session;
+        _sessionCachePopulated = true;
+        const fetchedSid = sessionIdFromPayload ?? session.id;
+        if (
+          (session.status === 'requester_paid' || session.status === 'payment_pending') &&
+          fetchedSid &&
+          !_requesterPaidSessions.has(fetchedSid) &&
+          !_requesterRatingInFlight.has(fetchedSid) &&
+          !_requesterDismissedSessions.has(fetchedSid)
+        ) {
+          _requesterRatingInFlight.add(fetchedSid);
+          const alreadyHandled = await isRequesterSessionPaid(fetchedSid);
+          _requesterRatingInFlight.delete(fetchedSid);
+          if (!alreadyHandled) {
+            setConfirmedSession(session);
+            setShowPaymentSuccess(true);
+          }
+        }
+      } catch (e: any) {
+        // Non-fatal — fall back to normal fetchActiveSession
+        fetchActiveSession();
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCancelReasonSelected = async (reason: string) => {
     console.log('[Requester] Cancel reason selected:', reason, 'for request:', activeRequestId);
