@@ -1537,92 +1537,35 @@ export default function RequesterHomeScreen() {
     setOnlineDoctors((data ?? []) as { id: string; lat: number; lng: number }[]);
   }, [user]);
 
-  const fetchDoctorWithRetry = useCallback(async (doctorId: string) => {
-    // Wait for both DB writes to land before reading
-    await new Promise(resolve => setTimeout(resolve, 800));
-    const { data: first } = await supabase
-      .from('doctor_profiles')
-      .select('id, lat, lng, is_online')
-      .eq('id', doctorId)
-      .single();
-
-    if (!first) {
-      setOnlineDoctors((prev) => prev.filter((d) => d.id !== doctorId));
-      return;
-    }
-    if (first.is_online && first.lat != null && first.lng != null) {
-      setOnlineDoctors((prev) => {
-        const filtered = prev.filter((d) => d.id !== first.id);
-        return [...filtered, { id: first.id, lat: first.lat!, lng: first.lng! }];
-      });
-      return;
-    }
-    if (!first.is_online) {
-      // Explicitly offline — remove immediately
-      setOnlineDoctors((prev) => prev.filter((d) => d.id !== doctorId));
-      return;
-    }
-    // is_online=true but lat still null — second write hasn't landed yet, retry
-    await new Promise(resolve => setTimeout(resolve, 1200));
-    const { data: second } = await supabase
-      .from('doctor_profiles')
-      .select('id, lat, lng, is_online')
-      .eq('id', doctorId)
-      .single();
-    if (!second) {
-      setOnlineDoctors((prev) => prev.filter((d) => d.id !== doctorId));
-      return;
-    }
-    if (second.is_online && second.lat != null && second.lng != null) {
-      setOnlineDoctors((prev) => {
-        const filtered = prev.filter((d) => d.id !== second.id);
-        return [...filtered, { id: second.id, lat: second.lat!, lng: second.lng! }];
-      });
-    } else {
-      setOnlineDoctors((prev) => prev.filter((d) => d.id !== second.id));
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Online doctors realtime ──
+  // ── Online doctors realtime (Broadcast — bypasses RLS) ──
   useEffect(() => {
     if (!user) return;
 
+    console.log('[OnlineDoctors] Subscribing to doctor-status broadcast channel');
     fetchOnlineDoctors();
 
     const ch = supabase
-      .channel('online-doctors')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'doctor_profiles' },
-        (payload) => {
-          const row = payload.new as { id?: string; lat?: number; lng?: number; is_online?: boolean } | null;
-          const doctorId = row?.id ?? (payload.old as any)?.id;
-          if (!doctorId) return;
-
-          // If we have a complete row, handle it directly
-          if (row && row.id && row.is_online !== undefined && (row.lat !== undefined || row.lng !== undefined)) {
-            if (row.is_online && row.lat != null && row.lng != null) {
-              setOnlineDoctors((prev) => {
-                const filtered = prev.filter((d) => d.id !== row.id);
-                return [...filtered, { id: row.id!, lat: row.lat!, lng: row.lng! }];
-              });
-            } else {
-              setOnlineDoctors((prev) => prev.filter((d) => d.id !== doctorId));
-            }
-            return;
-          }
-
-          // Partial row — re-fetch with retry to handle Android two-write race
-          fetchDoctorWithRetry(doctorId);
+      .channel('doctor-status')
+      .on('broadcast', { event: 'doctor_status_changed' }, (msg) => {
+        const data = msg.payload as { id?: string; lat?: number; lng?: number; is_online?: boolean } | null;
+        console.log('[OnlineDoctors] Received doctor_status_changed broadcast', data);
+        if (!data?.id) return;
+        if (data.is_online && data.lat != null && data.lng != null) {
+          setOnlineDoctors((prev) => {
+            const filtered = prev.filter((d) => d.id !== data.id);
+            return [...filtered, { id: data.id!, lat: data.lat!, lng: data.lng! }];
+          });
+        } else {
+          setOnlineDoctors((prev) => prev.filter((d) => d.id !== data.id));
         }
-      )
-      .subscribe((status) => {
-      });
+      })
+      .subscribe();
 
     return () => {
+      console.log('[OnlineDoctors] Unsubscribing from doctor-status broadcast channel');
       supabase.removeChannel(ch);
     };
-  }, [fetchOnlineDoctors, fetchDoctorWithRetry, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchOnlineDoctors, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sheet state
   const [sheetState, setSheetState] = useState<SheetState>('idle');
