@@ -1051,7 +1051,7 @@ function RequesterPaymentCard({
   // payment_confirmed / PAYMENT_CONFIRMED are handled by the parent's
   // requester-user channel and session channel; parent calls onPaymentConfirmed.
   useEffect(() => {
-    const channelName = `session:${session.id}`;
+    const channelName = `session-payment:${session.id}`;
 
     const ch = supabase.channel(channelName)
       .on('broadcast', { event: 'payment_refreshed' }, (payload) => {
