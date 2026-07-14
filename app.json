@@ -18,7 +18,10 @@
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
           "remote-notification"
-        ]
+        ],
+        "NSCameraUsageDescription": "FlashLocum needs camera access to let you upload your credentials and profile photo.",
+        "NSPhotoLibraryUsageDescription": "FlashLocum needs photo library access to let you select your credentials and profile photo.",
+        "NSPhotoLibraryAddUsageDescription": "FlashLocum needs permission to save photos to your library."
       },
       "config": {
         "googleMapsApiKey": "AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk"
