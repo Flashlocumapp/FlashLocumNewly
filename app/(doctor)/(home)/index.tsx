@@ -502,7 +502,7 @@ export default function DoctorHomeScreen() {
   const statusText = isJobCapReached ? 'Max Shifts Reached' : isOnline ? 'Online' : 'Offline';
   const showCapSubtext = isJobCapReached && !isOnline;
   const pillTop = insets.top + 12;
-  const sheetPaddingBottom = 80 + 16;
+  const sheetPaddingBottom = 80 + 16 + (Platform.OS === 'android' ? insets.bottom : 0);
 
   // Determine which sub-card to show
   const hasActiveSession = activeSession !== null;
