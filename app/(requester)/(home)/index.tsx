@@ -94,6 +94,8 @@ async function warmRequesterPaidCache() {
 let _hasInitialFix = false;
 // Module-level coord cache — survives tab switches (screen remounts)
 let _cachedRequesterCoords: { latitude: number; longitude: number } | null = null;
+// Module-level region cache — preserves zoom/pan across tab switches on Android
+let _cachedRequesterRegion: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number } | null = null;
 // Module-level session cache — survives tab switches / screen remounts
 let _cachedActiveSession: CoverageSession | null = undefined as any; // undefined = never fetched, null = fetched but no session
 let _sessionCachePopulated = false;
@@ -1982,24 +1984,16 @@ export default function RequesterHomeScreen() {
           _hasInitialFix = true;
           _cachedRequesterCoords = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude };
           setUserCoords({ latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude });
-          mapRef.current?.animateToRegion({
-            latitude: immediatePos.coords.latitude,
-            longitude: immediatePos.coords.longitude,
-            latitudeDelta: 0.12,
-            longitudeDelta: 0.12,
-          }, 800);
+          _cachedRequesterRegion = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude, latitudeDelta: 0.12, longitudeDelta: 0.12 };
+          mapRef.current?.animateToRegion(_cachedRequesterRegion, 800);
         }
         locationSub.current = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.Highest, timeInterval: 2000, distanceInterval: 1, mayShowUserSettingsDialog: true },
           (loc) => {
             if (!_hasInitialFix) {
               _hasInitialFix = true;
-              mapRef.current?.animateToRegion({
-                latitude: loc.coords.latitude,
-                longitude: loc.coords.longitude,
-                latitudeDelta: 0.12,
-                longitudeDelta: 0.12,
-              }, 800);
+              _cachedRequesterRegion = { latitude: loc.coords.latitude, longitude: loc.coords.longitude, latitudeDelta: 0.12, longitudeDelta: 0.12 };
+              mapRef.current?.animateToRegion(_cachedRequesterRegion, 800);
             }
             _cachedRequesterCoords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
             setUserCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
@@ -2819,7 +2813,8 @@ export default function RequesterHomeScreen() {
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
         provider={PROVIDER_GOOGLE}
-        initialRegion={LAGOS_REGION}
+        initialRegion={_cachedRequesterRegion ?? LAGOS_REGION}
+        onRegionChangeComplete={(region) => { _cachedRequesterRegion = region; }}
         customMapStyle={MINIMALIST_MAP_STYLE}
         minZoomLevel={10}
         maxZoomLevel={18}

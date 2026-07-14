@@ -36,6 +36,8 @@ const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 let _hasAnimatedToUser = false;
 // Module-level coord cache — survives tab switches (screen remounts)
 let _cachedDoctorCoords: { latitude: number; longitude: number } | null = null;
+// Module-level region cache — preserves zoom/pan across tab switches on Android
+let _cachedDoctorRegion: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number } | null = null;
 
 const { height: screenHeight } = Dimensions.get('window');
 const SHEET_HEIGHT = screenHeight * 0.45;
@@ -380,10 +382,9 @@ export default function DoctorHomeScreen() {
         setUserLocation(coords);
         if (!_hasAnimatedToUser && mapRef.current) {
           _hasAnimatedToUser = true;
-          mapRef.current.animateToRegion(
-            { ...coords, latitudeDelta: 0.12, longitudeDelta: 0.12 },
-            800,
-          );
+          const region = { ...coords, latitudeDelta: 0.12, longitudeDelta: 0.12 };
+          _cachedDoctorRegion = region;
+          mapRef.current.animateToRegion(region, 800);
         }
       } catch {
         // non-fatal — map still works without location
@@ -495,7 +496,8 @@ export default function DoctorHomeScreen() {
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
         provider={PROVIDER_GOOGLE}
-        initialRegion={LAGOS_REGION}
+        initialRegion={_cachedDoctorRegion ?? LAGOS_REGION}
+        onRegionChangeComplete={(region) => { _cachedDoctorRegion = region; }}
         showsMyLocationButton={false}
         customMapStyle={DESATURATED_MAP_STYLE}
         minZoomLevel={10}
