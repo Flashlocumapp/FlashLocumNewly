@@ -413,14 +413,14 @@ export default function DoctorHomeScreen() {
   // ─── Re-focus map on tab return ──────────────────────────────────────────────
   useFocusEffect(
     React.useCallback(() => {
-      // On focus: snap map back to user position if we have coords
       if (_cachedDoctorCoords && mapRef.current) {
-        const region = { ..._cachedDoctorCoords, latitudeDelta: 0.12, longitudeDelta: 0.12 };
-        _cachedDoctorRegion = region;
-        mapRef.current.animateToRegion(region, 800);
+        _cachedDoctorRegion = { ..._cachedDoctorCoords, latitudeDelta: 0.12, longitudeDelta: 0.12 };
+        mapRef.current.setCamera({
+          center: { latitude: _cachedDoctorCoords.latitude, longitude: _cachedDoctorCoords.longitude },
+          zoom: 13,
+        });
       }
       return () => {
-        // On blur: reset flag so animation fires again on next focus
         _hasAnimatedToUser = false;
       };
     }, [])
