@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -2011,6 +2012,22 @@ export default function RequesterHomeScreen() {
   // ─── GPS diagnostic watcher ───────────────────────────────────────────────────
   useEffect(() => {
   }, [userCoords]);
+
+  // ─── Re-focus map on tab return ──────────────────────────────────────────────
+  useFocusEffect(
+    React.useCallback(() => {
+      // On focus: snap map back to user position if we have coords
+      if (_cachedRequesterCoords && mapRef.current) {
+        const region = { ..._cachedRequesterCoords, latitudeDelta: 0.12, longitudeDelta: 0.12 };
+        _cachedRequesterRegion = region;
+        mapRef.current.animateToRegion(region, 800);
+      }
+      return () => {
+        // On blur: reset flag so animation fires again on next focus
+        _hasInitialFix = false;
+      };
+    }, [])
+  );
 
   // ─── Sheet height animation ───────────────────────────────────────────────────
   const animateSheet = useCallback((state: SheetState) => {

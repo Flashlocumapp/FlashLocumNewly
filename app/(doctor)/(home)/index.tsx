@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -404,6 +405,22 @@ export default function DoctorHomeScreen() {
     const t = setTimeout(() => setMarkerTracksViews(false), 500);
     return () => clearTimeout(t);
   }, [showMarker]);
+
+  // ─── Re-focus map on tab return ──────────────────────────────────────────────
+  useFocusEffect(
+    React.useCallback(() => {
+      // On focus: snap map back to user position if we have coords
+      if (_cachedDoctorCoords && mapRef.current) {
+        const region = { ..._cachedDoctorCoords, latitudeDelta: 0.12, longitudeDelta: 0.12 };
+        _cachedDoctorRegion = region;
+        mapRef.current.animateToRegion(region, 800);
+      }
+      return () => {
+        // On blur: reset flag so animation fires again on next focus
+        _hasAnimatedToUser = false;
+      };
+    }, [])
+  );
 
   // ─── Toggle online/offline ───────────────────────────────────────────────────
   const handleToggleStatus = () => {
