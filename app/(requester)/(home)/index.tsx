@@ -46,12 +46,25 @@ const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
 // ─── Persistent deduplication for payment success modal ──────────────────────
 const REQUESTER_PAID_SESSIONS_KEY = 'requester_paid_sessions_v1';
+const REQUESTER_DISMISSED_SESSIONS_KEY = 'requester_dismissed_sessions_v1';
 // Layer 1: synchronous in-memory Set — blocks concurrent triggers instantly
 const _requesterPaidSessions = new Set<string>();
 // Layer 2: in-flight lock — prevents two async checks racing each other
 const _requesterRatingInFlight = new Set<string>();
 // Sessions dismissed without rating — overlay will NOT re-appear for these
 const _requesterDismissedSessions = new Set<string>();
+
+async function markRequesterSessionDismissed(sessionId: string) {
+  _requesterDismissedSessions.add(sessionId);
+  try {
+    const existing = await AsyncStorage.getItem(REQUESTER_DISMISSED_SESSIONS_KEY);
+    const arr: string[] = existing ? JSON.parse(existing) : [];
+    if (!arr.includes(sessionId)) {
+      arr.push(sessionId);
+      await AsyncStorage.setItem(REQUESTER_DISMISSED_SESSIONS_KEY, JSON.stringify(arr.slice(-50)));
+    }
+  } catch {}
+}
 
 async function markRequesterSessionPaid(sessionId: string) {
   _requesterPaidSessions.add(sessionId);
@@ -85,9 +98,14 @@ async function isRequesterSessionPaid(sessionId: string): Promise<boolean> {
 
 async function warmRequesterPaidCache() {
   try {
-    const existing = await AsyncStorage.getItem(REQUESTER_PAID_SESSIONS_KEY);
-    const arr: string[] = existing ? JSON.parse(existing) : [];
-    arr.forEach(id => _requesterPaidSessions.add(id));
+    const [paidRaw, dismissedRaw] = await Promise.all([
+      AsyncStorage.getItem(REQUESTER_PAID_SESSIONS_KEY),
+      AsyncStorage.getItem(REQUESTER_DISMISSED_SESSIONS_KEY),
+    ]);
+    const paidArr: string[] = paidRaw ? JSON.parse(paidRaw) : [];
+    paidArr.forEach(id => _requesterPaidSessions.add(id));
+    const dismissedArr: string[] = dismissedRaw ? JSON.parse(dismissedRaw) : [];
+    dismissedArr.forEach(id => _requesterDismissedSessions.add(id));
   } catch {}
 }
 
@@ -1792,8 +1810,10 @@ export default function RequesterHomeScreen() {
 
   // ─── On mount — restore session state ────────────────────────────────────────
   useEffect(() => {
-    warmRequesterPaidCache();
-    fetchActiveSession();
+    (async () => {
+      await warmRequesterPaidCache();
+      fetchActiveSession();
+    })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Cleanup PollingManager on unmount ───────────────────────────────────────
@@ -1806,7 +1826,7 @@ export default function RequesterHomeScreen() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN') {
         console.log('[RequesterHome] SIGNED_IN — re-fetching active session');
-        fetchActiveSession();
+        warmRequesterPaidCache().then(() => fetchActiveSession());
       } else if (event === 'SIGNED_OUT') {
         console.log('[RequesterHome] SIGNED_OUT — clearing activeSessionId and session cache');
         setActiveSessionId(null);
@@ -3639,7 +3659,7 @@ export default function RequesterHomeScreen() {
           const sid = confirmedSession?.id;
           console.log('[Requester] Rating card dismissed', { sessionId: sid });
           // Record as dismissed so the overlay never re-appears for this session
-          if (sid) _requesterDismissedSessions.add(sid);
+          if (sid) markRequesterSessionDismissed(sid);
           setShowPaymentSuccess(false);
           setConfirmedSession(null);
           setActiveSession(null);
