@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { getCached, setCached } from '@/utils/tabCache';
+import DeleteAccountModal from '@/components/DeleteAccountModal';
 
 interface DoctorProfile {
   first_name: string | null;
@@ -142,6 +143,7 @@ export default function DoctorAccountScreen() {
 
   // Delete account
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -305,43 +307,34 @@ export default function DoctorAccountScreen() {
   };
 
   const handleDeleteAccount = () => {
-    console.log('[Doctor Account] Delete Account pressed');
-    Alert.alert(
-      'Delete Account',
-      'This will permanently delete your account and all associated data. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
+    console.log('[Doctor Account] Delete Account pressed — opening confirmation modal');
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    console.log('[Doctor Account] Delete Account confirmed, proceeding with deletion');
+    setDeleting(true);
+    try {
+      console.log('[Doctor Account] Calling delete-account edge function');
+      const res = await fetchWithAuth(
+        'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/delete-account',
         {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            console.log('[Doctor Account] Delete Account confirmed, proceeding with deletion');
-            setDeleting(true);
-            try {
-              console.log('[Doctor Account] Calling delete-account edge function');
-              const res = await fetchWithAuth(
-                'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/delete-account',
-                {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                },
-              );
-              console.log('[Doctor Account] delete-account response status:', res.status);
-              if (!res.ok) {
-                throw new Error('Account deletion failed on server. Please try again.');
-              }
-              console.log('[Doctor Account] Signing out after delete');
-              await supabase.auth.signOut();
-              router.replace('/');
-            } catch (err: unknown) {
-              console.error('[Doctor Account] Delete account error:', err);
-              setDeleting(false);
-              Alert.alert('Error', 'Could not delete account. Please contact support.');
-            }
-          },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
         },
-      ],
-    );
+      );
+      console.log('[Doctor Account] delete-account response status:', res.status);
+      if (!res.ok) {
+        throw new Error('Account deletion failed on server. Please try again.');
+      }
+      console.log('[Doctor Account] Signing out after delete');
+      await supabase.auth.signOut();
+      router.replace('/');
+    } catch (err: unknown) {
+      console.error('[Doctor Account] Delete account error:', err);
+      setDeleting(false);
+      Alert.alert('Error', 'Could not delete account. Please contact support.');
+    }
   };
 
   // If we have absolutely no profile data yet (no authProfile seed), show a minimal spinner
@@ -544,6 +537,13 @@ export default function DoctorAccountScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <DeleteAccountModal
+        visible={showDeleteModal}
+        onCancel={() => setShowDeleteModal(false)}
+        onConfirm={handleConfirmDelete}
+        isDeleting={deleting}
+      />
     </>
   );
 }

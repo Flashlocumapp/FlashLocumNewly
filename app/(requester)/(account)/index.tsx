@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { getCached, setCached } from '@/utils/tabCache';
+import DeleteAccountModal from '@/components/DeleteAccountModal';
 
 interface RequesterProfile {
   first_name: string | null;
@@ -88,6 +89,7 @@ export default function RequesterAccountScreen() {
   const [savingGender, setSavingGender] = useState(false);
 
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -176,43 +178,34 @@ export default function RequesterAccountScreen() {
   };
 
   const handleDeleteAccount = () => {
-    console.log('[Requester Account] Delete Account pressed');
-    Alert.alert(
-      'Delete Account',
-      'This will permanently delete your account and all associated data. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
+    console.log('[Requester Account] Delete Account pressed — opening confirmation modal');
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    console.log('[Requester Account] Delete Account confirmed, proceeding with deletion');
+    setDeleting(true);
+    try {
+      console.log('[Requester Account] Calling delete-account edge function');
+      const res = await fetchWithAuth(
+        'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/delete-account',
         {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            console.log('[Requester Account] Delete Account confirmed, proceeding with deletion');
-            setDeleting(true);
-            try {
-              console.log('[Requester Account] Calling delete-account edge function');
-              const res = await fetchWithAuth(
-                'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/delete-account',
-                {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                },
-              );
-              console.log('[Requester Account] delete-account response status:', res.status);
-              if (!res.ok) {
-                throw new Error('Account deletion failed on server. Please try again.');
-              }
-              console.log('[Requester Account] Signing out after delete');
-              await supabase.auth.signOut();
-              router.replace('/');
-            } catch (err: unknown) {
-              console.error('[Requester Account] Delete account error:', err);
-              setDeleting(false);
-              Alert.alert('Error', 'Could not delete account. Please contact support.');
-            }
-          },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
         },
-      ],
-    );
+      );
+      console.log('[Requester Account] delete-account response status:', res.status);
+      if (!res.ok) {
+        throw new Error('Account deletion failed on server. Please try again.');
+      }
+      console.log('[Requester Account] Signing out after delete');
+      await supabase.auth.signOut();
+      router.replace('/');
+    } catch (err: unknown) {
+      console.error('[Requester Account] Delete account error:', err);
+      setDeleting(false);
+      Alert.alert('Error', 'Could not delete account. Please contact support.');
+    }
   };
 
   // Only show full-screen spinner if we have no data at all (no authProfile seed)
@@ -332,6 +325,13 @@ export default function RequesterAccountScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <DeleteAccountModal
+        visible={showDeleteModal}
+        onCancel={() => setShowDeleteModal(false)}
+        onConfirm={handleConfirmDelete}
+        isDeleting={deleting}
+      />
     </>
   );
 }
