@@ -2028,7 +2028,10 @@ export default function RequesterHomeScreen() {
       if (_cachedRequesterCoords && mapRef.current) {
         const region = { ..._cachedRequesterCoords, latitudeDelta: 0.12, longitudeDelta: 0.12 };
         _cachedRequesterRegion = region;
-        mapRef.current.animateToRegion(region, 800);
+        mapRef.current.setCamera({
+        center: { latitude: _cachedRequesterCoords!.latitude, longitude: _cachedRequesterCoords!.longitude },
+        zoom: 13,
+      });
       }
       return () => {
         // On blur: reset flag so animation fires again on next focus

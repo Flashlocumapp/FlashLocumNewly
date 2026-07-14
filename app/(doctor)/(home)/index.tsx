@@ -385,7 +385,10 @@ export default function DoctorHomeScreen() {
           _hasAnimatedToUser = true;
           const region = { ...coords, latitudeDelta: 0.12, longitudeDelta: 0.12 };
           _cachedDoctorRegion = region;
-          mapRef.current.animateToRegion(region, 800);
+          mapRef.current.setCamera({
+        center: { latitude: _cachedDoctorCoords!.latitude, longitude: _cachedDoctorCoords!.longitude },
+        zoom: 13,
+      });
         }
       } catch {
         // non-fatal — map still works without location
