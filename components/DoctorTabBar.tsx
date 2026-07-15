@@ -35,7 +35,11 @@ export default function DoctorTabBar({ tabs }: Props) {
               key={tab.name}
               style={({ pressed }) => [styles.tab, { opacity: 1 }]}
               android_ripple={{ color: 'transparent' }}
-              onPress={() => { router.replace(tab.route); }}
+              onPress={() => {
+                if (activeIndex === i) return; // already on this tab — do nothing
+                console.log('[DoctorTabBar] Tab pressed:', tab.route);
+                router.replace(tab.route);
+              }}
             >
               <MaterialIcons
                 name={tab.icon}

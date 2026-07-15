@@ -96,7 +96,9 @@ export default function FloatingTabBar({
     }
   }, [activeTabIndex, animatedValue]);
 
-  const handleTabPress = (route: Href) => {
+  const handleTabPress = (route: Href, index: number) => {
+    if (activeTabIndex === index) return; // already on this tab — do nothing
+    console.log('[FloatingTabBar] Tab pressed:', route);
     router.replace(route);
   };
 
@@ -178,7 +180,7 @@ export default function FloatingTabBar({
                     <Pressable
                       style={({ pressed }) => [styles.tab, { opacity: 1 }]}
                       android_ripple={{ color: 'transparent' }}
-                      onPress={() => handleTabPress(tab.route)}
+                      onPress={() => handleTabPress(tab.route, index)}
                     >
                       <View style={styles.tabContent}>
                         <IconSymbol
@@ -218,7 +220,7 @@ export default function FloatingTabBar({
                     <Pressable
                       style={({ pressed }) => [styles.tab, { opacity: 1 }]}
                       android_ripple={{ color: 'transparent' }}
-                      onPress={() => handleTabPress(tab.route)}
+                      onPress={() => handleTabPress(tab.route, index)}
                     >
                       <View style={styles.tabContent}>
                         <IconSymbol

@@ -133,8 +133,9 @@ function DoctorUpcomingCard({
   onCancel: () => void;
   onCall: () => void;
 }) {
-  const [liveRequesterRating, setLiveRequesterRating] = useState<number | null>(null);
-  const [liveRequesterReliability, setLiveRequesterReliability] = useState<number | null>(null);
+  const _cachedRequesterStats = getCached<{ rating: number; reliability: number }>(`requester_stats_${session.requester_id}`);
+  const [liveRequesterRating, setLiveRequesterRating] = useState<number | null>(_cachedRequesterStats?.rating ?? null);
+  const [liveRequesterReliability, setLiveRequesterReliability] = useState<number | null>(_cachedRequesterStats?.reliability ?? null);
 
   useEffect(() => {
     if (!session.requester_id) return;
@@ -149,10 +150,12 @@ function DoctorUpcomingCard({
           console.log('[Doctor Home] Requester stats fetch failed, using defaults:', error?.message);
           setLiveRequesterRating(5.0);
           setLiveRequesterReliability(100);
+          setCached(`requester_stats_${session.requester_id}`, { rating: 5.0, reliability: 100 });
         } else {
           console.log('[Doctor Home] Live requester stats fetched:', data);
           setLiveRequesterRating(data.rating ?? 5.0);
           setLiveRequesterReliability(data.reliability ?? 100);
+          setCached(`requester_stats_${session.requester_id}`, { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
         }
       });
   }, [session.requester_id]);
@@ -218,8 +221,9 @@ function DoctorUpcomingCard({
 
 function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCall: () => void }) {
   const [elapsed, setElapsed] = useState('00:00:00');
-  const [liveRequesterRating, setLiveRequesterRating] = useState<number | null>(null);
-  const [liveRequesterReliability, setLiveRequesterReliability] = useState<number | null>(null);
+  const _cachedRequesterStats = getCached<{ rating: number; reliability: number }>(`requester_stats_${session.requester_id}`);
+  const [liveRequesterRating, setLiveRequesterRating] = useState<number | null>(_cachedRequesterStats?.rating ?? null);
+  const [liveRequesterReliability, setLiveRequesterReliability] = useState<number | null>(_cachedRequesterStats?.reliability ?? null);
 
   const currentDayLog = session.day_logs?.[session.current_day - 1];
   const startedAt = currentDayLog?.started_at ?? session.started_at;
@@ -245,10 +249,12 @@ function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCal
           console.log('[Doctor Home] Requester stats fetch failed (active), using defaults:', error?.message);
           setLiveRequesterRating(5.0);
           setLiveRequesterReliability(100);
+          setCached(`requester_stats_${session.requester_id}`, { rating: 5.0, reliability: 100 });
         } else {
           console.log('[Doctor Home] Live requester stats fetched (active):', data);
           setLiveRequesterRating(data.rating ?? 5.0);
           setLiveRequesterReliability(data.reliability ?? 100);
+          setCached(`requester_stats_${session.requester_id}`, { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
         }
       });
   }, [session.requester_id]);

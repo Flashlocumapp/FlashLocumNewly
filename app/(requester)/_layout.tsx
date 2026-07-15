@@ -48,7 +48,11 @@ export default function RequesterLayout() {
                   return (
                     <Pressable
                       key={tab.name}
-                      onPress={() => { router.replace(tab.route); }}
+                      onPress={() => {
+                        if (isActive) return; // already on this tab — do nothing
+                        console.log('[RequesterTabBar] Tab pressed:', tab.route);
+                        router.replace(tab.route);
+                      }}
                       android_ripple={{ color: 'transparent' }}
                       style={({ pressed }) => ({ flex: 1, alignItems: 'center', paddingVertical: 10, opacity: 1 })}
                     >
