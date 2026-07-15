@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Modal,
   View,
@@ -9,6 +9,7 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Animated,
 } from 'react-native';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/Theme';
 
@@ -26,12 +27,49 @@ export default function DeleteAccountModal({
   isDeleting,
 }: DeleteAccountModalProps) {
   const [inputText, setInputText] = useState('');
+  const [step, setStep] = useState<'warning' | 'confirm'>('warning');
+
+  const warningOpacity = useRef(new Animated.Value(1)).current;
+  const confirmOpacity = useRef(new Animated.Value(0)).current;
 
   const isConfirmEnabled = inputText === 'DELETE';
 
+  // Reset to warning step whenever modal closes
+  useEffect(() => {
+    if (!visible) {
+      setStep('warning');
+      setInputText('');
+      warningOpacity.setValue(1);
+      confirmOpacity.setValue(0);
+    }
+  }, [visible]);
+
+  const animateToConfirm = () => {
+    Animated.parallel([
+      Animated.timing(warningOpacity, {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+      Animated.timing(confirmOpacity, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true,
+      }),
+    ]).start(() => setStep('confirm'));
+  };
+
+  const handleYesDelete = () => {
+    console.log('[DeleteAccountModal] "Yes, Delete My Account" pressed — advancing to confirm step');
+    animateToConfirm();
+  };
+
   const handleCancel = () => {
-    console.log('[DeleteAccountModal] Cancel pressed');
+    console.log('[DeleteAccountModal] Cancel pressed — step:', step);
     setInputText('');
+    setStep('warning');
+    warningOpacity.setValue(1);
+    confirmOpacity.setValue(0);
     onCancel();
   };
 
@@ -63,54 +101,88 @@ export default function DeleteAccountModal({
       >
         <View style={styles.overlay}>
           <View style={styles.card}>
-            <Text style={styles.title}>Delete Account</Text>
-            <Text style={styles.message}>
-              This action is permanent and cannot be undone. Type{' '}
-              <Text style={styles.deleteWord}>DELETE</Text>
-              {' '}below to confirm.
-            </Text>
 
-            <TextInput
-              style={styles.input}
-              value={inputText}
-              onChangeText={(t) => {
-                setInputText(t);
-              }}
-              placeholder="Type DELETE to confirm"
-              placeholderTextColor="#ADADAD"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!isDeleting}
-            />
-
-            {isDeleting ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator size="small" color={COLORS.danger} />
-                <Text style={styles.loadingText}>Deleting account...</Text>
-              </View>
-            ) : (
-              <View style={styles.buttons}>
-                <TouchableOpacity
-                  style={styles.cancelBtn}
-                  onPress={handleCancel}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.confirmBtn,
-                    { backgroundColor: confirmBtnBg, opacity: confirmBtnOpacity },
-                  ]}
-                  onPress={handleConfirm}
-                  disabled={!isConfirmEnabled}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.confirmText}>Confirm Deletion</Text>
-                </TouchableOpacity>
-              </View>
+            {/* ── Step 1: Warning ── */}
+            {step === 'warning' && (
+              <Animated.View style={{ opacity: warningOpacity }}>
+                <Text style={styles.warningIcon}>⚠️</Text>
+                <Text style={styles.title}>Delete Account</Text>
+                <Text style={styles.message}>
+                  Are you sure you want to permanently delete your account? This action cannot be undone.
+                </Text>
+                <View style={styles.buttons}>
+                  <TouchableOpacity
+                    style={styles.cancelBtn}
+                    onPress={handleCancel}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.cancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.yesDeleteBtn]}
+                    onPress={handleYesDelete}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.yesDeleteText}>Yes, Delete My Account</Text>
+                  </TouchableOpacity>
+                </View>
+              </Animated.View>
             )}
+
+            {/* ── Step 2: Type to confirm ── */}
+            {step === 'confirm' && (
+              <Animated.View style={{ opacity: confirmOpacity }}>
+                <Text style={styles.title}>Delete Account</Text>
+                <Text style={styles.message}>
+                  This action is permanent and cannot be undone. Type{' '}
+                  <Text style={styles.deleteWord}>DELETE</Text>
+                  {' '}below to confirm.
+                </Text>
+
+                <TextInput
+                  style={styles.input}
+                  value={inputText}
+                  onChangeText={(t) => {
+                    setInputText(t);
+                  }}
+                  placeholder="Type DELETE to confirm"
+                  placeholderTextColor="#ADADAD"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isDeleting}
+                />
+
+                {isDeleting ? (
+                  <View style={styles.loadingRow}>
+                    <ActivityIndicator size="small" color={COLORS.danger} />
+                    <Text style={styles.loadingText}>Deleting account...</Text>
+                  </View>
+                ) : (
+                  <View style={styles.buttons}>
+                    <TouchableOpacity
+                      style={styles.cancelBtn}
+                      onPress={handleCancel}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.cancelText}>Cancel</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.confirmBtn,
+                        { backgroundColor: confirmBtnBg, opacity: confirmBtnOpacity },
+                      ]}
+                      onPress={handleConfirm}
+                      disabled={!isConfirmEnabled}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.confirmText}>Confirm Deletion</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </Animated.View>
+            )}
+
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -135,6 +207,27 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 380,
   },
+  // ── Step 1 styles ──
+  warningIcon: {
+    fontSize: 40,
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
+  },
+  yesDeleteBtn: {
+    flex: 1,
+    backgroundColor: COLORS.danger,
+    borderRadius: RADIUS.full,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  yesDeleteText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  // ── Shared styles ──
   title: {
     ...TYPOGRAPHY.h3,
     color: '#1C1C1E',
