@@ -38,10 +38,31 @@ let _layoutCachedCoords: { lat: number; lng: number } | null = null;
 
 // ─── Persistent deduplication for doctor rating overlay ──────────────────────
 const DOCTOR_RATED_SESSIONS_KEY = 'doctor_rated_sessions_v1';
+const DOCTOR_DISMISSED_SESSIONS_KEY = 'doctor_dismissed_sessions_v1';
 // Layer 1: synchronous in-memory Set — blocks concurrent triggers instantly
 const _doctorRatedSessions = new Set<string>();
 // Layer 1b: dismissed-without-rating sessions — overlay will NOT re-appear for these
 const _doctorDismissedSessions = new Set<string>();
+
+async function markDoctorSessionDismissed(sessionId: string) {
+  _doctorDismissedSessions.add(sessionId);
+  try {
+    const existing = await AsyncStorage.getItem(DOCTOR_DISMISSED_SESSIONS_KEY);
+    const arr: string[] = existing ? JSON.parse(existing) : [];
+    if (!arr.includes(sessionId)) {
+      arr.push(sessionId);
+      await AsyncStorage.setItem(DOCTOR_DISMISSED_SESSIONS_KEY, JSON.stringify(arr.slice(-50)));
+    }
+  } catch {}
+}
+
+async function warmDoctorDismissedCache() {
+  try {
+    const existing = await AsyncStorage.getItem(DOCTOR_DISMISSED_SESSIONS_KEY);
+    const arr: string[] = existing ? JSON.parse(existing) : [];
+    arr.forEach(id => _doctorDismissedSessions.add(id));
+  } catch {}
+}
 
 async function markDoctorSessionRated(sessionId: string) {
   _doctorRatedSessions.add(sessionId);
@@ -384,6 +405,7 @@ export default function DoctorLayout() {
       if (data) {
         // Review already submitted — dismiss the overlay and mark as rated
         markDoctorSessionRated(resolvedSessionId);
+        markDoctorSessionDismissed(resolvedSessionId);
         setShowDoctorRating(false);
       }
     }).catch(() => {
@@ -448,19 +470,20 @@ export default function DoctorLayout() {
           setIsOnline(data.is_online);
         }
       });
-    warmDoctorRatedCache();
-    fetchActiveSession().then(() => {
-      // Guard 2 — Boot-time: force offline if doctor is not verified
-      const bootStatus = profile?.verification_status;
-      if (bootStatus && bootStatus !== 'verified') {
-        console.log('[DoctorLayout] boot-time verification gate — status is', bootStatus, '— forcing offline');
-        setIsOnline(false);
-        fetchWithAuth(`${EDGE_BASE}/go-offline`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        }).catch(() => {});
-      }
+    Promise.all([warmDoctorRatedCache(), warmDoctorDismissedCache()]).then(() => {
+      fetchActiveSession().then(() => {
+        // Guard 2 — Boot-time: force offline if doctor is not verified
+        const bootStatus = profile?.verification_status;
+        if (bootStatus && bootStatus !== 'verified') {
+          console.log('[DoctorLayout] boot-time verification gate — status is', bootStatus, '— forcing offline');
+          setIsOnline(false);
+          fetchWithAuth(`${EDGE_BASE}/go-offline`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          }).catch(() => {});
+        }
+      });
     });
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -951,7 +974,7 @@ export default function DoctorLayout() {
   const handleDoctorRatingDone = useCallback(() => {
     const sid = doctorRatingSessionId;
     // Record this session as dismissed so the overlay never re-appears for it
-    if (sid) _doctorDismissedSessions.add(sid);
+    if (sid) markDoctorSessionDismissed(sid);
     console.log('[Doctor] Rating card dismissed', { sessionId: sid });
     setShowDoctorRating(false);
     setDoctorRatingSessionId(null);
