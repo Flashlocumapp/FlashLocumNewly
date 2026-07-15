@@ -1690,7 +1690,7 @@ export default function RequesterHomeScreen() {
       _cachedActiveSession = session;
       _sessionCachePopulated = true;
       // If session is already paid, use persistent guard to decide whether to show modal
-      if (session && session.status === 'requester_paid') {
+      if (session && (session.status === 'requester_paid' || session.status === 'settled' || session.status === 'payment_complete')) {
         // Synchronous check first — avoids async gap
         if (_requesterPaidSessions.has(session.id) || _requesterRatingInFlight.has(session.id) || _requesterDismissedSessions.has(session.id)) {
         } else {
@@ -2516,7 +2516,7 @@ export default function RequesterHomeScreen() {
         _sessionCachePopulated = true;
         const fetchedSid = sessionIdFromPayload ?? session.id;
         if (
-          (session.status === 'requester_paid' || session.status === 'payment_pending') &&
+          (session.status === 'requester_paid' || session.status === 'payment_pending' || session.status === 'settled' || session.status === 'payment_complete') &&
           fetchedSid &&
           !_requesterPaidSessions.has(fetchedSid) &&
           !_requesterRatingInFlight.has(fetchedSid) &&
