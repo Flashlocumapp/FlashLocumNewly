@@ -201,7 +201,6 @@ function CustomTimePicker({
   onCancel,
   isForDate,
   shiftDate,
-  watNow,
   isEndTime = false,
 }: {
   visible: boolean;
@@ -210,7 +209,6 @@ function CustomTimePicker({
   onCancel: () => void;
   isForDate: Date;
   shiftDate: Date;
-  watNow: Date;
   isEndTime?: boolean;
 }) {
   const [selectedHour, setSelectedHour] = useState(() => {
@@ -261,11 +259,12 @@ function CustomTimePicker({
     }
     // WAT validation (only for start time, not end time — end time can be next day)
     if (!isEndTime) {
+      const now = new Date();
       const shiftDateStr = shiftDate.toISOString().split('T')[0];
-      const watTodayStr = watNow.toISOString().split('T')[0];
+      const watTodayStr = now.toISOString().split('T')[0];
       if (shiftDateStr === watTodayStr) {
-        const watHour = watNow.getUTCHours();
-        const watMinute = watNow.getUTCMinutes();
+        const watHour = now.getUTCHours();
+        const watMinute = now.getUTCMinutes();
         if (h24 < watHour || (h24 === watHour && selectedMinute <= watMinute)) {
           Alert.alert('Invalid Time', 'Please select a future time.');
           return;
@@ -1614,8 +1613,7 @@ export default function RequesterHomeScreen() {
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
   const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // WAT now state
-  const [watNow, setWatNow] = useState<Date>(() => new Date(Date.now() + 60 * 60 * 1000));
+
 
   // Date/time pickers
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -2311,7 +2309,20 @@ export default function RequesterHomeScreen() {
   };
 
   const handleRequestCoverage = async () => {
+    console.log('[handleRequestCoverage] Submit button pressed');
     if (!selectedPlace) return;
+    // Guard: ensure the selected start time is still in the future
+    const startDateObj = new Date(shiftDate);
+    startDateObj.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
+    if (startDateObj <= new Date()) {
+      console.log('[handleRequestCoverage] Start time has passed, blocking submission', startDateObj);
+      Alert.alert(
+        'Start Time Has Passed',
+        'Your selected start time is in the past. Please update the start time before submitting.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     setSubmitting(true);
     try {
       // Construct ISO datetime strings for start_date and end_date
@@ -3780,7 +3791,6 @@ export default function RequesterHomeScreen() {
         initialTime={startTime}
         isForDate={shiftDate}
         shiftDate={shiftDate}
-        watNow={watNow}
         onDone={(date) => {
           setStartTime(date);
           setShowStartTimePicker(false);
@@ -3796,7 +3806,6 @@ export default function RequesterHomeScreen() {
         initialTime={endTime}
         isForDate={shiftDate}
         shiftDate={shiftDate}
-        watNow={watNow}
         isEndTime={true}
         onDone={(date) => {
           setEndTime(date);
