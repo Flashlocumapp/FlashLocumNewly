@@ -34,7 +34,7 @@
         "backgroundColor": "#1a1a1a"
       },
       "package": "com.flashlocum.app",
-      "versionCode": 2,
+      "versionCode": 10,
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU"

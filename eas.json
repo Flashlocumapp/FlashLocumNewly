@@ -2,12 +2,10 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "autoIncrement": true
+      "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal",
-      "autoIncrement": true
+      "distribution": "internal"
     },
     "production": {
       "autoIncrement": true
