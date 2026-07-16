@@ -372,7 +372,7 @@ export default function DoctorLayout() {
   }, [user, callEdge]);
 
   // ── Central guard: show rating overlay only if session not already rated/dismissed ──
-  const maybeShowDoctorRating = useCallback((sessionId: string, hospitalName: string, amount?: number) => {
+  const maybeShowDoctorRating = useCallback(async (sessionId: string, hospitalName: string, amount?: number) => {
     // If overlay is already open, do not reset in-progress input
     if (showDoctorRatingRef.current) return;
 
@@ -383,6 +383,24 @@ export default function DoctorLayout() {
     if (_doctorRatedSessions.has(resolvedSessionId)) return;
     // If the doctor already dismissed this overlay once, do not re-show it
     if (_doctorDismissedSessions.has(resolvedSessionId)) return;
+
+    // Async fallback — check AsyncStorage in case in-memory Sets haven't been warmed yet
+    try {
+      const [ratedRaw, dismissedRaw] = await Promise.all([
+        AsyncStorage.getItem(DOCTOR_RATED_SESSIONS_KEY),
+        AsyncStorage.getItem(DOCTOR_DISMISSED_SESSIONS_KEY),
+      ]);
+      const ratedArr: string[] = ratedRaw ? JSON.parse(ratedRaw) : [];
+      const dismissedArr: string[] = dismissedRaw ? JSON.parse(dismissedRaw) : [];
+      if (ratedArr.includes(resolvedSessionId)) {
+        _doctorRatedSessions.add(resolvedSessionId);
+        return;
+      }
+      if (dismissedArr.includes(resolvedSessionId)) {
+        _doctorDismissedSessions.add(resolvedSessionId);
+        return;
+      }
+    } catch {}
 
     // Show the overlay immediately — same pattern as requester side
     setDoctorRatingSessionId(resolvedSessionId);
@@ -427,7 +445,7 @@ export default function DoctorLayout() {
       setActiveJobCount(jobCount);
       // If session is already paid, use persistent guard to decide whether to show overlay
       if (session && (session.status === 'requester_paid' || session.status === 'settled')) {
-        maybeShowDoctorRating(session.id, session.hospital_name ?? '', session.price ?? 0);
+        void maybeShowDoctorRating(session.id, session.hospital_name ?? '', session.price ?? 0);
       }
     } catch (e: any) {
       // non-fatal
@@ -517,6 +535,8 @@ export default function DoctorLayout() {
   useEffect(() => {
     registerResetCallback(() => {
       console.log('[DoctorLayout] reset — clearing active session and job count');
+      _doctorRatedSessions.clear();
+      _doctorDismissedSessions.clear();
       setActiveSession(null);
       setActiveSessionId(null); // clear stale ID so ghost subscriptions don't form on next login
       setActiveJobCount(0);
@@ -532,16 +552,11 @@ export default function DoctorLayout() {
     return () => { PollingManager.stopAll(); };
   }, []);
 
-  // Re-fetch active session on SIGNED_IN (handles login after logout)
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') {
-        console.log('[DoctorLayout] SIGNED_IN — re-fetching active session');
-        fetchActiveSession();
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [fetchActiveSession]);
+  // Note: SIGNED_IN re-fetch is intentionally omitted here.
+  // The mount effect already handles sign-in correctly by waiting for
+  // warmDoctorRatedCache() and warmDoctorDismissedCache() to complete
+  // before calling fetchActiveSession(), preventing a race where the
+  // rating overlay fires before the in-memory Sets are populated.
 
 
 
@@ -716,7 +731,7 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] PAYMENT_CONFIRMED broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
         invalidate('coverage_doctor_completed');
         invalidate('coverage_doctor_upcoming');
       })
@@ -726,7 +741,7 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] payment_confirmed broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
         invalidate('coverage_doctor_completed');
         invalidate('coverage_doctor_upcoming');
       })
@@ -777,7 +792,7 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] user channel PAYMENT_CONFIRMED received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
         invalidate('coverage_doctor_completed');
         invalidate('coverage_doctor_upcoming');
       })
@@ -787,7 +802,7 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] user channel payment_confirmed received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
         invalidate('coverage_doctor_completed');
         invalidate('coverage_doctor_upcoming');
       })
@@ -866,14 +881,14 @@ export default function DoctorLayout() {
                 const hospitalName = payload?.payload?.hospital_name ?? '';
                 const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
                 setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-                maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+                void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
               })
               .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
                 const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? sid;
                 const hospitalName = payload?.payload?.hospital_name ?? '';
                 const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
                 setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-                maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+                void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
               })
               .subscribe(() => {});
             sessionChannelRef.current = newSessionChannel;
