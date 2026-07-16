@@ -68,12 +68,12 @@
       "expo-web-browser",
       "expo-secure-store",
       [
-          "expo-location",
-          {
-            "locationAlwaysAndWhenInUsePermission": "FlashLocum needs your location to show you nearby doctors and allow doctors to find you.",
-            "locationWhenInUsePermission": "FlashLocum needs your location to show you nearby doctors and allow doctors to find you."
-          }
-        ]
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "FlashLocum needs your location to show you nearby doctors and allow doctors to find you.",
+          "locationWhenInUsePermission": "FlashLocum needs your location to show you nearby doctors and allow doctors to find you."
+        }
+      ]
     ],
     "scheme": "flashlocum",
     "experiments": {
