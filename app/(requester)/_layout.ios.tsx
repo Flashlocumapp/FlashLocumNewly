@@ -54,6 +54,8 @@ export default function RequesterLayoutIOS() {
               <Pressable
                 key={tab.name}
                 onPress={() => {
+                  if (isActive) return; // already on this tab — do nothing
+                  console.log('[RequesterLayout] Tab pressed:', tab.route);
                   router.replace(tab.route);
                 }}
                 style={{ flex: 1, alignItems: 'center', paddingVertical: 10 }}

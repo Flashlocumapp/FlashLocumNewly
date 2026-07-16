@@ -1591,6 +1591,7 @@ export default function RequesterHomeScreen() {
 
   // Config form
   const [coverageType, setCoverageType] = useState<'Standard' | 'Home Care'>('Standard');
+  const [watNow, setWatNow] = useState<Date>(new Date(Date.now() + 60 * 60 * 1000));
   const [shiftDate, setShiftDate] = useState<Date>(new Date());
   const [startTime, setStartTime] = useState<Date>(() => {
     const d = new Date();
