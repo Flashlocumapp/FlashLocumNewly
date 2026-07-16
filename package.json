@@ -57,7 +57,6 @@
     "react-dom": "19.1.0",
     "react-leaflet": "^4.2.1",
     "react-native": "0.81.4",
-    "react-native-css-interop": "^0.1.22",
     "react-native-edge-to-edge": "^1.8.1",
     "react-native-gesture-handler": "^2.24.0",
     "react-native-google-places-autocomplete": "^2.6.4",

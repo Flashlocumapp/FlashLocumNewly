@@ -12,6 +12,7 @@
       "backgroundColor": "#1a1a1a"
     },
     "ios": {
+      "newArchEnabled": true,
       "supportsTablet": true,
       "bundleIdentifier": "com.flashlocum.app",
       "infoPlist": {
@@ -28,6 +29,7 @@
       },
     },
     "android": {
+      "newArchEnabled": true,
       "usesCleartextTraffic": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
