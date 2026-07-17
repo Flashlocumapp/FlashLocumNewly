@@ -400,13 +400,12 @@ export default function DoctorHomeScreen() {
             longitudeDelta: 0.12,
           };
           _cachedDoctorRegion = region;
-          mapRef.current.setCamera({
-            center: {
-              latitude: _cachedDoctorCoords!.latitude + MAP_LAT_OFFSET,
-              longitude: _cachedDoctorCoords!.longitude + MAP_LNG_OFFSET,
-            },
-            zoom: 12,
-          });
+          mapRef.current.animateToRegion({
+            latitude: _cachedDoctorCoords!.latitude + MAP_LAT_OFFSET,
+            longitude: _cachedDoctorCoords!.longitude + MAP_LNG_OFFSET,
+            latitudeDelta: 0.12,
+            longitudeDelta: 0.12,
+          }, 800);
         }
       } catch {
         // non-fatal — map still works without location
@@ -437,13 +436,12 @@ export default function DoctorHomeScreen() {
           latitudeDelta: 0.12,
           longitudeDelta: 0.12,
         };
-        mapRef.current.setCamera({
-          center: {
-            latitude: _cachedDoctorCoords.latitude + MAP_LAT_OFFSET,
-            longitude: _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
-          },
-          zoom: 12,
-        });
+        mapRef.current.animateToRegion({
+          latitude: _cachedDoctorCoords.latitude + MAP_LAT_OFFSET,
+          longitude: _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
+          latitudeDelta: 0.12,
+          longitudeDelta: 0.12,
+        }, 800);
       }
       return () => {
         _hasAnimatedToUser = false;
@@ -544,6 +542,7 @@ export default function DoctorHomeScreen() {
         provider={PROVIDER_GOOGLE}
         initialRegion={_cachedDoctorRegion ?? LAGOS_REGION}
         onRegionChangeComplete={(region) => { _cachedDoctorRegion = region; }}
+        onMapReady={() => {}}
         showsMyLocationButton={false}
         customMapStyle={DESATURATED_MAP_STYLE}
         minZoomLevel={10}
