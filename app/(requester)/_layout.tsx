@@ -1,9 +1,12 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { View, Text, Pressable, Animated, Platform } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { TabBarVisibilityContext, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase, fetchWithAuth } from '@/lib/supabase';
+import { setCached, isStale } from '@/utils/tabCache';
 
 const REQUESTER_TABS = [
   { name: '(home)',     route: '/(requester)/(home)'     as const, icon: 'home'           as const, label: 'Home'     },
@@ -16,6 +19,55 @@ export default function RequesterLayout() {
   const segments = useSegments();
   const insets = useSafeAreaInsets();
   const tabBarAnim = useRef(new Animated.Value(0)).current;
+  const { user, profile } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    console.log('[RequesterLayout] Starting background prefetch for user:', user.id);
+    // Fire-and-forget background prefetch — never blocks the home screen
+    void (async () => {
+      await Promise.allSettled([
+        // 1. Requester Coverage history
+        (async () => {
+          const key = `requester-coverage-${user.id}`;
+          if (!isStale(key)) return;
+          try {
+            console.log('[RequesterLayout] Prefetching coverage sessions, key:', key);
+            const res = await fetchWithAuth(
+              'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/get-coverage-sessions?role=requester&status=completed,cancelled,requester_paid',
+              { headers: { 'Content-Type': 'application/json' } }
+            );
+            if (!res.ok) return;
+            const data = await res.json();
+            setCached(key, data?.sessions ?? []);
+            console.log('[RequesterLayout] Coverage sessions cached, count:', (data?.sessions ?? []).length);
+          } catch {}
+        })(),
+        // 2. Requester Account profile
+        (async () => {
+          const key = 'requester_profile';
+          if (!isStale(key)) return;
+          try {
+            console.log('[RequesterLayout] Prefetching account profile, key:', key);
+            const { data } = await supabase
+              .from('profiles')
+              .select('first_name, last_name, phone, gender')
+              .eq('id', user.id)
+              .single();
+            if (!data) return;
+            const merged = {
+              first_name: profile?.first_name ?? data.first_name ?? null,
+              last_name: profile?.last_name ?? data.last_name ?? null,
+              phone: profile?.phone ?? data.phone ?? null,
+              gender: profile?.gender ?? data.gender ?? null,
+            };
+            setCached(key, merged);
+            console.log('[RequesterLayout] Account profile cached:', merged.first_name, merged.last_name);
+          } catch {}
+        })(),
+      ]);
+    })();
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
   const TAB_BAR_TOTAL = TAB_BAR_HEIGHT + insets.bottom;
 
   const setTabBarVisible = (visible: boolean) => {

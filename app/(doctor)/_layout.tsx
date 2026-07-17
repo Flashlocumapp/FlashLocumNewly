@@ -27,11 +27,67 @@ import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
 import { DoctorDispatchContext, CoverageSession, registerResetCallback } from '@/contexts/DoctorDispatchContext';
-import { getCached, setCached, invalidate } from '@/utils/tabCache';
+import { getCached, setCached, invalidate, isStale } from '@/utils/tabCache';
 import PollingManager from '../../utils/pollingManager';
 
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
+
+// ─── Background tab prefetch ──────────────────────────────────────────────────
+async function prefetchTabData(userId: string) {
+  const coverageUpcomingKey = `doctor-coverage-upcoming-${userId}`;
+  const coverageHistoryKey = `doctor-coverage-history-${userId}`;
+  const earningsKey = 'doctor_earnings';
+
+  await Promise.allSettled([
+    // 1. Coverage — Upcoming
+    (async () => {
+      if (!isStale(coverageUpcomingKey)) return;
+      try {
+        console.log('[prefetch] fetching doctor coverage upcoming');
+        const data = await fetchWithAuth(
+          `${EDGE_BASE}/get-coverage-sessions?role=doctor&status=upcoming,paused,payment_pending`
+        );
+        setCached(coverageUpcomingKey, data?.sessions ?? []);
+        console.log('[prefetch] doctor coverage upcoming cached', (data?.sessions ?? []).length, 'sessions');
+      } catch (e) {
+        console.log('[prefetch] doctor coverage upcoming failed (silent)', e);
+      }
+    })(),
+
+    // 2. Coverage — History
+    (async () => {
+      if (!isStale(coverageHistoryKey)) return;
+      try {
+        console.log('[prefetch] fetching doctor coverage history');
+        const data = await fetchWithAuth(
+          `${EDGE_BASE}/get-coverage-sessions?role=doctor&status=completed,cancelled,requester_paid,settled,payment_complete`
+        );
+        setCached(coverageHistoryKey, data?.sessions ?? []);
+        console.log('[prefetch] doctor coverage history cached', (data?.sessions ?? []).length, 'sessions');
+      } catch (e) {
+        console.log('[prefetch] doctor coverage history failed (silent)', e);
+      }
+    })(),
+
+    // 3. Earnings
+    (async () => {
+      if (!isStale(earningsKey)) return;
+      try {
+        console.log('[prefetch] fetching doctor earnings');
+        const { data, error } = await supabase
+          .from('doctor_earnings')
+          .select('*')
+          .order('paid_at', { ascending: false });
+        if (error) throw error;
+        setCached(earningsKey, data ?? []);
+        console.log('[prefetch] doctor earnings cached', (data ?? []).length, 'rows');
+      } catch (e) {
+        console.log('[prefetch] doctor earnings failed (silent)', e);
+      }
+    })(),
+  ]);
+}
 
 // Module-level GPS cache for go-online/heartbeat — written by the location watcher
 let _layoutCachedCoords: { lat: number; lng: number } | null = null;
@@ -501,6 +557,9 @@ export default function DoctorLayout() {
             body: JSON.stringify({}),
           }).catch(() => {});
         }
+        // Fire-and-forget background prefetch — must not block home screen render
+        console.log('[DoctorLayout] starting background tab prefetch for user', user.id);
+        prefetchTabData(user.id);
       });
     });
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
