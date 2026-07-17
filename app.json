@@ -74,27 +74,6 @@
           "locationWhenInUsePermission": "FlashLocum needs your location to show you nearby doctors and allow doctors to find you."
         }
       ],
-      [
-        "expo-splash-screen",
-        {
-          "backgroundColor": "#1a1a1a",
-          "image": "./assets/images/97ee5e17-f7fa-4301-8cc2-00f8121a76cf.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "android": {
-            "backgroundColor": "#1a1a1a",
-            "image": "./assets/images/97ee5e17-f7fa-4301-8cc2-00f8121a76cf.png",
-            "imageWidth": 200,
-            "resizeMode": "contain"
-          },
-          "ios": {
-            "backgroundColor": "#1a1a1a",
-            "image": "./assets/images/97ee5e17-f7fa-4301-8cc2-00f8121a76cf.png",
-            "imageWidth": 200,
-            "resizeMode": "contain"
-          }
-        }
-      ],
       "@react-native-community/datetimepicker"
     ],
     "scheme": "flashlocum",
