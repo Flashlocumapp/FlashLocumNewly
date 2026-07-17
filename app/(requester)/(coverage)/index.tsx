@@ -292,7 +292,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
     { label: 'Payment Status', value: settlementStatus, valueColor: settlementColor },
     { label: 'Started', value: formatDateTime(session.started_at) },
     { label: 'Ended', value: formatDateTime(session.ended_at) },
-    { label: 'Completed', value: formatDate(session.ended_at) },
+    { label: 'Completed', value: session.status === 'cancelled' ? '—' : formatDate(session.ended_at) },
   ];
 
   return (

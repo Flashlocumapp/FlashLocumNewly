@@ -404,7 +404,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
     { label: 'Settlement', value: settlementStatus, bold: true, valueColor: settlementColor },
     { label: 'Started', value: formatDateTime(session.started_at), bold: true, valueColor: undefined as string | undefined },
     { label: 'Ended', value: formatDateTime(session.ended_at), bold: true, valueColor: undefined as string | undefined },
-    { label: 'Completed', value: formatDate(session.ended_at ?? session.updated_at), bold: true },
+    { label: 'Completed', value: session.status === 'cancelled' ? '—' : formatDate(session.ended_at ?? session.updated_at), bold: true },
   ];
 
   return (
