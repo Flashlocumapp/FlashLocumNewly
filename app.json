@@ -94,7 +94,8 @@
             "resizeMode": "contain"
           }
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "scheme": "flashlocum",
     "experiments": {
