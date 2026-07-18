@@ -330,6 +330,8 @@ export default function DoctorLayout() {
   // Doctor rating overlay state
   const [showDoctorRating, setShowDoctorRating] = useState(false);
   const showDoctorRatingRef = useRef(false);
+  // Gate: blocks overlay triggers until AsyncStorage cache is warm
+  const warmCompleteRef = useRef(false);
   useEffect(() => { showDoctorRatingRef.current = showDoctorRating; }, [showDoctorRating]);
   const [doctorRatingSessionId, setDoctorRatingSessionId] = useState<string | null>(null);
   const [doctorRatingHospitalName, setDoctorRatingHospitalName] = useState<string>('');
@@ -421,6 +423,9 @@ export default function DoctorLayout() {
 
   // ── Central guard: show rating overlay only if session not already rated/dismissed ──
   const maybeShowDoctorRating = useCallback(async (sessionId: string, hospitalName: string, amount?: number) => {
+    // Gate: block all overlay triggers until AsyncStorage cache is warm
+    if (!warmCompleteRef.current) return;
+
     // If overlay is already open, do not reset in-progress input
     if (showDoctorRatingRef.current) return;
 
@@ -450,7 +455,24 @@ export default function DoctorLayout() {
       }
     } catch {}
 
-    // Show the overlay immediately — same pattern as requester side
+    // Pre-check DB — if review already exists, mark locally and skip overlay entirely
+    try {
+      const { data: existingReview } = await supabase
+        .from('shift_reviews')
+        .select('id')
+        .eq('session_id', resolvedSessionId)
+        .eq('reviewer_role', 'doctor')
+        .maybeSingle();
+      if (existingReview) {
+        markDoctorSessionRated(resolvedSessionId);
+        markDoctorSessionDismissed(resolvedSessionId);
+        return; // review exists — never show overlay
+      }
+    } catch {
+      // Non-fatal — proceed to show overlay if DB check fails
+    }
+
+    // Only reach here if no review exists anywhere
     setDoctorRatingSessionId(resolvedSessionId);
     setDoctorRatingHospitalName(hospitalName);
     setDoctorRatingStars(0);
@@ -458,25 +480,6 @@ export default function DoctorLayout() {
     setDoctorRatingError('');
     setDoctorRatingAmount(amount ?? 0);
     setShowDoctorRating(true);
-
-    // Background dedup check — if a review already exists in the DB, dismiss silently
-    void Promise.resolve(
-      supabase
-        .from('shift_reviews')
-        .select('id')
-        .eq('session_id', resolvedSessionId)
-        .eq('reviewer_role', 'doctor')
-        .maybeSingle()
-    ).then(({ data }) => {
-      if (data) {
-        // Review already submitted — dismiss the overlay and mark as rated
-        markDoctorSessionRated(resolvedSessionId);
-        markDoctorSessionDismissed(resolvedSessionId);
-        setShowDoctorRating(false);
-      }
-    }).catch(() => {
-      // Non-fatal — leave overlay visible
-    });
   }, [activeSessionIdRef]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch active session from edge function
@@ -537,6 +540,7 @@ export default function DoctorLayout() {
         }
       });
     Promise.all([warmDoctorRatedCache(), warmDoctorDismissedCache()]).then(() => {
+      warmCompleteRef.current = true;
       fetchActiveSession().then(() => {
         // Guard 2 — Boot-time: force offline if doctor is not verified
         const bootStatus = profile?.verification_status;
@@ -586,6 +590,7 @@ export default function DoctorLayout() {
   useEffect(() => {
     registerResetCallback(() => {
       console.log('[DoctorLayout] reset — clearing active session and job count');
+      warmCompleteRef.current = false;
       _doctorRatedSessions.clear();
       _doctorDismissedSessions.clear();
       setActiveSession(null);
