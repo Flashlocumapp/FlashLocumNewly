@@ -7,9 +7,9 @@
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/97ee5e17-f7fa-4301-8cc2-00f8121a76cf.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#1a1a1a"
+      "image": "./assets/images/splash-fullscreen.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#2B2B2B"
     },
     "ios": {
       "newArchEnabled": true,

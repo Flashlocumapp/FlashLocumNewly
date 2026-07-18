@@ -23,7 +23,7 @@ const DevErrorBoundary = __DEV__
   ? ErrorBoundary
   : ({ children }: { children: React.ReactNode }) => <>{children}</>;
 
-function NavigationGuard() {
+function NavigationGuard({ onNavigationReady }: { onNavigationReady: () => void }) {
   const { session, user, profile, isReady, profileLoading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
@@ -51,7 +51,7 @@ function NavigationGuard() {
     if (onIntro) return;
 
     hasRouted.current = true;
-    SplashScreen.hideAsync();
+    onNavigationReady();
 
     const alreadyInOnboarding = segments[0] === '(onboarding)';
     if (alreadyInOnboarding) {
@@ -190,12 +190,12 @@ function NavigationGuard() {
   return null;
 }
 
-function RootLayoutInner() {
+function RootLayoutInner({ onNavigationReady }: { onNavigationReady: () => void }) {
   return (
     <ThemeProvider value={DarkTheme}>
       <SafeAreaProvider>
         <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#111315' }}>
-          <NavigationGuard />
+          <NavigationGuard onNavigationReady={onNavigationReady} />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="index" options={{ headerShown: false }} />
             <Stack.Screen name="(auth)" />
@@ -217,16 +217,21 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+  const [navigationReady, setNavigationReady] = useState(false);
 
-  // Module-level preventAutoHideAsync handles the initial call.
-  // This safety net hides the splash if NavigationGuard doesn't fire within 5s.
+  // Hide splash only when BOTH fonts are loaded AND navigation has resolved auth state.
   useEffect(() => {
-    if (!fontsLoaded) return;
+    if (!fontsLoaded || !navigationReady) return;
+    SplashScreen.hideAsync().catch(() => {});
+  }, [fontsLoaded, navigationReady]);
+
+  // Safety-net: hide after 8s in case NavigationGuard never fires (e.g. error path).
+  useEffect(() => {
     const timer = setTimeout(() => {
       SplashScreen.hideAsync().catch(() => {});
-    }, 5000);
+    }, 8000);
     return () => clearTimeout(timer);
-  }, [fontsLoaded]);
+  }, []);
 
   if (!fontsLoaded) return null;
 
@@ -234,9 +239,9 @@ export default function RootLayout() {
     <DevErrorBoundary>
       <AuthProvider>
         <NotificationProvider>
-        <RootLayoutInner />
-      </NotificationProvider>
-        </AuthProvider>
+          <RootLayoutInner onNavigationReady={() => setNavigationReady(true)} />
+        </NotificationProvider>
+      </AuthProvider>
     </DevErrorBoundary>
   );
 }
