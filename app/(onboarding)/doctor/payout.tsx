@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,34 @@ const MONNIFY_BANKS_URL =
   'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/monnify-verify-account/banks';
 const MONNIFY_VERIFY_URL =
   'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/monnify-verify-account';
+const MONNIFY_SUBACCOUNT_URL =
+  'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/create-subaccount';
+const MONNIFY_PROVISION_URL =
+  'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/provision-reserved-account';
+
+// Verified Monnify split-payment subaccount whitelist (commercial banks only).
+// Fintechs (VFD, Kuda, OPay, PalmPay, Moniepoint, Carbon) are excluded until
+// Monnify explicitly documents split-payment support for them.
+const MONNIFY_SPLIT_PAYMENT_WHITELIST = new Set([
+  '044', // Access Bank
+  '023', // Citibank
+  '050', // Ecobank
+  '070', // Fidelity Bank
+  '011', // First Bank
+  '214', // FCMB
+  '058', // GTBank
+  '082', // Keystone Bank
+  '076', // Polaris Bank
+  '101', // Providus Bank
+  '221', // Stanbic IBTC
+  '068', // Standard Chartered
+  '232', // Sterling Bank
+  '032', // Union Bank
+  '033', // UBA
+  '215', // Unity Bank
+  '035', // Wema Bank
+  '057', // Zenith Bank
+]);
 
 const FALLBACK_BANKS = [
   { name: 'Access Bank', code: '044' },
@@ -42,6 +70,26 @@ const FALLBACK_BANKS = [
   { name: 'Wema Bank', code: '035' },
   { name: 'Zenith Bank', code: '057' },
 ];
+
+const LOOKUP_TIMEOUT_MS = 12000;
+
+/** Map structured error codes from edge functions to user-friendly messages. */
+function mapErrorCode(code: string | undefined): string {
+  switch (code) {
+    case 'ACCOUNT_NOT_FOUND':
+      return 'Account number not found. Please check your details and try again.';
+    case 'BANK_UNSUPPORTED':
+      return 'This bank is not currently supported for payouts. Please select a different bank.';
+    case 'PROVIDER_TIMEOUT':
+      return 'Verification is taking longer than expected. Please try again.';
+    case 'PROVIDER_ERROR':
+      return 'We could not verify your account at this time. Please try again.';
+    case 'SUBACCOUNT_EXISTS':
+      return 'A payout account is already registered. Contact support to update it.';
+    default:
+      return 'Account could not be verified. Please check your details and try again.';
+  }
+}
 
 interface Bank {
   name: string;
@@ -73,76 +121,171 @@ export default function DoctorPayout() {
   const [loadingLabel, setLoadingLabel] = useState('Saving...');
   const [submitError, setSubmitError] = useState('');
 
+  // Holds the AbortController for any in-flight account lookup.
+  const lookupAbortRef = useRef<AbortController | null>(null);
+
   // Load banks from Monnify, fall back to hardcoded list
   useEffect(() => {
     const loadBanks = async () => {
       try {
         const response = await fetchWithAuth(MONNIFY_BANKS_URL, {});
-        if (!response.ok) return;
-        const json = await response.json();
+        if (!response.ok) {
+          console.log('[Payout] Bank list load failed, using fallback');
+          return;
+        }
+        const text = await response.text();
+        let json: any;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          console.log('[Payout] Bank list load failed (JSON parse error), using fallback');
+          return;
+        }
         if (Array.isArray(json) && json.length > 0) {
-          const normalised = json.map((b: any) => ({
-            name: b.name || b.bankName || '',
-            code: b.code || b.bankCode || '',
-          })).filter(b => b.name && b.code && b.code.length === 3);
-          if (normalised.length > 0) setBanks(normalised);
+          const normalised = json
+            .map((b: any) => ({
+              name: b.name || b.bankName || '',
+              code: b.code || b.bankCode || '',
+            }))
+            .filter(
+              (b) =>
+                b.name &&
+                b.code &&
+                b.code.length === 3 &&
+                MONNIFY_SPLIT_PAYMENT_WHITELIST.has(b.code)
+            );
+          if (normalised.length > 0) {
+            setBanks(normalised);
+            console.log(`[Payout] Banks loaded: ${normalised.length} banks`);
+          } else {
+            console.log('[Payout] Bank list load failed (no whitelisted banks), using fallback');
+          }
         }
       } catch {
-        // keep fallback list
+        console.log('[Payout] Bank list load failed, using fallback');
       }
     };
     loadBanks();
   }, []);
 
-  const lookupAccountName = useCallback(async (bank: Bank, accNum: string) => {
-    setAccountNameLoading(true);
-    setAccountNameError('');
-    setAccountName('');
-    try {
-      const response = await fetchWithAuth(MONNIFY_VERIFY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accountNumber: accNum, bankCode: bank.code }),
-      });
-      const result = await response.json();
-      if (!response.ok || result.error) {
-        throw new Error(ACCOUNT_VERIFY_ERROR);
+  const lookupAccountName = useCallback(
+    async (bank: Bank, accNum: string) => {
+      // Cancel any previous in-flight lookup
+      if (lookupAbortRef.current) {
+        lookupAbortRef.current.abort();
       }
+      const controller = new AbortController();
+      lookupAbortRef.current = controller;
 
-      const returnedName = String(result.accountName || '').toLowerCase();
-      // Use profile.full_name first (set during Create Your Account), fall back to user metadata, then email
-      const rawRegistrationName = String(
-        profile?.full_name || user?.user_metadata?.full_name || user?.email || ''
-      ).toLowerCase();
+      // Set a 12-second timeout that aborts the same controller
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, LOOKUP_TIMEOUT_MS);
 
-      const stripTitles = (s: string) =>
-        s.replace(/\b(dr|mr|mrs|ms|prof|sir)\b\.?\s*/gi, '').trim();
+      console.log(
+        `[Payout] Account lookup started: bank=${bank.code}, account=****${accNum.slice(-4)}`
+      );
 
-      const cleanReturned = stripTitles(returnedName);
-      const cleanRegistration = stripTitles(rawRegistrationName);
+      setAccountNameLoading(true);
+      setAccountNameError('');
+      setAccountName('');
 
-      const regTokens = cleanRegistration.split(/\s+/).filter((t: string) => t.length > 1);
-      // Take only first 2 meaningful tokens (first name, last name)
-      const coreTokens = regTokens.slice(0, 2);
-      const matchCount = coreTokens.filter((token: string) => cleanReturned.includes(token)).length;
+      try {
+        const response = await fetchWithAuth(MONNIFY_VERIFY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accountNumber: accNum, bankCode: bank.code }),
+          signal: controller.signal,
+        });
 
-      if (coreTokens.length > 0 && matchCount === 0) {
-        setAccountNameError(ACCOUNT_MISMATCH_ERROR);
-        setAccountName('');
-      } else {
-        setAccountName(String(result.accountName || ''));
+        clearTimeout(timeoutId);
+
+        // Safe JSON parse — edge function may return non-JSON on errors
+        const text = await response.text();
+        let result: any;
+        try {
+          result = JSON.parse(text);
+        } catch {
+          console.log('[Payout] Account lookup failed: errorCode=PROVIDER_ERROR (JSON parse)');
+          setAccountNameError(mapErrorCode('PROVIDER_ERROR'));
+          return;
+        }
+
+        if (!response.ok || result.error) {
+          const code: string | undefined =
+            typeof result?.error === 'string' ? result.error : undefined;
+          console.log(`[Payout] Account lookup failed: errorCode=${code ?? 'unknown'}`);
+          setAccountNameError(mapErrorCode(code));
+          return;
+        }
+
+        const returnedName = String(result.accountName || '').toLowerCase();
+        // Build registration name from profile first/last name, then user metadata, then email
+        const profileFullName =
+          profile?.first_name && profile?.last_name
+            ? `${profile.first_name} ${profile.last_name}`
+            : profile?.first_name || profile?.last_name || '';
+        const rawRegistrationName = String(
+          profileFullName || user?.user_metadata?.full_name || user?.email || ''
+        ).toLowerCase();
+
+        const stripTitles = (s: string) =>
+          s.replace(/\b(dr|mr|mrs|ms|prof|sir)\b\.?\s*/gi, '').trim();
+
+        const cleanReturned = stripTitles(returnedName);
+        const cleanRegistration = stripTitles(rawRegistrationName);
+
+        const regTokens = cleanRegistration.split(/\s+/).filter((t: string) => t.length > 1);
+        // Take only first 2 meaningful tokens (first name, last name)
+        const coreTokens = regTokens.slice(0, 2);
+        const matchCount = coreTokens.filter((token: string) =>
+          cleanReturned.includes(token)
+        ).length;
+
+        if (coreTokens.length > 0 && matchCount === 0) {
+          console.log('[Payout] Account lookup failed: name mismatch');
+          setAccountNameError(ACCOUNT_MISMATCH_ERROR);
+          setAccountName('');
+        } else {
+          console.log('[Payout] Account lookup success: name resolved');
+          setAccountName(String(result.accountName || ''));
+        }
+      } catch (err: unknown) {
+        clearTimeout(timeoutId);
+        // Ignore aborted requests — a new lookup is already in flight
+        if (err instanceof Error && err.name === 'AbortError') {
+          // Check if this was a timeout abort (controller already fired) vs a
+          // cancellation from a new lookup. Either way, if it was a timeout the
+          // user should see the timeout message; if it was a cancellation we
+          // stay silent. We distinguish by checking whether the timeout already
+          // fired — but since we clearTimeout above only on success/non-abort
+          // paths, a timeout abort will reach here with the timeout already
+          // elapsed. Show the timeout message only if the component is still
+          // showing this lookup (i.e. the controller is still current).
+          if (lookupAbortRef.current === controller) {
+            console.log('[Payout] Account lookup failed: errorCode=PROVIDER_TIMEOUT (timeout)');
+            setAccountNameError(mapErrorCode('PROVIDER_TIMEOUT'));
+          }
+          return;
+        }
+        console.log('[Payout] Account lookup failed: errorCode=PROVIDER_ERROR');
+        setAccountNameError(mapErrorCode('PROVIDER_ERROR'));
+      } finally {
+        setAccountNameLoading(false);
       }
-    } catch {
-      setAccountNameError(ACCOUNT_VERIFY_ERROR);
-    } finally {
-      setAccountNameLoading(false);
-    }
-  }, [user, profile]);
+    },
+    [user, profile]
+  );
 
   useEffect(() => {
     if (selectedBank && accountNumber.length === 10) {
       lookupAccountName(selectedBank, accountNumber);
     } else {
+      // Cancel any in-flight lookup when inputs are cleared
+      if (lookupAbortRef.current) {
+        lookupAbortRef.current.abort();
+        lookupAbortRef.current = null;
+      }
       setAccountName('');
       setAccountNameError('');
     }
@@ -181,6 +324,7 @@ export default function DoctorPayout() {
     }
     if (!valid) return;
 
+    console.log('[Payout] Submit started');
     setLoading(true);
     setLoadingLabel('Saving details...');
 
@@ -188,6 +332,7 @@ export default function DoctorPayout() {
       const userId = user!.id;
 
       // Step 1: Save bank details
+      console.log('[Payout] Step 1: saving bank details');
       const { error: doctorProfileError } = await supabase
         .from('doctor_profiles')
         .upsert({
@@ -200,58 +345,66 @@ export default function DoctorPayout() {
       if (doctorProfileError) throw doctorProfileError;
 
       // Step 2: Create Monnify subaccount — BLOCKING, must succeed
+      console.log('[Payout] Step 2: creating subaccount');
       setLoadingLabel('Setting up payout account...');
-      const subaccountResponse = await fetchWithAuth(
-        'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/create-subaccount',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            doctor_id: userId,
-            bank_code: selectedBank!.code,
-            account_number: accountNumber,
-            account_name: accountName,
-            bank_name: selectedBank!.name,
-          }),
-        }
-      );
+      const subaccountResponse = await fetchWithAuth(MONNIFY_SUBACCOUNT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          doctor_id: userId,
+          bank_code: selectedBank!.code,
+          account_number: accountNumber,
+          account_name: accountName,
+          bank_name: selectedBank!.name,
+        }),
+      });
 
-      const subaccountResult = await subaccountResponse.json();
-
-      if (!subaccountResponse.ok || subaccountResult.error) {
-        throw new Error(
-          subaccountResult.error ||
-          'Payout account setup failed. Please check your bank details and try again.'
-        );
+      // Safe JSON parse for subaccount response
+      const subaccountText = await subaccountResponse.text();
+      let subaccountResult: any;
+      try {
+        subaccountResult = JSON.parse(subaccountText);
+      } catch {
+        subaccountResult = {};
       }
 
-      // Step 2b: Provision Monnify reserved account for this doctor
+      if (!subaccountResponse.ok || subaccountResult.error) {
+        const code: string | undefined =
+          typeof subaccountResult?.error === 'string' ? subaccountResult.error : undefined;
+        console.log(`[Payout] Submit failed: errorCode=${code ?? 'unknown'}`);
+        setSubmitError(mapErrorCode(code));
+        return;
+      }
+
+      // Step 2b: Provision Monnify reserved account for this doctor (non-blocking)
+      console.log('[Payout] Step 2b: provisioning reserved account');
       setLoadingLabel('Setting up payment account...');
       try {
-        const provisionResponse = await fetchWithAuth(
-          'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/provision-reserved-account',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}),
-          }
-        );
-        await provisionResponse.json();
+        const provisionResponse = await fetchWithAuth(MONNIFY_PROVISION_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        await provisionResponse.text();
       } catch {
         // Non-blocking: don't fail onboarding if this step fails
       }
 
       // Step 3: Mark onboarding complete — only reached if subaccount succeeded
+      console.log('[Payout] Step 3: marking onboarding complete');
       setLoadingLabel('Almost done...');
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert({ id: userId, onboarding_complete: true, doctor_onboarding_complete: true });
       if (profileError) throw profileError;
 
+      console.log('[Payout] Submit success');
       await refreshProfile();
       router.replace('/(doctor)/(home)' as any);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      const message =
+        err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      console.log(`[Payout] Submit failed: ${message}`);
       setSubmitError(message);
     } finally {
       setLoading(false);
