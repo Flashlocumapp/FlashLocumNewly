@@ -15,7 +15,7 @@ interface Props {
   tabs: DoctorTabItem[];
 }
 
-export default function DoctorTabBar({ tabs }: Props) {
+function DoctorTabBar({ tabs }: Props) {
   const router = useRouter();
   const segments = useSegments();
 
@@ -56,6 +56,8 @@ export default function DoctorTabBar({ tabs }: Props) {
     </SafeAreaView>
   );
 }
+
+export default React.memo(DoctorTabBar);
 
 const styles = StyleSheet.create({
   safeArea: {

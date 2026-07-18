@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,12 +16,6 @@ import {
 import { Stack, Href, useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  useFonts,
-  Inter_400Regular,
-  Inter_600SemiBold,
-  Inter_700Bold,
-} from '@expo-google-fonts/inter';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -303,8 +297,6 @@ export default function DoctorLayout() {
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
   const router = useRouter();
-  const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
-
   const [isOnline, setIsOnline] = useState(false);
   const [doctorScreenState, setDoctorScreenState] = useState<DoctorScreenState>('idle');
   const [requestQueue, setRequestQueue] = useState<DispatchRequest[]>([]);
@@ -1115,23 +1107,25 @@ export default function DoctorLayout() {
   // 3-job cap: pill is disabled when activeJobCount >= 3
   const isJobCapReached = activeJobCount >= 3;
 
+  const contextValue = useMemo(() => ({
+    isOnline,
+    setIsOnline,
+    goOnline,
+    doctorScreenState,
+    currentRequest,
+    confirmedRequest,
+    accepting,
+    handleAccept,
+    handleDecline,
+    activeSession,
+    setActiveSession,
+    activeJobCount,
+    setActiveJobCount,
+    isJobCapReached,
+  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached]);
+
   return (
-    <DoctorDispatchContext.Provider value={{
-      isOnline,
-      setIsOnline,
-      goOnline,
-      doctorScreenState,
-      currentRequest,
-      confirmedRequest,
-      accepting,
-      handleAccept,
-      handleDecline,
-      activeSession,
-      setActiveSession,
-      activeJobCount,
-      setActiveJobCount,
-      isJobCapReached,
-    }}>
+    <DoctorDispatchContext.Provider value={contextValue}>
       <View style={{ flex: 1 }}>
         <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
           <Stack.Screen name="(home)" />

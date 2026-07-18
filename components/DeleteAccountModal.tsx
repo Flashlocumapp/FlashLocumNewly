@@ -96,7 +96,7 @@ export default function DeleteAccountModal({
       onRequestClose={handleRequestClose}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
         style={styles.overlay}
       >
         <View style={styles.overlay}>

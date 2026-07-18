@@ -1,5 +1,6 @@
-import React, { useRef, useEffect } from 'react';
-import { View, Text, Pressable, Animated, Platform } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, Pressable, Platform } from 'react-native';
+import Animated, { useSharedValue, withTiming, useAnimatedStyle } from 'react-native-reanimated';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -14,11 +15,45 @@ const REQUESTER_TABS = [
   { name: '(account)',  route: '/(requester)/(account)'  as const, icon: 'person'         as const, label: 'Account'  },
 ];
 
+interface RequesterTabBarProps {
+  segments: string[];
+  router: ReturnType<typeof useRouter>;
+}
+
+const RequesterTabBar = React.memo(function RequesterTabBar({ segments, router }: RequesterTabBarProps) {
+  return (
+    <SafeAreaView edges={['bottom']} style={{ backgroundColor: '#F9F9F6', borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+      <View style={{ flexDirection: 'row', backgroundColor: '#F9F9F6', borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
+        {REQUESTER_TABS.map((tab) => {
+          const isActive = (segments as string[]).includes(tab.name);
+          return (
+            <Pressable
+              key={tab.name}
+              onPress={() => {
+                if (isActive) return; // already on this tab — do nothing
+                console.log('[RequesterTabBar] Tab pressed:', tab.route);
+                router.replace(tab.route);
+              }}
+              android_ripple={{ color: 'transparent' }}
+              style={({ pressed }) => ({ flex: 1, alignItems: 'center', paddingVertical: 10, opacity: 1 })}
+            >
+              <MaterialIcons name={tab.icon} size={24} color={isActive ? '#1C1C1E' : '#8E8E93'} />
+              <Text style={{ fontSize: 10, fontWeight: isActive ? '600' : '400', color: isActive ? '#1C1C1E' : '#8E8E93', marginTop: 3 }}>
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </SafeAreaView>
+  );
+});
+
 export default function RequesterLayout() {
   const router = useRouter();
   const segments = useSegments();
   const insets = useSafeAreaInsets();
-  const tabBarAnim = useRef(new Animated.Value(0)).current;
+  const tabBarOffset = useSharedValue(0);
   const { user, profile } = useAuth();
 
   useEffect(() => {
@@ -68,15 +103,16 @@ export default function RequesterLayout() {
       ]);
     })();
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const TAB_BAR_TOTAL = TAB_BAR_HEIGHT + insets.bottom;
 
   const setTabBarVisible = (visible: boolean) => {
-    Animated.timing(tabBarAnim, {
-      toValue: visible ? 0 : TAB_BAR_TOTAL,
-      duration: 260,
-      useNativeDriver: true,
-    }).start();
+    tabBarOffset.value = withTiming(visible ? 0 : TAB_BAR_TOTAL, { duration: 260 });
   };
+
+  const tabBarAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: tabBarOffset.value }],
+  }));
 
   return (
     <TabBarVisibilityContext.Provider value={{ setTabBarVisible }}>
@@ -88,35 +124,11 @@ export default function RequesterLayout() {
         </Stack>
 
         {Platform.OS !== 'ios' && (
-          <Animated.View style={{
+          <Animated.View style={[{
             position: 'absolute',
             bottom: 0, left: 0, right: 0,
-            transform: [{ translateY: tabBarAnim }],
-          }}>
-            <SafeAreaView edges={['bottom']} style={{ backgroundColor: '#F9F9F6', borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
-              <View style={{ flexDirection: 'row', backgroundColor: '#F9F9F6', borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
-                {REQUESTER_TABS.map((tab) => {
-                  const isActive = (segments as string[]).includes(tab.name);
-                  return (
-                    <Pressable
-                      key={tab.name}
-                      onPress={() => {
-                        if (isActive) return; // already on this tab — do nothing
-                        console.log('[RequesterTabBar] Tab pressed:', tab.route);
-                        router.replace(tab.route);
-                      }}
-                      android_ripple={{ color: 'transparent' }}
-                      style={({ pressed }) => ({ flex: 1, alignItems: 'center', paddingVertical: 10, opacity: 1 })}
-                    >
-                      <MaterialIcons name={tab.icon} size={24} color={isActive ? '#1C1C1E' : '#8E8E93'} />
-                      <Text style={{ fontSize: 10, fontWeight: isActive ? '600' : '400', color: isActive ? '#1C1C1E' : '#8E8E93', marginTop: 3 }}>
-                        {tab.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </SafeAreaView>
+          }, tabBarAnimStyle]}>
+            <RequesterTabBar segments={segments as string[]} router={router} />
           </Animated.View>
         )}
       </View>

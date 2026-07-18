@@ -281,7 +281,7 @@ export default function RequesterAccountScreen() {
 
       {/* Phone Edit Modal */}
       <Modal visible={phoneModalVisible} transparent animationType="slide" onRequestClose={() => setPhoneModalVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setPhoneModalVisible(false)}>
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>Edit Phone Number</Text>

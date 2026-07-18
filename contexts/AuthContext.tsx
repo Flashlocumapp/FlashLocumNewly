@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, getValidToken, setForegroundRefreshPromise, clearRefreshPromise, registerAuthFailureCallback } from '@/lib/supabase';
@@ -205,27 +205,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [fetchProfile]);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error };
-  };
+  }, []);
 
-  const signUp = async (email: string, password: string, metadata?: Record<string, string>) => {
+  const signUp = useCallback(async (email: string, password: string, metadata?: Record<string, string>) => {
     const { error } = await supabase.auth.signUp({ email, password, options: { data: metadata } });
     return { error };
-  };
+  }, []);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     console.log('[AuthContext] signOut — clearing tab cache and dispatch state');
     clearRefreshPromise(); // prevent stale promise from blocking post-login fetches
     clearAll();
     triggerDispatchReset();
     await supabase.auth.signOut();
     setProfile(null);
-  };
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    session, user, profile, loading, profileLoading, profileError, isReady,
+    signIn, signUp, signOut, refreshProfile,
+  }), [session, user, profile, loading, profileLoading, profileError, isReady, signIn, signUp, signOut, refreshProfile]);
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, profileLoading, profileError, isReady, signIn, signUp, signOut, refreshProfile }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

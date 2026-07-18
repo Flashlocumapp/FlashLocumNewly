@@ -3029,7 +3029,7 @@ export default function RequesterHomeScreen() {
           {sheetState === 'config' && (
             <KeyboardAvoidingView
               style={{ flex: 1 }}
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              behavior="padding"
               keyboardVerticalOffset={0}
             >
             <ScrollView

@@ -195,7 +195,7 @@ export default function SignUpScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
     >
       {/* Custom header bar */}
       <View style={[styles.headerBar, { paddingTop: insets.top + 16 }]}>

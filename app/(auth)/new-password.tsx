@@ -125,7 +125,7 @@ export default function NewPasswordScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
     >
       {/* Header */}
       <View style={styles.headerBar}>
