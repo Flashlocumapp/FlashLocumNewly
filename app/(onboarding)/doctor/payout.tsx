@@ -499,6 +499,18 @@ export default function DoctorPayout() {
             )}
           </View>
           {accountNameError ? <Text style={styles.inlineError}>{accountNameError}</Text> : null}
+          {accountNameError && accountNumber.length === 10 && selectedBank && !accountNameLoading ? (
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[Payout] Retry account lookup tapped');
+                setAccountNameError('');
+                setAccountName('');
+                lookupAccountName(selectedBank, accountNumber);
+              }}
+            >
+              <Text style={styles.retryText}>Tap to retry</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {/* Submit error */}
@@ -758,5 +770,11 @@ const styles = StyleSheet.create({
   modalDivider: {
     height: 1,
     backgroundColor: '#F0F0F0',
+  },
+  retryText: {
+    fontSize: 13,
+    color: '#0A0A0A',
+    textDecorationLine: 'underline',
+    marginTop: 6,
   },
 });
