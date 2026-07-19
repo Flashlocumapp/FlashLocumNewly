@@ -422,8 +422,13 @@ export default function DoctorHomeScreen() {
   useEffect(() => {
     if (!showMarker) return;
     setMarkerTracksViews(true);
-    const t = setTimeout(() => setMarkerTracksViews(false), 500);
-    return () => clearTimeout(t);
+    // On Android keep tracksViewChanges=true permanently (single marker, negligible cost,
+    // eliminates the native snapshot race). On iOS freeze after 1500ms.
+    if (Platform.OS === 'ios') {
+      const t = setTimeout(() => setMarkerTracksViews(false), 1500);
+      return () => clearTimeout(t);
+    }
+    // Android: leave markerTracksViews=true, no timeout needed
   }, [showMarker]);
 
   // ─── Re-focus map on tab return ──────────────────────────────────────────────
@@ -555,7 +560,7 @@ export default function DoctorHomeScreen() {
             tracksViewChanges={markerTracksViews}
           >
             <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#34C759', borderWidth: 2.5, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
-                <MaterialCommunityIcons name="stethoscope" size={20} color="#FFFFFF" />
+                <Text style={{ fontSize: 18, lineHeight: 22 }}>🩺</Text>
               </View>
           </Marker>
         )}
