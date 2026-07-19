@@ -332,6 +332,7 @@ export default function DoctorLayout() {
   const showDoctorRatingRef = useRef(false);
   // Gate: blocks overlay triggers until AsyncStorage cache is warm
   const warmCompleteRef = useRef(false);
+  const [warmComplete, setWarmComplete] = useState(false);
   useEffect(() => { showDoctorRatingRef.current = showDoctorRating; }, [showDoctorRating]);
   const [doctorRatingSessionId, setDoctorRatingSessionId] = useState<string | null>(null);
   const [doctorRatingHospitalName, setDoctorRatingHospitalName] = useState<string>('');
@@ -496,7 +497,10 @@ export default function DoctorLayout() {
       setActiveJobCount(jobCount);
       // If session is already paid, use persistent guard to decide whether to show overlay
       if (session && (session.status === 'requester_paid' || session.status === 'settled')) {
-        void maybeShowDoctorRating(session.id, session.hospital_name ?? '', session.price ?? 0);
+        // Synchronous pre-check — skip entirely if already handled
+        if (!_doctorRatedSessions.has(session.id) && !_doctorDismissedSessions.has(session.id)) {
+          void maybeShowDoctorRating(session.id, session.hospital_name ?? '', session.price ?? 0);
+        }
       }
     } catch (e: any) {
       // non-fatal
@@ -541,6 +545,7 @@ export default function DoctorLayout() {
       });
     Promise.all([warmDoctorRatedCache(), warmDoctorDismissedCache()]).then(() => {
       warmCompleteRef.current = true;
+      setWarmComplete(true);
       fetchActiveSession().then(() => {
         // Guard 2 — Boot-time: force offline if doctor is not verified
         const bootStatus = profile?.verification_status;
@@ -591,6 +596,7 @@ export default function DoctorLayout() {
     registerResetCallback(() => {
       console.log('[DoctorLayout] reset — clearing active session and job count');
       warmCompleteRef.current = false;
+      setWarmComplete(false);
       _doctorRatedSessions.clear();
       _doctorDismissedSessions.clear();
       setActiveSession(null);
@@ -866,7 +872,7 @@ export default function DoctorLayout() {
         // subscription status — no logging needed
       });
     return () => { supabase.removeChannel(ch); };
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, warmComplete]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Queue → state sync ──
   useEffect(() => {
@@ -1044,8 +1050,11 @@ export default function DoctorLayout() {
   // ── Doctor Rating — dismiss ──
   const handleDoctorRatingDone = useCallback(() => {
     const sid = doctorRatingSessionId;
-    // Record this session as dismissed so the overlay never re-appears for it
-    if (sid) markDoctorSessionDismissed(sid);
+    // Record this session as dismissed AND rated so the overlay never re-appears for it
+    if (sid) {
+      markDoctorSessionDismissed(sid);
+      markDoctorSessionRated(sid);
+    }
     console.log('[Doctor] Rating card dismissed', { sessionId: sid });
     setShowDoctorRating(false);
     setDoctorRatingSessionId(null);
@@ -1055,6 +1064,8 @@ export default function DoctorLayout() {
     setDoctorRatingAmount(0);
     // Clear activeSession so home screen shows "No coverage yet" after payment flow
     setActiveSession(null);
+    // Stop the 30s session poll — session is permanently settled
+    setActiveSessionId(null);
   }, [doctorRatingSessionId]);
 
   // ── Doctor Rating — submit review ──
@@ -1080,7 +1091,10 @@ export default function DoctorLayout() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to submit review');
       console.log('[Doctor] Rating submitted successfully', { sessionId: doctorRatingSessionId });
-      if (doctorRatingSessionId) markDoctorSessionRated(doctorRatingSessionId);
+      if (doctorRatingSessionId) {
+        markDoctorSessionRated(doctorRatingSessionId);
+        markDoctorSessionDismissed(doctorRatingSessionId);
+      }
       handleDoctorRatingDone();
     } catch (e: any) {
       console.log('[Doctor] Rating submission failed', { error: e.message });
