@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Image, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
 
-const appIcon = require('@/assets/images/APP ICON.png');
+const appIcon = require('@/assets/images/flashlocum-logo.png');
 
 export default function IndexScreen() {
   const [showSpinner, setShowSpinner] = useState(false);
