@@ -56,6 +56,11 @@
       "navigationBar": {
         "backgroundColor": "#F9F9F6",
         "barStyle": "dark-content"
+      },
+      "splash": {
+        "image": "./assets/images/splash-fullscreen.png",
+        "resizeMode": "cover",
+        "backgroundColor": "#2B2B2B"
       }
     },
     "web": {
