@@ -2859,7 +2859,7 @@ export default function RequesterHomeScreen() {
             width: 44,
             height: 44,
             borderRadius: 22,
-            backgroundColor: '#FFFFFF',
+            backgroundColor: '#2B2B2B',
             justifyContent: 'center',
             alignItems: 'center',
             shadowColor: '#000',
@@ -2869,7 +2869,7 @@ export default function RequesterHomeScreen() {
             elevation: 5,
           }}
         >
-          <ArrowLeft size={20} color="#1C1C1E" />
+          <ArrowLeft size={20} color="#F5F5F0" />
         </TouchableOpacity>
       )}
 
