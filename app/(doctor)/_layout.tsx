@@ -495,17 +495,10 @@ export default function DoctorLayout() {
       const jobCount: number = data?.active_job_count ?? 0;
       setActiveSession(session);
       setActiveJobCount(jobCount);
-      // If session is already paid, use persistent guard to decide whether to show overlay
-      if (session && (session.status === 'requester_paid' || session.status === 'settled')) {
-        // Synchronous pre-check — skip entirely if already handled
-        if (!_doctorRatedSessions.has(session.id) && !_doctorDismissedSessions.has(session.id)) {
-          void maybeShowDoctorRating(session.id, session.hospital_name ?? '', session.price ?? 0);
-        }
-      }
     } catch (e: any) {
       // non-fatal
     }
-  }, [maybeShowDoctorRating]);
+  }, []);
 
   // Keep stable refs
   useEffect(() => { callEdgeRef.current = callEdge; }, [callEdge]);
@@ -523,11 +516,14 @@ export default function DoctorLayout() {
   // ─── Keep activeSessionId in sync — only set, never clear ───────────────────
   useEffect(() => {
     if (activeSession?.id) {
-      setActiveSessionId(activeSession.id);
+      const terminalStatuses = ['settled', 'requester_paid', 'payment_complete'];
+      if (!terminalStatuses.includes(activeSession.status)) {
+        setActiveSessionId(activeSession.id);
+      }
     }
     // Intentionally do NOT clear when activeSession becomes null —
     // this keeps the session channel alive after payment_confirmed fires.
-  }, [activeSession?.id]);
+  }, [activeSession?.id, activeSession?.status]);
 
   // On mount — restore session state after app restart
   useEffect(() => {
@@ -1048,12 +1044,14 @@ export default function DoctorLayout() {
   }, [requestQueue, user, callEdge]);
 
   // ── Doctor Rating — dismiss ──
-  const handleDoctorRatingDone = useCallback(() => {
+  const handleDoctorRatingDone = useCallback(async () => {
     const sid = doctorRatingSessionId;
     // Record this session as dismissed AND rated so the overlay never re-appears for it
     if (sid) {
-      markDoctorSessionDismissed(sid);
-      markDoctorSessionRated(sid);
+      await Promise.all([
+        markDoctorSessionDismissed(sid),
+        markDoctorSessionRated(sid),
+      ]);
     }
     console.log('[Doctor] Rating card dismissed', { sessionId: sid });
     setShowDoctorRating(false);
@@ -1092,8 +1090,10 @@ export default function DoctorLayout() {
       if (!res.ok) throw new Error(data.error ?? 'Failed to submit review');
       console.log('[Doctor] Rating submitted successfully', { sessionId: doctorRatingSessionId });
       if (doctorRatingSessionId) {
-        markDoctorSessionRated(doctorRatingSessionId);
-        markDoctorSessionDismissed(doctorRatingSessionId);
+        await Promise.all([
+          markDoctorSessionRated(doctorRatingSessionId),
+          markDoctorSessionDismissed(doctorRatingSessionId),
+        ]);
       }
       handleDoctorRatingDone();
     } catch (e: any) {
