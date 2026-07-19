@@ -68,6 +68,14 @@
       "bundler": "metro"
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-fullscreen.png",
+          "resizeMode": "cover",
+          "backgroundColor": "#2B2B2B"
+        }
+      ],
       "expo-font",
       "expo-router",
       "expo-web-browser",
