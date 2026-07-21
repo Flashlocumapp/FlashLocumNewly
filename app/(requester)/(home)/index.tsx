@@ -3900,6 +3900,7 @@ export default function RequesterHomeScreen() {
                 onPress={() => {
                   console.log('[EarlyStartModal] Update Start Time pressed');
                   setShowEarlyStartModal(false);
+                  transitionTo('config');
                 }}
                 style={{
                   backgroundColor: '#F9F9F6',
