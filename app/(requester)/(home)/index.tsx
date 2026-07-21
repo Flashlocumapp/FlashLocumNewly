@@ -2320,13 +2320,10 @@ export default function RequesterHomeScreen() {
     // Guard: ensure the selected start time is still in the future
     const startDateObj = new Date(shiftDate);
     startDateObj.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
-    if (startDateObj <= new Date()) {
-      console.log('[handleRequestCoverage] Start time has passed, blocking submission', startDateObj);
-      Alert.alert(
-        'Start Time Has Passed',
-        'Your selected start time is in the past. Please update the start time before submitting.',
-        [{ text: 'OK' }]
-      );
+    const minimumStart = new Date(Date.now() + 30 * 60 * 1000);
+    if (startDateObj < minimumStart) {
+      console.log('[handleRequestCoverage] Start time is too soon, blocking submission', startDateObj, 'minimum:', minimumStart);
+      setShowEarlyStartModal(true);
       return;
     }
     setSubmitting(true);
@@ -2437,6 +2434,7 @@ export default function RequesterHomeScreen() {
   };
 
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showEarlyStartModal, setShowEarlyStartModal] = useState(false);
   const [showCancelReasons, setShowCancelReasons] = useState(false);
   const [cancelWithdrawn, setCancelWithdrawn] = useState(false);
   const [showCancelActiveModal, setShowCancelActiveModal] = useState(false);
@@ -3677,7 +3675,7 @@ export default function RequesterHomeScreen() {
             value={shiftDate}
             mode="date"
             display="default"
-            minimumDate={new Date()}
+            minimumDate={new Date(Date.now() + 30 * 60 * 1000)}
             maximumDate={maxDate}
             onChange={(event, date) => {
               // Always close first on Android
@@ -3740,7 +3738,7 @@ export default function RequesterHomeScreen() {
                     value={shiftDate}
                     mode="date"
                     display="spinner"
-                    minimumDate={new Date()}
+                    minimumDate={new Date(Date.now() + 30 * 60 * 1000)}
                     maximumDate={maxDate}
                     style={{ backgroundColor: '#1C1C1E' }}
                     textColor="#FFFFFF"
@@ -3868,6 +3866,49 @@ export default function RequesterHomeScreen() {
                 }}
               >
                 <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>Cancel Request</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── EARLY START TIME MODAL ── */}
+      <Modal
+        visible={showEarlyStartModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowEarlyStartModal(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}
+          onPress={() => setShowEarlyStartModal(false)}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{
+              backgroundColor: '#1C1C1E',
+              borderRadius: 24,
+              padding: 28,
+              width: '100%',
+            }}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
+                Too Soon to Request
+              </Text>
+              <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
+                Start time must be at least 30 minutes from now. This gives doctors enough time to travel to your location.
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[EarlyStartModal] Update Start Time pressed');
+                  setShowEarlyStartModal(false);
+                }}
+                style={{
+                  backgroundColor: '#F9F9F6',
+                  borderRadius: 999,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Update Start Time</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
