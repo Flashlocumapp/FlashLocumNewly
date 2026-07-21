@@ -1537,7 +1537,7 @@ export default function RequesterHomeScreen() {
       return;
     }
     setOnlineDoctors((data ?? []) as { id: string; lat: number; lng: number }[]);
-  }, [user]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Online doctors realtime (Broadcast — bypasses RLS) ──
   useEffect(() => {
@@ -1561,13 +1561,18 @@ export default function RequesterHomeScreen() {
           setOnlineDoctors((prev) => prev.filter((d) => d.id !== data.id));
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          // Re-fetch full list on every (re)connect to recover any missed broadcasts
+          fetchOnlineDoctors();
+        }
+      });
 
     return () => {
       console.log('[OnlineDoctors] Unsubscribing from doctor-status broadcast channel');
       supabase.removeChannel(ch);
     };
-  }, [fetchOnlineDoctors, user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sheet state
   const [sheetState, setSheetState] = useState<SheetState>('idle');
