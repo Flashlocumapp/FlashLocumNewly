@@ -144,7 +144,7 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const SHEET_HEIGHTS = {
   idle: 140 + 80,
-  searching: SCREEN_HEIGHT * 0.62,
+  searching: SCREEN_HEIGHT * 0.75,
   config: SCREEN_HEIGHT * 0.75,
   summary: 240 + 80,
   matching: 300 + 80,
