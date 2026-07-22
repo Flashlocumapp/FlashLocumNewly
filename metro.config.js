@@ -7,6 +7,17 @@ const config = getDefaultConfig(__dirname);
 
 config.resolver.unstable_enablePackageExports = true;
 
+// ── Web platform: stub out react-native-maps to prevent the fatal
+//    codegenNativeCommands import that kills Metro when bundling for web.
+const RN_MAPS_STUB = path.join(__dirname, 'utils', 'polyfills', 'react-native-maps.web.js');
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (platform === 'web' && moduleName.includes('react-native-maps')) {
+    return { filePath: RN_MAPS_STUB, type: 'sourceFile' };
+  }
+  // Fall through to default resolver for everything else
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 // Use turborepo to restore the cache when possible
 config.cacheStores = [
     new FileStore({ root: path.join(__dirname, 'node_modules', '.cache', 'metro') }),
