@@ -93,6 +93,9 @@ const DOCTOR_DISMISSED_SESSIONS_KEY = 'doctor_dismissed_sessions_v1';
 const _doctorRatedSessions = new Set<string>();
 // Layer 1b: dismissed-without-rating sessions — overlay will NOT re-appear for these
 const _doctorDismissedSessions = new Set<string>();
+// Module-level promise for the warm-up — allows PAYMENT_CONFIRMED handlers that arrive
+// before warm-up completes to await it instead of being silently dropped.
+let _doctorWarmPromise: Promise<void> | null = null;
 
 async function markDoctorSessionDismissed(sessionId: string) {
   _doctorDismissedSessions.add(sessionId);
@@ -424,8 +427,11 @@ export default function DoctorLayout() {
 
   // ── Central guard: show rating overlay only if session not already rated/dismissed ──
   const maybeShowDoctorRating = useCallback(async (sessionId: string, hospitalName: string, amount?: number) => {
-    // Gate: block all overlay triggers until AsyncStorage cache is warm
-    if (!warmCompleteRef.current) return;
+    // Gate: if cache is not yet warm, await the warm promise instead of dropping the event
+    if (!warmCompleteRef.current) {
+      if (_doctorWarmPromise) await _doctorWarmPromise;
+      else return;
+    }
 
     // If overlay is already open, do not reset in-progress input
     if (showDoctorRatingRef.current) return;
@@ -539,7 +545,7 @@ export default function DoctorLayout() {
           setIsOnline(data.is_online);
         }
       });
-    Promise.all([warmDoctorRatedCache(), warmDoctorDismissedCache()]).then(() => {
+    _doctorWarmPromise = Promise.all([warmDoctorRatedCache(), warmDoctorDismissedCache()]).then(() => {
       warmCompleteRef.current = true;
       setWarmComplete(true);
       fetchActiveSession().then(() => {
@@ -593,6 +599,7 @@ export default function DoctorLayout() {
       console.log('[DoctorLayout] reset — clearing active session and job count');
       warmCompleteRef.current = false;
       setWarmComplete(false);
+      _doctorWarmPromise = null;
       _doctorRatedSessions.clear();
       _doctorDismissedSessions.clear();
       setActiveSession(null);
@@ -821,7 +828,7 @@ export default function DoctorLayout() {
       supabase.removeChannel(ch);
       sessionChannelRef.current = null;
     };
-  }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeSessionId, warmComplete]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Merged doctor-user channel: scores + payment confirmation via user:{user.id} ──
   // The backend broadcasts PAYMENT_CONFIRMED to user:{doctor_id} (not doctor-user:{id}),
