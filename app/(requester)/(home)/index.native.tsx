@@ -1944,9 +1944,7 @@ export default function RequesterHomeScreen() {
   // ─── Re-focus map on tab return ──────────────────────────────────────────────
   useFocusEffect(
     React.useCallback(() => {
-      // On focus: snap map back to user position if we have coords
-      // Use a short delay so the map has settled after the tab switch
-      const t = setTimeout(() => {
+      const doAnimate = () => {
         if (_cachedRequesterCoords && mapRef.current) {
           _cachedRequesterRegion = {
             latitude: _cachedRequesterCoords.latitude + MAP_LAT_OFFSET,
@@ -1958,12 +1956,15 @@ export default function RequesterHomeScreen() {
             console.log('[Map] animateToRegion on tab focus', _cachedRequesterRegion);
             mapRef.current.animateToRegion(_cachedRequesterRegion, 600);
           } catch {
-            // fallback — map may not be ready
+            // map not ready
           }
         }
-      }, 150);
+      };
+      const t1 = setTimeout(doAnimate, 300);
+      const t2 = setTimeout(doAnimate, 700);
       return () => {
-        clearTimeout(t);
+        clearTimeout(t1);
+        clearTimeout(t2);
         // On blur: reset flag so animation fires again on next focus
         _hasInitialFix = false;
       };

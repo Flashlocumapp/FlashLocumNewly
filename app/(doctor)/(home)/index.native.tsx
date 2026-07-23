@@ -434,21 +434,26 @@ export default function DoctorHomeScreen() {
   // ─── Re-focus map on tab return ──────────────────────────────────────────────
   useFocusEffect(
     React.useCallback(() => {
-      if (_cachedDoctorCoords && mapRef.current) {
-        _cachedDoctorRegion = {
-          latitude: _cachedDoctorCoords.latitude + MAP_LAT_OFFSET,
-          longitude: _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
-          latitudeDelta: 0.12,
-          longitudeDelta: 0.12,
-        };
-        mapRef.current.animateToRegion({
-          latitude: _cachedDoctorCoords.latitude + MAP_LAT_OFFSET,
-          longitude: _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
-          latitudeDelta: 0.12,
-          longitudeDelta: 0.12,
-        }, 800);
-      }
+      const doAnimate = () => {
+        if (_cachedDoctorCoords && mapRef.current) {
+          _cachedDoctorRegion = {
+            latitude: _cachedDoctorCoords.latitude + MAP_LAT_OFFSET,
+            longitude: _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
+            latitudeDelta: 0.12,
+            longitudeDelta: 0.12,
+          };
+          try {
+            mapRef.current.animateToRegion(_cachedDoctorRegion, 600);
+          } catch {
+            // map not ready
+          }
+        }
+      };
+      const t1 = setTimeout(doAnimate, 300);
+      const t2 = setTimeout(doAnimate, 700);
       return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
         _hasAnimatedToUser = false;
       };
     }, [])
