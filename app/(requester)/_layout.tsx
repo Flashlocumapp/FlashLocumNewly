@@ -1,41 +1,42 @@
 import React, { useEffect } from 'react';
 import { View, Text, Pressable, Platform } from 'react-native';
 import Animated, { useSharedValue, withTiming, useAnimatedStyle } from 'react-native-reanimated';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { TabBarVisibilityContext, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { setCached, isStale } from '@/utils/tabCache';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 
 const REQUESTER_TABS = [
-  { name: '(home)',     route: '/(requester)/(home)'     as const, icon: 'home'           as const, label: 'Home'     },
-  { name: '(coverage)', route: '/(requester)/(coverage)' as const, icon: 'calendar-month' as const, label: 'Coverage' },
-  { name: '(account)',  route: '/(requester)/(account)'  as const, icon: 'person'         as const, label: 'Account'  },
+  { name: '(home)',     icon: 'home'           as const, label: 'Home'     },
+  { name: '(coverage)', icon: 'calendar-month' as const, label: 'Coverage' },
+  { name: '(account)',  icon: 'person'         as const, label: 'Account'  },
 ];
 
 interface RequesterTabBarProps {
-  segments: string[];
-  router: ReturnType<typeof useRouter>;
+  tabBarProps: BottomTabBarProps;
 }
 
-const RequesterTabBar = React.memo(function RequesterTabBar({ segments, router }: RequesterTabBarProps) {
+const RequesterTabBar = React.memo(function RequesterTabBar({ tabBarProps }: RequesterTabBarProps) {
+  const activeIndex = tabBarProps.state.index;
   return (
     <SafeAreaView edges={['bottom']} style={{ backgroundColor: '#F9F9F6', borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
       <View style={{ flexDirection: 'row', backgroundColor: '#F9F9F6', borderTopLeftRadius: 24, borderTopRightRadius: 24 }}>
-        {REQUESTER_TABS.map((tab) => {
-          const isActive = (segments as string[]).includes(tab.name);
+        {REQUESTER_TABS.map((tab, i) => {
+          const isActive = activeIndex === i;
           return (
             <Pressable
               key={tab.name}
               onPress={() => {
-                if (isActive) return; // already on this tab — do nothing
-                console.log('[RequesterTabBar] Tab pressed:', tab.route);
-                router.replace(tab.route);
+                if (isActive) return;
+                console.log('[RequesterTabBar] Tab pressed:', tab.name);
+                tabBarProps.navigation.navigate(tab.name);
               }}
               android_ripple={{ color: 'transparent' }}
-              style={({ pressed }) => ({ flex: 1, alignItems: 'center', paddingVertical: 10, opacity: 1 })}
+              style={{ flex: 1, alignItems: 'center', paddingVertical: 10, opacity: 1 }}
             >
               <MaterialIcons name={tab.icon} size={24} color={isActive ? '#1C1C1E' : '#8E8E93'} />
               <Text style={{ fontSize: 10, fontWeight: isActive ? '600' : '400', color: isActive ? '#1C1C1E' : '#8E8E93', marginTop: 3 }}>
@@ -50,8 +51,6 @@ const RequesterTabBar = React.memo(function RequesterTabBar({ segments, router }
 });
 
 export default function RequesterLayout() {
-  const router = useRouter();
-  const segments = useSegments();
   const insets = useSafeAreaInsets();
   const tabBarOffset = useSharedValue(0);
   const { user, profile } = useAuth();
@@ -114,23 +113,26 @@ export default function RequesterLayout() {
     transform: [{ translateY: tabBarOffset.value }],
   }));
 
+  const renderTabBar = (tabBarProps: BottomTabBarProps) => {
+    if (Platform.OS === 'ios') return null;
+    return (
+      <Animated.View style={[{ position: 'absolute', bottom: 0, left: 0, right: 0 }, tabBarAnimStyle]}>
+        <RequesterTabBar tabBarProps={tabBarProps} />
+      </Animated.View>
+    );
+  };
+
   return (
     <TabBarVisibilityContext.Provider value={{ setTabBarVisible }}>
       <View style={{ flex: 1, backgroundColor: '#F9F9F6' }}>
-        <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
-          <Stack.Screen name="(home)" />
-          <Stack.Screen name="(coverage)" />
-          <Stack.Screen name="(account)" />
-        </Stack>
-
-        {Platform.OS !== 'ios' && (
-          <Animated.View style={[{
-            position: 'absolute',
-            bottom: 0, left: 0, right: 0,
-          }, tabBarAnimStyle]}>
-            <RequesterTabBar segments={segments as string[]} router={router} />
-          </Animated.View>
-        )}
+        <Tabs
+          tabBar={renderTabBar}
+          screenOptions={{ headerShown: false, animation: 'none' }}
+        >
+          <Tabs.Screen name="(home)" />
+          <Tabs.Screen name="(coverage)" />
+          <Tabs.Screen name="(account)" />
+        </Tabs>
       </View>
     </TabBarVisibilityContext.Provider>
   );

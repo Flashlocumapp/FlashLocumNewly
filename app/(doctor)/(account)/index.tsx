@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -145,49 +146,51 @@ export default function DoctorAccountScreen() {
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  useEffect(() => {
-    if (!user) return;
-    const fetchProfile = async () => {
-      const [profileRes, doctorProfileRes] = await Promise.all([
-        supabase
-          .from('profiles')
-          .select('first_name, last_name, phone, gender, verification_status')
-          .eq('id', user.id)
-          .single(),
-        supabase
-          .from('doctor_profiles')
-          .select('mdcn_number, bank_name, bank_code, account_number, account_name, selfie_url, subaccount_code')
-          .eq('id', user.id)
-          .single(),
-      ]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      const fetchProfile = async () => {
+        const [profileRes, doctorProfileRes] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('first_name, last_name, phone, gender, verification_status')
+            .eq('id', user.id)
+            .single(),
+          supabase
+            .from('doctor_profiles')
+            .select('mdcn_number, bank_name, bank_code, account_number, account_name, selfie_url, subaccount_code')
+            .eq('id', user.id)
+            .single(),
+        ]);
 
-      const mergedProfile: DoctorProfile = {
-        first_name: authProfile?.first_name ?? profileRes.data?.first_name ?? null,
-        last_name: authProfile?.last_name ?? profileRes.data?.last_name ?? null,
-        phone: authProfile?.phone ?? profileRes.data?.phone ?? null,
-        gender: authProfile?.gender ?? profileRes.data?.gender ?? null,
-        verification_status: profileRes.data?.verification_status ?? null,
-        mdcn_number: doctorProfileRes.data?.mdcn_number ?? null,
-        bank_name: doctorProfileRes.data?.bank_name ?? null,
-        bank_code: doctorProfileRes.data?.bank_code ?? null,
-        account_number: doctorProfileRes.data?.account_number ?? null,
-        account_name: doctorProfileRes.data?.account_name ?? null,
-        selfie_url: doctorProfileRes.data?.selfie_url ?? null,
-        subaccount_code: doctorProfileRes.data?.subaccount_code ?? null,
+        const mergedProfile: DoctorProfile = {
+          first_name: authProfile?.first_name ?? profileRes.data?.first_name ?? null,
+          last_name: authProfile?.last_name ?? profileRes.data?.last_name ?? null,
+          phone: authProfile?.phone ?? profileRes.data?.phone ?? null,
+          gender: authProfile?.gender ?? profileRes.data?.gender ?? null,
+          verification_status: profileRes.data?.verification_status ?? null,
+          mdcn_number: doctorProfileRes.data?.mdcn_number ?? null,
+          bank_name: doctorProfileRes.data?.bank_name ?? null,
+          bank_code: doctorProfileRes.data?.bank_code ?? null,
+          account_number: doctorProfileRes.data?.account_number ?? null,
+          account_name: doctorProfileRes.data?.account_name ?? null,
+          selfie_url: doctorProfileRes.data?.selfie_url ?? null,
+          subaccount_code: doctorProfileRes.data?.subaccount_code ?? null,
+        };
+        setProfile(mergedProfile);
+        setCached('doctor_profile', { ...mergedProfile });
+        const rawSelfieUrl = doctorProfileRes.data?.selfie_url ?? null;
+        if (rawSelfieUrl) {
+          const { data: signedData } = await supabase.storage
+            .from('doctor-documents')
+            .createSignedUrl(rawSelfieUrl, 3600);
+          if (signedData?.signedUrl) setSelfieUrl(signedData.signedUrl);
+        }
+        setLoading(false);
       };
-      setProfile(mergedProfile);
-      setCached('doctor_profile', { ...mergedProfile });
-      const rawSelfieUrl = doctorProfileRes.data?.selfie_url ?? null;
-      if (rawSelfieUrl) {
-        const { data: signedData } = await supabase.storage
-          .from('doctor-documents')
-          .createSignedUrl(rawSelfieUrl, 3600);
-        if (signedData?.signedUrl) setSelfieUrl(signedData.signedUrl);
-      }
-      setLoading(false);
-    };
-    fetchProfile();
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+      fetchProfile();
+    }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   const firstName = profile?.first_name ?? '';
   const lastName = profile?.last_name ?? '';

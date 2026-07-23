@@ -38,7 +38,7 @@ function DoctorTabBar({ tabs }: Props) {
               onPress={() => {
                 if (activeIndex === i) return; // already on this tab — do nothing
                 console.log('[DoctorTabBar] Tab pressed:', tab.route);
-                router.replace(tab.route);
+                router.navigate(tab.route);
               }}
             >
               <MaterialIcons

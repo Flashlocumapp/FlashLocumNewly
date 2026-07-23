@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -91,27 +92,29 @@ export default function RequesterAccountScreen() {
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  useEffect(() => {
-    if (!user) return;
-    const fetchProfile = async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('first_name, last_name, phone, gender')
-        .eq('id', user.id)
-        .single();
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      const fetchProfile = async () => {
+        const { data } = await supabase
+          .from('profiles')
+          .select('first_name, last_name, phone, gender')
+          .eq('id', user.id)
+          .single();
 
-      const mergedProfile: RequesterProfile = {
-        first_name: authProfile?.first_name ?? data?.first_name ?? null,
-        last_name: authProfile?.last_name ?? data?.last_name ?? null,
-        phone: authProfile?.phone ?? data?.phone ?? null,
-        gender: authProfile?.gender ?? data?.gender ?? null,
+        const mergedProfile: RequesterProfile = {
+          first_name: authProfile?.first_name ?? data?.first_name ?? null,
+          last_name: authProfile?.last_name ?? data?.last_name ?? null,
+          phone: authProfile?.phone ?? data?.phone ?? null,
+          gender: authProfile?.gender ?? data?.gender ?? null,
+        };
+        setProfile(mergedProfile);
+        setCached('requester_profile', { ...mergedProfile });
+        setLoading(false);
       };
-      setProfile(mergedProfile);
-      setCached('requester_profile', { ...mergedProfile });
-      setLoading(false);
-    };
-    fetchProfile();
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+      fetchProfile();
+    }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   const verifStatus = authProfile?.verification_status;
   const verifBadge = !verifStatus || verifStatus === 'verified'

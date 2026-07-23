@@ -13,7 +13,7 @@ import {
   Keyboard,
   Pressable,
 } from 'react-native';
-import { Stack, Href, useRouter } from 'expo-router';
+import { Stack, Tabs, Href, useRouter } from 'expo-router';
 import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1153,12 +1153,12 @@ export default function DoctorLayout() {
   return (
     <DoctorDispatchContext.Provider value={contextValue}>
       <View style={{ flex: 1 }}>
-        <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
-          <Stack.Screen name="(home)" />
-          <Stack.Screen name="(coverage)" />
-          <Stack.Screen name="(earnings)" />
-          <Stack.Screen name="(account)" />
-        </Stack>
+        <Tabs screenOptions={{ headerShown: false, animation: 'none' }} tabBar={() => null}>
+          <Tabs.Screen name="(home)" />
+          <Tabs.Screen name="(coverage)" />
+          <Tabs.Screen name="(earnings)" />
+          <Tabs.Screen name="(account)" />
+        </Tabs>
 
         {/* Tab bar — hidden when a request card is showing */}
         {!showCard && <DoctorTabBar tabs={TABS} />}
