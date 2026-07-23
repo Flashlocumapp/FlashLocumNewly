@@ -7,6 +7,17 @@ const config = getDefaultConfig(__dirname);
 
 config.resolver.unstable_enablePackageExports = true;
 
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (platform === 'web' && moduleName === 'react-native-maps') {
+    // Return an empty stub so Metro doesn't crash on web
+    return {
+      type: 'sourceFile',
+      filePath: require.resolve('./utils/polyfills/react-native-maps-stub.js'),
+    };
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 // Use turborepo to restore the cache when possible
 config.cacheStores = [
     new FileStore({ root: path.join(__dirname, 'node_modules', '.cache', 'metro') }),
