@@ -7,6 +7,20 @@ const config = getDefaultConfig(__dirname);
 
 config.resolver.unstable_enablePackageExports = true;
 
+// Prevent react-native-maps from being bundled on web — it has no web
+// implementation and causes Metro to crash when building the web bundle.
+const RNM_STUB = path.join(__dirname, 'utils', 'polyfills', 'react-native-maps-web-stub.js');
+const _defaultResolveRequest = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (platform === 'web' && moduleName === 'react-native-maps') {
+    return { filePath: RNM_STUB, type: 'sourceFile' };
+  }
+  if (_defaultResolveRequest) {
+    return _defaultResolveRequest(context, moduleName, platform);
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 // Use turborepo to restore the cache when possible
 config.cacheStores = [
     new FileStore({ root: path.join(__dirname, 'node_modules', '.cache', 'metro') }),
