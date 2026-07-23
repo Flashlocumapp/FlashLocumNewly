@@ -1153,15 +1153,15 @@ export default function DoctorLayout() {
   return (
     <DoctorDispatchContext.Provider value={contextValue}>
       <View style={{ flex: 1 }}>
-        <Tabs screenOptions={{ headerShown: false, animation: 'none' }} tabBar={() => null}>
+        <Tabs
+          screenOptions={{ headerShown: false, animation: 'none', sceneStyle: { paddingBottom: 0 } }}
+          tabBar={(props) => showCard ? null : <DoctorTabBar tabs={TABS} />}
+        >
           <Tabs.Screen name="(home)" />
           <Tabs.Screen name="(coverage)" />
           <Tabs.Screen name="(earnings)" />
           <Tabs.Screen name="(account)" />
         </Tabs>
-
-        {/* Tab bar — hidden when a request card is showing */}
-        {!showCard && <DoctorTabBar tabs={TABS} />}
 
         {/* ── INCOMING REQUEST CARD ── */}
         {showCard && currentRequest && (

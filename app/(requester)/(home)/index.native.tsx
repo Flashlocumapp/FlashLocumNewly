@@ -1945,14 +1945,25 @@ export default function RequesterHomeScreen() {
   useFocusEffect(
     React.useCallback(() => {
       // On focus: snap map back to user position if we have coords
-      if (_cachedRequesterCoords && mapRef.current) {
-        _cachedRequesterRegion = { latitude: _cachedRequesterCoords.latitude + MAP_LAT_OFFSET, longitude: _cachedRequesterCoords.longitude + MAP_LNG_OFFSET, latitudeDelta: 0.12, longitudeDelta: 0.12 };
-        mapRef.current.setCamera({
-        center: { latitude: _cachedRequesterCoords!.latitude + MAP_LAT_OFFSET, longitude: _cachedRequesterCoords!.longitude + MAP_LNG_OFFSET },
-        zoom: 12,
-      });
-      }
+      // Use a short delay so the map has settled after the tab switch
+      const t = setTimeout(() => {
+        if (_cachedRequesterCoords && mapRef.current) {
+          _cachedRequesterRegion = {
+            latitude: _cachedRequesterCoords.latitude + MAP_LAT_OFFSET,
+            longitude: _cachedRequesterCoords.longitude + MAP_LNG_OFFSET,
+            latitudeDelta: 0.12,
+            longitudeDelta: 0.12,
+          };
+          try {
+            console.log('[Map] animateToRegion on tab focus', _cachedRequesterRegion);
+            mapRef.current.animateToRegion(_cachedRequesterRegion, 600);
+          } catch {
+            // fallback — map may not be ready
+          }
+        }
+      }, 150);
       return () => {
+        clearTimeout(t);
         // On blur: reset flag so animation fires again on next focus
         _hasInitialFix = false;
       };
