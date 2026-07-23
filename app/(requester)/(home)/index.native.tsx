@@ -1549,7 +1549,9 @@ export default function RequesterHomeScreen() {
     const ch = supabase
       .channel('doctor-status')
       .on('broadcast', { event: 'doctor_status_changed' }, (msg) => {
-        const data = msg.payload as { id?: string; lat?: number; lng?: number; is_online?: boolean } | null;
+        const raw = (msg.payload as any);
+        console.log('[doctor_status_changed] raw payload received:', JSON.stringify(raw));
+        const data = (raw?.id != null ? raw : raw?.payload) as { id?: string; lat?: number; lng?: number; is_online?: boolean } | null;
         console.log('[OnlineDoctors] Received doctor_status_changed broadcast', data);
         if (!data?.id) return;
         if (data.is_online && data.lat != null && data.lng != null) {
