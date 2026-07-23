@@ -25,7 +25,7 @@
         "NSPhotoLibraryAddUsageDescription": "FlashLocum needs permission to save photos to your library."
       },
       "config": {
-        "googleMapsApiKey": "AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk"
+        "googleMapsApiKey": "AIzaSyBF•••••••••••••••••••••••••••••••"
       }
     },
     "android": {
@@ -50,7 +50,7 @@
       "versionCode": 10,
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU"
+          "apiKey": "AIzaSyAC•••••••••••••••••••••••••••••••"
         }
       },
       "navigationBar": {
@@ -95,15 +95,12 @@
       "typedRoutes": true
     },
     "extra": {
-      "eas": {
-        "projectId": "2e1c9549-69cf-4cd3-b5ca-4b922181897b"
-      },
       "router": {},
       "backendUrl": "https://bm7mn4rkap7zw8ax5ddfbmfaz9q8m3ru.app.specular.dev",
       "oneSignalAppId": "e865db07-c6ae-412a-ba03-d139e934eeb0",
       "_onesignal_disabled": "Re-add onesignal-expo-plugin to plugins and restore NotificationContext.native.tsx when Apple Developer account is approved",
       "supabaseUrl": "https://juilousufwlsiqdcgllu.supabase.co",
-      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1aWxvdXN1Zndsc2lxZGNnbGx1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3MjE1MTEsImV4cCI6MjA5ODI5NzUxMX0.XOE0UTfZrfLp_giDlGkBsffhRBhVT1njaETm7vtmTxA"
+      "supabaseAnonKey": "eyJhbGci••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••"
     }
   }
 }
