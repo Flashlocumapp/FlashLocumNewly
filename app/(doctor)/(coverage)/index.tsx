@@ -775,6 +775,27 @@ export default function DoctorCoverageScreen() {
           });
         }
       })
+      .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+        const sessionId: string =
+          payload?.payload?.session_id ??
+          payload?.payload?.session?.id;
+        if (!sessionId) return;
+        console.log('[DoctorCoverage] SHIFT_CANCELLED received on doctor channel:', sessionId);
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setUpcomingSessions(prev => {
+          const found = prev.find(s => s.id === sessionId);
+          if (found) {
+            // Move to history as cancelled
+            setHistorySessions(hist => [
+              { ...found, status: 'cancelled' as const },
+              ...hist,
+            ]);
+            invalidate(upcomingKey);
+            invalidate(historyKey);
+          }
+          return prev.filter(s => s.id !== sessionId);
+        });
+      })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           if (wasSubscribed) {
@@ -807,6 +828,23 @@ export default function DoctorCoverageScreen() {
         .on('broadcast', { event: 'STATUS_CHANGED' }, (payload) => {
           const newStatus = payload?.payload?.status as CoverageSession['status'];
           if (newStatus) handleStatusChange(session.id, newStatus);
+        })
+        .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
+          // Fallback: also handle cancellation on the per-session channel
+          console.log('[DoctorCoverage] SHIFT_CANCELLED received on per-session channel:', session.id);
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setUpcomingSessions(prev => {
+            const found = prev.find(s => s.id === session.id);
+            if (found) {
+              setHistorySessions(hist => [
+                { ...found, status: 'cancelled' as const },
+                ...hist,
+              ]);
+              invalidate(upcomingKey);
+              invalidate(historyKey);
+            }
+            return prev.filter(s => s.id !== session.id);
+          });
         })
         .subscribe();
       perSessionChannelsRef.current.push(ch);
