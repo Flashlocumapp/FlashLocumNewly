@@ -388,6 +388,9 @@ export default function DoctorLayout() {
   // Background recovery refs
   const wasOnlineRef = useRef(false);
   const doctorBackgroundedAtRef = useRef<number>(0);
+  // Payment polling fallback refs
+  const paymentPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const paymentPollAttemptsRef = useRef(0);
 
   const callEdge = useCallback(async (fn: string, body?: object) => {
     try {
@@ -489,6 +492,49 @@ export default function DoctorLayout() {
     setDoctorRatingAmount(amount ?? 0);
     setShowDoctorRating(true);
   }, [activeSessionIdRef]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Payment polling fallback: polls get-active-session every 5s for up to 30s ──
+  const startPaymentPolling = useCallback((sessionId: string, hospitalName: string, amount: number) => {
+    // Clear any existing poll
+    if (paymentPollRef.current) {
+      clearInterval(paymentPollRef.current);
+      paymentPollRef.current = null;
+    }
+    paymentPollAttemptsRef.current = 0;
+    console.log('[Doctor] startPaymentPolling — polling for paid status', { sessionId });
+    paymentPollRef.current = setInterval(async () => {
+      paymentPollAttemptsRef.current += 1;
+      try {
+        const res = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=doctor`, {});
+        if (res.ok) {
+          const data = await res.json();
+          const snap = data?.session ?? null;
+          const paidStatuses = ['settled', 'requester_paid', 'payment_complete'];
+          if (snap && paidStatuses.includes(snap.status)) {
+            console.log('[Doctor] paymentPoll — paid status confirmed:', snap.status, '— showing rating overlay');
+            if (paymentPollRef.current) {
+              clearInterval(paymentPollRef.current);
+              paymentPollRef.current = null;
+            }
+            const resolvedId = sessionId || snap.id;
+            const resolvedHospital = hospitalName || (snap.hospital_name ?? '');
+            const resolvedAmount = amount || (snap.total_cost ?? 0);
+            void maybeShowDoctorRating(resolvedId, resolvedHospital, resolvedAmount);
+            return;
+          }
+        }
+      } catch {
+        // non-fatal
+      }
+      if (paymentPollAttemptsRef.current >= 6) {
+        console.log('[Doctor] paymentPoll — max attempts reached, stopping');
+        if (paymentPollRef.current) {
+          clearInterval(paymentPollRef.current);
+          paymentPollRef.current = null;
+        }
+      }
+    }, 5000);
+  }, [maybeShowDoctorRating]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch active session from edge function
   const fetchActiveSession = useCallback(async () => {
@@ -616,9 +662,15 @@ export default function DoctorLayout() {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Cleanup PollingManager on unmount ───────────────────────────────────────
+  // ─── Cleanup PollingManager and payment poll on unmount ──────────────────────
   useEffect(() => {
-    return () => { PollingManager.stopAll(); };
+    return () => {
+      PollingManager.stopAll();
+      if (paymentPollRef.current) {
+        clearInterval(paymentPollRef.current);
+        paymentPollRef.current = null;
+      }
+    };
   }, []);
 
   // Note: SIGNED_IN re-fetch is intentionally omitted here.
@@ -801,6 +853,7 @@ export default function DoctorLayout() {
         console.log('[Doctor] PAYMENT_CONFIRMED broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        startPaymentPolling(sessionId ?? '', hospitalName, amount);
         invalidate('coverage_doctor_completed');
         invalidate('coverage_doctor_upcoming');
       })
@@ -811,6 +864,7 @@ export default function DoctorLayout() {
         console.log('[Doctor] payment_confirmed broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        startPaymentPolling(sessionId ?? '', hospitalName, amount);
         invalidate('coverage_doctor_completed');
         invalidate('coverage_doctor_upcoming');
       })
@@ -832,7 +886,7 @@ export default function DoctorLayout() {
       supabase.removeChannel(ch);
       sessionChannelRef.current = null;
     };
-  }, [activeSessionId, warmComplete]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeSessionId, startPaymentPolling]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Merged doctor-user channel: scores + payment confirmation via user:{user.id} ──
   // The backend broadcasts PAYMENT_CONFIRMED to user:{doctor_id} (not doctor-user:{id}),
@@ -862,6 +916,7 @@ export default function DoctorLayout() {
         console.log('[Doctor] user channel PAYMENT_CONFIRMED received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        startPaymentPolling(sessionId ?? '', hospitalName, amount);
         invalidate('coverage_doctor_completed');
         invalidate('coverage_doctor_upcoming');
       })
@@ -872,6 +927,7 @@ export default function DoctorLayout() {
         console.log('[Doctor] user channel payment_confirmed received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        startPaymentPolling(sessionId ?? '', hospitalName, amount);
         invalidate('coverage_doctor_completed');
         invalidate('coverage_doctor_upcoming');
       })
@@ -879,7 +935,7 @@ export default function DoctorLayout() {
         // subscription status — no logging needed
       });
     return () => { supabase.removeChannel(ch); };
-  }, [user, warmComplete]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, startPaymentPolling]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Queue → state sync ──
   useEffect(() => {
@@ -949,22 +1005,40 @@ export default function DoctorLayout() {
                 const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? sid;
                 const hospitalName = payload?.payload?.hospital_name ?? '';
                 const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
+                console.log('[Doctor] AppState-rebuilt session channel PAYMENT_CONFIRMED received', { sessionId, hospitalName, amount });
                 setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
                 void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+                startPaymentPolling(sessionId ?? '', hospitalName, amount);
               })
               .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
                 const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? sid;
                 const hospitalName = payload?.payload?.hospital_name ?? '';
                 const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
+                console.log('[Doctor] AppState-rebuilt session channel payment_confirmed received', { sessionId, hospitalName, amount });
                 setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
                 void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+                startPaymentPolling(sessionId ?? '', hospitalName, amount);
               })
               .subscribe(() => {});
             sessionChannelRef.current = newSessionChannel;
           }
 
-          // 2. Session reconciliation
+          // 2. Session reconciliation + paid-state recovery
           await fetchActiveSession();
+          // Check if session is already in a paid state — fetch directly so we have fresh data
+          try {
+            const snapRes = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=doctor`, {});
+            if (snapRes.ok) {
+              const snapData = await snapRes.json();
+              const snap = snapData?.session ?? null;
+              if (snap && (snap.status === 'settled' || snap.status === 'requester_paid' || snap.status === 'payment_complete')) {
+                console.log('[Doctor] AppState active — session in paid state:', snap.status, '— triggering rating overlay');
+                void maybeShowDoctorRating(snap.id, snap.hospital_name ?? '', snap.total_cost ?? 0);
+              }
+            }
+          } catch {
+            // non-fatal
+          }
 
           // 4. Dispatch reconciliation
           if (user) await forceSync();
@@ -977,7 +1051,7 @@ export default function DoctorLayout() {
       }
     });
     return () => sub.remove();
-  }, [user, profile?.verification_status, forceSync, fetchActiveSession, callEdge, maybeShowDoctorRating]);
+  }, [user, profile?.verification_status, forceSync, fetchActiveSession, callEdge, maybeShowDoctorRating, startPaymentPolling]);
 
   // ── Accept ──
   const handleAccept = useCallback(async () => {

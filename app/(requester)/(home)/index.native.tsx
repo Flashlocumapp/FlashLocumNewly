@@ -1483,14 +1483,16 @@ export default function RequesterHomeScreen() {
         const sessionId = payload?.payload?.session_id;
         invalidate('coverage_requester_completed');
         invalidate('coverage_requester_upcoming');
-        handlePaymentConfirmedWithFallback(sessionId);
+        handlePaymentConfirmedWithFallbackRef.current(sessionId);
+        startRequesterPaymentPollingRef.current();
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[Requester] user channel PAYMENT_CONFIRMED received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
         invalidate('coverage_requester_completed');
         invalidate('coverage_requester_upcoming');
-        handlePaymentConfirmedWithFallback(sessionId);
+        handlePaymentConfirmedWithFallbackRef.current(sessionId);
+        startRequesterPaymentPollingRef.current();
       })
       // From channel 7 (shift cancelled on requester channel)
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
@@ -1515,7 +1517,7 @@ export default function RequesterHomeScreen() {
       .subscribe((status) => {
       });
     return () => { supabase.removeChannel(ch); };
-  }, [user, handlePaymentConfirmedWithFallback]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mapRef = useRef<MapView>(null);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(
@@ -1657,6 +1659,9 @@ export default function RequesterHomeScreen() {
   const [submittingRating, setSubmittingRating] = useState(false);
   const [ratingError, setRatingError] = useState('');
   const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  // Payment polling fallback refs
+  const paymentPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const paymentPollAttemptsRef = useRef(0);
 
   // Realtime refs for matching
   const matchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1668,6 +1673,10 @@ export default function RequesterHomeScreen() {
   const fetchActiveSessionRef = useRef<() => void>(() => {});
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const transitionToRef = useRef<(state: SheetState) => void>(() => {});
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  const handlePaymentConfirmedWithFallbackRef = useRef<(sessionId?: string) => void>(() => {});
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  const startRequesterPaymentPollingRef = useRef<() => void>(() => {});
 
 
 
@@ -1793,14 +1802,29 @@ export default function RequesterHomeScreen() {
 
   // ─── AppState reconnection safety net ────────────────────────────────────────
   useEffect(() => {
-    const handleAppStateChange = (nextState: AppStateStatus) => {
+    const handleAppStateChange = async (nextState: AppStateStatus) => {
       if (nextState === 'active') {
-        fetchActiveSession();
+        await fetchActiveSession();
         fetchOnlineDoctors();
+        // If session is already in a paid state, trigger rating overlay
+        const snap = activeSessionRef.current;
+        if (snap && (snap.status === 'requester_paid' || snap.status === 'settled' || snap.status === 'payment_complete')) {
+          if (!_requesterPaidSessions.has(snap.id) && !_requesterDismissedSessions.has(snap.id)) {
+            console.log('[Requester] AppState active — session in paid state:', snap.status, '— showing overlay');
+            setConfirmedSession(snap);
+            setShowPaymentSuccess(true);
+          }
+        }
       }
     };
     const sub = AppState.addEventListener('change', handleAppStateChange);
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      if (paymentPollRef.current) {
+        clearInterval(paymentPollRef.current);
+        paymentPollRef.current = null;
+      }
+    };
   }, [fetchActiveSession, fetchOnlineDoctors]);
 
   // ─── Session realtime subscription ───────────────────────────────────────────
@@ -1866,12 +1890,14 @@ export default function RequesterHomeScreen() {
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[Requester] session channel PAYMENT_CONFIRMED received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
-        handlePaymentConfirmedWithFallback(sessionId);
+        handlePaymentConfirmedWithFallbackRef.current(sessionId);
+        startRequesterPaymentPollingRef.current();
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[Requester] session channel payment_confirmed received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
-        handlePaymentConfirmedWithFallback(sessionId);
+        handlePaymentConfirmedWithFallbackRef.current(sessionId);
+        startRequesterPaymentPollingRef.current();
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
         setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
@@ -1889,7 +1915,7 @@ export default function RequesterHomeScreen() {
       supabase.removeChannel(ch);
       sessionChannelRef.current = null;
     };
-  }, [activeSessionId, handlePaymentConfirmedWithFallback]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Channels 6 and 7 merged into requester-user channel above
 
@@ -2505,21 +2531,26 @@ export default function RequesterHomeScreen() {
     const sid = sessionIdFromPayload ?? currentSession?.id;
 
     if (currentSession) {
-      // Happy path — ref is populated, show card immediately
+      // Happy path — ref is populated, show overlay IMMEDIATELY then dedup in background
       if (sid && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid) && !_requesterDismissedSessions.has(sid)) {
+        // Show immediately — do NOT block on AsyncStorage
+        setConfirmedSession(currentSession);
+        setShowPaymentSuccess(true);
         _requesterRatingInFlight.add(sid);
+        // Background dedup check — if already handled, hide overlay
         isRequesterSessionPaid(sid).then((alreadyHandled) => {
           _requesterRatingInFlight.delete(sid);
-          if (!alreadyHandled) {
-            setConfirmedSession(currentSession);
-            setShowPaymentSuccess(true);
+          if (alreadyHandled) {
+            setShowPaymentSuccess(false);
+            setConfirmedSession(null);
           }
+          // If not already handled, overlay stays visible — nothing to do
         }).catch(() => { _requesterRatingInFlight.delete(sid); });
       }
       setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
       fetchActiveSession();
     } else {
-      // Android timing gap — ref is null, fetch session then show card
+      // Android timing gap — ref is null, fetch session then show overlay IMMEDIATELY
       setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
       try {
         const res = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=requester`, {});
@@ -2538,13 +2569,18 @@ export default function RequesterHomeScreen() {
           !_requesterRatingInFlight.has(fetchedSid) &&
           !_requesterDismissedSessions.has(fetchedSid)
         ) {
+          // Show overlay IMMEDIATELY
+          setConfirmedSession(session);
+          setShowPaymentSuccess(true);
           _requesterRatingInFlight.add(fetchedSid);
-          const alreadyHandled = await isRequesterSessionPaid(fetchedSid);
-          _requesterRatingInFlight.delete(fetchedSid);
-          if (!alreadyHandled) {
-            setConfirmedSession(session);
-            setShowPaymentSuccess(true);
-          }
+          // Background dedup check — if already handled, hide overlay
+          isRequesterSessionPaid(fetchedSid).then((alreadyHandled) => {
+            _requesterRatingInFlight.delete(fetchedSid);
+            if (alreadyHandled) {
+              setShowPaymentSuccess(false);
+              setConfirmedSession(null);
+            }
+          }).catch(() => { _requesterRatingInFlight.delete(fetchedSid); });
         }
       } catch (e: any) {
         // Non-fatal — fall back to normal fetchActiveSession
@@ -2552,6 +2588,53 @@ export default function RequesterHomeScreen() {
       }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Requester payment polling fallback: polls get-active-session every 5s for up to 30s ──
+  const startRequesterPaymentPolling = useCallback(() => {
+    // Clear any existing poll
+    if (paymentPollRef.current) {
+      clearInterval(paymentPollRef.current);
+      paymentPollRef.current = null;
+    }
+    paymentPollAttemptsRef.current = 0;
+    console.log('[Requester] startRequesterPaymentPolling — polling for paid status');
+    paymentPollRef.current = setInterval(async () => {
+      paymentPollAttemptsRef.current += 1;
+      try {
+        const res = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=requester`, {});
+        if (res.ok) {
+          const data = await res.json();
+          const snap = data?.session ?? null;
+          const paidStatuses = ['requester_paid', 'settled', 'payment_complete'];
+          if (snap && paidStatuses.includes(snap.status)) {
+            console.log('[Requester] paymentPoll — paid status confirmed:', snap.status, '— showing overlay');
+            if (paymentPollRef.current) {
+              clearInterval(paymentPollRef.current);
+              paymentPollRef.current = null;
+            }
+            // Only show if not already showing and not already handled
+            if (!_requesterPaidSessions.has(snap.id) && !_requesterDismissedSessions.has(snap.id)) {
+              handlePaymentConfirmedWithFallback(snap.id);
+            }
+            return;
+          }
+        }
+      } catch {
+        // non-fatal
+      }
+      if (paymentPollAttemptsRef.current >= 6) {
+        console.log('[Requester] paymentPoll — max attempts reached, stopping');
+        if (paymentPollRef.current) {
+          clearInterval(paymentPollRef.current);
+          paymentPollRef.current = null;
+        }
+      }
+    }, 5000);
+  }, [handlePaymentConfirmedWithFallback]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep refs in sync so effects declared before these callbacks can call them without stale closures
+  useEffect(() => { handlePaymentConfirmedWithFallbackRef.current = handlePaymentConfirmedWithFallback; }, [handlePaymentConfirmedWithFallback]);
+  useEffect(() => { startRequesterPaymentPollingRef.current = startRequesterPaymentPolling; }, [startRequesterPaymentPolling]);
 
   const handleCancelReasonSelected = async (reason: string) => {
     console.log('[Requester] Cancel reason selected:', reason, 'for request:', activeRequestId);
