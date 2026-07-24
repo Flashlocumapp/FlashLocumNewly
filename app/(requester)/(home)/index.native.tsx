@@ -123,7 +123,7 @@ const ANDROID_KEY = 'AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU';
 const IOS_KEY = 'AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk';
 const MAPS_KEY = Platform.OS === 'ios' ? IOS_KEY : ANDROID_KEY;
 
-const RECENT_PLACE_KEY = 'flashlocum_recent_place';
+
 
 const LAGOS_REGION = {
   latitude: 6.5244,
@@ -1419,6 +1419,7 @@ export default function RequesterHomeScreen() {
   const insets = useSafeAreaInsets();
   const { setTabBarVisible } = useTabBarVisibility();
   const { user, profile } = useAuth();
+  const recentPlaceKey = user?.id ? `flashlocum_recent_place_${user.id}` : null;
   const accountStatus = profile?.verification_status ?? 'verified'; // default verified for requesters until explicitly set
   const isAccountBlocked = accountStatus === 'under_review' || accountStatus === 'suspended';
   const isUnderReview = accountStatus === 'under_review';
@@ -1682,7 +1683,9 @@ export default function RequesterHomeScreen() {
 
   // ─── Load recent place on mount ───────────────────────────────────────────────
   useEffect(() => {
-    SecureStore.getItemAsync(RECENT_PLACE_KEY).then((raw) => {
+    if (!recentPlaceKey) return;
+    console.log('[RequesterHome] Loading recent place for user', user?.id);
+    SecureStore.getItemAsync(recentPlaceKey).then((raw) => {
       if (raw) {
         try {
           const parsed = JSON.parse(raw) as SelectedPlace;
@@ -1691,7 +1694,7 @@ export default function RequesterHomeScreen() {
         }
       }
     });
-  }, []);
+  }, [recentPlaceKey]);
 
   // ─── Fetch active session helper ──────────────────────────────────────────────
   const fetchActiveSession = useCallback(async () => {
@@ -2098,9 +2101,12 @@ export default function RequesterHomeScreen() {
       setSearchText('');
       setSearchResults([]);
       // Save to recent
-      SecureStore.setItemAsync(RECENT_PLACE_KEY, JSON.stringify(place)).then(() => {
-        setRecentPlace(place);
-      });
+      if (recentPlaceKey) {
+        console.log('[RequesterHome] Saving recent place for user', user?.id);
+        SecureStore.setItemAsync(recentPlaceKey, JSON.stringify(place)).then(() => {
+          setRecentPlace(place);
+        });
+      }
       transitionTo('config');
     } catch (e: any) {
       Alert.alert('Error', 'Could not load place details. Please try again.');
@@ -2112,10 +2118,13 @@ export default function RequesterHomeScreen() {
   // ─── Recent place tap ─────────────────────────────────────────────────────────
   const handleRecentPlaceTap = useCallback(() => {
     if (!recentPlace) return;
+    console.log('[RequesterHome] Recent place tapped:', recentPlace.name);
     setSelectedPlace(recentPlace);
-    SecureStore.setItemAsync(RECENT_PLACE_KEY, JSON.stringify(recentPlace));
+    if (recentPlaceKey) {
+      SecureStore.setItemAsync(recentPlaceKey, JSON.stringify(recentPlace));
+    }
     transitionTo('config');
-  }, [recentPlace, transitionTo]);
+  }, [recentPlace, recentPlaceKey, transitionTo]);
 
   // ─── Matching progress animation ─────────────────────────────────────────────
   useEffect(() => {
