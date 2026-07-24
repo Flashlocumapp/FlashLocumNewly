@@ -659,7 +659,12 @@ export default function DoctorCoverageScreen() {
         const newSession = payload?.payload?.session as CoverageSession;
         if (newSession) {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setUpcomingSessions(prev => [newSession, ...prev]);
+          setUpcomingSessions(prev => {
+            if (prev.some(s => s.id === newSession.id)) return prev;
+            return [...prev, newSession].sort((a, b) =>
+              new Date(a.shift_start).getTime() - new Date(b.shift_start).getTime()
+            );
+          });
           invalidate(upcomingKey);
         }
       })
@@ -821,7 +826,10 @@ export default function DoctorCoverageScreen() {
     return bTime - aTime;
   });
   const filteredHistory = filterByDateRange(sortedHistory, dateRange);
-  const currentSessions = isHistoryTab ? filteredHistory : upcomingSessions;
+  const sortedUpcoming = [...upcomingSessions].sort((a, b) =>
+    new Date(a.shift_start).getTime() - new Date(b.shift_start).getTime()
+  );
+  const currentSessions = isHistoryTab ? filteredHistory : sortedUpcoming;
   const currentLoading = isHistoryTab ? historyLoading : upcomingLoading;
   const currentRefreshing = isHistoryTab ? historyRefreshing : upcomingRefreshing;
   const emptyMessage = isHistoryTab

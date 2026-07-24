@@ -309,6 +309,7 @@ export default function DoctorLayout() {
   // Active session state
   const [activeSession, setActiveSession] = useState<CoverageSession | null>(null);
   const [activeJobCount, setActiveJobCount] = useState(0);
+  const [upcomingSessions, setUpcomingSessions] = useState<CoverageSession[]>([]);
   // Stable session ID — only set when a real ID arrives, never cleared when session becomes null.
   // This prevents the session channel from re-subscribing to 'session:undefined' after payment_confirmed.
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -499,8 +500,10 @@ export default function DoctorLayout() {
       const data = await res.json();
       const session: CoverageSession | null = data?.session ?? null;
       const jobCount: number = data?.active_job_count ?? 0;
+      const upcoming: CoverageSession[] = data?.upcoming_sessions ?? [];
       setActiveSession(session);
       setActiveJobCount(jobCount);
+      setUpcomingSessions(upcoming);
     } catch (e: any) {
       // non-fatal
     }
@@ -605,6 +608,7 @@ export default function DoctorLayout() {
       setActiveSession(null);
       setActiveSessionId(null); // clear stale ID so ghost subscriptions don't form on next login
       setActiveJobCount(0);
+      setUpcomingSessions([]);
       setIsOnline(false);
       setDoctorScreenState('idle');
       setRequestQueue([]);
@@ -1069,6 +1073,7 @@ export default function DoctorLayout() {
     setDoctorRatingAmount(0);
     // Clear activeSession so home screen shows "No coverage yet" after payment flow
     setActiveSession(null);
+    setUpcomingSessions([]);
     // Stop the 30s session poll — session is permanently settled
     setActiveSessionId(null);
   }, [doctorRatingSessionId]);
@@ -1148,7 +1153,9 @@ export default function DoctorLayout() {
     activeJobCount,
     setActiveJobCount,
     isJobCapReached,
-  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached]);
+    upcomingSessions,
+    setUpcomingSessions,
+  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions]);
 
   return (
     <DoctorDispatchContext.Provider value={contextValue}>
