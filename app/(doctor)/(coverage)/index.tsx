@@ -16,9 +16,9 @@ import {
   TextInput,
   KeyboardAvoidingView,
   PanResponder,
+  AppState,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
 import { Clock } from 'lucide-react-native';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
@@ -607,6 +607,57 @@ export default function DoctorCoverageScreen() {
       });
   }, [historyData, user?.id]);
 
+  // Reconcile upcoming sessions against server state — only updates if there's a mismatch
+  const reconcileUpcoming = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const res = await fetchWithAuth(
+        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=upcoming,paused,payment_pending`,
+        { headers: { 'Content-Type': 'application/json' } },
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      const serverSessions: CoverageSession[] = data?.sessions ?? [];
+      setUpcomingSessions(prev => {
+        const prevIds = [...prev].map(s => s.id).sort().join(',');
+        const serverIds = [...serverSessions].map(s => s.id).sort().join(',');
+        if (prevIds === serverIds) return prev;
+        console.log('[DoctorCoverage] Reconciliation detected mismatch — updating from server');
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        return [...serverSessions].sort((a, b) =>
+          new Date(a.shift_start).getTime() - new Date(b.shift_start).getTime()
+        );
+      });
+    } catch {
+      // non-fatal — realtime remains primary
+    }
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stable ref so Effect A can call reconcileUpcoming without it being a dependency
+  const reconcileUpcomingRef = useRef(reconcileUpcoming);
+  useEffect(() => { reconcileUpcomingRef.current = reconcileUpcoming; }, [reconcileUpcoming]);
+
+  // AppState ref for prolonged background detection
+  const backgroundedAtRef = useRef<number>(0);
+
+  // Reconcile after app returns from background if backgrounded > 30s
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background') {
+        backgroundedAtRef.current = Date.now();
+      }
+      if (state === 'active' && backgroundedAtRef.current > 0) {
+        const elapsed = Date.now() - backgroundedAtRef.current;
+        if (elapsed > 30_000) {
+          console.log('[DoctorCoverage] App resumed after', Math.round(elapsed / 1000), 's — reconciling');
+          reconcileUpcomingRef.current();
+        }
+        backgroundedAtRef.current = 0;
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   const updateSessionStatus = useCallback(async (sessionId: string, status: string, extraFields?: Record<string, string>) => {
     const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/update-shift-status`, {
       method: 'POST',
@@ -648,6 +699,7 @@ export default function DoctorCoverageScreen() {
       doctorChannelRef.current = null;
     }
     console.log('[DoctorCoverage] Setting up doctor channel for', user.id);
+    let wasSubscribed = false;
     const doctorCh = supabase
       .channel(`doctor:${user.id}`)
       .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
@@ -723,7 +775,18 @@ export default function DoctorCoverageScreen() {
           });
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          if (wasSubscribed) {
+            // This is a reconnect — reconcile to catch any events missed during the gap
+            console.log('[DoctorCoverage] Realtime reconnected — reconciling upcoming sessions');
+            reconcileUpcomingRef.current();
+          }
+          wasSubscribed = true;
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          wasSubscribed = false;
+        }
+      });
     doctorChannelRef.current = doctorCh;
     return () => {
       if (doctorChannelRef.current) {
@@ -754,16 +817,6 @@ export default function DoctorCoverageScreen() {
       perSessionChannelsRef.current = [];
     };
   }, [upcomingSessions, handleStatusChange]);
-
-  // Focus-based refresh: safety net to catch shifts accepted while tab was not visible
-  useFocusEffect(
-    useCallback(() => {
-      if (user?.id) {
-        console.log('[DoctorCoverage] Tab focused — refreshing upcoming sessions');
-        refreshUpcoming();
-      }
-    }, [user?.id, refreshUpcoming])
-  );
 
   const handleCall = useCallback((session: CoverageSession) => {
     if (!session.requester_phone) {
