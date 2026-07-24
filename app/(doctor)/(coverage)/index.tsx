@@ -18,6 +18,7 @@ import {
   PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Clock } from 'lucide-react-native';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
@@ -527,7 +528,8 @@ export default function DoctorCoverageScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('Upcoming');
-  const channelsRef = useRef<ReturnType<typeof supabase.channel>[]>([]);
+  const doctorChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const perSessionChannelsRef = useRef<ReturnType<typeof supabase.channel>[]>([]);
 
   const upcomingKey = `doctor-coverage-upcoming-${user?.id ?? 'anon'}`;
   const historyKey = `doctor-coverage-history-${user?.id ?? 'anon'}`;
@@ -638,25 +640,19 @@ export default function DoctorCoverageScreen() {
     }
   }, [upcomingKey, historyKey]);
 
-  const setupRealtimeSubscriptions = useCallback((sessions: CoverageSession[], userId: string) => {
-    channelsRef.current.forEach(ch => supabase.removeChannel(ch));
-    channelsRef.current = [];
-
-    sessions.forEach(session => {
-      const ch = supabase
-        .channel(`coverage:${session.id}`)
-        .on('broadcast', { event: 'STATUS_CHANGED' }, (payload) => {
-          const newStatus = payload?.payload?.status as CoverageSession['status'];
-          if (newStatus) handleStatusChange(session.id, newStatus);
-        })
-        .subscribe();
-      channelsRef.current.push(ch);
-    });
-
+  // Effect A — Doctor-level channel: set up ONCE on mount, never torn down on session changes
+  useEffect(() => {
+    if (!user?.id) return;
+    if (doctorChannelRef.current) {
+      supabase.removeChannel(doctorChannelRef.current);
+      doctorChannelRef.current = null;
+    }
+    console.log('[DoctorCoverage] Setting up doctor channel for', user.id);
     const doctorCh = supabase
-      .channel(`doctor:${userId}`)
+      .channel(`doctor:${user.id}`)
       .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
         const newSession = payload?.payload?.session as CoverageSession;
+        console.log('[DoctorCoverage] SESSION_CREATED received:', newSession?.id);
         if (newSession) {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
           setUpcomingSessions(prev => {
@@ -675,7 +671,9 @@ export default function DoctorCoverageScreen() {
           setUpcomingSessions(prev => {
             const exists = prev.find(s => s.id === updatedSession.id);
             if (exists) return prev.map(s => s.id === updatedSession.id ? updatedSession : s);
-            return [updatedSession, ...prev];
+            return [...prev, updatedSession].sort((a, b) =>
+              new Date(a.shift_start).getTime() - new Date(b.shift_start).getTime()
+            );
           });
         }
       })
@@ -726,19 +724,46 @@ export default function DoctorCoverageScreen() {
         }
       })
       .subscribe();
-    channelsRef.current.push(doctorCh);
-  }, [handleStatusChange, upcomingKey, historyKey]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    setupRealtimeSubscriptions(upcomingSessions, user.id);
-  }, [upcomingSessions, user?.id, setupRealtimeSubscriptions]);
-
-  useEffect(() => {
+    doctorChannelRef.current = doctorCh;
     return () => {
-      channelsRef.current.forEach(ch => supabase.removeChannel(ch));
+      if (doctorChannelRef.current) {
+        supabase.removeChannel(doctorChannelRef.current);
+        doctorChannelRef.current = null;
+      }
     };
-  }, []);
+  }, [user?.id]); // ONLY depends on user.id — never on upcomingSessions
+
+  // Effect B — Per-session channels: set up when session IDs change
+  useEffect(() => {
+    perSessionChannelsRef.current.forEach(ch => supabase.removeChannel(ch));
+    perSessionChannelsRef.current = [];
+
+    upcomingSessions.forEach(session => {
+      const ch = supabase
+        .channel(`coverage:${session.id}`)
+        .on('broadcast', { event: 'STATUS_CHANGED' }, (payload) => {
+          const newStatus = payload?.payload?.status as CoverageSession['status'];
+          if (newStatus) handleStatusChange(session.id, newStatus);
+        })
+        .subscribe();
+      perSessionChannelsRef.current.push(ch);
+    });
+
+    return () => {
+      perSessionChannelsRef.current.forEach(ch => supabase.removeChannel(ch));
+      perSessionChannelsRef.current = [];
+    };
+  }, [upcomingSessions, handleStatusChange]);
+
+  // Focus-based refresh: safety net to catch shifts accepted while tab was not visible
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) {
+        console.log('[DoctorCoverage] Tab focused — refreshing upcoming sessions');
+        refreshUpcoming();
+      }
+    }, [user?.id, refreshUpcoming])
+  );
 
   const handleCall = useCallback((session: CoverageSession) => {
     if (!session.requester_phone) {
