@@ -439,8 +439,8 @@ export default function DoctorHomeScreen() {
           const targetRegion = {
             latitude: _cachedDoctorCoords.latitude + MAP_LAT_OFFSET,
             longitude: _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
-            latitudeDelta: 0.012,
-            longitudeDelta: 0.012,
+            latitudeDelta: 0.12,
+            longitudeDelta: 0.12,
           };
           try {
             mapRef.current.animateToRegion(targetRegion, 600);

@@ -1949,8 +1949,8 @@ export default function RequesterHomeScreen() {
           const targetRegion = {
             latitude: _cachedRequesterCoords.latitude + MAP_LAT_OFFSET,
             longitude: _cachedRequesterCoords.longitude + MAP_LNG_OFFSET,
-            latitudeDelta: 0.012,
-            longitudeDelta: 0.012,
+            latitudeDelta: 0.12,
+            longitudeDelta: 0.12,
           };
           try {
             console.log('[Map] animateToRegion on tab focus', targetRegion);
