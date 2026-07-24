@@ -841,10 +841,16 @@ export default function DoctorLayout() {
         fetchActiveSession();
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
-        const updated = payload?.payload?.session as CoverageSession | undefined;
+        const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
         }
+        // Start polling immediately — if PAYMENT_CONFIRMED broadcast is missed (WebSocket gap,
+        // Android background restrictions), polling catches it within 5s
+        const sid = (updated as any)?.id ?? activeSessionIdRef.current ?? '';
+        const hospital = (updated as any)?.hospital_name ?? '';
+        const amt = (updated as any)?.total_cost ?? (updated as any)?.price ?? 0;
+        startPaymentPolling(sid, hospital, amt);
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? activeSessionId;
@@ -887,6 +893,34 @@ export default function DoctorLayout() {
       sessionChannelRef.current = null;
     };
   }, [activeSessionId, startPaymentPolling]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Postgres Changes fallback: fires when coverage_sessions row status → requester_paid ──
+  useEffect(() => {
+    if (!activeSessionId) return;
+    const ch = supabase
+      .channel(`session-pg-changes:${activeSessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'coverage_sessions',
+          filter: `id=eq.${activeSessionId}`,
+        },
+        (payload) => {
+          const newRow = payload.new as any;
+          if (newRow?.status === 'requester_paid') {
+            console.log('[Doctor] postgres_changes — session status requester_paid, showing rating overlay');
+            const sid = newRow.id ?? activeSessionId;
+            const hospital = newRow.hospital_name ?? '';
+            const amt = newRow.total_cost ?? newRow.price ?? 0;
+            void maybeShowDoctorRating(sid, hospital, amt);
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Merged doctor-user channel: scores + payment confirmation via user:{user.id} ──
   // The backend broadcasts PAYMENT_CONFIRMED to user:{doctor_id} (not doctor-user:{id}),

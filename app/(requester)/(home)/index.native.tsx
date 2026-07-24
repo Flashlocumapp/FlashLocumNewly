@@ -1851,10 +1851,13 @@ export default function RequesterHomeScreen() {
   useEffect(() => {
     const handleAppStateChange = async (nextState: AppStateStatus) => {
       if (nextState === 'active') {
-        await fetchActiveSession();
+        // Read ref BEFORE fetchActiveSession — fetchActiveSession may overwrite it to null
+        const snapBefore = activeSessionRef.current;
         fetchOnlineDoctors();
-        // If session is already in a paid state, trigger rating overlay
-        const snap = activeSessionRef.current;
+        await fetchActiveSession();
+        // Check the pre-fetch snap first (covers the case where session was paid before fetch)
+        const snapAfter = activeSessionRef.current;
+        const snap = snapAfter ?? snapBefore;
         if (snap && (snap.status === 'requester_paid' || snap.status === 'settled' || snap.status === 'payment_complete')) {
           if (!_requesterPaidSessions.has(snap.id) && !_requesterDismissedSessions.has(snap.id)) {
             console.log('[Requester] AppState active — session in paid state:', snap.status, '— showing overlay');
@@ -1911,6 +1914,8 @@ export default function RequesterHomeScreen() {
         PollingManager.stop('end-shift');
         const updated = payload?.payload?.session as Partial<CoverageSession>;
         setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+        // Start polling immediately — catches PAYMENT_CONFIRMED if broadcast is missed
+        startRequesterPaymentPollingRef.current();
       })
       .on('broadcast', { event: 'PAYMENT_DEADLINE_EXTENDED' }, (payload) => {
         const newDeadline = payload?.payload?.payment_deadline_at as string;
@@ -1962,6 +1967,31 @@ export default function RequesterHomeScreen() {
       supabase.removeChannel(ch);
       sessionChannelRef.current = null;
     };
+  }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Postgres Changes fallback: fires when coverage_sessions row status → requester_paid ──
+  useEffect(() => {
+    if (!activeSessionId) return;
+    const ch = supabase
+      .channel(`session-pg-changes-req:${activeSessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'coverage_sessions',
+          filter: `id=eq.${activeSessionId}`,
+        },
+        (payload) => {
+          const newRow = payload.new as any;
+          if (newRow?.status === 'requester_paid') {
+            console.log('[Requester] postgres_changes — session status requester_paid, showing rating overlay');
+            handlePaymentConfirmedWithFallbackRef.current(newRow.id ?? activeSessionId);
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Channels 6 and 7 merged into requester-user channel above
