@@ -331,7 +331,7 @@ export default function DoctorHomeScreen() {
   const isSuspended = verificationStatus === 'suspended';
   const isBlocked = !isVerified; // covers all non-verified states
 
-  const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached } = useDoctorDispatch();
+  const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached, upcomingSessions } = useDoctorDispatch();
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCancelReasons, setShowCancelReasons] = useState(false);
@@ -541,6 +541,7 @@ export default function DoctorHomeScreen() {
   const hasActiveSession = activeSession !== null;
   const isUpcomingOrPaused = hasActiveSession && (activeSession.status === 'upcoming' || activeSession.status === 'paused');
   const isActive = hasActiveSession && activeSession.status === 'active';
+  const nextUpcomingSession = !hasActiveSession && upcomingSessions.length > 0 ? upcomingSessions[0] : null;
 
   return (
     <View style={styles.container}>
@@ -644,7 +645,7 @@ export default function DoctorHomeScreen() {
           <View style={styles.dragHandle} />
 
           {/* Coverage sub-card — default fallback, shows when no named card matches */}
-          {(!isUpcomingOrPaused && !isActive) && (
+          {(!isUpcomingOrPaused && !isActive && !nextUpcomingSession) && (
             <View style={styles.subCard}>
               <Text style={styles.subCardLabel}>COVERAGE</Text>
               <Text style={styles.subCardHeading}>No coverage yet</Text>
@@ -657,6 +658,14 @@ export default function DoctorHomeScreen() {
           {isUpcomingOrPaused && activeSession && (
             <DoctorUpcomingCard
               session={activeSession}
+              onCancel={handleCancelShift}
+              onCall={handleCallRequester}
+            />
+          )}
+
+          {nextUpcomingSession && (
+            <DoctorUpcomingCard
+              session={nextUpcomingSession}
               onCancel={handleCancelShift}
               onCall={handleCallRequester}
             />
