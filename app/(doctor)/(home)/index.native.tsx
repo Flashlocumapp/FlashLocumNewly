@@ -436,25 +436,24 @@ export default function DoctorHomeScreen() {
     React.useCallback(() => {
       const doAnimate = () => {
         if (_cachedDoctorCoords && mapRef.current) {
-          _cachedDoctorRegion = {
+          const targetRegion = {
             latitude: _cachedDoctorCoords.latitude + MAP_LAT_OFFSET,
             longitude: _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
-            latitudeDelta: 0.12,
-            longitudeDelta: 0.12,
+            latitudeDelta: 0.012,
+            longitudeDelta: 0.012,
           };
           try {
-            mapRef.current.animateToRegion(_cachedDoctorRegion, 600);
+            mapRef.current.animateToRegion(targetRegion, 600);
           } catch {
             // map not ready
           }
         }
       };
       const t1 = setTimeout(doAnimate, 300);
-      const t2 = setTimeout(doAnimate, 700);
+      const t2 = setTimeout(doAnimate, 800);
       return () => {
         clearTimeout(t1);
         clearTimeout(t2);
-        _hasAnimatedToUser = false;
       };
     }, [])
   );
