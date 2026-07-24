@@ -1543,6 +1543,8 @@ export default function RequesterHomeScreen() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Online doctors realtime (Broadcast — bypasses RLS) ──
+  const wasSubscribed = useRef(false);
+
   useEffect(() => {
     if (!user) return;
 
@@ -1568,14 +1570,56 @@ export default function RequesterHomeScreen() {
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          // Re-fetch full list on every (re)connect to recover any missed broadcasts
-          fetchOnlineDoctors();
+          if (wasSubscribed.current) {
+            // Reconnect — re-fetch to recover any missed broadcasts
+            console.log('[OnlineDoctors] Broadcast channel reconnected, re-fetching online doctors');
+            fetchOnlineDoctors();
+          } else {
+            // First connect — initial fetch already called above, just mark as subscribed
+            console.log('[OnlineDoctors] Broadcast channel connected for the first time');
+            wasSubscribed.current = true;
+          }
         }
       });
 
     return () => {
       console.log('[OnlineDoctors] Unsubscribing from doctor-status broadcast channel');
       supabase.removeChannel(ch);
+    };
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Online doctors Postgres Changes fallback (independent delivery path) ──
+  useEffect(() => {
+    if (!user) return;
+
+    console.log('[OnlineDoctors] Subscribing to doctor-profiles-presence Postgres Changes channel');
+
+    const pgCh = supabase
+      .channel('doctor-profiles-presence')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'doctor_profiles' },
+        (payload) => {
+          const row = payload.new as { id?: string; lat?: number | null; lng?: number | null; is_online?: boolean };
+          console.log('[OnlineDoctors] Postgres Changes UPDATE received', row);
+          if (!row?.id) return;
+          if (row.is_online === true && row.lat != null && row.lng != null) {
+            setOnlineDoctors((prev) => {
+              const filtered = prev.filter((d) => d.id !== row.id);
+              return [...filtered, { id: row.id!, lat: row.lat!, lng: row.lng! }];
+            });
+          } else {
+            setOnlineDoctors((prev) => prev.filter((d) => d.id !== row.id));
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[OnlineDoctors] Postgres Changes channel status:', status);
+      });
+
+    return () => {
+      console.log('[OnlineDoctors] Unsubscribing from doctor-profiles-presence Postgres Changes channel');
+      supabase.removeChannel(pgCh);
     };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
