@@ -2187,7 +2187,7 @@ export default function RequesterHomeScreen() {
     } finally {
       setSearchLoading(false);
     }
-  }, [transitionTo]);
+  }, [recentPlaceKey, transitionTo]);
 
   // ─── Recent place tap ─────────────────────────────────────────────────────────
   const handleRecentPlaceTap = useCallback(() => {
