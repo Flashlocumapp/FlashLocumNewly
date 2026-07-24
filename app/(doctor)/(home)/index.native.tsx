@@ -541,7 +541,7 @@ export default function DoctorHomeScreen() {
   const hasActiveSession = activeSession !== null;
   const isUpcomingOrPaused = hasActiveSession && (activeSession.status === 'upcoming' || activeSession.status === 'paused');
   const isActive = hasActiveSession && activeSession.status === 'active';
-  const nextUpcomingSession = !hasActiveSession && upcomingSessions.length > 0 ? upcomingSessions[0] : null;
+  const nextUpcomingSession = upcomingSessions.find(s => s.id !== activeSession?.id) ?? null;
 
   return (
     <View style={styles.container}>
