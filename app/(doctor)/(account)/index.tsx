@@ -318,6 +318,8 @@ export default function DoctorAccountScreen() {
     console.log('[Doctor Account] Delete Account confirmed, proceeding with deletion');
     setDeleting(true);
     try {
+      // Force a fresh token before deletion — prevents 401 from expired sessions
+      await supabase.auth.refreshSession();
       console.log('[Doctor Account] Calling delete-account edge function');
       const res = await fetchWithAuth(
         'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/delete-account',
