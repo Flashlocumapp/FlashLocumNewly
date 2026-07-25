@@ -1455,6 +1455,8 @@ export default function RequesterHomeScreen() {
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         console.log('[Requester] requester-user channel SHIFT_CANCELLED received');
         PollingManager.stop('cancel');
+        const sid = activeSessionRef.current?.id;
+        if (sid) PollingManager.stop(`cancel-watch-${sid}`);
         setActiveSession(null);
       })
       .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
@@ -1483,6 +1485,8 @@ export default function RequesterHomeScreen() {
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
         console.log('[Requester] requester channel SHIFT_CANCELLED received — doctor cancelled');
         PollingManager.stop('cancel');
+        const sid = activeSessionRef.current?.id;
+        if (sid) PollingManager.stop(`cancel-watch-${sid}`);
         setActiveSession(null);
       })
       .subscribe();
@@ -1785,6 +1789,40 @@ export default function RequesterHomeScreen() {
     // this keeps the session channel alive after payment_confirmed fires.
   }, [activeSession?.id]);
 
+  // ── Cancel-watch poll — catches SHIFT_CANCELLED if broadcast is missed (either side cancels) ──
+  useEffect(() => {
+    if (!activeSessionId) return;
+    const sid = activeSessionId;
+    const key = `cancel-watch-${sid}`;
+    if (PollingManager.isRunning(key)) return;
+
+    PollingManager.start(key, async () => {
+      // Only poll if there is still an active session to watch
+      const current = activeSessionRef.current;
+      if (!current || current.id !== sid) {
+        return true; // session already gone — stop polling
+      }
+      if (current.status === 'cancelled') {
+        setActiveSession(null);
+        return true;
+      }
+      const { data: s } = await supabase
+        .from('coverage_sessions')
+        .select('status')
+        .eq('id', sid)
+        .maybeSingle();
+      if (!s || s.status === 'cancelled') {
+        setActiveSession(null);
+        return true;
+      }
+      return false;
+    });
+
+    return () => {
+      PollingManager.stop(key);
+    };
+  }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── On mount — restore session state ────────────────────────────────────────
   useEffect(() => {
     (async () => {
@@ -1925,6 +1963,8 @@ export default function RequesterHomeScreen() {
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         PollingManager.stop('cancel');
+        const sid = activeSessionRef.current?.id ?? activeSessionId;
+        if (sid) PollingManager.stop(`cancel-watch-${sid}`);
         setActiveSession(null);
       })
       .subscribe((status) => {

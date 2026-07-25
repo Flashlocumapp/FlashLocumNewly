@@ -380,6 +380,8 @@ export default function DoctorLayout() {
   const forceSyncRef = useRef<() => Promise<void>>(async () => {});
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  // Stable map of upcoming-session channels — never torn down wholesale, only diffed
+  const upcomingChannelsRef = useRef<Map<string, ReturnType<typeof supabase.channel>>>(new Map());
   const isOnlineRef = useRef(false);
   const isRealtimeHealthyRef = useRef(false);
   const lastLocationRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -795,6 +797,38 @@ export default function DoctorLayout() {
     return () => clearInterval(id);
   }, [activeSessionId, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Cancel-watch poll — catches SHIFT_CANCELLED if broadcast is missed ──
+  // Runs for every upcoming session. Stops itself when the session disappears from DB.
+  useEffect(() => {
+    if (upcomingSessions.length === 0) return;
+
+    for (const session of upcomingSessions) {
+      const key = `cancel-upcoming-${session.id}`;
+      if (PollingManager.isRunning(key)) continue;
+      PollingManager.start(key, async () => {
+        const { data: s } = await supabase
+          .from('coverage_sessions')
+          .select('status')
+          .eq('id', session.id)
+          .maybeSingle();
+        if (!s || s.status === 'cancelled') {
+          // Session gone or cancelled — remove from list
+          setUpcomingSessions((prev) => prev.filter((ss) => ss.id !== session.id));
+          setActiveJobCount((prev) => Math.max(0, prev - 1));
+          return true; // stop polling
+        }
+        return false;
+      });
+    }
+
+    // Stop polls for sessions no longer in the list
+    return () => {
+      const currentIds = new Set(upcomingSessions.map((s) => s.id));
+      // Note: we only stop polls for sessions that have been removed.
+      // The PollingManager.start() call above already handles dedup via isRunning().
+    };
+  }, [upcomingSessions.map(s => s.id).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Realtime subscription — dispatch channel ──
   useEffect(() => {
     if (!user) return;
@@ -932,42 +966,59 @@ export default function DoctorLayout() {
   }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Per-upcoming-session cancel listener ──
-  // Subscribes to each upcoming session's broadcast channel so that when a requester
-  // cancels a shift that is NOT the active session, the doctor's list updates immediately.
+  // Uses a stable Map ref — only subscribes NEW session IDs, only unsubscribes REMOVED ones.
+  // This eliminates the teardown/rebuild window that caused missed SHIFT_CANCELLED broadcasts.
   useEffect(() => {
-    if (upcomingSessions.length === 0) return;
+    const map = upcomingChannelsRef.current;
+    const currentIds = new Set(upcomingSessions.map((s) => s.id));
 
-    const channels = upcomingSessions.map((session) => {
+    // Unsubscribe channels for sessions no longer in the list
+    for (const [id, ch] of map.entries()) {
+      if (!currentIds.has(id)) {
+        supabase.removeChannel(ch);
+        map.delete(id);
+      }
+    }
+
+    // Subscribe channels for new sessions not yet in the map
+    for (const session of upcomingSessions) {
+      if (map.has(session.id)) continue; // already subscribed — do NOT recreate
       const ch = supabase.channel(`session:${session.id}`)
         .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
-          console.log('[Doctor] upcoming session cancelled by requester:', session.id);
+          console.log('[Doctor] upcoming session cancelled:', session.id);
+          supabase.removeChannel(ch);
+          map.delete(session.id);
           setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
           setActiveJobCount((prev) => Math.max(0, prev - 1));
+          PollingManager.stop(`cancel-upcoming-${session.id}`);
         })
         .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
           console.log('[Doctor] upcoming session started:', session.id);
-          // Optimistic update — switch home tab to active immediately
           const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
           setActiveSession((prev) => {
-            // If there's already an active session, don't overwrite it
             if (prev && prev.status === 'active') return prev;
             return { ...(updated ?? session), status: 'active' } as CoverageSession;
           });
           setActiveSessionId(session.id);
-          // Remove from upcoming immediately
           setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
-          // Then re-fetch to get authoritative data from server
           reconcileUpcomingRef.current();
           fetchActiveSession();
         })
         .subscribe();
-      return ch;
-    });
+      map.set(session.id, ch);
+    }
+  }, [upcomingSessions]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Cleanup all upcoming channels on unmount ──
+  useEffect(() => {
+    const map = upcomingChannelsRef.current;
     return () => {
-      channels.forEach((ch) => supabase.removeChannel(ch));
+      for (const ch of map.values()) {
+        supabase.removeChannel(ch);
+      }
+      map.clear();
     };
-  }, [upcomingSessions.map(s => s.id).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Postgres Changes fallback: fires when coverage_sessions row status → requester_paid ──
   useEffect(() => {
