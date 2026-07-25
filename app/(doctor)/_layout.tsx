@@ -944,9 +944,19 @@ export default function DoctorLayout() {
           setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
           setActiveJobCount((prev) => Math.max(0, prev - 1));
         })
-        .on('broadcast', { event: 'SHIFT_STARTED' }, () => {
-          // Session moved from upcoming to active — reconcile
+        .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
           console.log('[Doctor] upcoming session started:', session.id);
+          // Optimistic update — switch home tab to active immediately
+          const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
+          setActiveSession((prev) => {
+            // If there's already an active session, don't overwrite it
+            if (prev && prev.status === 'active') return prev;
+            return { ...(updated ?? session), status: 'active' } as CoverageSession;
+          });
+          setActiveSessionId(session.id);
+          // Remove from upcoming immediately
+          setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
+          // Then re-fetch to get authoritative data from server
           reconcileUpcomingRef.current();
           fetchActiveSession();
         })

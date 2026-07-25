@@ -25,6 +25,7 @@ import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 import { useDoctorDispatch } from '@/contexts/DoctorDispatchContext';
 import { useTabData } from '@/hooks/useTabData';
 import { invalidate } from '@/utils/tabCache';
+import PollingManager from '@/utils/pollingManager';
 import { DoctorUpcomingCoverageCard, buildShiftPillText } from '@/components/DoctorUpcomingCoverageCard';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -459,8 +460,19 @@ export default function DoctorCoverageScreen() {
       if (ok) {
         console.log('[DoctorCoverage] Session cancelled successfully with reason:', reason);
         handleStatusChange(sessionId, 'cancelled');
-        // Reconcile context state to ensure both tabs are in sync
         reconcileUpcomingSessions();
+        // 5s polling fallback — confirms the DB write landed
+        PollingManager.start(`cancel-doctor-${sessionId}`, async () => {
+          const { data: s } = await supabase
+            .from('coverage_sessions')
+            .select('status')
+            .eq('id', sessionId)
+            .maybeSingle();
+          if (s?.status === 'cancelled') {
+            return true; // confirmed — stop polling
+          }
+          return false;
+        });
       } else {
         console.error('[DoctorCoverage] Failed to cancel session:', sessionId);
       }
