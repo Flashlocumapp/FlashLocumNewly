@@ -469,6 +469,7 @@ export default function DoctorCoverageScreen() {
             .eq('id', sessionId)
             .maybeSingle();
           if (s?.status === 'cancelled') {
+            reconcileUpcomingSessions();
             return true; // confirmed — stop polling
           }
           return false;

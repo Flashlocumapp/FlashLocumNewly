@@ -274,7 +274,7 @@ export default function DoctorHomeScreen() {
   const isSuspended = verificationStatus === 'suspended';
   const isBlocked = !isVerified; // covers all non-verified states
 
-  const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached, upcomingSessions } = useDoctorDispatch();
+  const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcomingSessions } = useDoctorDispatch();
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCancelReasons, setShowCancelReasons] = useState(false);
@@ -419,9 +419,11 @@ export default function DoctorHomeScreen() {
   };
 
   // ─── Cancel shift ────────────────────────────────────────────────────────────
+  const [pendingCancelSession, setPendingCancelSession] = useState<CoverageSession | null>(null);
+
   const handleCancelShift = useCallback((session?: CoverageSession) => {
     console.log('[DoctorHome] handleCancelShift pressed for session:', session?.id ?? activeSession?.id);
-    if (!activeSession && !session) return;
+    setPendingCancelSession(session ?? null);
     setShowCancelModal(true);
   }, [activeSession]);
 
@@ -431,9 +433,15 @@ export default function DoctorHomeScreen() {
   };
 
   const handleCancelReasonSelected = async (reason: string) => {
-    if (!activeSession) return;
-    const sessionId = activeSession.id;
+    const sessionToCancel = pendingCancelSession;
+    if (!sessionToCancel) return;
+    const sessionId = sessionToCancel.id;
     setShowCancelReasons(false);
+    setPendingCancelSession(null);
+
+    // Optimistic removal from upcoming list immediately
+    setUpcomingSessions((prev) => prev.filter((s) => s.id !== sessionId));
+
     try {
       console.log('[Doctor] handleCancelReasonSelected: cancelling session', sessionId, 'reason:', reason);
       const res = await fetchWithAuth(`${EDGE_BASE}/update-shift-status`, {
@@ -443,18 +451,21 @@ export default function DoctorHomeScreen() {
       });
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
+        // Revert optimistic removal on failure
+        reconcileUpcomingSessions();
         throw new Error(errText || 'Cancel failed');
       }
-      setActiveSession(null);
+      // Server confirmed — reconcile to ensure consistency
+      reconcileUpcomingSessions();
       console.log('[Doctor] Starting cancel poll for session:', sessionId);
-      PollingManager.start('cancel', async () => {
+      PollingManager.start(`cancel-doctor-${sessionId}`, async () => {
         const { data: s } = await supabase
           .from('coverage_sessions')
           .select('status')
           .eq('id', sessionId)
           .maybeSingle();
         if (s?.status === 'cancelled') {
-          setActiveSession(null);
+          reconcileUpcomingSessions();
           return true;
         }
         return false;

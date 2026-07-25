@@ -938,7 +938,7 @@ export default function DoctorLayout() {
     if (upcomingSessions.length === 0) return;
 
     const channels = upcomingSessions.map((session) => {
-      const ch = supabase.channel(`upcoming-session:${session.id}`)
+      const ch = supabase.channel(`session:${session.id}`)
         .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
           console.log('[Doctor] upcoming session cancelled by requester:', session.id);
           setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
