@@ -76,10 +76,20 @@ export default function RequesterBasicProfile() {
     setLoading(true);
 
     try {
+      // Strip any title prefix (Dr., Mr., Mrs., Prof. etc.) before splitting
+      const rawFull: string = user?.user_metadata?.full_name ?? '';
+      const strippedFull = rawFull.replace(/^(dr|mr|mrs|ms|prof|sir)\.?\s*/i, '').trim();
+      const spaceIdx = strippedFull.indexOf(' ');
+      const firstName = spaceIdx > -1 ? strippedFull.slice(0, spaceIdx).trim() : strippedFull.trim();
+      const lastName = spaceIdx > -1 ? strippedFull.slice(spaceIdx + 1).trim() : '';
+      console.log('[basic-profile] name split', { rawFull, strippedFull, firstName, lastName });
+
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert({
           id: user!.id,
+          first_name: firstName,
+          last_name: lastName,
           phone: cleanedPhone,
           gender,
           onboarding_complete: true,
