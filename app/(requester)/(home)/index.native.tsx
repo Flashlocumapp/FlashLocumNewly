@@ -45,6 +45,9 @@ import { buildShiftPillText, EnvironmentBadge as SessionEnvBadge } from '@/compo
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
+// ─── Module-level retry flag for handleRequestCoverage ───────────────────────
+let _submitRetried = false;
+
 // ─── Persistent deduplication for payment success modal ──────────────────────
 const REQUESTER_PAID_SESSIONS_KEY = 'requester_paid_sessions_v1';
 const REQUESTER_DISMISSED_SESSIONS_KEY = 'requester_dismissed_sessions_v1';
@@ -2407,6 +2410,7 @@ export default function RequesterHomeScreen() {
 
   const handleRequestCoverage = async () => {
     console.log('[handleRequestCoverage] Submit button pressed');
+    _submitRetried = false;
     if (!selectedPlace) return;
     // Guard: ensure the selected start time is still in the future
     const startDateObj = new Date(shiftDate);
@@ -2480,6 +2484,15 @@ export default function RequesterHomeScreen() {
         });
       }
     } catch (e: any) {
+      const isNetworkErr = e instanceof TypeError &&
+        (e.message?.includes('Network request failed') || e.message?.includes('network'));
+      if (isNetworkErr && !_submitRetried) {
+        _submitRetried = true;
+        console.log('[Requester] Network error on submit — retrying in 1.5s');
+        await new Promise(r => setTimeout(r, 1500));
+        handleRequestCoverage();
+        return;
+      }
       Alert.alert('Error', e.message || 'Could not submit request. Please try again.');
     } finally {
       setSubmitting(false);
@@ -2713,22 +2726,36 @@ export default function RequesterHomeScreen() {
 
   // ─── Session action handlers ──────────────────────────────────────────────────
   const callSessionEdge = useCallback(async (fn: string, sessionId: string) => {
-    const res = await fetchWithAuth(`${EDGE_BASE}/${fn}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId }),
-    });
-    if (!res.ok) {
-      let errMsg = `HTTP ${res.status}`;
-      try {
-        const errBody = await res.json();
-        errMsg = errBody.error || errBody.message || errMsg;
-      } catch {
-        try { errMsg = (await res.text()) || errMsg; } catch {}
+    const doRequest = async () => {
+      const res = await fetchWithAuth(`${EDGE_BASE}/${fn}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      if (!res.ok) {
+        let errMsg = `HTTP ${res.status}`;
+        try {
+          const errBody = await res.json();
+          errMsg = errBody.error || errBody.message || errMsg;
+        } catch {
+          try { errMsg = (await res.text()) || errMsg; } catch {}
+        }
+        throw new Error(errMsg);
       }
-      throw new Error(errMsg);
+      return res.json();
+    };
+    try {
+      return await doRequest();
+    } catch (err: any) {
+      const isNetworkErr = err instanceof TypeError &&
+        (err.message?.includes('Network request failed') || err.message?.includes('network'));
+      if (isNetworkErr) {
+        console.log('[Requester] Network error on session action — retrying in 1s');
+        await new Promise(r => setTimeout(r, 1000));
+        return doRequest();
+      }
+      throw err;
     }
-    return res.json();
   }, []);
 
   const handleStartShift = useCallback(async () => {
@@ -2753,7 +2780,7 @@ export default function RequesterHomeScreen() {
         return false;
       });
     } catch (e: any) {
-      Alert.alert('Something went wrong', 'Please try again.');
+      Alert.alert('Something went wrong', e.message || 'Please try again.');
     }
   }, [activeSession, callSessionEdge]);
 
@@ -2900,7 +2927,7 @@ export default function RequesterHomeScreen() {
     const sessionId = activeSession.id;
     // Clear immediately so the search card appears right away
     setActiveSession(null);
-    try {
+    const doCancelRequest = async () => {
       const res = await fetchWithAuth(`${EDGE_BASE}/update-shift-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2910,6 +2937,9 @@ export default function RequesterHomeScreen() {
         const errText = await res.text().catch(() => '');
         throw new Error(errText || 'Cancel failed');
       }
+    };
+    try {
+      await doCancelRequest();
       console.log('[Requester] Starting cancel poll for session:', sessionId);
       PollingManager.start('cancel', async () => {
         const { data: s } = await supabase
@@ -2924,6 +2954,32 @@ export default function RequesterHomeScreen() {
         return false;
       });
     } catch (e: any) {
+      const isNetworkErr = e instanceof TypeError &&
+        (e.message?.includes('Network request failed') || e.message?.includes('network'));
+      if (isNetworkErr) {
+        console.log('[Requester] Network error on cancel — retrying in 1s');
+        await new Promise(r => setTimeout(r, 1000));
+        try {
+          await doCancelRequest();
+          PollingManager.start('cancel', async () => {
+            const { data: s } = await supabase
+              .from('coverage_sessions')
+              .select('status')
+              .eq('id', sessionId)
+              .maybeSingle();
+            if (s?.status === 'cancelled') {
+              fetchActiveSessionRef.current();
+              return true;
+            }
+            return false;
+          });
+          return;
+        } catch (retryErr: any) {
+          Alert.alert('Something went wrong', retryErr.message || 'Please try again.');
+          fetchActiveSession();
+          return;
+        }
+      }
       Alert.alert('Error', e.message);
       // Re-fetch to restore correct state if the API call failed
       fetchActiveSession();

@@ -38,8 +38,8 @@ function scheduleProactiveRefresh(expiresAt: number): void {
   _tokenExpiresAt = expiresAt;
   if (_proactiveTimer) clearTimeout(_proactiveTimer);
   const nowSeconds = Math.floor(Date.now() / 1000);
-  // Fire 120s before expiry (widened from 60s — gives more headroom)
-  const secondsUntilRefresh = Math.max(0, expiresAt - nowSeconds - 120);
+  // Fire 180s before expiry (widened from 120s — gives more headroom for cold TCP reconnect)
+  const secondsUntilRefresh = Math.max(0, expiresAt - nowSeconds - 180);
   _proactiveTimer = setTimeout(async () => {
     _proactiveTimer = null;
     console.log('[supabase] Proactive token refresh triggered');
@@ -85,8 +85,8 @@ if (Platform.OS !== 'web') {
   AppState.addEventListener('change', async (nextState) => {
     if (nextState === 'active') {
       const nowSeconds = Math.floor(Date.now() / 1000);
-      // If token expires within 120s of now (stale or about to expire), refresh immediately
-      if (_tokenExpiresAt > 0 && _tokenExpiresAt - nowSeconds <= 120) {
+      // If token expires within 180s of now (stale or about to expire), refresh immediately
+      if (_tokenExpiresAt > 0 && _tokenExpiresAt - nowSeconds <= 180) {
         console.log('[supabase] AppState active — token stale/near-expiry, triggering getValidToken');
         getValidToken().catch(() => {});
       }
@@ -133,13 +133,13 @@ export async function getValidToken(): Promise<string | null> {
     // timeout fired — fall through to fast/slow path below
   }
 
-  // Fast path — return cached token if it expires more than 120s from now
+  // Fast path — return cached token if it expires more than 180s from now
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) {
       const expiresAt = session.expires_at ?? 0;
       const nowSeconds = Math.floor(Date.now() / 1000);
-      if (expiresAt - nowSeconds > 120) {
+      if (expiresAt - nowSeconds > 180) {
         return session.access_token;
       }
     }
@@ -228,7 +228,22 @@ export async function fetchWithAuth(
     },
   });
 
-  const res = await makeRequest(token);
+  const fetchWithRetry = async (t: string): Promise<Response> => {
+    try {
+      return await makeRequest(t);
+    } catch (err: any) {
+      const isNetworkError = err instanceof TypeError &&
+        (err.message?.includes('Network request failed') || err.message?.includes('network'));
+      if (isNetworkError) {
+        console.log('[fetchWithAuth] Network error on first attempt — retrying in 1s');
+        await new Promise(r => setTimeout(r, 1000));
+        return makeRequest(t); // second attempt — let it throw if it fails again
+      }
+      throw err;
+    }
+  };
+
+  const res = await fetchWithRetry(token);
   console.log('[fetchWithAuth] Response:', res.status, url);
 
   // Check for auth errors (including non-401 status codes with auth error bodies)

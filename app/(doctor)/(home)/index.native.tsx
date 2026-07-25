@@ -442,7 +442,7 @@ export default function DoctorHomeScreen() {
     // Optimistic removal from upcoming list immediately
     setUpcomingSessions((prev) => prev.filter((s) => s.id !== sessionId));
 
-    try {
+    const doCancelRequest = async () => {
       console.log('[Doctor] handleCancelReasonSelected: cancelling session', sessionId, 'reason:', reason);
       const res = await fetchWithAuth(`${EDGE_BASE}/update-shift-status`, {
         method: 'POST',
@@ -451,12 +451,11 @@ export default function DoctorHomeScreen() {
       });
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
-        // Revert optimistic removal on failure
-        reconcileUpcomingSessions();
         throw new Error(errText || 'Cancel failed');
       }
-      // Server confirmed — reconcile to ensure consistency
-      reconcileUpcomingSessions();
+    };
+
+    const startCancelPoll = () => {
       console.log('[Doctor] Starting cancel poll for session:', sessionId);
       PollingManager.start(`cancel-doctor-${sessionId}`, async () => {
         const { data: s } = await supabase
@@ -470,7 +469,33 @@ export default function DoctorHomeScreen() {
         }
         return false;
       });
+    };
+
+    try {
+      await doCancelRequest();
+      // Server confirmed — reconcile to ensure consistency
+      reconcileUpcomingSessions();
+      startCancelPoll();
     } catch (e: any) {
+      const isNetworkErr = e instanceof TypeError &&
+        (e.message?.includes('Network request failed') || e.message?.includes('network'));
+      if (isNetworkErr) {
+        console.log('[Doctor] Network error on cancel — retrying in 1s');
+        await new Promise(r => setTimeout(r, 1000));
+        try {
+          await doCancelRequest();
+          reconcileUpcomingSessions();
+          startCancelPoll();
+          return;
+        } catch (retryErr: any) {
+          // Revert optimistic removal on failure
+          reconcileUpcomingSessions();
+          Alert.alert('Something went wrong', retryErr.message || 'Please try again.');
+          return;
+        }
+      }
+      // Revert optimistic removal on failure
+      reconcileUpcomingSessions();
       Alert.alert('Error', e.message);
     }
   };
