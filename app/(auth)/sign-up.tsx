@@ -146,9 +146,37 @@ export default function SignUpScreen() {
       if (signInError) {
         setError(signInError.message || 'Sign in failed. Please try again.');
       } else {
-        // Write lastPathway so NavigationGuard routes to the correct portal,
-        // then let NavigationGuard handle all routing via onAuthStateChange.
+        // Fetch profile to determine correct destination
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
         await SecureStore.setItemAsync('flashlocum_last_pathway', role);
+        if (!profileData) {
+          // No profile yet — go to onboarding
+          const dest = role === 'doctor'
+            ? '/(onboarding)/doctor/basic-profile'
+            : '/(onboarding)/requester/basic-profile';
+          router.replace(dest as any);
+          return;
+        }
+        const doctorComplete = profileData.doctor_onboarding_complete === true;
+        const requesterComplete = profileData.requester_onboarding_complete === true;
+        if (doctorComplete && !requesterComplete) {
+          router.replace('/(doctor)/(home)' as any);
+        } else if (requesterComplete && !doctorComplete) {
+          router.replace('/(requester)/(home)' as any);
+        } else if (doctorComplete && requesterComplete) {
+          const dest = role === 'doctor' ? '/(doctor)/(home)' : '/(requester)/(home)';
+          router.replace(dest as any);
+        } else {
+          // Neither complete — go to onboarding
+          const dest = role === 'doctor'
+            ? '/(onboarding)/doctor/basic-profile'
+            : '/(onboarding)/requester/basic-profile';
+          router.replace(dest as any);
+        }
       }
     }
   };
