@@ -165,9 +165,9 @@ function NavigationGuard({ onNavigationReady }: { onNavigationReady: () => void 
   useEffect(() => {
     if (!session && !profile && hasRouted.current) {
       routedWithNoSession.current = false; // clear stale flag on sign-out
-      if (segments[0] === '(auth)') return; // already in auth flow — don't redirect
-      hasRouted.current = false;
+      hasRouted.current = false;           // always reset so next sign-in can route correctly
       skipIntroRef.current = true;
+      if (segments[0] === '(auth)') return; // already in auth flow — no need to navigate
       router.replace('/(auth)/role-select' as any);
     }
   }, [session, profile, segments]); // eslint-disable-line react-hooks/exhaustive-deps
