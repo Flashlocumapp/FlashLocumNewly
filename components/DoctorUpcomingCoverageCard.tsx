@@ -60,10 +60,11 @@ export function EnvironmentBadge({ environment }: { environment: string }) {
   );
 }
 
-export function DoctorUpcomingCoverageCard({ session, onCall, onCancel }: {
+export function DoctorUpcomingCoverageCard({ session, onCall, onCancel, variant = 'light' }: {
   session: CoverageSession;
   onCall: (session: CoverageSession) => void;
   onCancel: (session: CoverageSession) => void;
+  variant?: 'light' | 'dark';
 }) {
   const [liveRating, setLiveRating] = useState<number | null>(null);
   const [liveReliability, setLiveReliability] = useState<number | null>(null);
@@ -100,9 +101,19 @@ export function DoctorUpcomingCoverageCard({ session, onCall, onCancel }: {
     ? 'PAYMENT PENDING'
     : 'UPCOMING COVERAGE';
 
+  const isDark = variant === 'dark';
+  const cardBg = isDark ? '#2C2C2E' : '#FFFFFF';
+  const primaryText = isDark ? '#FFFFFF' : '#1C1C1E';
+  const pillBg = isDark ? '#3A3A3C' : '#F0F0F0';
+  const pillText = isDark ? '#FFFFFF' : '#1C1C1E';
+  const cancelBg = '#FFFFFF';
+  const cancelBorder = '#E5E5EA';
+  const cancelText = '#1C1C1E';
+  const callBg = isDark ? '#0A0A0A' : '#1C1C1E';
+
   return (
     <View style={{
-      backgroundColor: '#FFFFFF',
+      backgroundColor: cardBg,
       borderRadius: 20,
       padding: 16,
       marginBottom: 12,
@@ -120,15 +131,15 @@ export function DoctorUpcomingCoverageCard({ session, onCall, onCancel }: {
 
       {/* Hospital name + rating row */}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-        <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#1C1C1E', flexShrink: 1 }} numberOfLines={1}>
+        <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: primaryText, flexShrink: 1 }} numberOfLines={1}>
           {session.hospital_name}
         </Text>
         <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 6 }}>{'|'}</Text>
         <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_400Regular' }}>{'★ '}</Text>
-        <Text style={{ fontSize: 13, color: '#1C1C1E', fontFamily: 'Inter_400Regular' }}>{ratingDisplay}</Text>
+        <Text style={{ fontSize: 13, color: primaryText, fontFamily: 'Inter_400Regular' }}>{ratingDisplay}</Text>
         <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#34C759', marginHorizontal: 6 }} />
-        <Text style={{ fontSize: 13, color: '#1C1C1E', fontFamily: 'Inter_400Regular' }}>{reliabilityDisplay}</Text>
-        <Text style={{ fontSize: 13, color: '#1C1C1E', fontFamily: 'Inter_400Regular' }}>{'%'}</Text>
+        <Text style={{ fontSize: 13, color: primaryText, fontFamily: 'Inter_400Regular' }}>{reliabilityDisplay}</Text>
+        <Text style={{ fontSize: 13, color: primaryText, fontFamily: 'Inter_400Regular' }}>{'%'}</Text>
       </View>
 
       {/* Address */}
@@ -137,8 +148,8 @@ export function DoctorUpcomingCoverageCard({ session, onCall, onCancel }: {
       </Text>
 
       {/* Shift pill */}
-      <View style={{ backgroundColor: '#F0F0F0', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start', marginTop: 8 }}>
-        <Text style={{ fontSize: 12, color: '#1C1C1E', fontFamily: 'Inter_400Regular' }} numberOfLines={1}>
+      <View style={{ backgroundColor: pillBg, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start', marginTop: 8 }}>
+        <Text style={{ fontSize: 12, color: pillText, fontFamily: 'Inter_400Regular' }} numberOfLines={1}>
           {shiftPillText}
         </Text>
       </View>
@@ -163,9 +174,9 @@ export function DoctorUpcomingCoverageCard({ session, onCall, onCancel }: {
                 onCancel(session);
               }}
               activeOpacity={0.8}
-              style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 11, alignItems: 'center', borderWidth: 1, borderColor: '#E5E5EA' }}
+              style={{ flex: 1, backgroundColor: cancelBg, borderRadius: 999, paddingVertical: 11, alignItems: 'center', borderWidth: 1, borderColor: cancelBorder }}
             >
-              <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E', letterSpacing: 0.3 }}>CANCEL SHIFT</Text>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: cancelText, letterSpacing: 0.3 }}>CANCEL SHIFT</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity
@@ -174,7 +185,7 @@ export function DoctorUpcomingCoverageCard({ session, onCall, onCancel }: {
               onCall(session);
             }}
             activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#1C1C1E', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
+            style={{ flex: 1, backgroundColor: callBg, borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
           >
             <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', letterSpacing: 0.3 }}>CALL</Text>
           </TouchableOpacity>

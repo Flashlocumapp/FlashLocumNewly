@@ -515,6 +515,7 @@ export default function DoctorHomeScreen() {
               session={activeSession}
               onCancel={(s) => handleCancelShift(s)}
               onCall={(s) => handleCallRequester(s)}
+              variant="dark"
             />
           )}
 
@@ -523,6 +524,7 @@ export default function DoctorHomeScreen() {
               session={nextUpcomingSession}
               onCancel={(s) => handleCancelShift(s)}
               onCall={(s) => handleCallRequester(s)}
+              variant="dark"
             />
           )}
 
