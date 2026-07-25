@@ -735,6 +735,11 @@ export default function DoctorCoverageScreen() {
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
           setUpcomingSessions(prev => prev.filter(s => s.id !== sessionId));
         }
+        // Reconcile immediately — removes the now-active session from upcoming
+        // even if sessionId was missing from the payload
+        reconcileUpcomingRef.current();
+        // Also reconcile 5s later as belt-and-suspenders
+        setTimeout(() => { reconcileUpcomingRef.current(); }, 5000);
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
         const updatedSession = payload?.payload?.session as CoverageSession;
@@ -795,6 +800,9 @@ export default function DoctorCoverageScreen() {
           }
           return prev.filter(s => s.id !== sessionId);
         });
+        // Reconcile immediately as fallback
+        reconcileUpcomingRef.current();
+        setTimeout(() => { reconcileUpcomingRef.current(); }, 5000);
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {

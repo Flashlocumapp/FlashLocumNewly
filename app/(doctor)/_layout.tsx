@@ -928,7 +928,7 @@ export default function DoctorLayout() {
   // Dependency on activeSessionId ensures the handler captures the latest session ID in its closure.
   useEffect(() => {
     if (!user) return;
-    const ch = supabase.channel(`user:${user.id}`)
+    const ch = supabase.channel(`doctor:${user.id}`)
       .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
         if (payload?.payload?.reviewer_role === 'requester') {
           const newRating = payload?.payload?.new_rating;
