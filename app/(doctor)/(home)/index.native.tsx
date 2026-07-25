@@ -31,7 +31,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 import { getCached, setCached } from '@/utils/tabCache';
 import PollingManager from '../../../utils/pollingManager';
-import { DoctorUpcomingCoverageCard, buildShiftPillText, EnvironmentBadge } from '@/components/DoctorUpcomingCoverageCard';
+import { buildShiftPillText, EnvironmentBadge } from '@/components/DoctorUpcomingCoverageCard';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
@@ -69,6 +69,98 @@ function formatElapsed(startedAt: string): string {
 }
 
 
+
+// ─── HomeUpcomingContent — renders inside the shared subCard wrapper ──────────
+function HomeUpcomingContent({
+  session,
+  onCancel,
+  onCall,
+}: {
+  session: CoverageSession;
+  onCancel: (s: CoverageSession) => void;
+  onCall: (s: CoverageSession) => void;
+}) {
+  const _cachedRequesterStats = getCached<{ rating: number; reliability: number }>(`requester_stats_${session.requester_id}`);
+  const [liveRequesterRating, setLiveRequesterRating] = useState<number | null>(_cachedRequesterStats?.rating ?? null);
+  const [liveRequesterReliability, setLiveRequesterReliability] = useState<number | null>(_cachedRequesterStats?.reliability ?? null);
+
+  useEffect(() => {
+    if (!session.requester_id) return;
+    console.log('[Doctor Home] Fetching live requester stats for upcoming session, requester_id:', session.requester_id);
+    supabase
+      .from('requester_profiles')
+      .select('rating, reliability')
+      .eq('id', session.requester_id)
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) {
+          console.log('[Doctor Home] Requester stats fetch failed (upcoming), using defaults:', error?.message);
+          setLiveRequesterRating(5.0);
+          setLiveRequesterReliability(100);
+          setCached(`requester_stats_${session.requester_id}`, { rating: 5.0, reliability: 100 });
+        } else {
+          console.log('[Doctor Home] Live requester stats fetched (upcoming):', data);
+          setLiveRequesterRating(data.rating ?? 5.0);
+          setLiveRequesterReliability(data.reliability ?? 100);
+          setCached(`requester_stats_${session.requester_id}`, { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
+        }
+      });
+  }, [session.requester_id]);
+
+  const canCancel = session.status === 'upcoming' && session.current_day === 1;
+  const shiftPillText = buildShiftPillText(session);
+  const requesterRatingDisplay = liveRequesterRating != null ? liveRequesterRating.toFixed(1) : '--';
+  const reliabilityDisplay = liveRequesterReliability != null ? `${Math.round(liveRequesterReliability)}` : '--';
+
+  return (
+    <>
+      {/* Header row */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <Text style={styles.subCardLabel}>UPCOMING COVERAGE</Text>
+        <EnvironmentBadge environment={session.environment} />
+      </View>
+
+      {/* Hospital name + rating row */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+        <Text style={[styles.subCardHeading, { flexShrink: 1 }]} numberOfLines={1}>{session.hospital_name}</Text>
+        <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 6 }}>{'|'}</Text>
+        <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_400Regular' }}>{'★ '}</Text>
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{requesterRatingDisplay}</Text>
+        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#34C759', marginHorizontal: 6 }} />
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{reliabilityDisplay}</Text>
+        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{'%'}</Text>
+      </View>
+
+      {/* Address */}
+      <Text style={[styles.subCardBody, { marginTop: 0 }]} numberOfLines={1}>{session.hospital_address}</Text>
+
+      {/* Shift pill */}
+      <View style={styles.shiftPill}>
+        <Text style={styles.shiftPillText} numberOfLines={1}>{shiftPillText}</Text>
+      </View>
+
+      {/* Action buttons */}
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+        {canCancel && (
+          <TouchableOpacity
+            onPress={() => { console.log('[Doctor Home] CANCEL SHIFT pressed for session:', session.id); onCancel(session); }}
+            activeOpacity={0.8}
+            style={{ flex: 1, backgroundColor: '#F9F9F6', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
+          >
+            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E', letterSpacing: 0.3 }}>CANCEL SHIFT</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          onPress={() => { console.log('[Doctor Home] CALL pressed for session:', session.id); onCall(session); }}
+          activeOpacity={0.8}
+          style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
+        >
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', letterSpacing: 0.3 }}>CALL</Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+}
 
 function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCall: () => void }) {
   const [elapsed, setElapsed] = useState('00:00:00');
@@ -499,7 +591,7 @@ export default function DoctorHomeScreen() {
           {/* Decorative drag handle */}
           <View style={styles.dragHandle} />
 
-          {/* Coverage sub-card — default fallback, shows when no named card matches */}
+          {/* No session */}
           {(!isUpcomingOrPaused && !isActive && !nextUpcomingSession) && (
             <View style={styles.subCard}>
               <Text style={styles.subCardLabel}>COVERAGE</Text>
@@ -510,24 +602,29 @@ export default function DoctorHomeScreen() {
             </View>
           )}
 
+          {/* Upcoming/paused active session — content inside subCard */}
           {isUpcomingOrPaused && activeSession && (
-            <DoctorUpcomingCoverageCard
-              session={activeSession}
-              onCancel={(s) => handleCancelShift(s)}
-              onCall={(s) => handleCallRequester(s)}
-              variant="dark"
-            />
+            <View style={styles.subCard}>
+              <HomeUpcomingContent
+                session={activeSession}
+                onCancel={(s) => handleCancelShift(s)}
+                onCall={(s) => handleCallRequester(s)}
+              />
+            </View>
           )}
 
+          {/* Next upcoming session */}
           {nextUpcomingSession && (
-            <DoctorUpcomingCoverageCard
-              session={nextUpcomingSession}
-              onCancel={(s) => handleCancelShift(s)}
-              onCall={(s) => handleCallRequester(s)}
-              variant="dark"
-            />
+            <View style={styles.subCard}>
+              <HomeUpcomingContent
+                session={nextUpcomingSession}
+                onCancel={(s) => handleCancelShift(s)}
+                onCall={(s) => handleCallRequester(s)}
+              />
+            </View>
           )}
 
+          {/* Active session — DoctorActiveCard has its own subCard wrapper */}
           {isActive && activeSession && (
             <DoctorActiveCard
               session={activeSession}
