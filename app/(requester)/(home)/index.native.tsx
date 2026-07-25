@@ -1450,9 +1450,9 @@ export default function RequesterHomeScreen() {
       })
       // From channel 7 (shift cancelled on requester channel)
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+        console.log('[Requester] requester-user channel SHIFT_CANCELLED received');
         PollingManager.stop('cancel');
         setActiveSession(null);
-        fetchActiveSessionRef.current();
       })
       .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
         // A session was created — if we're in matching state, confirm the match
@@ -1472,6 +1472,19 @@ export default function RequesterHomeScreen() {
       });
     return () => { supabase.removeChannel(ch); };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Realtime: requester:{user.id} channel — catches doctor-initiated cancellations ─
+  useEffect(() => {
+    if (!user) return;
+    const ch = supabase.channel(`requester:${user.id}`)
+      .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
+        console.log('[Requester] requester channel SHIFT_CANCELLED received — doctor cancelled');
+        PollingManager.stop('cancel');
+        setActiveSession(null);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mapRef = useRef<MapView>(null);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(
@@ -1936,10 +1949,14 @@ export default function RequesterHomeScreen() {
           filter: `id=eq.${activeSessionId}`,
         },
         (payload) => {
-          const newRow = payload.new as any;
-          if (newRow?.status === 'requester_paid') {
-            console.log('[Requester] postgres_changes — session status requester_paid, showing rating overlay');
+          const newRow = payload.new as { status?: string; id?: string };
+          if (newRow?.status === 'requester_paid' || newRow?.status === 'settled' || newRow?.status === 'payment_complete') {
+            console.log('[Requester] postgres_changes — session status', newRow.status, ', handling payment confirmed');
             handlePaymentConfirmedWithFallbackRef.current(newRow.id ?? activeSessionId);
+          }
+          if (newRow?.status === 'cancelled') {
+            console.log('[Requester] postgres_changes: session cancelled — clearing activeSession');
+            setActiveSession(null);
           }
         }
       )
