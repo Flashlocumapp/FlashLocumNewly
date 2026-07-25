@@ -931,6 +931,34 @@ export default function DoctorLayout() {
     };
   }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Per-upcoming-session cancel listener ──
+  // Subscribes to each upcoming session's broadcast channel so that when a requester
+  // cancels a shift that is NOT the active session, the doctor's list updates immediately.
+  useEffect(() => {
+    if (upcomingSessions.length === 0) return;
+
+    const channels = upcomingSessions.map((session) => {
+      const ch = supabase.channel(`upcoming-session:${session.id}`)
+        .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
+          console.log('[Doctor] upcoming session cancelled by requester:', session.id);
+          setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
+          setActiveJobCount((prev) => Math.max(0, prev - 1));
+        })
+        .on('broadcast', { event: 'SHIFT_STARTED' }, () => {
+          // Session moved from upcoming to active — reconcile
+          console.log('[Doctor] upcoming session started:', session.id);
+          reconcileUpcomingRef.current();
+          fetchActiveSession();
+        })
+        .subscribe();
+      return ch;
+    });
+
+    return () => {
+      channels.forEach((ch) => supabase.removeChannel(ch));
+    };
+  }, [upcomingSessions.map(s => s.id).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Postgres Changes fallback: fires when coverage_sessions row status → requester_paid ──
   useEffect(() => {
     if (!activeSessionId) return;

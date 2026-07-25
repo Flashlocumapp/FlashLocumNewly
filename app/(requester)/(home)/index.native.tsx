@@ -41,6 +41,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 import { getCached, setCached, invalidate } from '@/utils/tabCache';
 import PollingManager from '../../../utils/pollingManager';
+import { buildShiftPillText, EnvironmentBadge as SessionEnvBadge } from '@/components/sessionUtils';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
@@ -491,55 +492,7 @@ function getSessionInitials(name: string): string {
   return parts[0]?.[0]?.toUpperCase() ?? '?';
 }
 
-function buildShiftPillText(session: CoverageSession): string {
-  const shiftMs = new Date(session.shift_end).getTime() - new Date(session.shift_start).getTime();
-  const msHours = shiftMs / (1000 * 60 * 60);
-  const perDayHours = (session.per_day_hours && Number(session.per_day_hours) > 0)
-    ? Number(session.per_day_hours)
-    : (msHours > 0 ? msHours : 24);
-  const coverageLength = Math.max(1, session.coverage_length ?? 1);
-  const totalHours = perDayHours * coverageLength;
-  const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
-  const priceDisplay = `₦${Number(session.price).toLocaleString()}`;
-  const shiftStart = formatSessionTime(session.shift_start);
-  const shiftEnd = formatSessionTime(session.shift_end);
-  const sep = ' · ';
-
-  if (session.status === 'paused') {
-    return `${session.shift_type}${sep}Day ${session.current_day} of ${coverageLength}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
-  }
-
-  if (perDayHours >= 24) {
-    const startDate = new Date(session.shift_date + 'T12:00:00');
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 1);
-    const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
-    const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
-    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
-  }
-
-  if (coverageLength > 1) {
-    const startDate = new Date(session.shift_date + 'T12:00:00');
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + coverageLength - 1);
-    const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
-    const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
-    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}${sep}Day ${session.current_day} of ${coverageLength}`;
-  }
-
-  const dayLabel = new Date(session.shift_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
-  return `${session.shift_type}${sep}${dayLabel}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
-}
-
-function SessionEnvBadge({ environment }: { environment: string }) {
-  const bg = '#F5F5F0';
-  const color = '#1C1C1E';
-  return (
-    <View style={{ backgroundColor: bg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
-      <Text style={{ fontSize: 12, color, fontFamily: 'Inter_600SemiBold' }}>{environment}</Text>
-    </View>
-  );
-}
+// buildShiftPillText and SessionEnvBadge are imported from shared sessionUtils below
 
 // ─── Requester Upcoming Coverage Card ────────────────────────────────────────
 function RequesterUpcomingCard({

@@ -2,63 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
+import { buildShiftPillText, EnvironmentBadge } from '@/components/sessionUtils';
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
-
-export function buildShiftPillText(session: CoverageSession): string {
-  const shiftMs = new Date(session.shift_end).getTime() - new Date(session.shift_start).getTime();
-  const msHours = shiftMs / (1000 * 60 * 60);
-  const shiftHours = (session.per_day_hours && Number(session.per_day_hours) > 0)
-    ? Number(session.per_day_hours)
-    : (msHours > 0 ? msHours : 24);
-  const totalHours = shiftHours * session.coverage_length;
-  const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
-  const priceDisplay = `₦${Number(session.booked_price ?? session.price).toLocaleString()}`;
-  const shiftStart = formatTime(session.shift_start);
-  const shiftEnd = formatTime(session.shift_end);
-  const sep = '  ·  ';
-
-  if (session.status === 'paused') {
-    return `${session.shift_type}${sep}Day ${session.current_day} of ${session.coverage_length}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
-  }
-
-  if (shiftHours >= 24) {
-    const startDate = new Date(session.shift_date);
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 1);
-    const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
-    const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
-    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
-  }
-
-  if (session.coverage_length > 1) {
-    const startDate = new Date(session.shift_date);
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + session.coverage_length - 1);
-    const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
-    const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
-    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
-  }
-
-  const dayLabel = new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short' });
-  return `${session.shift_type}${sep}${dayLabel}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
-}
-
-export function EnvironmentBadge({ environment }: { environment: string }) {
-  const bg = '#F5F5F0';
-  const color = '#1C1C1E';
-  return (
-    <View style={{ backgroundColor: bg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
-      <Text style={{ fontSize: 12, color, fontFamily: 'Inter_600SemiBold' }}>{environment}</Text>
-    </View>
-  );
-}
+// Re-export shared utilities so existing imports from this file continue to work
+export { buildShiftPillText, EnvironmentBadge } from '@/components/sessionUtils';
 
 export function DoctorUpcomingCoverageCard({ session, onCall, onCancel, variant = 'light' }: {
   session: CoverageSession;
