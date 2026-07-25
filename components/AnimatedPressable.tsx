@@ -25,7 +25,6 @@ export function AnimatedPressable({
     <Animated.View style={[animatedStyle, style]}>
       <Pressable
         onPressIn={() => {
-          console.log('[AnimatedPressable] onPressIn');
           scale.value = withSpring(scaleValue, { damping: 15, stiffness: 300 });
         }}
         onPressOut={() => {

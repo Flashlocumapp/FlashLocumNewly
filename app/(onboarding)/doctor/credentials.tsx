@@ -239,20 +239,13 @@ export default function DoctorCredentials() {
       const userId = user!.id;
 
       const nyscExt = getExtension(nyscFile!.name);
-      const nyscPath = await uploadFile(
-        nyscFile!.uri,
-        `${userId}/nysc-cert.${nyscExt}`,
-        nyscFile!.mimeType,
-      );
-
       const licenceExt = getExtension(licenceFile!.name);
-      const licencePath = await uploadFile(
-        licenceFile!.uri,
-        `${userId}/medical-licence.${licenceExt}`,
-        licenceFile!.mimeType,
-      );
 
-      const selfiePath = await uploadFile(selfieUri!, `${userId}/selfie.jpg`, 'image/jpeg');
+      const [nyscPath, licencePath, selfiePath] = await Promise.all([
+        uploadFile(nyscFile!.uri, `${userId}/nysc-cert.${nyscExt}`, nyscFile!.mimeType),
+        uploadFile(licenceFile!.uri, `${userId}/medical-licence.${licenceExt}`, licenceFile!.mimeType),
+        uploadFile(selfieUri!, `${userId}/selfie.jpg`, 'image/jpeg'),
+      ]);
 
       const { error: doctorProfileError } = await supabase
         .from('doctor_profiles')

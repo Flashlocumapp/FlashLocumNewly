@@ -399,7 +399,7 @@ export default function DoctorPayout() {
       if (profileError) throw profileError;
 
       console.log('[Payout] Submit success');
-      await refreshProfile();
+      refreshProfile();
       router.replace('/(doctor)/(home)' as any);
     } catch (err: unknown) {
       const message =

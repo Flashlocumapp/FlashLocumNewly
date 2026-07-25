@@ -44,7 +44,7 @@ function NavigationGuard({ onNavigationReady }: { onNavigationReady: () => void 
   useEffect(() => {
     if (!isReady || lastPathway === undefined) return;
     if (hasRouted.current) return;
-    if (profileLoading) return; // wait for profile fetch to complete
+    if (!profile && profileLoading) return; // wait for profile fetch only if we don't have one yet
 
     // Never interrupt the intro animation
     const onIntro = segments[1] === 'intro'; // segments[0] = '(auth)', segments[1] = 'intro'

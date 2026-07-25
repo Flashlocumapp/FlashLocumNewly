@@ -82,8 +82,6 @@ export default function RequesterBasicProfile() {
       const spaceIdx = strippedFull.indexOf(' ');
       const firstName = spaceIdx > -1 ? strippedFull.slice(0, spaceIdx).trim() : strippedFull.trim();
       const lastName = spaceIdx > -1 ? strippedFull.slice(spaceIdx + 1).trim() : '';
-      console.log('[basic-profile] name split', { rawFull, strippedFull, firstName, lastName });
-
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert({
@@ -104,7 +102,7 @@ export default function RequesterBasicProfile() {
 
       if (requesterError) throw requesterError;
 
-      await refreshProfile();
+      refreshProfile();
       router.replace('/(requester)/(home)' as any);
     } catch (err: any) {
       setSubmitError(err?.message || 'Something went wrong. Please try again.');

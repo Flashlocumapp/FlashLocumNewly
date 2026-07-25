@@ -85,8 +85,6 @@ export default function DoctorBasicProfile() {
       const spaceIdx = strippedFull.indexOf(' ');
       const firstName = spaceIdx > -1 ? strippedFull.slice(0, spaceIdx).trim() : strippedFull.trim();
       const lastName = spaceIdx > -1 ? strippedFull.slice(spaceIdx + 1).trim() : '';
-      console.log('[basic-profile] name split', { rawFull, strippedFull, firstName, lastName });
-
       console.log('[basic-profile] handleContinue: upserting profile for user', user!.id);
       const { error: profileError } = await supabase
         .from('profiles')
@@ -108,7 +106,7 @@ export default function DoctorBasicProfile() {
 
       if (doctorProfileError) throw doctorProfileError;
 
-      await refreshProfile();
+      refreshProfile();
       router.push('/(onboarding)/doctor/credentials');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
