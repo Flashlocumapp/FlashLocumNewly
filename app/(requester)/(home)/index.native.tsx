@@ -4135,10 +4135,10 @@ export default function RequesterHomeScreen() {
               width: '100%',
             }}>
               <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
-                Too Soon to Request
+                Please Choose a Later Start Time
               </Text>
               <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
-                Start time must be at least 30 minutes from now. This gives doctors enough time to travel to your location.
+                Start time must be at least 30 minutes from now.
               </Text>
               <TouchableOpacity
                 onPress={() => {
