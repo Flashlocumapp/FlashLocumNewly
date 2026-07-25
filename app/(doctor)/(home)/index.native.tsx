@@ -31,6 +31,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 import { getCached, setCached } from '@/utils/tabCache';
 import PollingManager from '../../../utils/pollingManager';
+import { DoctorUpcomingCoverageCard, buildShiftPillText, EnvironmentBadge } from '@/components/DoctorUpcomingCoverageCard';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
@@ -54,14 +55,6 @@ const LAGOS_REGION = {
 const MAP_LAT_OFFSET = -0.03; // shifts centre south → pin appears higher
 const MAP_LNG_OFFSET = 0.03;  // shifts centre east → pin appears to the left
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
-
 function formatElapsed(startedAt: string): string {
   const diffMs = Date.now() - new Date(startedAt).getTime();
   const totalSec = Math.max(0, Math.floor(diffMs / 1000));
@@ -75,149 +68,7 @@ function formatElapsed(startedAt: string): string {
   ].join(':');
 }
 
-function buildShiftPillText(session: CoverageSession): string {
-  const shiftMs = new Date(session.shift_end).getTime() - new Date(session.shift_start).getTime();
-  const msHours = shiftMs / (1000 * 60 * 60);
-  const shiftHours = (session.per_day_hours && Number(session.per_day_hours) > 0)
-    ? Number(session.per_day_hours)
-    : (msHours > 0 ? msHours : 24);
-  const totalHours = shiftHours * session.coverage_length;
-  const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
-  const priceDisplay = `₦${Number(session.price).toLocaleString()}`;
-  const shiftStart = formatTime(session.shift_start);
-  const shiftEnd = formatTime(session.shift_end);
-  const sep = ' · ';
 
-  if (session.status === 'paused') {
-    return `${session.shift_type}${sep}Day ${session.current_day} of ${session.coverage_length}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
-  }
-
-  if (shiftHours >= 24) {
-    const startDate = new Date(session.shift_date);
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 1);
-    const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
-    const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
-    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
-  }
-
-  if (session.coverage_length > 1) {
-    const startDate = new Date(session.shift_date);
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + session.coverage_length - 1);
-    const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
-    const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
-    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
-  }
-
-  const dayLabel = new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short' });
-  return `${session.shift_type}${sep}${dayLabel}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
-}
-
-function EnvironmentBadge({ environment }: { environment: string }) {
-  const bg = '#F5F5F0';
-  const color = '#1C1C1E';
-  return (
-    <View style={{ backgroundColor: bg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
-      <Text style={{ fontSize: 12, color, fontFamily: 'Inter_600SemiBold' }}>{environment}</Text>
-    </View>
-  );
-}
-
-function DoctorUpcomingCard({
-  session,
-  onCancel,
-  onCall,
-}: {
-  session: CoverageSession;
-  onCancel: () => void;
-  onCall: () => void;
-}) {
-  const _cachedRequesterStats = getCached<{ rating: number; reliability: number }>(`requester_stats_${session.requester_id}`);
-  const [liveRequesterRating, setLiveRequesterRating] = useState<number | null>(_cachedRequesterStats?.rating ?? null);
-  const [liveRequesterReliability, setLiveRequesterReliability] = useState<number | null>(_cachedRequesterStats?.reliability ?? null);
-
-  useEffect(() => {
-    if (!session.requester_id) return;
-    console.log('[Doctor Home] Fetching live requester stats for requester_id:', session.requester_id);
-    supabase
-      .from('requester_profiles')
-      .select('rating, reliability')
-      .eq('id', session.requester_id)
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) {
-          console.log('[Doctor Home] Requester stats fetch failed, using defaults:', error?.message);
-          setLiveRequesterRating(5.0);
-          setLiveRequesterReliability(100);
-          setCached(`requester_stats_${session.requester_id}`, { rating: 5.0, reliability: 100 });
-        } else {
-          console.log('[Doctor Home] Live requester stats fetched:', data);
-          setLiveRequesterRating(data.rating ?? 5.0);
-          setLiveRequesterReliability(data.reliability ?? 100);
-          setCached(`requester_stats_${session.requester_id}`, { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
-        }
-      });
-  }, [session.requester_id]);
-
-  const requesterRatingDisplay = liveRequesterRating != null ? liveRequesterRating.toFixed(1) : '--';
-  const reliabilityDisplay = liveRequesterReliability != null ? `${Math.round(liveRequesterReliability)}` : '--';
-  const shiftPillText = buildShiftPillText(session);
-  const canCancel = session.status === 'upcoming' && session.current_day === 1;
-
-  return (
-    <View style={styles.subCard}>
-      {/* Header row */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <Text style={styles.subCardLabel}>UPCOMING COVERAGE</Text>
-        <EnvironmentBadge environment={session.environment} />
-      </View>
-
-      {/* Hospital name + rating row */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-        <Text style={[styles.subCardHeading, { flexShrink: 1 }]} numberOfLines={1}>{session.hospital_name}</Text>
-        <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 6 }}>{'|'}</Text>
-        <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_400Regular' }}>{'★ '}</Text>
-        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{requesterRatingDisplay}</Text>
-        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#34C759', marginHorizontal: 6 }} />
-        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{reliabilityDisplay}</Text>
-        <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{'%'}</Text>
-      </View>
-
-      {/* Address */}
-      <Text style={[styles.subCardBody, { marginTop: 0 }]} numberOfLines={1}>{session.hospital_address}</Text>
-
-      {/* Shift pill */}
-      <View style={styles.shiftPill}>
-        <Text style={styles.shiftPillText} numberOfLines={1}>{shiftPillText}</Text>
-      </View>
-
-      {/* Action buttons */}
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-        {canCancel && (
-          <TouchableOpacity
-            onPress={() => {
-              onCancel();
-            }}
-            activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
-          >
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E', letterSpacing: 0.3 }}>CANCEL SHIFT</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          onPress={() => {
-            onCall();
-          }}
-          activeOpacity={0.8}
-          style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
-        >
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', letterSpacing: 0.3 }}>CALL</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
 
 function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCall: () => void }) {
   const [elapsed, setElapsed] = useState('00:00:00');
@@ -429,6 +280,7 @@ export default function DoctorHomeScreen() {
       return () => clearTimeout(t);
     }
     // Android: leave markerTracksViews=true, no timeout needed
+    return undefined;
   }, [showMarker]);
 
   // ─── Re-focus map on tab return ──────────────────────────────────────────────
@@ -475,8 +327,9 @@ export default function DoctorHomeScreen() {
   };
 
   // ─── Cancel shift ────────────────────────────────────────────────────────────
-  const handleCancelShift = useCallback(() => {
-    if (!activeSession) return;
+  const handleCancelShift = useCallback((session?: CoverageSession) => {
+    console.log('[DoctorHome] handleCancelShift pressed for session:', session?.id ?? activeSession?.id);
+    if (!activeSession && !session) return;
     setShowCancelModal(true);
   }, [activeSession]);
 
@@ -520,12 +373,14 @@ export default function DoctorHomeScreen() {
   };
 
   // ─── Call requester ──────────────────────────────────────────────────────────
-  const handleCallRequester = useCallback(() => {
-    if (!activeSession?.requester_phone) {
+  const handleCallRequester = useCallback((session?: CoverageSession) => {
+    const phone = session?.requester_phone ?? activeSession?.requester_phone;
+    console.log('[DoctorHome] handleCallRequester pressed — phone:', phone, 'session:', session?.id ?? activeSession?.id);
+    if (!phone) {
       Alert.alert('No phone number available');
       return;
     }
-    Linking.openURL(`tel:${activeSession.requester_phone}`);
+    Linking.openURL(`tel:${phone}`);
   }, [activeSession]);
 
   if (!fontsLoaded) return null;
@@ -656,18 +511,18 @@ export default function DoctorHomeScreen() {
           )}
 
           {isUpcomingOrPaused && activeSession && (
-            <DoctorUpcomingCard
+            <DoctorUpcomingCoverageCard
               session={activeSession}
-              onCancel={handleCancelShift}
-              onCall={handleCallRequester}
+              onCancel={(s) => handleCancelShift(s)}
+              onCall={(s) => handleCallRequester(s)}
             />
           )}
 
           {nextUpcomingSession && (
-            <DoctorUpcomingCard
+            <DoctorUpcomingCoverageCard
               session={nextUpcomingSession}
-              onCancel={handleCancelShift}
-              onCall={handleCallRequester}
+              onCancel={(s) => handleCancelShift(s)}
+              onCall={(s) => handleCallRequester(s)}
             />
           )}
 

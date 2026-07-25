@@ -103,6 +103,7 @@ type DoctorDispatchCtx = {
   isJobCapReached: boolean;
   upcomingSessions: CoverageSession[];
   setUpcomingSessions: (s: CoverageSession[]) => void;
+  reconcileUpcomingSessions: () => Promise<void>;
 };
 
 export const DoctorDispatchContext = createContext<DoctorDispatchCtx>({
@@ -122,6 +123,7 @@ export const DoctorDispatchContext = createContext<DoctorDispatchCtx>({
   isJobCapReached: false,
   upcomingSessions: [],
   setUpcomingSessions: () => {},
+  reconcileUpcomingSessions: async () => {},
 });
 
 export const useDoctorDispatch = () => useContext(DoctorDispatchContext);

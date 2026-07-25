@@ -539,6 +539,36 @@ export default function DoctorLayout() {
   const startPaymentPollingRef = useRef(startPaymentPolling);
   useEffect(() => { startPaymentPollingRef.current = startPaymentPolling; }, [startPaymentPolling]);
 
+  // Reconcile upcoming sessions against server state — only updates if there's a mismatch
+  const reconcileUpcoming = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      console.log('[DoctorLayout] reconcileUpcoming — fetching server state');
+      const res = await fetchWithAuth(
+        `${EDGE_BASE}/get-coverage-sessions?role=doctor&status=upcoming,paused,payment_pending`,
+        { headers: { 'Content-Type': 'application/json' } },
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      const serverSessions: CoverageSession[] = data?.sessions ?? [];
+      setUpcomingSessions(prev => {
+        const prevIds = [...prev].map(s => s.id).sort().join(',');
+        const serverIds = [...serverSessions].map(s => s.id).sort().join(',');
+        if (prevIds === serverIds) return prev;
+        console.log('[DoctorLayout] reconcileUpcoming — mismatch detected, updating from server');
+        return [...serverSessions].sort((a, b) =>
+          new Date(a.shift_start).getTime() - new Date(b.shift_start).getTime()
+        );
+      });
+    } catch {
+      // non-fatal — realtime remains primary
+    }
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stable ref so channel handlers can call reconcileUpcoming without stale closures
+  const reconcileUpcomingRef = useRef(reconcileUpcoming);
+  useEffect(() => { reconcileUpcomingRef.current = reconcileUpcoming; }, [reconcileUpcoming]);
+
   // Fetch active session from edge function
   const fetchActiveSession = useCallback(async () => {
     try {
@@ -826,6 +856,8 @@ export default function DoctorLayout() {
         }
         // Always re-fetch to confirm — optimistic update fires first, re-fetch corrects within ~300ms
         fetchActiveSession();
+        // Remove the now-active session from upcoming
+        reconcileUpcomingRef.current();
       })
       .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
         const updated = payload?.payload?.session as CoverageSession | undefined;
@@ -884,6 +916,8 @@ export default function DoctorLayout() {
         PollingManager.stop('cancel');
         setActiveSession(null);
         setActiveJobCount((prev) => Math.max(0, prev - 1));
+        // Reconcile upcoming — removes any cancelled session from the list
+        reconcileUpcomingRef.current();
       })
       .subscribe((status) => {
         console.log('[Doctor] session channel subscribe status:', status, 'for session:', activeSessionId);
@@ -1266,7 +1300,8 @@ export default function DoctorLayout() {
     isJobCapReached,
     upcomingSessions,
     setUpcomingSessions,
-  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions]);
+    reconcileUpcomingSessions: reconcileUpcoming,
+  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcoming]);
 
   return (
     <DoctorDispatchContext.Provider value={contextValue}>

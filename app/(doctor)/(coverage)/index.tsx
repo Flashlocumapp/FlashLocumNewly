@@ -2,7 +2,6 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
@@ -16,7 +15,6 @@ import {
   TextInput,
   KeyboardAvoidingView,
   PanResponder,
-  AppState,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
@@ -24,8 +22,10 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
+import { useDoctorDispatch } from '@/contexts/DoctorDispatchContext';
 import { useTabData } from '@/hooks/useTabData';
 import { invalidate } from '@/utils/tabCache';
+import { DoctorUpcomingCoverageCard, buildShiftPillText } from '@/components/DoctorUpcomingCoverageCard';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -35,20 +35,6 @@ const SUPABASE_URL = 'https://juilousufwlsiqdcgllu.supabase.co';
 
 const TABS = ['Upcoming', 'History'] as const;
 type TabType = typeof TABS[number];
-
-function getDoctorInitials(name: string): string {
-  const parts = name.replace(/^Dr\.?\s*/i, '').trim().split(' ');
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  return parts[0]?.[0]?.toUpperCase() ?? '?';
-}
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
 
 function EmptyState({ message }: { message: string }) {
   return (
@@ -69,188 +55,6 @@ function EmptyState({ message }: { message: string }) {
       <Text style={[TYPOGRAPHY.body, { color: COLORS.textSecondary, textAlign: 'center', paddingHorizontal: SPACING.xl }]}>
         {message}
       </Text>
-    </View>
-  );
-}
-
-function SkeletonCard() {
-  const opacity = useRef(new Animated.Value(0.3)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.7, duration: 900, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.3, duration: 900, useNativeDriver: true }),
-      ]),
-    ).start();
-  }, [opacity]);
-  return (
-    <Animated.View style={{ opacity, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, marginBottom: 12 }}>
-      <View style={{ width: '60%', height: 16, borderRadius: 8, backgroundColor: '#E5E5E5', marginBottom: 8 }} />
-      <View style={{ width: '40%', height: 12, borderRadius: 6, backgroundColor: '#E5E5E5', marginBottom: 6 }} />
-      <View style={{ width: '80%', height: 12, borderRadius: 6, backgroundColor: '#E5E5E5' }} />
-    </Animated.View>
-  );
-}
-
-function buildShiftPillText(session: CoverageSession): string {
-  const shiftMs = new Date(session.shift_end).getTime() - new Date(session.shift_start).getTime();
-  const msHours = shiftMs / (1000 * 60 * 60);
-  const shiftHours = (session.per_day_hours && Number(session.per_day_hours) > 0)
-    ? Number(session.per_day_hours)
-    : (msHours > 0 ? msHours : 24);
-  const totalHours = shiftHours * session.coverage_length;
-  const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
-  const priceDisplay = `₦${Number(session.booked_price ?? session.price).toLocaleString()}`;
-  const shiftStart = formatTime(session.shift_start);
-  const shiftEnd = formatTime(session.shift_end);
-  const sep = '  ·  ';
-
-  if (session.status === 'paused') {
-    return `${session.shift_type}${sep}Day ${session.current_day} of ${session.coverage_length}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
-  }
-
-  if (shiftHours >= 24) {
-    const startDate = new Date(session.shift_date);
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 1);
-    const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
-    const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
-    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
-  }
-
-  if (session.coverage_length > 1) {
-    const startDate = new Date(session.shift_date);
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + session.coverage_length - 1);
-    const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
-    const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
-    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
-  }
-
-  const dayLabel = new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short' });
-  return `${session.shift_type}${sep}${dayLabel}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
-}
-
-function EnvironmentBadge({ environment }: { environment: string }) {
-  const bg = '#F5F5F0';
-  const color = '#1C1C1E';
-  return (
-    <View style={{ backgroundColor: bg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
-      <Text style={{ fontSize: 12, color, fontFamily: 'Inter_600SemiBold' }}>{environment}</Text>
-    </View>
-  );
-}
-
-function UpcomingCoverageCard({ session, onCall, onCancel }: {
-  session: CoverageSession;
-  onCall: (session: CoverageSession) => void;
-  onCancel: (session: CoverageSession) => void;
-}) {
-  const [liveRating, setLiveRating] = useState<number | null>(null);
-  const [liveReliability, setLiveReliability] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!session.requester_id) return;
-    supabase
-      .from('requester_profiles')
-      .select('rating, reliability')
-      .eq('id', session.requester_id)
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) {
-          setLiveRating(5.0);
-          setLiveReliability(100);
-        } else {
-          setLiveRating(data.rating ?? 5.0);
-          setLiveReliability(data.reliability ?? 100);
-        }
-      });
-  }, [session.requester_id]);
-
-  const ratingDisplay = liveRating != null ? liveRating.toFixed(1) : '--';
-  const reliabilityDisplay = liveReliability != null ? `${Math.round(liveReliability)}` : '--';
-  const shiftPillText = buildShiftPillText(session);
-  const canCancel = session.status === 'upcoming';
-
-  const statusLabel = session.status === 'paused' ? 'PAUSED COVERAGE' : session.status === 'payment_pending' ? 'PAYMENT PENDING' : 'UPCOMING COVERAGE';
-
-  return (
-    <View style={{
-      backgroundColor: '#FFFFFF',
-      borderRadius: 20,
-      padding: 16,
-      marginBottom: 12,
-      ...(Platform.OS === 'ios'
-        ? { boxShadow: '0 2px 8px rgba(0,0,0,0.08)' } as any
-        : { elevation: 4 }),
-    }}>
-      {/* Header row */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold' }}>
-          {statusLabel}
-        </Text>
-        <EnvironmentBadge environment={session.environment ?? 'Normal'} />
-      </View>
-
-      {/* Hospital name + rating row */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-        <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: '#1C1C1E', flexShrink: 1 }} numberOfLines={1}>
-          {session.hospital_name}
-        </Text>
-        <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 6 }}>{'|'}</Text>
-        <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_400Regular' }}>{'★ '}</Text>
-        <Text style={{ fontSize: 13, color: '#1C1C1E', fontFamily: 'Inter_400Regular' }}>{ratingDisplay}</Text>
-        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#34C759', marginHorizontal: 6 }} />
-        <Text style={{ fontSize: 13, color: '#1C1C1E', fontFamily: 'Inter_400Regular' }}>{reliabilityDisplay}{'%'}</Text>
-      </View>
-
-      {/* Address */}
-      <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }} numberOfLines={1}>
-        {session.hospital_address}
-      </Text>
-
-      {/* Shift pill */}
-      <View style={{ backgroundColor: '#F0F0F0', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start', marginTop: 8 }}>
-        <Text style={{ fontSize: 12, color: '#1C1C1E', fontFamily: 'Inter_400Regular' }} numberOfLines={1}>
-          {shiftPillText}
-        </Text>
-      </View>
-
-      {/* Payment pending banner */}
-      {session.status === 'payment_pending' && (
-        <View style={{ backgroundColor: '#3A2A00', borderRadius: 10, padding: 12, marginTop: 12 }}>
-          <Text style={{ fontSize: 13, fontWeight: '600', color: '#D97706', fontFamily: 'Inter_600SemiBold' }}>{'⏳ Waiting for Payment'}</Text>
-          <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 4, fontFamily: 'Inter_400Regular' }}>
-            The requester has been sent a payment request. You will be notified once payment is confirmed.
-          </Text>
-        </View>
-      )}
-
-      {/* Action buttons */}
-      {session.status !== 'payment_pending' && (
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-          {canCancel && (
-            <TouchableOpacity
-              onPress={() => {
-                onCancel(session);
-              }}
-              activeOpacity={0.8}
-              style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
-            >
-              <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E', letterSpacing: 0.3 }}>CANCEL SHIFT</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            onPress={() => {
-              onCall(session);
-            }}
-            activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#1C1C1E', borderRadius: 999, paddingVertical: 11, alignItems: 'center' }}
-          >
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', letterSpacing: 0.3 }}>CALL</Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </View>
   );
 }
@@ -277,6 +81,7 @@ function HistoryCoverageCard({ session, onPress }: {
   return (
     <TouchableOpacity
       onPress={() => {
+        console.log('[DoctorCoverage] History card pressed for session:', session.id);
         onPress(session);
       }}
       activeOpacity={0.85}
@@ -305,7 +110,8 @@ function HistoryCoverageCard({ session, onPress }: {
         <Text style={{ fontSize: 13, color: '#F4A261' }}>{'★ '}</Text>
         <Text style={{ fontSize: 13, color: '#1C1C1E', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
         <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#34C759', marginHorizontal: 5 }} />
-        <Text style={{ fontSize: 13, color: '#1C1C1E', fontFamily: 'Inter_600SemiBold' }}>{reliabilityDisplay}{'%'}</Text>
+        <Text style={{ fontSize: 13, color: '#1C1C1E', fontFamily: 'Inter_600SemiBold' }}>{reliabilityDisplay}</Text>
+        <Text style={{ fontSize: 13, color: '#1C1C1E', fontFamily: 'Inter_600SemiBold' }}>{'%'}</Text>
       </View>
 
       {/* Shift pill */}
@@ -364,7 +170,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
   const shiftSummaryLine = `${session.shift_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd} · ${hoursDisplay} · ₦${Number(session.booked_price ?? session.price ?? 0).toLocaleString()}`;
 
-  const settlementStatus = session.status === 'cancelled' ? 'Cancelled' : (session.status === 'requester_paid' || session.status === 'completed' || session.status === 'disbursed' ? 'Paid' : 'Pending');
+  const settlementStatus = session.status === 'cancelled' ? 'Cancelled' : (session.status === 'requester_paid' || session.status === 'completed' || session.status === 'payment_complete' ? 'Paid' : 'Pending');
   const settlementColor = settlementStatus === 'Cancelled' ? '#EF4444' : settlementStatus === 'Paid' ? '#34C759' : '#FFFFFF';
 
   const formatDateTime = (iso: string | null | undefined) => {
@@ -380,6 +186,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
 
   const handleSubmit = async () => {
     if (stars === 0) { setError('Please select a star rating.'); return; }
+    console.log('[DoctorCoverage] Submitting review for session:', session.id, 'stars:', stars);
     setSubmitting(true); setError('');
     try {
       const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/submit-review`, {
@@ -389,6 +196,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to submit rating');
+      console.log('[DoctorCoverage] Review submitted successfully for session:', session.id);
       onReviewSubmitted(session.id);
     } catch (e: any) {
       setError(e.message);
@@ -405,7 +213,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
     { label: 'Settlement', value: settlementStatus, bold: true, valueColor: settlementColor },
     { label: 'Started', value: formatDateTime(session.started_at), bold: true, valueColor: undefined as string | undefined },
     { label: 'Ended', value: formatDateTime(session.ended_at), bold: true, valueColor: undefined as string | undefined },
-    { label: 'Completed', value: session.status === 'cancelled' ? '—' : formatDate(session.ended_at ?? session.updated_at), bold: true },
+    { label: 'Completed', value: session.status === 'cancelled' ? '—' : formatDate(session.ended_at ?? (session as any).updated_at), bold: true },
   ];
 
   return (
@@ -418,7 +226,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
         >
           <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
             <View style={{ backgroundColor: '#2C2C2E', borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40 }}>
-              {/* Drag handle — tapping or dragging down closes */}
+              {/* Drag handle */}
               <TouchableOpacity onPress={onClose} style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}>
                 <View
                   {...panResponder.panHandlers}
@@ -441,7 +249,8 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
                   <Text style={{ fontSize: 14, color: '#F4A261' }}>{'★ '}</Text>
                   <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#F4A261' }}>{ratingDisplay}</Text>
                   <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#34C759', marginHorizontal: 5 }} />
-                  <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#34C759' }}>{reliabilityDisplay}{'%'}</Text>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#34C759' }}>{reliabilityDisplay}</Text>
+                  <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#34C759' }}>{'%'}</Text>
                 </View>
 
                 {/* Address */}
@@ -482,6 +291,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
                       <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
                         {[1, 2, 3, 4, 5].map(n => (
                           <TouchableOpacity key={n} onPress={() => {
+                            console.log('[DoctorCoverage] Star rating selected:', n, 'for session:', session.id);
                             setStars(n);
                           }} activeOpacity={0.7}>
                             <Text style={{ fontSize: 32, color: n <= stars ? '#F4A261' : '#D1D1D6' }}>{'★'}</Text>
@@ -528,34 +338,12 @@ export default function DoctorCoverageScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('Upcoming');
-  const doctorChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const perSessionChannelsRef = useRef<ReturnType<typeof supabase.channel>[]>([]);
+
+  // Use shared context state — single source of truth
+  const { upcomingSessions, setUpcomingSessions, reconcileUpcomingSessions } = useDoctorDispatch();
 
   const upcomingKey = `doctor-coverage-upcoming-${user?.id ?? 'anon'}`;
   const historyKey = `doctor-coverage-history-${user?.id ?? 'anon'}`;
-
-  const {
-    data: upcomingData,
-    loading: upcomingLoading,
-    refreshing: upcomingRefreshing,
-    refresh: refreshUpcoming,
-  } = useTabData<CoverageSession[]>({
-    cacheKey: upcomingKey,
-    fetcher: useCallback(async () => {
-      if (!user?.id) return [];
-      console.log('[DoctorCoverage] fetching upcoming sessions for', user.id);
-      const res = await fetchWithAuth(
-        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=upcoming,paused,payment_pending`,
-        { headers: { 'Content-Type': 'application/json' } },
-      );
-      if (!res.ok) {
-        throw new Error('Failed to load upcoming sessions');
-      }
-      const data = await res.json();
-      return data?.sessions ?? [];
-    }, [user?.id]), // eslint-disable-line react-hooks/exhaustive-deps
-    alwaysRefresh: true,
-  });
 
   const {
     data: historyData,
@@ -579,18 +367,11 @@ export default function DoctorCoverageScreen() {
     alwaysRefresh: true,
   });
 
-  // Local mutable state for realtime updates on top of cached data
-  const [upcomingSessions, setUpcomingSessions] = useState<CoverageSession[]>([]);
   const [historySessions, setHistorySessions] = useState<CoverageSession[]>([]);
   const [selectedHistorySession, setSelectedHistorySession] = useState<CoverageSession | null>(null);
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
   const [showCancelReasons, setShowCancelReasons] = useState(false);
   const [pendingCancelSession, setPendingCancelSession] = useState<CoverageSession | null>(null);
-
-  // Sync fetched data into local state
-  useEffect(() => {
-    if (upcomingData) setUpcomingSessions(upcomingData);
-  }, [upcomingData]);
 
   useEffect(() => {
     if (!historyData || !user?.id) return;
@@ -607,58 +388,8 @@ export default function DoctorCoverageScreen() {
       });
   }, [historyData, user?.id]);
 
-  // Reconcile upcoming sessions against server state — only updates if there's a mismatch
-  const reconcileUpcoming = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      const res = await fetchWithAuth(
-        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=upcoming,paused,payment_pending`,
-        { headers: { 'Content-Type': 'application/json' } },
-      );
-      if (!res.ok) return;
-      const data = await res.json();
-      const serverSessions: CoverageSession[] = data?.sessions ?? [];
-      setUpcomingSessions(prev => {
-        const prevIds = [...prev].map(s => s.id).sort().join(',');
-        const serverIds = [...serverSessions].map(s => s.id).sort().join(',');
-        if (prevIds === serverIds) return prev;
-        console.log('[DoctorCoverage] Reconciliation detected mismatch — updating from server');
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        return [...serverSessions].sort((a, b) =>
-          new Date(a.shift_start).getTime() - new Date(b.shift_start).getTime()
-        );
-      });
-    } catch {
-      // non-fatal — realtime remains primary
-    }
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Stable ref so Effect A can call reconcileUpcoming without it being a dependency
-  const reconcileUpcomingRef = useRef(reconcileUpcoming);
-  useEffect(() => { reconcileUpcomingRef.current = reconcileUpcoming; }, [reconcileUpcoming]);
-
-  // AppState ref for prolonged background detection
-  const backgroundedAtRef = useRef<number>(0);
-
-  // Reconcile after app returns from background if backgrounded > 30s
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'background') {
-        backgroundedAtRef.current = Date.now();
-      }
-      if (state === 'active' && backgroundedAtRef.current > 0) {
-        const elapsed = Date.now() - backgroundedAtRef.current;
-        if (elapsed > 30_000) {
-          console.log('[DoctorCoverage] App resumed after', Math.round(elapsed / 1000), 's — reconciling');
-          reconcileUpcomingRef.current();
-        }
-        backgroundedAtRef.current = 0;
-      }
-    });
-    return () => sub.remove();
-  }, []);
-
   const updateSessionStatus = useCallback(async (sessionId: string, status: string, extraFields?: Record<string, string>) => {
+    console.log('[DoctorCoverage] updateSessionStatus — sessionId:', sessionId, 'status:', status, 'extra:', extraFields);
     const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/update-shift-status`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -670,201 +401,27 @@ export default function DoctorCoverageScreen() {
     return true;
   }, []);
 
+  // Ref to always have the latest upcomingSessions without stale closure
+  const upcomingSessionsRef = useRef(upcomingSessions);
+  useEffect(() => { upcomingSessionsRef.current = upcomingSessions; }, [upcomingSessions]);
+
   const handleStatusChange = useCallback((sessionId: string, newStatus: CoverageSession['status']) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 
-    const removeFromList = (list: CoverageSession[]) =>
-      list.filter(s => s.id !== sessionId);
-
     if (newStatus === 'completed' || newStatus === 'cancelled') {
-      setUpcomingSessions(prev => {
-        const found = prev.find(s => s.id === sessionId);
-        if (found) {
-          setHistorySessions(hist => [{ ...found, status: newStatus }, ...hist]);
-          // Invalidate cache so next visit re-fetches
-          invalidate(upcomingKey);
-          invalidate(historyKey);
-          return removeFromList(prev);
-        }
-        return prev;
-      });
-    }
-  }, [upcomingKey, historyKey]);
-
-  // Effect A — Doctor-level channel: set up ONCE on mount, never torn down on session changes
-  useEffect(() => {
-    if (!user?.id) return;
-    if (doctorChannelRef.current) {
-      supabase.removeChannel(doctorChannelRef.current);
-      doctorChannelRef.current = null;
-    }
-    console.log('[DoctorCoverage] Setting up doctor channel for', user.id);
-    let wasSubscribed = false;
-    const doctorCh = supabase
-      .channel(`doctor:${user.id}`)
-      .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
-        const newSession = payload?.payload?.session as CoverageSession;
-        console.log('[DoctorCoverage] SESSION_CREATED received:', newSession?.id);
-        if (newSession) {
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setUpcomingSessions(prev => {
-            if (prev.some(s => s.id === newSession.id)) return prev;
-            return [...prev, newSession].sort((a, b) =>
-              new Date(a.shift_start).getTime() - new Date(b.shift_start).getTime()
-            );
-          });
-          invalidate(upcomingKey);
-        }
-      })
-      .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
-        const updatedSession = payload?.payload?.session as CoverageSession;
-        if (updatedSession) {
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setUpcomingSessions(prev => {
-            const exists = prev.find(s => s.id === updatedSession.id);
-            if (exists) return prev.map(s => s.id === updatedSession.id ? updatedSession : s);
-            return [...prev, updatedSession].sort((a, b) =>
-              new Date(a.shift_start).getTime() - new Date(b.shift_start).getTime()
-            );
-          });
-        }
-      })
-      .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
-        const sessionId = payload?.payload?.session?.id;
-        if (sessionId) {
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setUpcomingSessions(prev => prev.filter(s => s.id !== sessionId));
-        }
-        // Reconcile immediately — removes the now-active session from upcoming
-        // even if sessionId was missing from the payload
-        reconcileUpcomingRef.current();
-        // Also reconcile 5s later as belt-and-suspenders
-        setTimeout(() => { reconcileUpcomingRef.current(); }, 5000);
-      })
-      .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
-        const updatedSession = payload?.payload?.session as CoverageSession;
-        if (updatedSession) {
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setUpcomingSessions(prev => prev.map(s => s.id === updatedSession.id ? { ...s, ...updatedSession } : s));
-        }
-      })
-      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        const sessionId = payload?.payload?.session_id as string ?? payload?.payload?.session?.id as string;
-        if (sessionId) {
-          console.log('[DoctorCoverage] PAYMENT_CONFIRMED received, moving session to history:', sessionId);
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setUpcomingSessions(prev => {
-            const found = prev.find(s => s.id === sessionId);
-            if (found) {
-              setHistorySessions(hist => [{ ...found, status: 'requester_paid' as const }, ...hist]);
-              invalidate(upcomingKey);
-              invalidate(historyKey);
-            }
-            return prev.filter(s => s.id !== sessionId);
-          });
-        }
-      })
-      .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
-        const sessionId = payload?.payload?.session_id as string ?? payload?.payload?.session?.id as string;
-        if (sessionId) {
-          console.log('[DoctorCoverage] PAYMENT_COMPLETE received, moving session to history:', sessionId);
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setUpcomingSessions(prev => {
-            const found = prev.find(s => s.id === sessionId);
-            if (found) {
-              setHistorySessions(hist => [{ ...found, status: 'requester_paid' as const }, ...hist]);
-              invalidate(upcomingKey);
-              invalidate(historyKey);
-            }
-            return prev.filter(s => s.id !== sessionId);
-          });
-        }
-      })
-      .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
-        const sessionId: string =
-          payload?.payload?.session_id ??
-          payload?.payload?.session?.id;
-        if (!sessionId) return;
-        console.log('[DoctorCoverage] SHIFT_CANCELLED received on doctor channel:', sessionId);
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setUpcomingSessions(prev => {
-          const found = prev.find(s => s.id === sessionId);
-          if (found) {
-            // Move to history as cancelled
-            setHistorySessions(hist => [
-              { ...found, status: 'cancelled' as const },
-              ...hist,
-            ]);
-            invalidate(upcomingKey);
-            invalidate(historyKey);
-          }
-          return prev.filter(s => s.id !== sessionId);
-        });
-        // Reconcile immediately as fallback
-        reconcileUpcomingRef.current();
-        setTimeout(() => { reconcileUpcomingRef.current(); }, 5000);
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          if (wasSubscribed) {
-            // This is a reconnect — reconcile to catch any events missed during the gap
-            console.log('[DoctorCoverage] Realtime reconnected — reconciling upcoming sessions');
-            reconcileUpcomingRef.current();
-          }
-          wasSubscribed = true;
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          wasSubscribed = false;
-        }
-      });
-    doctorChannelRef.current = doctorCh;
-    return () => {
-      if (doctorChannelRef.current) {
-        supabase.removeChannel(doctorChannelRef.current);
-        doctorChannelRef.current = null;
+      const current = upcomingSessionsRef.current;
+      const found = current.find(s => s.id === sessionId);
+      if (found) {
+        setHistorySessions(hist => [{ ...found, status: newStatus }, ...hist]);
+        invalidate(upcomingKey);
+        invalidate(historyKey);
+        setUpcomingSessions(current.filter(s => s.id !== sessionId));
       }
-    };
-  }, [user?.id]); // ONLY depends on user.id — never on upcomingSessions
-
-  // Effect B — Per-session channels: set up when session IDs change
-  useEffect(() => {
-    perSessionChannelsRef.current.forEach(ch => supabase.removeChannel(ch));
-    perSessionChannelsRef.current = [];
-
-    upcomingSessions.forEach(session => {
-      const ch = supabase
-        .channel(`coverage:${session.id}`)
-        .on('broadcast', { event: 'STATUS_CHANGED' }, (payload) => {
-          const newStatus = payload?.payload?.status as CoverageSession['status'];
-          if (newStatus) handleStatusChange(session.id, newStatus);
-        })
-        .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
-          // Fallback: also handle cancellation on the per-session channel
-          console.log('[DoctorCoverage] SHIFT_CANCELLED received on per-session channel:', session.id);
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-          setUpcomingSessions(prev => {
-            const found = prev.find(s => s.id === session.id);
-            if (found) {
-              setHistorySessions(hist => [
-                { ...found, status: 'cancelled' as const },
-                ...hist,
-              ]);
-              invalidate(upcomingKey);
-              invalidate(historyKey);
-            }
-            return prev.filter(s => s.id !== session.id);
-          });
-        })
-        .subscribe();
-      perSessionChannelsRef.current.push(ch);
-    });
-
-    return () => {
-      perSessionChannelsRef.current.forEach(ch => supabase.removeChannel(ch));
-      perSessionChannelsRef.current = [];
-    };
-  }, [upcomingSessions, handleStatusChange]);
+    }
+  }, [upcomingKey, historyKey, setUpcomingSessions]);
 
   const handleCall = useCallback((session: CoverageSession) => {
+    console.log('[DoctorCoverage] Call pressed for session:', session.id, 'requester_phone:', session.requester_phone);
     if (!session.requester_phone) {
       Alert.alert('No phone number available');
       return;
@@ -873,14 +430,14 @@ export default function DoctorCoverageScreen() {
   }, []);
 
   const handleCancel = useCallback((session: CoverageSession) => {
-    console.log('[Doctor Coverage] Cancel shift pressed for session:', session.id);
+    console.log('[DoctorCoverage] Cancel shift pressed for session:', session.id);
     Alert.alert('Cancel Shift?', 'This will cancel the booking.', [
       { text: 'Keep', style: 'cancel' },
       {
         text: 'Cancel Shift',
         style: 'destructive',
         onPress: () => {
-          console.log('[Doctor Coverage] Cancel confirmed, showing reason picker for session:', session.id);
+          console.log('[DoctorCoverage] Cancel confirmed, showing reason picker for session:', session.id);
           setPendingCancelSession(session);
           setShowCancelReasons(true);
         },
@@ -890,7 +447,7 @@ export default function DoctorCoverageScreen() {
 
   const handleCancelReasonSelected = useCallback(async (reason: string) => {
     if (!pendingCancelSession) return;
-    console.log('[Doctor Coverage] Cancel reason selected:', reason, 'for session:', pendingCancelSession.id);
+    console.log('[DoctorCoverage] Cancel reason selected:', reason, 'for session:', pendingCancelSession.id);
     setShowCancelReasons(false);
     const sessionId = pendingCancelSession.id;
     setPendingCancelSession(null);
@@ -900,15 +457,17 @@ export default function DoctorCoverageScreen() {
         cancelled_by: 'doctor',
       });
       if (ok) {
-        console.log('[Doctor Coverage] Session cancelled successfully with reason:', reason);
+        console.log('[DoctorCoverage] Session cancelled successfully with reason:', reason);
         handleStatusChange(sessionId, 'cancelled');
+        // Reconcile context state to ensure both tabs are in sync
+        reconcileUpcomingSessions();
       } else {
-        console.error('[Doctor Coverage] Failed to cancel session:', sessionId);
+        console.error('[DoctorCoverage] Failed to cancel session:', sessionId);
       }
     } catch (e) {
-      console.error('[Doctor Coverage] Exception cancelling session:', e);
+      console.error('[DoctorCoverage] Exception cancelling session:', e);
     }
-  }, [pendingCancelSession, updateSessionStatus, handleStatusChange]);
+  }, [pendingCancelSession, updateSessionStatus, handleStatusChange, reconcileUpcomingSessions]);
 
   const handleReviewSubmitted = useCallback((sessionId: string) => {
     setReviewedIds(prev => new Set([...prev, sessionId]));
@@ -928,7 +487,7 @@ export default function DoctorCoverageScreen() {
       const d = new Date(s.shift_date);
       if (range === 'this_month') return d >= startOfMonth;
       if (range === 'last_month') return d >= startOfLastMonth && d <= endOfLastMonth;
-      return d >= threeMonthsAgo; // last_3_months
+      return d >= threeMonthsAgo;
     });
   }
 
@@ -954,8 +513,7 @@ export default function DoctorCoverageScreen() {
     new Date(a.shift_start).getTime() - new Date(b.shift_start).getTime()
   );
   const currentSessions = isHistoryTab ? filteredHistory : sortedUpcoming;
-  const currentLoading = isHistoryTab ? historyLoading : upcomingLoading;
-  const currentRefreshing = isHistoryTab ? historyRefreshing : upcomingRefreshing;
+  const currentLoading = isHistoryTab ? historyLoading : false;
   const emptyMessage = isHistoryTab
     ? 'No past coverage yet.'
     : 'No upcoming shifts. Stay online to receive requests.';
@@ -985,6 +543,7 @@ export default function DoctorCoverageScreen() {
             <TouchableOpacity
               key={tab}
               onPress={() => {
+                console.log('[DoctorCoverage] Tab pressed:', tab);
                 setActiveTab(tab);
               }}
               activeOpacity={0.7}
@@ -1022,6 +581,7 @@ export default function DoctorCoverageScreen() {
             <TouchableOpacity
               key={key}
               onPress={() => {
+                console.log('[DoctorCoverage] Date range filter pressed:', key);
                 setDateRange(key);
               }}
               activeOpacity={0.7}
@@ -1046,11 +606,7 @@ export default function DoctorCoverageScreen() {
 
       {/* Content */}
       {currentLoading ? (
-        <>
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </>
+        <ActivityIndicator color={COLORS.text} style={{ marginTop: SPACING.xl }} />
       ) : currentSessions.length === 0 ? (
         <EmptyState message={emptyMessage} />
       ) : (
@@ -1064,7 +620,7 @@ export default function DoctorCoverageScreen() {
               }}
             />
           ) : (
-            <UpcomingCoverageCard
+            <DoctorUpcomingCoverageCard
               key={session.id}
               session={session}
               onCall={handleCall}
