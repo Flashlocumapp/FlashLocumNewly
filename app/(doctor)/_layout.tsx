@@ -536,6 +536,9 @@ export default function DoctorLayout() {
     }, 5000);
   }, [maybeShowDoctorRating]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const startPaymentPollingRef = useRef(startPaymentPolling);
+  useEffect(() => { startPaymentPollingRef.current = startPaymentPolling; }, [startPaymentPolling]);
+
   // Fetch active session from edge function
   const fetchActiveSession = useCallback(async () => {
     try {
@@ -760,7 +763,7 @@ export default function DoctorLayout() {
       fetchActiveSession();
     }, POLL_INTERVAL);
     return () => clearInterval(id);
-  }, [activeSessionId, user, fetchActiveSession]);
+  }, [activeSessionId, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Realtime subscription — dispatch channel ──
   useEffect(() => {
@@ -850,7 +853,7 @@ export default function DoctorLayout() {
         const sid = (updated as any)?.id ?? activeSessionIdRef.current ?? '';
         const hospital = (updated as any)?.hospital_name ?? '';
         const amt = (updated as any)?.total_cost ?? (updated as any)?.price ?? 0;
-        startPaymentPolling(sid, hospital, amt);
+        startPaymentPollingRef.current(sid, hospital, amt);
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? activeSessionId;
@@ -859,7 +862,7 @@ export default function DoctorLayout() {
         console.log('[Doctor] PAYMENT_CONFIRMED broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
-        startPaymentPolling(sessionId ?? '', hospitalName, amount);
+        startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
         invalidate('coverage_doctor_completed');
         invalidate('coverage_doctor_upcoming');
       })
@@ -870,7 +873,7 @@ export default function DoctorLayout() {
         console.log('[Doctor] payment_confirmed broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
-        startPaymentPolling(sessionId ?? '', hospitalName, amount);
+        startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
         invalidate('coverage_doctor_completed');
         invalidate('coverage_doctor_upcoming');
       })
@@ -883,7 +886,7 @@ export default function DoctorLayout() {
         setActiveJobCount((prev) => Math.max(0, prev - 1));
       })
       .subscribe((status) => {
-        // subscription status — no logging needed
+        console.log('[Doctor] session channel subscribe status:', status, 'for session:', activeSessionId);
       });
 
     sessionChannelRef.current = ch;
@@ -892,7 +895,7 @@ export default function DoctorLayout() {
       supabase.removeChannel(ch);
       sessionChannelRef.current = null;
     };
-  }, [activeSessionId, startPaymentPolling]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Postgres Changes fallback: fires when coverage_sessions row status → requester_paid ──
   useEffect(() => {
@@ -950,7 +953,7 @@ export default function DoctorLayout() {
         console.log('[Doctor] user channel PAYMENT_CONFIRMED received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
-        startPaymentPolling(sessionId ?? '', hospitalName, amount);
+        startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
         invalidate('coverage_doctor_completed');
         invalidate('coverage_doctor_upcoming');
       })
@@ -961,7 +964,7 @@ export default function DoctorLayout() {
         console.log('[Doctor] user channel payment_confirmed received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
-        startPaymentPolling(sessionId ?? '', hospitalName, amount);
+        startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
         invalidate('coverage_doctor_completed');
         invalidate('coverage_doctor_upcoming');
       })
@@ -969,7 +972,7 @@ export default function DoctorLayout() {
         // subscription status — no logging needed
       });
     return () => { supabase.removeChannel(ch); };
-  }, [user, startPaymentPolling]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Queue → state sync ──
   useEffect(() => {
