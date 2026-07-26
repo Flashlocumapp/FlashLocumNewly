@@ -46,8 +46,8 @@ import { buildShiftPillText, EnvironmentBadge as SessionEnvBadge } from '@/compo
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
-// POLL_INTERVAL: 8s in dev (Expo Go WebSocket unreliable), 30s in production.
-const POLL_INTERVAL = __DEV__ ? 8000 : 30000;
+// POLL_INTERVAL: 8s in dev (Expo Go WebSocket unreliable), 10s in production.
+const POLL_INTERVAL = __DEV__ ? 8000 : 10000;
 
 // ─── Module-level retry flag for handleRequestCoverage ───────────────────────
 let _submitRetried = false;
@@ -1765,7 +1765,6 @@ export default function RequesterHomeScreen() {
   const realtimeChannelRef = useRef<any>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shouldPollRef = useRef(false);
-  const isRealtimeHealthyRef = useRef(false);
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const fetchActiveSessionRef = useRef<() => void>(() => {});
   // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -1804,6 +1803,9 @@ export default function RequesterHomeScreen() {
       const data = await res.json();
       const session: CoverageSession | null = data?.session ?? null;
       setActiveSession(session);
+      if (session) {
+        setActiveSessionId(session.id);
+      }
       _cachedActiveSession = session;
       _sessionCachePopulated = true;
       // If session is already paid, use persistent guard to decide whether to show modal
@@ -1860,14 +1862,9 @@ export default function RequesterHomeScreen() {
     }
   }, []);
 
-  // ─── Keep activeSessionId in sync — only set, never clear ───────────────────
-  useEffect(() => {
-    if (activeSession?.id) {
-      setActiveSessionId(activeSession.id);
-    }
-    // Intentionally do NOT clear when activeSession becomes null —
-    // this keeps the session channel alive after payment_confirmed fires.
-  }, [activeSession?.id]);
+  // Note: activeSessionId is set directly in fetchActiveSession() alongside setActiveSession()
+  // to ensure both state values update in the same render cycle. The separate sync useEffect
+  // has been removed — the two-hop update is now collapsed into fetchActiveSession.
 
 
 
@@ -2046,6 +2043,10 @@ export default function RequesterHomeScreen() {
         });
       })
       .subscribe((status) => {
+        console.log('[Requester] session channel subscribe status:', status, 'for session:', activeSessionId);
+        if (status === 'SUBSCRIBED') {
+          fetchActiveSessionRef.current();
+        }
       });
 
     sessionChannelRef.current = ch;
@@ -2056,34 +2057,59 @@ export default function RequesterHomeScreen() {
     };
   }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Postgres Changes fallback: fires when coverage_sessions row status → requester_paid ──
+  // ── Stable postgres_changes on coverage_sessions — layer 3 for session events ──
+  // Mounted once on user.id. Replaces the unstable session-ID-scoped subscription.
   useEffect(() => {
-    if (!activeSessionId) return;
+    if (!user?.id) return;
     const ch = supabase
-      .channel(`session-pg-changes-req:${activeSessionId}`)
+      .channel(`session-status-watch-req:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'coverage_sessions',
+          filter: `requester_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newRow = payload.new as Partial<CoverageSession>;
+          const status = newRow?.status;
+          console.log('[Requester] coverage_sessions INSERT via postgres_changes — status:', status, 'id:', newRow.id);
+          if (status === 'upcoming' || status === 'active' || status === 'paused' || status === 'payment_pending') {
+            fetchActiveSessionRef.current();
+          } else if (status === 'requester_paid' || status === 'settled' || status === 'payment_complete') {
+            handlePaymentConfirmedWithFallbackRef.current(newRow.id);
+          } else if (status === 'cancelled') {
+            setActiveSession(null);
+          }
+        }
+      )
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'coverage_sessions',
-          filter: `id=eq.${activeSessionId}`,
+          filter: `requester_id=eq.${user.id}`,
         },
         (payload) => {
-          const newRow = payload.new as { status?: string; id?: string };
-          if (newRow?.status === 'requester_paid' || newRow?.status === 'settled' || newRow?.status === 'payment_complete') {
-            console.log('[Requester] postgres_changes — session status', newRow.status, ', handling payment confirmed');
-            handlePaymentConfirmedWithFallbackRef.current(newRow.id ?? activeSessionId);
-          }
-          if (newRow?.status === 'cancelled') {
-            console.log('[Requester] postgres_changes: session cancelled — clearing activeSession');
+          const newRow = payload.new as Partial<CoverageSession>;
+          const status = newRow?.status;
+          console.log('[Requester] coverage_sessions UPDATE via postgres_changes — status:', status, 'id:', newRow.id);
+          if (status === 'upcoming' || status === 'active' || status === 'paused' || status === 'payment_pending') {
+            fetchActiveSessionRef.current();
+          } else if (status === 'requester_paid' || status === 'settled' || status === 'payment_complete') {
+            handlePaymentConfirmedWithFallbackRef.current(newRow.id);
+          } else if (status === 'cancelled') {
             setActiveSession(null);
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[Requester] session-status-watch-req channel:', status);
+      });
     return () => { supabase.removeChannel(ch); };
-  }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Channels 6 and 7 merged into requester-user channel above
 
@@ -2342,7 +2368,7 @@ export default function RequesterHomeScreen() {
           transitionToRef.current('summary');
         })
         .subscribe((status) => {
-          isRealtimeHealthyRef.current = status === 'SUBSCRIBED';
+          console.log('[Requester] matching channel subscribe status:', status);
         });
 
       // One-time mount check — catches match that happened while app was backgrounded
@@ -2406,12 +2432,12 @@ export default function RequesterHomeScreen() {
 
         // Schedule next poll if still active
         if (shouldPollRef.current) {
-          pollIntervalRef.current = setTimeout(doPoll, 5000) as any;
+          pollIntervalRef.current = setTimeout(doPoll, 3000) as any;
         }
       };
 
-      // Start first poll after 3 seconds
-      pollIntervalRef.current = setTimeout(doPoll, 3000) as any;
+      // Start first poll immediately — no delay
+      doPoll();
 
       return () => {
         shouldPollRef.current = false;

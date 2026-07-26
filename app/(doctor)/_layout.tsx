@@ -155,10 +155,9 @@ async function warmDoctorRatedCache() {
   } catch {}
 }
 
-// POLL_INTERVAL: 8s in dev (Expo Go WebSocket unreliable), 30s in production.
-// Cost at 30s: 2 req/min per online doctor. At 1,000 concurrent doctors = 2,000 req/min —
-// well within Supabase Edge Function limits. Realtime is the primary delivery path (zero cost).
-const POLL_INTERVAL = __DEV__ ? 5000 : 30000;
+// POLL_INTERVAL: 5s in dev (Expo Go WebSocket unreliable), 10s in production.
+// Cost at 10s: 6 req/min per online doctor. Realtime is the primary delivery path (zero cost).
+const POLL_INTERVAL = __DEV__ ? 5000 : 10000;
 
 type DoctorScreenState = 'idle' | 'incoming' | 'confirmed';
 
@@ -387,7 +386,6 @@ export default function DoctorLayout() {
   const upcomingChannelsRef = useRef<Map<string, ReturnType<typeof supabase.channel>>>(new Map());
   const upcomingCoverageChannelsRef = useRef<Map<string, ReturnType<typeof supabase.channel>>>(new Map());
   const isOnlineRef = useRef(false);
-  const isRealtimeHealthyRef = useRef(false);
   const lastLocationRef = useRef<{ lat: number; lng: number } | null>(null);
   // Coords passed from home screen when going online
   const pendingGoOnlineCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -782,9 +780,7 @@ export default function DoctorLayout() {
   useEffect(() => {
     if (!isOnline || !user) return;
     const id = setInterval(() => {
-      if (__DEV__ || !isRealtimeHealthyRef.current) {
-        forceSyncRef.current();
-      }
+      forceSyncRef.current();
     }, POLL_INTERVAL);
     return () => clearInterval(id);
   }, [isOnline, user]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -841,15 +837,8 @@ export default function DoctorLayout() {
         // Do NOT check isOnlineRef here — it can be stale.
         // The Queue → state sync effect will transition to 'incoming' when isOnline is true.
       })
-      .on('broadcast', { event: 'EVICT_REQUEST' }, (payload) => {
-        const evictedId: string = payload.payload?.request_id;
-        setRequestQueue((prev) => prev.filter((r) => r.id !== evictedId));
-      })
       .subscribe((status) => {
-        isRealtimeHealthyRef.current = status === 'SUBSCRIBED';
-        if (status === 'SUBSCRIBED' && isOnlineRef.current) {
-          forceSync();
-        }
+        console.log('[Doctor] dispatch channel subscribe status:', status);
       });
     channelRef.current = channel;
     return () => {
@@ -977,6 +966,9 @@ export default function DoctorLayout() {
       })
       .subscribe((status) => {
         console.log('[Doctor] session channel subscribe status:', status, 'for session:', activeSessionId);
+        if (status === 'SUBSCRIBED') {
+          fetchActiveSession();
+        }
       });
 
     sessionChannelRef.current = ch;
@@ -1149,6 +1141,73 @@ export default function DoctorLayout() {
     return () => { supabase.removeChannel(ch); };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Stable postgres_changes on coverage_requests — layer 3 for dispatch events ──
+  // INSERT: adds pending, non-expired requests to the queue (deduped).
+  // UPDATE: removes matched/expired/cancelled requests from the queue.
+  useEffect(() => {
+    if (!user?.id) return;
+    const ch = supabase
+      .channel(`coverage-requests-pg:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'coverage_requests',
+          filter: `doctor_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const row = payload.new as any;
+          if (row?.status !== 'pending') return;
+          if (row?.expiry_at && new Date(row.expiry_at) <= new Date()) return;
+          const req: DispatchRequest = {
+            id: row.id,
+            requester_id: row.requester_id,
+            hospital_name: row.hospital_name,
+            hospital_address: row.hospital_address,
+            shift_type: row.shift_type,
+            shift_date: row.shift_date,
+            start_time: row.start_time,
+            end_time: row.end_time,
+            duration_hours: row.duration_hours ?? 0,
+            coverage_length: row.coverage_length,
+            environment: row.environment,
+            note: row.note,
+            price: row.price ?? 0,
+            expiry_at: row.expiry_at,
+            requester_rating: row.requester_rating,
+            requester_reliability: row.requester_reliability,
+          };
+          console.log('[Doctor] coverage_requests INSERT via postgres_changes — adding to queue:', req.id);
+          setRequestQueue((prev) => {
+            if (prev.some((r) => r.id === req.id)) return prev;
+            return [...prev, req];
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'coverage_requests',
+          filter: `doctor_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const row = payload.new as any;
+          const evictStatuses = ['matched', 'expired', 'cancelled'];
+          if (evictStatuses.includes(row?.status)) {
+            console.log('[Doctor] coverage_requests UPDATE via postgres_changes — evicting from queue:', row.id, 'status:', row.status);
+            setRequestQueue((prev) => prev.filter((r) => r.id !== row.id));
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Doctor] coverage-requests-pg channel:', status);
+      });
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Postgres Changes fallback: fires when coverage_sessions row status → requester_paid ──
   useEffect(() => {
     if (!activeSessionId) return;
@@ -1275,67 +1334,8 @@ export default function DoctorLayout() {
 
         if (doctorBackgroundedAtRef.current > 0 && elapsed > FIVE_MINUTES) {
           console.log('[AppState] active after', Math.round(elapsed / 1000), 's — running doctor background recovery');
-
-          // 1. Channel health check — dispatch channel
-          if (channelRef.current && channelRef.current.state !== 'joined') {
-            console.log('[AppState] dispatch channel unhealthy (state:', channelRef.current.state, ') — re-subscribing');
-            supabase.removeChannel(channelRef.current);
-            channelRef.current = null;
-            const newChannel = supabase.channel('dispatch:lagos')
-              .on('broadcast', { event: 'NEW_REQUEST' }, (payload) => {
-                const req = payload.payload as DispatchRequest;
-                const now = new Date();
-                if (req.expiry_at && new Date(req.expiry_at) <= now) return;
-                setRequestQueue((prev) => {
-                  if (prev.some((r) => r.id === req.id)) return prev;
-                  return [...prev, req];
-                });
-              })
-              .on('broadcast', { event: 'EVICT_REQUEST' }, (payload) => {
-                const evictedId: string = payload.payload?.request_id;
-                setRequestQueue((prev) => prev.filter((r) => r.id !== evictedId));
-              })
-              .subscribe((status) => {
-                isRealtimeHealthyRef.current = status === 'SUBSCRIBED';
-                if (status === 'SUBSCRIBED' && isOnlineRef.current) {
-                  forceSyncRef.current();
-                }
-              });
-            channelRef.current = newChannel;
-          }
-
-          // Session channel health check
-          if (activeSessionIdRef.current && sessionChannelRef.current && sessionChannelRef.current.state !== 'joined') {
-            console.log('[AppState] session channel unhealthy (state:', sessionChannelRef.current.state, ') — re-subscribing');
-            supabase.removeChannel(sessionChannelRef.current);
-            sessionChannelRef.current = null;
-            const sid = activeSessionIdRef.current;
-            const newSessionChannel = supabase.channel(`session:${sid}`)
-              .on('broadcast', { event: 'SHIFT_STARTED' }, () => { fetchActiveSession(); })
-              .on('broadcast', { event: 'SHIFT_PAUSED' }, () => { fetchActiveSession(); })
-              .on('broadcast', { event: 'SHIFT_RESUMED' }, () => { fetchActiveSession(); })
-              .on('broadcast', { event: 'SHIFT_ENDED' }, () => { fetchActiveSession(); })
-              .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-                const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? sid;
-                const hospitalName = payload?.payload?.hospital_name ?? '';
-                const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
-                console.log('[Doctor] AppState-rebuilt session channel PAYMENT_CONFIRMED received', { sessionId, hospitalName, amount });
-                setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-                void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
-                startPaymentPolling(sessionId ?? '', hospitalName, amount);
-              })
-              .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
-                const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? sid;
-                const hospitalName = payload?.payload?.hospital_name ?? '';
-                const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
-                console.log('[Doctor] AppState-rebuilt session channel payment_confirmed received', { sessionId, hospitalName, amount });
-                setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
-                void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
-                startPaymentPolling(sessionId ?? '', hospitalName, amount);
-              })
-              .subscribe(() => {});
-            sessionChannelRef.current = newSessionChannel;
-          }
+          // Channels auto-reconnect via Supabase realtime. Recovery is handled by
+          // fetchActiveSession() (session channel SUBSCRIBED) and forceSync() (dispatch poll).
 
           // 2. Session reconciliation + paid-state recovery
           await fetchActiveSession();
