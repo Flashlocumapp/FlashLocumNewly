@@ -571,6 +571,9 @@ export default function DoctorLayout() {
 
   // Stable ref so channel handlers can call reconcileUpcoming without stale closures
   const reconcileUpcomingRef = useRef(reconcileUpcoming);
+  // Guard ref: true while a start-shift transition is in progress — prevents the background
+  // upcoming poll from calling reconcileUpcoming and destroying the coverage channel mid-flight
+  const startShiftInProgressRef = useRef(false);
   useEffect(() => { reconcileUpcomingRef.current = reconcileUpcoming; }, [reconcileUpcoming]);
 
   // Fetch active session from edge function
@@ -800,6 +803,10 @@ export default function DoctorLayout() {
     if (!upcomingSessions.length || !user) return;
     console.log('[Doctor] upcoming sessions poll — starting interval for', upcomingSessions.length, 'sessions');
     const id = setInterval(() => {
+      if (startShiftInProgressRef.current) {
+        console.log('[Doctor] upcoming sessions poll — skipping tick, start-shift in progress');
+        return;
+      }
       console.log('[Doctor] upcoming sessions poll — tick, reconciling');
       reconcileUpcomingRef.current();
     }, POLL_INTERVAL);
@@ -1050,6 +1057,7 @@ export default function DoctorLayout() {
               return false;
             });
           } else if (status === 'active') {
+            startShiftInProgressRef.current = true;
             supabase.removeChannel(covCh);
             coverageMap.delete(session.id);
             setActiveSession((prev) => {
@@ -1058,6 +1066,10 @@ export default function DoctorLayout() {
             });
             setActiveSessionId(session.id);
             setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
+            // Fetch authoritative state from DB and clear the transition guard
+            fetchActiveSession().finally(() => {
+              startShiftInProgressRef.current = false;
+            });
             PollingManager.start(`start-confirm-cov-${session.id}`, async () => {
               const { data: s } = await supabase
                 .from('coverage_sessions')
@@ -1094,6 +1106,48 @@ export default function DoctorLayout() {
       coverageMap.clear();
     };
   }, []);
+
+  // ── Stable postgres_changes subscription — catches status transitions that broadcast channels miss ──
+  // This is the architectural fix for Start Shift: the coverage:{id} broadcast channel can be
+  // destroyed by a concurrent upcomingSessions state update (background poll race). This subscription
+  // is permanent and cannot be torn down by any state change — it is the guaranteed delivery path.
+  useEffect(() => {
+    if (!user?.id) return;
+    const ch = supabase
+      .channel(`session-status-watch:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'coverage_sessions',
+          filter: `doctor_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newRow = payload.new as any;
+          const oldRow = payload.old as any;
+          // Only act when status actually changed
+          if (!newRow?.status || newRow.status === oldRow?.status) return;
+          const newStatus = newRow.status as string;
+          console.log('[Doctor] postgres_changes session status:', oldRow?.status, '→', newStatus, 'session:', newRow.id);
+          if (newStatus === 'active') {
+            // This is the Start Shift transition. Call fetchActiveSession() immediately —
+            // same as what happens on app restart. This is the guaranteed fallback path.
+            fetchActiveSession();
+          } else if (newStatus === 'paused') {
+            fetchActiveSession();
+          } else if (newStatus === 'cancelled') {
+            // Reconcile upcoming to remove the cancelled session
+            reconcileUpcomingRef.current();
+          }
+          // payment_pending, settled, requester_paid are handled by existing payment polling
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Doctor] session-status-watch channel:', status);
+      });
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Postgres Changes fallback: fires when coverage_sessions row status → requester_paid ──
   useEffect(() => {
