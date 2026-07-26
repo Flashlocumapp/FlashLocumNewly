@@ -876,10 +876,6 @@ export default function DoctorLayout() {
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
         }
-        // Always re-fetch to confirm — optimistic update fires first, re-fetch corrects within ~300ms
-        fetchActiveSession();
-        // Remove the now-active session from upcoming
-        reconcileUpcomingRef.current();
         PollingManager.start(`start-confirm-active`, async () => {
           const { data: s } = await supabase
             .from('coverage_sessions')
