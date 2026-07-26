@@ -12,6 +12,9 @@ import {
   TextInput,
   Keyboard,
   Pressable,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
 } from 'react-native';
 import { Stack, Tabs, Href, useRouter } from 'expo-router';
 import * as Location from 'expo-location';
@@ -494,24 +497,23 @@ export default function DoctorLayout() {
     setShowDoctorRating(true);
   }, [activeSessionIdRef]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Payment polling fallback: polls get-active-session every 5s (no cap) ──
+  // ── Payment polling fallback: polls coverage_sessions directly by session ID (no cap) ──
   const startPaymentPolling = useCallback((sessionId: string, hospitalName: string, amount: number) => {
-    console.log('[Doctor] startPaymentPolling — polling for paid status (no cap)', { sessionId });
+    console.log('[Doctor] startPaymentPolling — polling coverage_sessions directly (no cap)', { sessionId });
     PollingManager.start('payment-confirm', async () => {
       try {
-        const res = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=doctor`, {});
-        if (res.ok) {
-          const data = await res.json();
-          const snap = data?.session ?? null;
-          const paidStatuses = ['settled', 'requester_paid', 'payment_complete'];
-          if (snap && paidStatuses.includes(snap.status)) {
-            console.log('[Doctor] paymentPoll — paid status confirmed:', snap.status, '— showing rating overlay');
-            const resolvedId = sessionId || snap.id;
-            const resolvedHospital = hospitalName || (snap.hospital_name ?? '');
-            const resolvedAmount = amount || (snap.total_cost ?? 0);
-            void maybeShowDoctorRating(resolvedId, resolvedHospital, resolvedAmount);
-            return true;
-          }
+        const { data: snap } = await supabase
+          .from('coverage_sessions')
+          .select('id, status, price, hospital_name')
+          .eq('id', sessionId)
+          .maybeSingle();
+        const paidStatuses = ['settled', 'requester_paid', 'payment_complete'];
+        if (snap && paidStatuses.includes(snap.status)) {
+          console.log('[Doctor] paymentPoll — paid status confirmed:', snap.status, '— showing rating overlay');
+          const resolvedHospital = hospitalName || (snap.hospital_name ?? '');
+          const resolvedAmount = amount || (snap.price ?? 0);
+          void maybeShowDoctorRating(sessionId, resolvedHospital, resolvedAmount);
+          return true;
         }
       } catch {
         // non-fatal
@@ -785,6 +787,17 @@ export default function DoctorLayout() {
     }, POLL_INTERVAL);
     return () => clearInterval(id);
   }, [upcomingSessions.length, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Proactive payment poll — starts whenever session enters payment_pending state ──
+  // Ensures overlay fires even if SHIFT_ENDED broadcast was missed
+  useEffect(() => {
+    if (activeSession?.status !== 'payment_pending') return;
+    const sessionId = activeSession.id;
+    const hospitalName = activeSession.hospital_name ?? '';
+    const amount = activeSession.price ?? 0;
+    console.log('[Doctor] session entered payment_pending — starting payment poll proactively', { sessionId });
+    startPaymentPollingRef.current(sessionId, hospitalName, amount);
+  }, [activeSession?.status, activeSession?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Realtime subscription — dispatch channel ──
   useEffect(() => {
@@ -1590,19 +1603,20 @@ export default function DoctorLayout() {
           animationType="fade"
           onRequestClose={handleDoctorRatingDone}
         >
-          <View style={{ flex: 1 }}>
-            {/* Backdrop — full screen, tap to dismiss overlay */}
-            <Pressable
-              style={StyleSheet.absoluteFillObject}
-              onPress={() => { Keyboard.dismiss(); handleDoctorRatingDone(); }}
-            >
-              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} />
-            </Pressable>
-
-            {/* Card — centred, tap inside to dismiss keyboard only */}
-            <View
+          {/* Backdrop */}
+          <Pressable
+            style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' }}
+            onPress={() => { Keyboard.dismiss(); handleDoctorRatingDone(); }}
+          />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+            pointerEvents="box-none"
+          >
+            <ScrollView
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}
+              keyboardShouldPersistTaps="handled"
               pointerEvents="box-none"
-              style={{ ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', padding: 24 }}
             >
               <Pressable
                 onPress={() => Keyboard.dismiss()}
@@ -1696,8 +1710,8 @@ export default function DoctorLayout() {
                   </View>
                 </View>
               </Pressable>
-            </View>
-          </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </Modal>
       </View>
     </DoctorDispatchContext.Provider>

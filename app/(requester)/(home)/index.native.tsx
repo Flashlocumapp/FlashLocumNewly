@@ -1273,15 +1273,21 @@ function RequesterRatingCard({
       animationType="fade"
       onRequestClose={onDismiss}
     >
-      {/* Full-screen container — pointerEvents="box-none" so touches pass through to backdrop */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-        {/* Backdrop — tap closes the card */}
-        <Pressable
-          style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' }}
-          onPress={() => { console.log('[Requester] Rating backdrop pressed — dismissing'); Keyboard.dismiss(); onDismiss(); }}
-        />
-        {/* Card container — centred, pointerEvents="box-none" so backdrop behind it stays tappable */}
-        <View pointerEvents="box-none" style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+      {/* Backdrop */}
+      <Pressable
+        style={{ ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' }}
+        onPress={() => { console.log('[Requester] Rating backdrop pressed — dismissing'); Keyboard.dismiss(); onDismiss(); }}
+      />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        pointerEvents="box-none"
+      >
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}
+          keyboardShouldPersistTaps="handled"
+          pointerEvents="box-none"
+        >
           {/* Card — tap inside dismisses keyboard only */}
           <Pressable
             onPress={() => Keyboard.dismiss()}
@@ -1366,8 +1372,8 @@ function RequesterRatingCard({
               </TouchableOpacity>
             </View>
           </Pressable>
-        </View>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -1882,6 +1888,14 @@ export default function RequesterHomeScreen() {
       fetchActiveSession();
     }, POLL_INTERVAL);
     return () => clearInterval(id);
+  }, [activeSession?.status, activeSession?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Proactive payment poll — starts whenever session enters payment_pending state ───
+  // Ensures overlay fires even if PAYMENT_CONFIRMED broadcast was missed
+  useEffect(() => {
+    if (activeSession?.status !== 'payment_pending') return;
+    console.log('[Requester] session entered payment_pending — starting payment poll proactively');
+    startRequesterPaymentPollingRef.current();
   }, [activeSession?.status, activeSession?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Session realtime subscription ───────────────────────────────────────────
@@ -2643,6 +2657,25 @@ export default function RequesterHomeScreen() {
     setActiveSession(null);
   }, []); // no deps — reads from ref so never goes stale
 
+  const fetchAndSetSettledAmount = useCallback(async (sessionId: string) => {
+    try {
+      console.log('[Requester] fetchAndSetSettledAmount — fetching payment_intents for session', sessionId);
+      const { data } = await supabase
+        .from('payment_intents')
+        .select('amount_naira')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      if (data?.amount_naira != null) {
+        console.log('[Requester] fetchAndSetSettledAmount — amount_naira:', data.amount_naira);
+        setSettledAmount(Number(data.amount_naira));
+      }
+    } catch {
+      // non-fatal — overlay will fall back to confirmedSession.price
+    }
+  }, []);
+
   const handlePaymentConfirmedWithFallback = useCallback(async (sessionIdFromPayload?: string) => {
     const currentSession = activeSessionRef.current;
     const sid = sessionIdFromPayload ?? currentSession?.id;
@@ -2650,6 +2683,8 @@ export default function RequesterHomeScreen() {
     if (currentSession) {
       // Happy path — ref is populated, show overlay IMMEDIATELY then dedup in background
       if (sid && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid) && !_requesterDismissedSessions.has(sid)) {
+        // Fire-and-forget fetch of authoritative amount — overlay reads settledAmount reactively
+        void fetchAndSetSettledAmount(sid);
         // Show immediately — do NOT block on AsyncStorage
         setConfirmedSession(currentSession);
         setShowPaymentSuccess(true);
@@ -2686,6 +2721,8 @@ export default function RequesterHomeScreen() {
           !_requesterRatingInFlight.has(fetchedSid) &&
           !_requesterDismissedSessions.has(fetchedSid)
         ) {
+          // Fire-and-forget fetch of authoritative amount — overlay reads settledAmount reactively
+          void fetchAndSetSettledAmount(fetchedSid);
           // Show overlay IMMEDIATELY
           setConfirmedSession(session);
           setShowPaymentSuccess(true);
@@ -2913,36 +2950,7 @@ export default function RequesterHomeScreen() {
     }
   };
 
-  // Fetch the authoritative payment_intents amount when session reaches settled/payment_complete
-  useEffect(() => {
-    const status = activeSession?.status;
-    const sessionId = activeSession?.id;
-    if (!sessionId || (status !== 'settled' && status !== 'payment_complete')) {
-      return;
-    }
-    console.log('[Requester] Fetching payment_intent amount for settled session', sessionId);
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('payment_intents')
-          .select('amount_naira')
-          .eq('session_id', sessionId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-        if (error) {
-          console.warn('[Requester] payment_intents fetch error:', error.message);
-          return;
-        }
-        if (data?.amount_naira != null) {
-          console.log('[Requester] payment_intent amount_naira:', data.amount_naira);
-          setSettledAmount(Number(data.amount_naira));
-        }
-      } catch (e: any) {
-        console.warn('[Requester] payment_intents fetch exception:', e.message);
-      }
-    })();
-  }, [activeSession?.status, activeSession?.id]);
+
 
   const handleCancelActiveShift = useCallback(() => {
     if (!activeSession) return;
@@ -3859,6 +3867,7 @@ export default function RequesterHomeScreen() {
           if (sid) markRequesterSessionDismissed(sid);
           setShowPaymentSuccess(false);
           setConfirmedSession(null);
+          setSettledAmount(null);
           setActiveSession(null);
           setRatingStars(0);
           setRatingComment('');
@@ -3892,6 +3901,7 @@ export default function RequesterHomeScreen() {
             if (confirmedSession?.id) markRequesterSessionPaid(confirmedSession.id);
             setShowPaymentSuccess(false);
             setConfirmedSession(null);
+            setSettledAmount(null);
             setActiveSession(null);
             setRatingStars(0);
             setRatingComment('');
