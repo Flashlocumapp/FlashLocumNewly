@@ -1574,15 +1574,12 @@ export default function RequesterHomeScreen() {
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          if (wasSubscribed.current) {
-            // Reconnect — re-fetch to recover any missed broadcasts
-            console.log('[OnlineDoctors] Broadcast channel reconnected, re-fetching online doctors');
-            fetchOnlineDoctors();
-          } else {
-            // First connect — initial fetch already called above, just mark as subscribed
-            console.log('[OnlineDoctors] Broadcast channel connected for the first time');
-            wasSubscribed.current = true;
-          }
+          // Always re-fetch on every SUBSCRIBED confirmation — closes the race window
+          // between the initial DB fetch and the moment the WebSocket is actually live.
+          // Any doctor who went online in that gap will be picked up here.
+          console.log('[OnlineDoctors] Broadcast channel SUBSCRIBED, re-fetching online doctors');
+          fetchOnlineDoctors();
+          wasSubscribed.current = true;
         }
       });
 
@@ -1626,6 +1623,17 @@ export default function RequesterHomeScreen() {
       supabase.removeChannel(pgCh);
     };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Periodic background poll — keeps online doctors list fresh ──
+  // Catches any go-online/go-offline broadcast missed due to network gaps or
+  // WebSocket reconnect windows. Runs every 15s in dev, 30s in prod.
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(() => {
+      fetchOnlineDoctors();
+    }, __DEV__ ? 15000 : 30000);
+    return () => clearInterval(interval);
+  }, [user, fetchOnlineDoctors]);
 
   // Sheet state
   const [sheetState, setSheetState] = useState<SheetState>('idle');
@@ -3086,9 +3094,7 @@ export default function RequesterHomeScreen() {
             anchor={{ x: 0.5, y: 0.5 }}
             tracksViewChanges={false}
           >
-            <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: '#34C759', borderWidth: 2, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
-              <MaterialCommunityIcons name="stethoscope" size={14} color="#FFFFFF" />
-            </View>
+            <MaterialCommunityIcons name="stethoscope" size={22} color="#1C1C1E" />
           </Marker>
         ))}
       </MapView>
