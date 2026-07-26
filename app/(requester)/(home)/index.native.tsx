@@ -943,6 +943,7 @@ function RequesterPaymentCard({
           amount_naira: payment.amount_naira ?? snap.amount_naira,
           monnify_account_number: payment.account_number ?? snap.monnify_account_number,
           monnify_bank_name: payment.bank_name ?? snap.monnify_bank_name,
+          monnify_account_name: payment.account_name ?? snap.monnify_account_name ?? null,
           monnify_account_reference: payment.account_reference ?? snap.monnify_account_reference,
           expiry_at: payment.expiry_at ?? snap.expiry_at,
         } : snap);
@@ -1025,6 +1026,7 @@ function RequesterPaymentCard({
             amount_naira: payment.amount_naira ?? snap.amount_naira,
             monnify_account_number: payment.account_number ?? snap.monnify_account_number,
             monnify_bank_name: payment.bank_name ?? snap.monnify_bank_name,
+            monnify_account_name: payment.account_name ?? snap.monnify_account_name ?? null,
             monnify_account_reference: payment.account_reference ?? snap.monnify_account_reference,
             expiry_at: payment.expiry_at ?? snap.expiry_at,
           } : snap);
@@ -1181,7 +1183,7 @@ function RequesterPaymentCard({
               ACCOUNT NAME
             </Text>
             <Text style={{ fontSize: 17, fontFamily: 'Inter_600SemiBold', color: loadingIntent ? '#8E8E93' : '#000000' }}>
-              {loadingIntent ? 'Loading...' : 'FlashLocum'}
+              {loadingIntent ? 'Loading...' : (paymentIntent?.monnify_account_name ?? 'FlashLocum')}
             </Text>
           </View>
 

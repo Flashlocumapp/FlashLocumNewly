@@ -6,6 +6,7 @@ export type PaymentIntent = {
   amount_naira: number;
   monnify_account_number: string | null;
   monnify_bank_name: string | null;
+  monnify_account_name: string | null;
   monnify_account_reference: string | null;
   monnify_transaction_reference: string | null;
   status: 'pending' | 'expired' | 'paid';
