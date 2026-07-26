@@ -497,23 +497,41 @@ export default function DoctorLayout() {
     setShowDoctorRating(true);
   }, [activeSessionIdRef]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Payment polling fallback: polls coverage_sessions directly by session ID (no cap) ──
+  // ── Payment polling: tries get-active-session first, falls back to direct DB query ──
   const startPaymentPolling = useCallback((sessionId: string, hospitalName: string, amount: number) => {
-    console.log('[Doctor] startPaymentPolling — polling coverage_sessions directly (no cap)', { sessionId });
+    console.log('[Doctor] startPaymentPolling — dual-check poll (no cap)', { sessionId });
     PollingManager.start('payment-confirm', async () => {
       try {
-        const { data: snap } = await supabase
-          .from('coverage_sessions')
-          .select('id, status, price, hospital_name')
-          .eq('id', sessionId)
-          .maybeSingle();
-        const paidStatuses = ['settled', 'requester_paid', 'payment_complete'];
-        if (snap && paidStatuses.includes(snap.status)) {
-          console.log('[Doctor] paymentPoll — paid status confirmed:', snap.status, '— showing rating overlay');
-          const resolvedHospital = hospitalName || (snap.hospital_name ?? '');
-          const resolvedAmount = amount || (snap.price ?? 0);
-          void maybeShowDoctorRating(sessionId, resolvedHospital, resolvedAmount);
-          return true;
+        // Primary: get-active-session (original working approach)
+        const res = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=doctor`, {});
+        if (res.ok) {
+          const data = await res.json();
+          const snap = data?.session ?? null;
+          const paidStatuses = ['settled', 'requester_paid', 'payment_complete'];
+          if (snap && paidStatuses.includes(snap.status)) {
+            console.log('[Doctor] paymentPoll (primary) — paid status confirmed:', snap.status);
+            const resolvedHospital = hospitalName || (snap.hospital_name ?? '');
+            const resolvedAmount = amount || (snap.total_cost ?? snap.price ?? 0);
+            void maybeShowDoctorRating(sessionId || snap.id, resolvedHospital, resolvedAmount);
+            return true;
+          }
+        }
+        // Fallback: query coverage_sessions directly by session ID
+        // (covers case where get-active-session no longer returns the session)
+        if (sessionId) {
+          const { data: snap2 } = await supabase
+            .from('coverage_sessions')
+            .select('id, status, total_cost, hospital_name')
+            .eq('id', sessionId)
+            .maybeSingle();
+          const paidStatuses = ['settled', 'requester_paid', 'payment_complete'];
+          if (snap2 && paidStatuses.includes(snap2.status)) {
+            console.log('[Doctor] paymentPoll (fallback) — paid status confirmed:', snap2.status);
+            const resolvedHospital = hospitalName || (snap2.hospital_name ?? '');
+            const resolvedAmount = amount || (snap2.total_cost ?? 0);
+            void maybeShowDoctorRating(sessionId, resolvedHospital, resolvedAmount);
+            return true;
+          }
         }
       } catch {
         // non-fatal
@@ -794,7 +812,7 @@ export default function DoctorLayout() {
     if (activeSession?.status !== 'payment_pending') return;
     const sessionId = activeSession.id;
     const hospitalName = activeSession.hospital_name ?? '';
-    const amount = activeSession.price ?? 0;
+    const amount = (activeSession as CoverageSession & { total_cost?: number }).total_cost ?? 0;
     console.log('[Doctor] session entered payment_pending — starting payment poll proactively', { sessionId });
     startPaymentPollingRef.current(sessionId, hospitalName, amount);
   }, [activeSession?.status, activeSession?.id]); // eslint-disable-line react-hooks/exhaustive-deps
