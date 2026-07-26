@@ -382,6 +382,7 @@ export default function DoctorLayout() {
   const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   // Stable map of upcoming-session channels — never torn down wholesale, only diffed
   const upcomingChannelsRef = useRef<Map<string, ReturnType<typeof supabase.channel>>>(new Map());
+  const upcomingCoverageChannelsRef = useRef<Map<string, ReturnType<typeof supabase.channel>>>(new Map());
   const isOnlineRef = useRef(false);
   const isRealtimeHealthyRef = useRef(false);
   const lastLocationRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -774,6 +775,17 @@ export default function DoctorLayout() {
     return () => clearInterval(id);
   }, [activeSessionId, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Polling fallback — upcoming sessions poll (runs whenever there are upcoming sessions) ──
+  useEffect(() => {
+    if (!upcomingSessions.length || !user) return;
+    console.log('[Doctor] upcoming sessions poll — starting interval for', upcomingSessions.length, 'sessions');
+    const id = setInterval(() => {
+      console.log('[Doctor] upcoming sessions poll — tick, reconciling');
+      reconcileUpcomingRef.current();
+    }, POLL_INTERVAL);
+    return () => clearInterval(id);
+  }, [upcomingSessions.length, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Realtime subscription — dispatch channel ──
   useEffect(() => {
     if (!user) return;
@@ -963,6 +975,7 @@ export default function DoctorLayout() {
   // This eliminates the teardown/rebuild window that caused missed SHIFT_CANCELLED broadcasts.
   useEffect(() => {
     const map = upcomingChannelsRef.current;
+    const coverageMap = upcomingCoverageChannelsRef.current;
     const currentIds = new Set(upcomingSessions.map((s) => s.id));
 
     // Unsubscribe channels for sessions no longer in the list
@@ -972,13 +985,19 @@ export default function DoctorLayout() {
         map.delete(id);
       }
     }
+    for (const [id, ch] of coverageMap.entries()) {
+      if (!currentIds.has(id)) {
+        supabase.removeChannel(ch);
+        coverageMap.delete(id);
+      }
+    }
 
     // Subscribe channels for new sessions not yet in the map
     for (const session of upcomingSessions) {
       if (map.has(session.id)) continue; // already subscribed — do NOT recreate
       const ch = supabase.channel(`session:${session.id}`)
         .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
-          console.log('[Doctor] upcoming session cancelled:', session.id);
+          console.log('[Doctor] upcoming session cancelled (session channel):', session.id);
           supabase.removeChannel(ch);
           map.delete(session.id);
           setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
@@ -995,7 +1014,7 @@ export default function DoctorLayout() {
           });
         })
         .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
-          console.log('[Doctor] upcoming session started:', session.id);
+          console.log('[Doctor] upcoming session started (session channel):', session.id);
           supabase.removeChannel(ch);
           map.delete(session.id);
           const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
@@ -1022,17 +1041,76 @@ export default function DoctorLayout() {
         })
         .subscribe();
       map.set(session.id, ch);
+
+      // ── coverage:{session_id} — third delivery path for STATUS_CHANGED ──
+      if (coverageMap.has(session.id)) continue;
+      const covCh = supabase.channel(`coverage:${session.id}`)
+        .on('broadcast', { event: 'STATUS_CHANGED' }, (payload) => {
+          const status = payload?.payload?.status as string | undefined;
+          console.log('[Doctor] coverage channel STATUS_CHANGED:', session.id, status);
+          if (status === 'cancelled') {
+            supabase.removeChannel(covCh);
+            coverageMap.delete(session.id);
+            setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
+            setActiveJobCount((prev) => Math.max(0, prev - 1));
+            PollingManager.start(`cancel-confirm-cov-${session.id}`, async () => {
+              const { data: s } = await supabase
+                .from('coverage_sessions')
+                .select('status')
+                .eq('id', session.id)
+                .maybeSingle();
+              if (!s || s.status === 'cancelled') {
+                reconcileUpcomingRef.current();
+                return true;
+              }
+              return false;
+            });
+          } else if (status === 'active') {
+            supabase.removeChannel(covCh);
+            coverageMap.delete(session.id);
+            setActiveSession((prev) => {
+              if (prev && prev.status === 'active') return prev;
+              return { ...session, status: 'active' } as CoverageSession;
+            });
+            setActiveSessionId(session.id);
+            setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
+            reconcileUpcomingRef.current();
+            fetchActiveSession();
+            PollingManager.start(`start-confirm-cov-${session.id}`, async () => {
+              const { data: s } = await supabase
+                .from('coverage_sessions')
+                .select('id, status')
+                .eq('id', session.id)
+                .maybeSingle();
+              if (s?.status === 'active') {
+                await fetchActiveSession();
+                return true;
+              }
+              return false;
+            });
+          } else if (status === 'paused') {
+            fetchActiveSession();
+            reconcileUpcomingRef.current();
+          }
+        })
+        .subscribe();
+      coverageMap.set(session.id, covCh);
     }
   }, [upcomingSessions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Cleanup all upcoming channels on unmount ──
   useEffect(() => {
     const map = upcomingChannelsRef.current;
+    const coverageMap = upcomingCoverageChannelsRef.current;
     return () => {
       for (const ch of map.values()) {
         supabase.removeChannel(ch);
       }
       map.clear();
+      for (const ch of coverageMap.values()) {
+        supabase.removeChannel(ch);
+      }
+      coverageMap.clear();
     };
   }, []);
 
@@ -1107,15 +1185,21 @@ export default function DoctorLayout() {
         invalidate('coverage_doctor_completed');
         invalidate('coverage_doctor_upcoming');
       })
-      .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
+      .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+        const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
+        console.log('[Doctor] user channel SHIFT_CANCELLED received', { sessionId });
         setActiveSession(null);
         setActiveJobCount((prev) => Math.max(0, prev - 1));
+        if (sessionId) {
+          setUpcomingSessions((prev) => prev.filter((s) => s.id !== sessionId));
+        }
         reconcileUpcomingRef.current();
         PollingManager.start('cancel-confirm-user', async () => {
+          if (!sessionId) return true;
           const { data: s } = await supabase
             .from('coverage_sessions')
             .select('status')
-            .eq('id', activeSessionIdRef.current ?? '')
+            .eq('id', sessionId)
             .maybeSingle();
           if (!s || s.status === 'cancelled') {
             reconcileUpcomingRef.current();

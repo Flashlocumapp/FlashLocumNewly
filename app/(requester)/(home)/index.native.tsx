@@ -45,6 +45,9 @@ import { buildShiftPillText, EnvironmentBadge as SessionEnvBadge } from '@/compo
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
+// POLL_INTERVAL: 8s in dev (Expo Go WebSocket unreliable), 30s in production.
+const POLL_INTERVAL = __DEV__ ? 8000 : 30000;
+
 // ─── Module-level retry flag for handleRequestCoverage ───────────────────────
 let _submitRetried = false;
 
@@ -1867,6 +1870,19 @@ export default function RequesterHomeScreen() {
       sub.remove();
     };
   }, [fetchActiveSession, fetchOnlineDoctors]);
+
+  // ─── Polling fallback — upcoming/paused session poll ─────────────────────────
+  // Runs when activeSession is in upcoming or paused state (no activeSessionId-based poll covers this).
+  // Catches missed broadcasts for cancel, start, pause, resume.
+  useEffect(() => {
+    if (!activeSession || !['upcoming', 'paused'].includes(activeSession.status)) return;
+    console.log('[Requester] upcoming/paused poll — starting interval, status:', activeSession.status);
+    const id = setInterval(() => {
+      console.log('[Requester] upcoming/paused poll — tick, fetching active session');
+      fetchActiveSession();
+    }, POLL_INTERVAL);
+    return () => clearInterval(id);
+  }, [activeSession?.status, activeSession?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Session realtime subscription ───────────────────────────────────────────
   useEffect(() => {
