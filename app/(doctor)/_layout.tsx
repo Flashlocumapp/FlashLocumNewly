@@ -876,6 +876,8 @@ export default function DoctorLayout() {
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
         }
+        // Remove from upcoming atomically — prevents the upcoming card staying visible alongside the active card
+        setUpcomingSessions((prev) => prev.filter((s) => s.id !== (updated?.id ?? activeSessionIdRef.current)));
         PollingManager.start(`start-confirm-active`, async () => {
           const { data: s } = await supabase
             .from('coverage_sessions')
@@ -1021,7 +1023,7 @@ export default function DoctorLayout() {
     // Subscribe channels for new sessions not yet in the map
     for (const session of upcomingSessions) {
       if (map.has(session.id)) continue; // already subscribed — do NOT recreate
-      const ch = supabase.channel(`session:${session.id}`)
+      const ch = supabase.channel(`upcoming:${session.id}`)
         .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
           console.log('[Doctor] upcoming session cancelled (session channel):', session.id);
           supabase.removeChannel(ch);
@@ -1039,35 +1041,12 @@ export default function DoctorLayout() {
             return false;
           });
         })
-        .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
-          console.log('[Doctor] upcoming session started (session channel):', session.id);
-          supabase.removeChannel(ch);
-          map.delete(session.id);
-          const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
-          setActiveSession((prev) => {
-            if (prev && prev.status === 'active') return prev;
-            return { ...(updated ?? session), status: 'active' } as CoverageSession;
-          });
-          setActiveSessionId(session.id);
-          setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
-          PollingManager.start(`start-confirm-${session.id}`, async () => {
-            const { data: s } = await supabase
-              .from('coverage_sessions')
-              .select('id, status')
-              .eq('id', session.id)
-              .maybeSingle();
-            if (s?.status === 'active') {
-              return true;
-            }
-            return false;
-          });
-        })
         .subscribe();
       map.set(session.id, ch);
 
       // ── coverage:{session_id} — third delivery path for STATUS_CHANGED ──
       if (coverageMap.has(session.id)) continue;
-      const covCh = supabase.channel(`coverage:${session.id}`)
+      const covCh = supabase.channel(`coverage-watch:${session.id}`)
         .on('broadcast', { event: 'STATUS_CHANGED' }, (payload) => {
           const status = payload?.payload?.status as string | undefined;
           console.log('[Doctor] coverage channel STATUS_CHANGED:', session.id, status);
