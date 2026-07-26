@@ -1024,8 +1024,6 @@ export default function DoctorLayout() {
           });
           setActiveSessionId(session.id);
           setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
-          reconcileUpcomingRef.current();
-          fetchActiveSession();
           PollingManager.start(`start-confirm-${session.id}`, async () => {
             const { data: s } = await supabase
               .from('coverage_sessions')
@@ -1074,8 +1072,6 @@ export default function DoctorLayout() {
             });
             setActiveSessionId(session.id);
             setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
-            reconcileUpcomingRef.current();
-            fetchActiveSession();
             PollingManager.start(`start-confirm-cov-${session.id}`, async () => {
               const { data: s } = await supabase
                 .from('coverage_sessions')
