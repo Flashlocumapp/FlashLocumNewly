@@ -158,7 +158,7 @@ async function warmDoctorRatedCache() {
 // POLL_INTERVAL: 8s in dev (Expo Go WebSocket unreliable), 30s in production.
 // Cost at 30s: 2 req/min per online doctor. At 1,000 concurrent doctors = 2,000 req/min —
 // well within Supabase Edge Function limits. Realtime is the primary delivery path (zero cost).
-const POLL_INTERVAL = __DEV__ ? 8000 : 30000;
+const POLL_INTERVAL = __DEV__ ? 5000 : 30000;
 
 type DoctorScreenState = 'idle' | 'incoming' | 'confirmed';
 
@@ -870,27 +870,6 @@ export default function DoctorLayout() {
     }
 
     const ch = supabase.channel(channelName)
-      .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
-        PollingManager.stop('accept');
-        const updated = payload?.payload?.session as CoverageSession | undefined;
-        if (updated) {
-          setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
-        }
-        // Remove from upcoming atomically — prevents the upcoming card staying visible alongside the active card
-        setUpcomingSessions((prev) => prev.filter((s) => s.id !== (updated?.id ?? activeSessionIdRef.current)));
-        PollingManager.start(`start-confirm-active`, async () => {
-          const { data: s } = await supabase
-            .from('coverage_sessions')
-            .select('status')
-            .eq('id', activeSessionIdRef.current ?? '')
-            .maybeSingle();
-          if (s?.status === 'active') {
-            await fetchActiveSession();
-            return true;
-          }
-          return false;
-        });
-      })
       .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
         const updated = payload?.payload?.session as CoverageSession | undefined;
         if (updated) {
@@ -1047,7 +1026,7 @@ export default function DoctorLayout() {
 
       // ── coverage:{session_id} — third delivery path for STATUS_CHANGED ──
       if (coverageMap.has(session.id)) continue;
-      const covCh = supabase.channel(`coverage-watch:${session.id}`)
+      const covCh = supabase.channel(`coverage:${session.id}`)
         .on('broadcast', { event: 'STATUS_CHANGED' }, (payload) => {
           const status = payload?.payload?.status as string | undefined;
           console.log('[Doctor] coverage channel STATUS_CHANGED:', session.id, status);
