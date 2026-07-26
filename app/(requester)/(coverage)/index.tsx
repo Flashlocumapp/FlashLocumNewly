@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -433,7 +434,7 @@ export default function RequesterCoverageScreen() {
 
   const cacheKey = `requester-coverage-${user?.id ?? 'anon'}`;
 
-  const { data: historySessions, loading, refreshing } = useTabData<CoverageSession[]>({
+  const { data: historySessions, loading, refreshing, refresh: refreshHistory } = useTabData<CoverageSession[]>({
     cacheKey,
     fetcher: useCallback(async () => {
       if (!user?.id) return [];
@@ -471,6 +472,38 @@ export default function RequesterCoverageScreen() {
     }, [user?.id]), // eslint-disable-line react-hooks/exhaustive-deps
     alwaysRefresh: true,
   });
+
+  // Refresh history whenever this tab gains focus
+  useFocusEffect(
+    useCallback(() => {
+      refreshHistory();
+    }, [refreshHistory])
+  );
+
+  // Realtime: refresh history when coverage_sessions rows change for this requester
+  useEffect(() => {
+    if (!user?.id) return;
+    const ch = supabase
+      .channel(`coverage-history-requester:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'coverage_sessions',
+          filter: `requester_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newStatus = (payload.new as any)?.status;
+          if (['completed', 'cancelled', 'requester_paid', 'payment_pending', 'active'].includes(newStatus)) {
+            console.log('[RequesterCoverage] Realtime coverage_sessions change, status:', newStatus, '— refreshing history');
+            refreshHistory();
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   type DateRange = 'this_month' | 'last_month' | 'last_3_months';
   const [dateRange, setDateRange] = useState<DateRange>('this_month');

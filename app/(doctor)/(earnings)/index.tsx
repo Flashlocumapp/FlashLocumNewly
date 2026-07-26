@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -235,6 +236,36 @@ export default function DoctorEarningsScreen() {
     if (!user) return;
     fetchEarnings();
   }, [user, fetchEarnings]);
+
+  // ── Focus-triggered refresh ──────────────────────────────────────────────────
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      fetchEarnings();
+    }, [user, fetchEarnings])
+  );
+
+  // ── Realtime: postgres_changes on doctor_earnings ────────────────────────────
+  useEffect(() => {
+    if (!user?.id) return;
+    const ch = supabase
+      .channel(`earnings-realtime:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'doctor_earnings',
+          filter: `doctor_id=eq.${user.id}`,
+        },
+        () => {
+          console.log('[Earnings] Realtime doctor_earnings change — refreshing');
+          fetchEarnings();
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Pull-to-refresh ─────────────────────────────────────────────────────────
   const handleRefresh = useCallback(async () => {

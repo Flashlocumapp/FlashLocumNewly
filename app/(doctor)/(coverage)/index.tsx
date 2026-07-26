@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -350,6 +351,7 @@ export default function DoctorCoverageScreen() {
     data: historyData,
     loading: historyLoading,
     refreshing: historyRefreshing,
+    refresh: refreshHistory,
   } = useTabData<CoverageSession[]>({
     cacheKey: historyKey,
     fetcher: useCallback(async () => {
@@ -388,6 +390,38 @@ export default function DoctorCoverageScreen() {
         if (data) setReviewedIds(new Set(data.map((r: { session_id: string }) => r.session_id)));
       });
   }, [historyData, user?.id]);
+
+  // Refresh history whenever this tab gains focus
+  useFocusEffect(
+    useCallback(() => {
+      refreshHistory();
+    }, [refreshHistory])
+  );
+
+  // Realtime: refresh history when coverage_sessions rows change for this doctor
+  useEffect(() => {
+    if (!user?.id) return;
+    const ch = supabase
+      .channel(`coverage-history-doctor:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'coverage_sessions',
+          filter: `doctor_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const newStatus = (payload.new as any)?.status;
+          if (['completed', 'cancelled', 'requester_paid', 'payment_pending', 'active'].includes(newStatus)) {
+            console.log('[DoctorCoverage] Realtime coverage_sessions change, status:', newStatus, '— refreshing history');
+            refreshHistory();
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateSessionStatus = useCallback(async (sessionId: string, status: string, extraFields?: Record<string, string>) => {
     console.log('[DoctorCoverage] updateSessionStatus — sessionId:', sessionId, 'status:', status, 'extra:', extraFields);

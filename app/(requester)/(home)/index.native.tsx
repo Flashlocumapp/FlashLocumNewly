@@ -1449,16 +1449,14 @@ export default function RequesterHomeScreen() {
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         console.log('[Requester] user channel payment_confirmed received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
-        invalidate('coverage_requester_completed');
-        invalidate('coverage_requester_upcoming');
+        invalidate(`requester-coverage-${user?.id ?? 'anon'}`);
         handlePaymentConfirmedWithFallbackRef.current(sessionId);
         startRequesterPaymentPollingRef.current();
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         console.log('[Requester] user channel PAYMENT_CONFIRMED received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
-        invalidate('coverage_requester_completed');
-        invalidate('coverage_requester_upcoming');
+        invalidate(`requester-coverage-${user?.id ?? 'anon'}`);
         handlePaymentConfirmedWithFallbackRef.current(sessionId);
         startRequesterPaymentPollingRef.current();
       })

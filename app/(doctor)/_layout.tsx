@@ -930,8 +930,9 @@ export default function DoctorLayout() {
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
         startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
-        invalidate('coverage_doctor_completed');
-        invalidate('coverage_doctor_upcoming');
+        invalidate(`doctor-coverage-history-${user.id}`);
+        invalidate(`doctor-coverage-upcoming-${user.id}`);
+        invalidate('doctor_earnings');
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? activeSessionId;
@@ -941,8 +942,9 @@ export default function DoctorLayout() {
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
         startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
-        invalidate('coverage_doctor_completed');
-        invalidate('coverage_doctor_upcoming');
+        invalidate(`doctor-coverage-history-${user.id}`);
+        invalidate(`doctor-coverage-upcoming-${user.id}`);
+        invalidate('doctor_earnings');
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
         setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
@@ -1150,8 +1152,9 @@ export default function DoctorLayout() {
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
         startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
-        invalidate('coverage_doctor_completed');
-        invalidate('coverage_doctor_upcoming');
+        invalidate(`doctor-coverage-history-${user.id}`);
+        invalidate(`doctor-coverage-upcoming-${user.id}`);
+        invalidate('doctor_earnings');
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
@@ -1161,8 +1164,9 @@ export default function DoctorLayout() {
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
         startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
-        invalidate('coverage_doctor_completed');
-        invalidate('coverage_doctor_upcoming');
+        invalidate(`doctor-coverage-history-${user.id}`);
+        invalidate(`doctor-coverage-upcoming-${user.id}`);
+        invalidate('doctor_earnings');
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
