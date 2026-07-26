@@ -1734,6 +1734,7 @@ export default function RequesterHomeScreen() {
   const handlePaymentConfirmedWithFallbackRef = useRef<(sessionId?: string) => void>(() => {});
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const startRequesterPaymentPollingRef = useRef<() => void>(() => {});
+  const endShiftInProgressRef = useRef(false);
 
 
 
@@ -1894,8 +1895,10 @@ export default function RequesterHomeScreen() {
     if (!activeSession || !['upcoming', 'paused'].includes(activeSession.status)) return;
     console.log('[Requester] upcoming/paused poll — starting interval, status:', activeSession.status);
     const id = setInterval(() => {
-      console.log('[Requester] upcoming/paused poll — tick, fetching active session');
-      fetchActiveSession();
+      if (!endShiftInProgressRef.current) {
+        console.log('[Requester] upcoming/paused poll — tick, fetching active session');
+        fetchActiveSession();
+      }
     }, POLL_INTERVAL);
     return () => clearInterval(id);
   }, [activeSession?.status, activeSession?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2928,18 +2931,26 @@ export default function RequesterHomeScreen() {
   const handleConfirmEndShift = async () => {
     if (!activeSession) return;
     const sid = activeSession.id;
+    endShiftInProgressRef.current = true;
+    // Clear from paid/dismissed sets so day 2+ of multi-day shifts can trigger the overlay again
+    _requesterPaidSessions.delete(sid);
+    _requesterDismissedSessions.delete(sid);
     console.log('[Requester] handleConfirmEndShift: ending shift for session', sid);
     setShowEndShiftModal(false);
     try {
       const data = await callSessionEdge('end-shift', sid);
       console.log('[Requester] end-shift response:', JSON.stringify(data));
-      const updated = data?.session as Partial<CoverageSession>;
-      if (updated) {
-        // Ensure price from backend is merged in (covers multi-day total)
-        if (updated.price != null) {
-          console.log('[Requester] end-shift updated price from backend:', updated.price);
-        }
-        setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      const updated = data?.session as Partial<CoverageSession> | undefined;
+      // Always transition to payment_pending — do not gate on data.session being truthy.
+      // If data.session is null (edge case), we still know the API succeeded and the session
+      // is now payment_pending. The payment card must render.
+      setActiveSession((prev) => prev ? {
+        ...prev,
+        ...(updated ?? {}),
+        status: 'payment_pending',
+      } : prev);
+      if (updated?.price != null) {
+        console.log('[Requester] end-shift updated price from backend:', updated.price);
       }
       console.log('[Requester] Starting end-shift poll for session:', sid);
       PollingManager.start('end-shift', async () => {
@@ -2949,7 +2960,6 @@ export default function RequesterHomeScreen() {
           .eq('id', sid)
           .maybeSingle();
         if (s?.status === 'payment_pending' || s?.status === 'completed' || s?.status === 'requester_paid') {
-          fetchActiveSessionRef.current();
           return true;
         }
         return false;
@@ -2957,6 +2967,8 @@ export default function RequesterHomeScreen() {
     } catch (e: any) {
       console.error('[Requester] end-shift failed:', e.message);
       Alert.alert('End Shift Failed', e.message || 'Something went wrong. Please try again.');
+    } finally {
+      endShiftInProgressRef.current = false;
     }
   };
 
