@@ -390,9 +390,7 @@ export default function DoctorLayout() {
   // Background recovery refs
   const wasOnlineRef = useRef(false);
   const doctorBackgroundedAtRef = useRef<number>(0);
-  // Payment polling fallback refs
-  const paymentPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const paymentPollAttemptsRef = useRef(0);
+
 
   const callEdge = useCallback(async (fn: string, body?: object) => {
     try {
@@ -495,17 +493,10 @@ export default function DoctorLayout() {
     setShowDoctorRating(true);
   }, [activeSessionIdRef]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Payment polling fallback: polls get-active-session every 5s for up to 30s ──
+  // ── Payment polling fallback: polls get-active-session every 5s (no cap) ──
   const startPaymentPolling = useCallback((sessionId: string, hospitalName: string, amount: number) => {
-    // Clear any existing poll
-    if (paymentPollRef.current) {
-      clearInterval(paymentPollRef.current);
-      paymentPollRef.current = null;
-    }
-    paymentPollAttemptsRef.current = 0;
-    console.log('[Doctor] startPaymentPolling — polling for paid status', { sessionId });
-    paymentPollRef.current = setInterval(async () => {
-      paymentPollAttemptsRef.current += 1;
+    console.log('[Doctor] startPaymentPolling — polling for paid status (no cap)', { sessionId });
+    PollingManager.start('payment-confirm', async () => {
       try {
         const res = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=doctor`, {});
         if (res.ok) {
@@ -514,28 +505,18 @@ export default function DoctorLayout() {
           const paidStatuses = ['settled', 'requester_paid', 'payment_complete'];
           if (snap && paidStatuses.includes(snap.status)) {
             console.log('[Doctor] paymentPoll — paid status confirmed:', snap.status, '— showing rating overlay');
-            if (paymentPollRef.current) {
-              clearInterval(paymentPollRef.current);
-              paymentPollRef.current = null;
-            }
             const resolvedId = sessionId || snap.id;
             const resolvedHospital = hospitalName || (snap.hospital_name ?? '');
             const resolvedAmount = amount || (snap.total_cost ?? 0);
             void maybeShowDoctorRating(resolvedId, resolvedHospital, resolvedAmount);
-            return;
+            return true;
           }
         }
       } catch {
         // non-fatal
       }
-      if (paymentPollAttemptsRef.current >= 6) {
-        console.log('[Doctor] paymentPoll — max attempts reached, stopping');
-        if (paymentPollRef.current) {
-          clearInterval(paymentPollRef.current);
-          paymentPollRef.current = null;
-        }
-      }
-    }, 5000);
+      return false;
+    });
   }, [maybeShowDoctorRating]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startPaymentPollingRef = useRef(startPaymentPolling);
@@ -697,14 +678,10 @@ export default function DoctorLayout() {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Cleanup PollingManager and payment poll on unmount ──────────────────────
+  // ─── Cleanup PollingManager on unmount ──────────────────────────────────────
   useEffect(() => {
     return () => {
       PollingManager.stopAll();
-      if (paymentPollRef.current) {
-        clearInterval(paymentPollRef.current);
-        paymentPollRef.current = null;
-      }
     };
   }, []);
 
@@ -1019,6 +996,8 @@ export default function DoctorLayout() {
         })
         .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
           console.log('[Doctor] upcoming session started:', session.id);
+          supabase.removeChannel(ch);
+          map.delete(session.id);
           const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
           setActiveSession((prev) => {
             if (prev && prev.status === 'active') return prev;
@@ -1127,6 +1106,23 @@ export default function DoctorLayout() {
         startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
         invalidate('coverage_doctor_completed');
         invalidate('coverage_doctor_upcoming');
+      })
+      .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
+        setActiveSession(null);
+        setActiveJobCount((prev) => Math.max(0, prev - 1));
+        reconcileUpcomingRef.current();
+        PollingManager.start('cancel-confirm-user', async () => {
+          const { data: s } = await supabase
+            .from('coverage_sessions')
+            .select('status')
+            .eq('id', activeSessionIdRef.current ?? '')
+            .maybeSingle();
+          if (!s || s.status === 'cancelled') {
+            reconcileUpcomingRef.current();
+            return true;
+          }
+          return false;
+        });
       })
       .subscribe((status) => {
         // subscription status — no logging needed

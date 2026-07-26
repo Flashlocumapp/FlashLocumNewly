@@ -1455,9 +1455,20 @@ export default function RequesterHomeScreen() {
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         console.log('[Requester] requester-user channel SHIFT_CANCELLED received');
         PollingManager.stop('cancel');
-        const sid = activeSessionRef.current?.id;
-        if (sid) PollingManager.stop(`cancel-watch-${sid}`);
         setActiveSession(null);
+        PollingManager.start('cancel-confirm', async () => {
+          const sid = activeSessionRef.current?.id ?? '';
+          if (!sid) return true;
+          const { data: s } = await supabase
+            .from('coverage_sessions')
+            .select('status')
+            .eq('id', sid)
+            .maybeSingle();
+          if (!s || s.status === 'cancelled') {
+            return true;
+          }
+          return false;
+        });
       })
       .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
         // A session was created — if we're in matching state, confirm the match
@@ -1485,9 +1496,20 @@ export default function RequesterHomeScreen() {
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
         console.log('[Requester] requester channel SHIFT_CANCELLED received — doctor cancelled');
         PollingManager.stop('cancel');
-        const sid = activeSessionRef.current?.id;
-        if (sid) PollingManager.stop(`cancel-watch-${sid}`);
         setActiveSession(null);
+        PollingManager.start('cancel-confirm', async () => {
+          const sid = activeSessionRef.current?.id ?? '';
+          if (!sid) return true;
+          const { data: s } = await supabase
+            .from('coverage_sessions')
+            .select('status')
+            .eq('id', sid)
+            .maybeSingle();
+          if (!s || s.status === 'cancelled') {
+            return true;
+          }
+          return false;
+        });
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -1677,9 +1699,7 @@ export default function RequesterHomeScreen() {
   const [submittingRating, setSubmittingRating] = useState(false);
   const [ratingError, setRatingError] = useState('');
   const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  // Payment polling fallback refs
-  const paymentPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const paymentPollAttemptsRef = useRef(0);
+
 
   // Realtime refs for matching
   const matchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1789,39 +1809,7 @@ export default function RequesterHomeScreen() {
     // this keeps the session channel alive after payment_confirmed fires.
   }, [activeSession?.id]);
 
-  // ── Cancel-watch poll — catches SHIFT_CANCELLED if broadcast is missed (either side cancels) ──
-  useEffect(() => {
-    if (!activeSessionId) return;
-    const sid = activeSessionId;
-    const key = `cancel-watch-${sid}`;
-    if (PollingManager.isRunning(key)) return;
 
-    PollingManager.start(key, async () => {
-      // Only poll if there is still an active session to watch
-      const current = activeSessionRef.current;
-      if (!current || current.id !== sid) {
-        return true; // session already gone — stop polling
-      }
-      if (current.status === 'cancelled') {
-        setActiveSession(null);
-        return true;
-      }
-      const { data: s } = await supabase
-        .from('coverage_sessions')
-        .select('status')
-        .eq('id', sid)
-        .maybeSingle();
-      if (!s || s.status === 'cancelled') {
-        setActiveSession(null);
-        return true;
-      }
-      return false;
-    });
-
-    return () => {
-      PollingManager.stop(key);
-    };
-  }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── On mount — restore session state ────────────────────────────────────────
   useEffect(() => {
@@ -1877,10 +1865,6 @@ export default function RequesterHomeScreen() {
     const sub = AppState.addEventListener('change', handleAppStateChange);
     return () => {
       sub.remove();
-      if (paymentPollRef.current) {
-        clearInterval(paymentPollRef.current);
-        paymentPollRef.current = null;
-      }
     };
   }, [fetchActiveSession, fetchOnlineDoctors]);
 
@@ -1963,9 +1947,20 @@ export default function RequesterHomeScreen() {
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         PollingManager.stop('cancel');
-        const sid = activeSessionRef.current?.id ?? activeSessionId;
-        if (sid) PollingManager.stop(`cancel-watch-${sid}`);
         setActiveSession(null);
+        PollingManager.start('cancel-confirm', async () => {
+          const sid = activeSessionRef.current?.id ?? '';
+          if (!sid) return true;
+          const { data: s } = await supabase
+            .from('coverage_sessions')
+            .select('status')
+            .eq('id', sid)
+            .maybeSingle();
+          if (!s || s.status === 'cancelled') {
+            return true;
+          }
+          return false;
+        });
       })
       .subscribe((status) => {
       });
@@ -2695,17 +2690,10 @@ export default function RequesterHomeScreen() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Requester payment polling fallback: polls get-active-session every 5s for up to 30s ──
+  // ── Requester payment polling fallback: polls get-active-session every 5s (no cap) ──
   const startRequesterPaymentPolling = useCallback(() => {
-    // Clear any existing poll
-    if (paymentPollRef.current) {
-      clearInterval(paymentPollRef.current);
-      paymentPollRef.current = null;
-    }
-    paymentPollAttemptsRef.current = 0;
-    console.log('[Requester] startRequesterPaymentPolling — polling for paid status');
-    paymentPollRef.current = setInterval(async () => {
-      paymentPollAttemptsRef.current += 1;
+    console.log('[Requester] startRequesterPaymentPolling — polling for paid status (no cap)');
+    PollingManager.start('payment-confirm', async () => {
       try {
         const res = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=requester`, {});
         if (res.ok) {
@@ -2714,28 +2702,17 @@ export default function RequesterHomeScreen() {
           const paidStatuses = ['requester_paid', 'settled', 'payment_complete'];
           if (snap && paidStatuses.includes(snap.status)) {
             console.log('[Requester] paymentPoll — paid status confirmed:', snap.status, '— showing overlay');
-            if (paymentPollRef.current) {
-              clearInterval(paymentPollRef.current);
-              paymentPollRef.current = null;
-            }
-            // Only show if not already showing and not already handled
             if (!_requesterPaidSessions.has(snap.id) && !_requesterDismissedSessions.has(snap.id)) {
               handlePaymentConfirmedWithFallback(snap.id);
             }
-            return;
+            return true;
           }
         }
       } catch {
         // non-fatal
       }
-      if (paymentPollAttemptsRef.current >= 6) {
-        console.log('[Requester] paymentPoll — max attempts reached, stopping');
-        if (paymentPollRef.current) {
-          clearInterval(paymentPollRef.current);
-          paymentPollRef.current = null;
-        }
-      }
-    }, 5000);
+      return false;
+    });
   }, [handlePaymentConfirmedWithFallback]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep refs in sync so effects declared before these callbacks can call them without stale closures
