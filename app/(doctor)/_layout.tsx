@@ -856,7 +856,6 @@ export default function DoctorLayout() {
             .eq('id', activeSessionIdRef.current ?? '')
             .maybeSingle();
           if (s?.status === 'active') {
-            await fetchActiveSession();
             return true;
           }
           return false;
@@ -1031,7 +1030,6 @@ export default function DoctorLayout() {
               .eq('id', session.id)
               .maybeSingle();
             if (s?.status === 'active') {
-              await fetchActiveSession();
               return true;
             }
             return false;
@@ -1079,7 +1077,6 @@ export default function DoctorLayout() {
                 .eq('id', session.id)
                 .maybeSingle();
               if (s?.status === 'active') {
-                await fetchActiveSession();
                 return true;
               }
               return false;
