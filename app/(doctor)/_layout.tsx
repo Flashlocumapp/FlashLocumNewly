@@ -797,38 +797,6 @@ export default function DoctorLayout() {
     return () => clearInterval(id);
   }, [activeSessionId, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Cancel-watch poll — catches SHIFT_CANCELLED if broadcast is missed ──
-  // Runs for every upcoming session. Stops itself when the session disappears from DB.
-  useEffect(() => {
-    if (upcomingSessions.length === 0) return;
-
-    for (const session of upcomingSessions) {
-      const key = `cancel-upcoming-${session.id}`;
-      if (PollingManager.isRunning(key)) continue;
-      PollingManager.start(key, async () => {
-        const { data: s } = await supabase
-          .from('coverage_sessions')
-          .select('status')
-          .eq('id', session.id)
-          .maybeSingle();
-        if (!s || s.status === 'cancelled') {
-          // Session gone or cancelled — remove from list
-          setUpcomingSessions((prev) => prev.filter((ss) => ss.id !== session.id));
-          setActiveJobCount((prev) => Math.max(0, prev - 1));
-          return true; // stop polling
-        }
-        return false;
-      });
-    }
-
-    // Stop polls for sessions no longer in the list
-    return () => {
-      const currentIds = new Set(upcomingSessions.map((s) => s.id));
-      // Note: we only stop polls for sessions that have been removed.
-      // The PollingManager.start() call above already handles dedup via isRunning().
-    };
-  }, [upcomingSessions.map(s => s.id).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── Realtime subscription — dispatch channel ──
   useEffect(() => {
     if (!user) return;
@@ -892,6 +860,18 @@ export default function DoctorLayout() {
         fetchActiveSession();
         // Remove the now-active session from upcoming
         reconcileUpcomingRef.current();
+        PollingManager.start(`start-confirm-active`, async () => {
+          const { data: s } = await supabase
+            .from('coverage_sessions')
+            .select('status')
+            .eq('id', activeSessionIdRef.current ?? '')
+            .maybeSingle();
+          if (s?.status === 'active') {
+            await fetchActiveSession();
+            return true;
+          }
+          return false;
+        });
       })
       .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
         const updated = payload?.payload?.session as CoverageSession | undefined;
@@ -900,6 +880,18 @@ export default function DoctorLayout() {
         }
         // Always re-fetch to confirm — optimistic update fires first, re-fetch corrects within ~300ms
         fetchActiveSession();
+        PollingManager.start('pause-confirm', async () => {
+          const { data: s } = await supabase
+            .from('coverage_sessions')
+            .select('status')
+            .eq('id', activeSessionIdRef.current ?? '')
+            .maybeSingle();
+          if (s?.status === 'paused') {
+            await fetchActiveSession();
+            return true;
+          }
+          return false;
+        });
       })
       .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
         const updated = payload?.payload?.session as CoverageSession | undefined;
@@ -908,6 +900,18 @@ export default function DoctorLayout() {
         }
         // Always re-fetch to confirm — optimistic update fires first, re-fetch corrects within ~300ms
         fetchActiveSession();
+        PollingManager.start('resume-confirm', async () => {
+          const { data: s } = await supabase
+            .from('coverage_sessions')
+            .select('status')
+            .eq('id', activeSessionIdRef.current ?? '')
+            .maybeSingle();
+          if (s?.status === 'active') {
+            await fetchActiveSession();
+            return true;
+          }
+          return false;
+        });
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
         const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
@@ -952,6 +956,18 @@ export default function DoctorLayout() {
         setActiveJobCount((prev) => Math.max(0, prev - 1));
         // Reconcile upcoming — removes any cancelled session from the list
         reconcileUpcomingRef.current();
+        PollingManager.start('cancel-confirm', async () => {
+          const { data: s } = await supabase
+            .from('coverage_sessions')
+            .select('status')
+            .eq('id', activeSessionIdRef.current ?? '')
+            .maybeSingle();
+          if (!s || s.status === 'cancelled') {
+            reconcileUpcomingRef.current();
+            return true;
+          }
+          return false;
+        });
       })
       .subscribe((status) => {
         console.log('[Doctor] session channel subscribe status:', status, 'for session:', activeSessionId);
@@ -991,6 +1007,15 @@ export default function DoctorLayout() {
           setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
           setActiveJobCount((prev) => Math.max(0, prev - 1));
           PollingManager.stop(`cancel-upcoming-${session.id}`);
+          PollingManager.start(`cancel-confirm-${session.id}`, async () => {
+            const { data: s } = await supabase
+              .from('coverage_sessions')
+              .select('status')
+              .eq('id', session.id)
+              .maybeSingle();
+            if (!s || s.status === 'cancelled') return true;
+            return false;
+          });
         })
         .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
           console.log('[Doctor] upcoming session started:', session.id);
@@ -1003,6 +1028,18 @@ export default function DoctorLayout() {
           setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
           reconcileUpcomingRef.current();
           fetchActiveSession();
+          PollingManager.start(`start-confirm-${session.id}`, async () => {
+            const { data: s } = await supabase
+              .from('coverage_sessions')
+              .select('id, status')
+              .eq('id', session.id)
+              .maybeSingle();
+            if (s?.status === 'active') {
+              await fetchActiveSession();
+              return true;
+            }
+            return false;
+          });
         })
         .subscribe();
       map.set(session.id, ch);
