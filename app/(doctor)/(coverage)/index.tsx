@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
+import { COLORS, TYPOGRAPHY, SPACING, RADIUS, DOCTOR_CANCEL_REASONS } from '@/constants/Theme';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
@@ -676,7 +676,7 @@ export default function DoctorCoverageScreen() {
           <Text style={{ fontSize: 14, color: '#8E8E93', marginBottom: 24 }}>
             Help us improve by letting us know why you cancelled.
           </Text>
-          {['Personal emergency', 'Scheduling conflict', 'Health reasons', 'Transport issues', 'Other'].map((reason) => (
+          {DOCTOR_CANCEL_REASONS.map((reason) => (
             <TouchableOpacity
               key={reason}
               onPress={() => handleCancelReasonSelected(reason)}

@@ -102,3 +102,11 @@ export const SHADOWS = {
     default: {},
   }),
 };
+
+export const DOCTOR_CANCEL_REASONS = [
+  'Personal emergency',
+  'Medical emergency',
+  'Transport issue',
+  'Double booking',
+  'Other',
+] as const;

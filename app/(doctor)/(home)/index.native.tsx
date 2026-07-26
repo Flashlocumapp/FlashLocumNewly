@@ -32,6 +32,7 @@ import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 import { getCached, setCached } from '@/utils/tabCache';
 import PollingManager from '../../../utils/pollingManager';
 import { buildShiftPillText, EnvironmentBadge } from '@/components/DoctorUpcomingCoverageCard';
+import { DOCTOR_CANCEL_REASONS } from '@/constants/Theme';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
@@ -759,7 +760,7 @@ export default function DoctorHomeScreen() {
             <Text style={{ fontSize: 14, color: '#8E8E93', marginBottom: 24 }}>
               Help us improve by letting us know why you cancelled.
             </Text>
-            {['Personal emergency', 'Medical emergency', 'Transport issue', 'Double booking', 'Other'].map((reason) => (
+            {DOCTOR_CANCEL_REASONS.map((reason) => (
               <TouchableOpacity
                 key={reason}
                 onPress={() => handleCancelReasonSelected(reason)}
