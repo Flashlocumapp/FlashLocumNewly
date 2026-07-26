@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import useSupercluster from 'use-supercluster';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -1525,6 +1526,12 @@ export default function RequesterHomeScreen() {
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mapRef = useRef<MapView>(null);
+  const [mapRegion, setMapRegion] = useState<{
+    latitude: number;
+    longitude: number;
+    latitudeDelta: number;
+    longitudeDelta: number;
+  }>(LAGOS_REGION);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(
     _cachedRequesterCoords
   );
@@ -1532,6 +1539,41 @@ export default function RequesterHomeScreen() {
   const [onlineDoctors, setOnlineDoctors] = useState<{ id: string; lat: number; lng: number }[]>([]);
 
   const locationSub = useRef<Location.LocationSubscription | null>(null);
+
+  const doctorPoints = useMemo(() => {
+    return onlineDoctors.map((doc) => ({
+      type: 'Feature' as const,
+      properties: { cluster: false, doctorId: doc.id },
+      geometry: {
+        type: 'Point' as const,
+        coordinates: [doc.lng, doc.lat],
+      },
+    }));
+  }, [onlineDoctors]);
+
+  const bounds = useMemo((): [number, number, number, number] => {
+    const { latitude, longitude, latitudeDelta, longitudeDelta } = mapRegion;
+    return [
+      longitude - longitudeDelta,   // west
+      latitude - latitudeDelta,     // south
+      longitude + longitudeDelta,   // east
+      latitude + latitudeDelta,     // north
+    ];
+  }, [mapRegion]);
+
+  const zoom = useMemo(() => {
+    return Math.min(
+      Math.round(Math.log(360 / mapRegion.longitudeDelta) / Math.LN2),
+      20
+    );
+  }, [mapRegion]);
+
+  const { clusters, supercluster } = useSupercluster({
+    points: doctorPoints,
+    bounds,
+    zoom,
+    options: { radius: 60, maxZoom: 17 },
+  });
 
   const fetchOnlineDoctors = useCallback(async () => {
     const { data, error } = await supabase
@@ -3088,7 +3130,10 @@ export default function RequesterHomeScreen() {
         style={StyleSheet.absoluteFillObject}
         provider={PROVIDER_GOOGLE}
         initialRegion={_cachedRequesterRegion ?? LAGOS_REGION}
-        onRegionChangeComplete={(region) => { _cachedRequesterRegion = region; }}
+        onRegionChangeComplete={(region) => {
+          _cachedRequesterRegion = region;
+          setMapRegion(region);
+        }}
         customMapStyle={MINIMALIST_MAP_STYLE}
         minZoomLevel={10}
         maxZoomLevel={18}
@@ -3099,16 +3144,115 @@ export default function RequesterHomeScreen() {
             <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#F59E0B', borderWidth: 2.5, borderColor: '#FFFFFF' }} />
           </Marker>
         )}
-        {onlineDoctors.map((doc) => (
-          <Marker
-            key={doc.id}
-            coordinate={{ latitude: doc.lat, longitude: doc.lng }}
-            anchor={{ x: 0.5, y: 0.5 }}
-            tracksViewChanges={false}
-          >
-            <MaterialCommunityIcons name="stethoscope" size={22} color="#1C1C1E" />
-          </Marker>
-        ))}
+        {clusters.map((point) => {
+          const [lng, lat] = point.geometry.coordinates;
+          const { cluster: isCluster, point_count: pointCount } = point.properties as any;
+
+          if (isCluster) {
+            return (
+              <Marker
+                key={`cluster-${point.id}`}
+                coordinate={{ latitude: lat, longitude: lng }}
+                anchor={{ x: 0.5, y: 0.5 }}
+                tracksViewChanges={false}
+                onPress={() => {
+                  console.log('[Map] Cluster marker pressed', { clusterId: point.id, pointCount });
+                  if (!supercluster) return;
+                  const expansionZoom = Math.min(
+                    supercluster.getClusterExpansionZoom(point.id as number),
+                    20
+                  );
+                  const newRegion = {
+                    latitude: lat,
+                    longitude: lng,
+                    latitudeDelta: 360 / Math.pow(2, expansionZoom) * 0.5,
+                    longitudeDelta: 360 / Math.pow(2, expansionZoom) * 0.5,
+                  };
+                  mapRef.current?.animateToRegion(newRegion, 400);
+                }}
+              >
+                <View style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 26,
+                  backgroundColor: '#1C1C1E',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 4,
+                  elevation: 5,
+                }}>
+                  <MaterialCommunityIcons name="stethoscope" size={16} color="#FFFFFF" />
+                  <Text style={{
+                    color: '#FFFFFF',
+                    fontSize: 13,
+                    fontWeight: '700',
+                    lineHeight: 15,
+                    marginTop: 1,
+                  }}>
+                    {pointCount}
+                  </Text>
+                </View>
+              </Marker>
+            );
+          }
+
+          // Individual doctor marker
+          const doctorId = (point.properties as any).doctorId;
+          return (
+            <Marker
+              key={`doctor-${doctorId}`}
+              coordinate={{ latitude: lat, longitude: lng }}
+              anchor={{ x: 0.5, y: 1.0 }}
+              tracksViewChanges={false}
+            >
+              <View style={{ alignItems: 'center' }}>
+                {/* Teardrop pin shape */}
+                <View style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: '#FFFFFF',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 3,
+                  elevation: 4,
+                }}>
+                  <MaterialCommunityIcons name="stethoscope" size={18} color="#1C1C1E" />
+                  {/* Green online dot */}
+                  <View style={{
+                    position: 'absolute',
+                    top: 2,
+                    right: 2,
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: '#22C55E',
+                    borderWidth: 1.5,
+                    borderColor: '#FFFFFF',
+                  }} />
+                </View>
+                {/* Pin tail */}
+                <View style={{
+                  width: 0,
+                  height: 0,
+                  borderLeftWidth: 5,
+                  borderRightWidth: 5,
+                  borderTopWidth: 7,
+                  borderLeftColor: 'transparent',
+                  borderRightColor: 'transparent',
+                  borderTopColor: '#FFFFFF',
+                  marginTop: -1,
+                }} />
+              </View>
+            </Marker>
+          );
+        })}
       </MapView>
 
 
