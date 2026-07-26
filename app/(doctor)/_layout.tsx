@@ -878,9 +878,6 @@ export default function DoctorLayout() {
         }
         // Remove from upcoming atomically — prevents the upcoming card staying visible alongside the active card
         setUpcomingSessions((prev) => prev.filter((s) => s.id !== (updated?.id ?? activeSessionIdRef.current)));
-        // Always re-fetch to confirm — optimistic update fires first, re-fetch corrects within ~300ms
-        // This matches the identical pattern used by SHIFT_PAUSED and SHIFT_RESUMED which work reliably
-        fetchActiveSession();
         PollingManager.start(`start-confirm-active`, async () => {
           const { data: s } = await supabase
             .from('coverage_sessions')
