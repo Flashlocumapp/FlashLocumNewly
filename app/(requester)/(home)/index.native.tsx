@@ -1898,13 +1898,17 @@ export default function RequesterHomeScreen() {
       )
       .subscribe((status) => {
         console.log('[OnlineDoctors] Postgres Changes channel status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('[OnlineDoctors] Postgres Changes channel SUBSCRIBED, re-fetching online doctors');
+          fetchOnlineDoctors();
+        }
       });
 
     return () => {
       console.log('[OnlineDoctors] Unsubscribing from doctor-profiles-presence Postgres Changes channel');
       supabase.removeChannel(pgCh);
     };
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, fetchOnlineDoctors]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Periodic background poll — keeps online doctors list fresh ──
   // Catches any go-online/go-offline broadcast missed due to network gaps or
@@ -2457,6 +2461,19 @@ export default function RequesterHomeScreen() {
         signalScreenReady();
       }
     }, [signalScreenReady])
+  );
+
+  // ─── Re-fetch online doctors on tab focus (after first mount) ────────────────
+  const onlineDoctorsFocusRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!onlineDoctorsFocusRef.current) {
+        onlineDoctorsFocusRef.current = true;
+        return; // skip first focus — already fetched on mount via broadcast channel
+      }
+      console.log('[OnlineDoctors] Tab focused, re-fetching online doctors');
+      fetchOnlineDoctors();
+    }, [fetchOnlineDoctors])
   );
 
   // ─── Sheet height animation ───────────────────────────────────────────────────

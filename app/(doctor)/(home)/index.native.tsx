@@ -362,6 +362,36 @@ export default function DoctorHomeScreen() {
     return () => { active = false; };
   }, []);
 
+  // ─── Send location update when GPS resolves while already online with null coords ──
+  // If the doctor tapped Go Online before GPS resolved, go-online was called with
+  // undefined coords → lat/lng = null in DB → invisible on requester map.
+  // This effect fires when userLocation first becomes non-null and re-calls go-online
+  // with the resolved coords so the doctor appears on the map.
+  const sentInitialLocationRef = useRef(false);
+  useEffect(() => {
+    if (!userLocation) return;
+    if (!isOnline) return;
+    if (sentInitialLocationRef.current) return;
+    sentInitialLocationRef.current = true;
+    const coords = { lat: userLocation.latitude, lng: userLocation.longitude };
+    console.log('[DoctorHome] GPS resolved while online — sending location update to go-online:', coords);
+    fetchWithAuth(`${EDGE_BASE}/go-online`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(coords),
+    }).catch((err) => {
+      console.log('[DoctorHome] Failed to send initial location update:', err?.message);
+    });
+  }, [userLocation, isOnline]);
+
+  // Reset sentInitialLocationRef when doctor goes offline so the next go-online
+  // cycle can send the location again if GPS resolves after the toggle.
+  useEffect(() => {
+    if (!isOnline) {
+      sentInitialLocationRef.current = false;
+    }
+  }, [isOnline]);
+
   // ─── tracksViewChanges: reset to true briefly when marker appears ───────────
   const showMarker = isOnline && userLocation !== null;
   useEffect(() => {
