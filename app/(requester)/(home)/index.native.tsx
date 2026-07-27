@@ -824,10 +824,19 @@ function RequesterPaymentCard({
   session,
   bottomPadding,
   onPaymentConfirmed,
+  initialPayment,
 }: {
   session: CoverageSession;
   bottomPadding: number;
   onPaymentConfirmed: () => void;
+  initialPayment?: {
+    account_number: string;
+    bank_name: string;
+    account_name: string | null;
+    account_reference: string;
+    expiry_at: string;
+    amount_naira: number;
+  } | null;
 }) {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -835,7 +844,8 @@ function RequesterPaymentCard({
   // Payment intent state — always sourced from backend
   const [paymentIntent, setPaymentIntent] = useState<import('@/types').PaymentIntent | null>(null);
   const paymentIntentRef = useRef<import('@/types').PaymentIntent | null>(null);
-  const [loadingIntent, setLoadingIntent] = useState(true);
+  const [loadingIntent, setLoadingIntent] = useState(!initialPayment);
+  const autoRefreshAttemptedRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
   // paymentConfirmed is now driven entirely by the parent via onPaymentConfirmed
@@ -895,29 +905,57 @@ function RequesterPaymentCard({
     timerRef.current = setInterval(tick, 1000);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Fetch payment intent from Supabase ──────────────────────────────────
+  // ─── Fetch payment intent from Supabase (with retry loop) ───────────────
   const fetchPaymentIntent = useCallback(async () => {
     setLoadingIntent(true);
-    try {
-      const { data, error } = await supabase
-        .from('payment_intents')
-        .select('*')
-        .eq('session_id', session.id)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+    const MAX_ATTEMPTS = 15; // 15 × 2s = 30s
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      try {
+        const { data } = await supabase
+          .from('payment_intents')
+          .select('*')
+          .eq('session_id', session.id)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
 
-      if (error) {
-        setPaymentIntent(null);
-      } else if (data) {
-        setPaymentIntent(data as import('@/types').PaymentIntent);
-        startCountdown(data.expiry_at);
+        if (data) {
+          // Row found — check if account details are populated
+          if (data.monnify_account_number) {
+            // Happy path — account details present
+            setPaymentIntent(data as import('@/types').PaymentIntent);
+            startCountdown(data.expiry_at);
+            setLoadingIntent(false);
+            return;
+          } else if (!autoRefreshAttemptedRef.current) {
+            // Row exists but Monnify failed — auto-trigger refresh once
+            autoRefreshAttemptedRef.current = true;
+            setLoadingIntent(false);
+            setPaymentIntent(data as import('@/types').PaymentIntent);
+            // Trigger refresh after a short delay to let the UI settle
+            setTimeout(() => { handleRefreshPaymentRef.current(); }, 500);
+            return;
+          } else {
+            // Already tried refresh — stop retrying
+            setPaymentIntent(data as import('@/types').PaymentIntent);
+            setLoadingIntent(false);
+            return;
+          }
+        }
+        // No row yet — wait 2s and retry (unless last attempt)
+        if (attempt < MAX_ATTEMPTS - 1) {
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      } catch (e: any) {
+        // Network error — wait 2s and retry
+        if (attempt < MAX_ATTEMPTS - 1) {
+          await new Promise(r => setTimeout(r, 2000));
+        }
       }
-    } catch (e: any) {
-    } finally {
-      setLoadingIntent(false);
     }
+    // Exhausted all retries — stop loading, leave paymentIntent null
+    setLoadingIntent(false);
   }, [session.id, startCountdown]);
 
   // ─── Refresh payment via edge function ───────────────────────────────────
@@ -967,13 +1005,38 @@ function RequesterPaymentCard({
     handleRefreshPaymentRef.current = handleRefreshPayment;
   }, [handleRefreshPayment]);
 
-  // ─── On mount: fetch intent + AppState foreground re-fetch ───────────────
+  // ─── On mount: seed from initialPayment or fetch from DB ─────────────────
   useEffect(() => {
-    fetchPaymentIntent();
+    if (initialPayment?.account_number) {
+      // Happy path — seed from end-shift response, no DB query needed
+      const pi: import('@/types').PaymentIntent = {
+        id: '',
+        session_id: session.id,
+        amount_naira: initialPayment.amount_naira,
+        monnify_account_number: initialPayment.account_number,
+        monnify_bank_name: initialPayment.bank_name,
+        monnify_account_name: initialPayment.account_name ?? null,
+        monnify_account_reference: initialPayment.account_reference,
+        monnify_transaction_reference: null,
+        status: 'pending',
+        expiry_at: initialPayment.expiry_at,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      setPaymentIntent(pi);
+      startCountdown(initialPayment.expiry_at);
+      setLoadingIntent(false);
+    } else {
+      // Fallback path — app restart, background recovery, or end-shift response had no payment
+      fetchPaymentIntent();
+    }
 
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active') {
-        fetchPaymentIntent();
+        // Only re-fetch if we don't already have account details
+        if (!paymentIntentRef.current?.monnify_account_number) {
+          fetchPaymentIntent();
+        }
       }
     };
     const sub = AppState.addEventListener('change', handleAppStateChange);
@@ -982,7 +1045,7 @@ function RequesterPaymentCard({
       sub.remove();
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [fetchPaymentIntent]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── One-time mount check: catches payment that happened while app was backgrounded ───
   useEffect(() => {
@@ -1044,6 +1107,41 @@ function RequesterPaymentCard({
     };
   }, [session.id, startCountdown]);
 
+  // ─── postgres_changes on payment_intents — guaranteed delivery path ──────
+  // Fires when end-shift inserts the row, independent of broadcast timing.
+  // Covers app-restart and background-recovery scenarios.
+  useEffect(() => {
+    const ch = supabase
+      .channel(`payment-intents-watch:${session.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'payment_intents',
+          filter: `session_id=eq.${session.id}`,
+        },
+        (payload) => {
+          const row = payload.new as import('@/types').PaymentIntent;
+          console.log('[RequesterPaymentCard] payment_intents INSERT via postgres_changes — account_number:', row.monnify_account_number);
+          if (row.monnify_account_number) {
+            setPaymentIntent(row);
+            startCountdown(row.expiry_at);
+            setLoadingIntent(false);
+          } else if (!autoRefreshAttemptedRef.current) {
+            // Row inserted but Monnify failed — auto-refresh once
+            autoRefreshAttemptedRef.current = true;
+            setPaymentIntent(row);
+            setLoadingIntent(false);
+            setTimeout(() => { handleRefreshPaymentRef.current(); }, 500);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(ch); };
+  }, [session.id, startCountdown]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Derived display values ───────────────────────────────────────────────
   const amountNaira = paymentIntent?.amount_naira ?? session.price;
   const amountDisplay = `₦${Number(amountNaira).toLocaleString()}`;
@@ -1054,6 +1152,7 @@ function RequesterPaymentCard({
 
   const countdownDisplay = refreshing ? 'Refreshing...' : countdown;
   const isLoading = loadingIntent && !paymentIntent;
+  const hasExhaustedRetry = !loadingIntent && !paymentIntent?.monnify_account_number && !refreshing;
 
   const handleCopy = async () => {
     await Clipboard.setStringAsync(accountNumber);
@@ -1142,7 +1241,7 @@ function RequesterPaymentCard({
               BANK
             </Text>
             <Text style={{ fontSize: 17, fontFamily: 'Inter_600SemiBold', color: loadingIntent ? '#8E8E93' : '#000000', marginBottom: 16 }}>
-              {loadingIntent ? 'Loading...' : (bankName || '—')}
+              {loadingIntent ? 'Generating...' : (bankName || '—')}
             </Text>
 
             <View style={{ height: 1, backgroundColor: '#F2F2F7', marginBottom: 16 }} />
@@ -1152,9 +1251,18 @@ function RequesterPaymentCard({
               ACCOUNT NUMBER
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: loadingIntent ? '#8E8E93' : '#000000', letterSpacing: 1 }}>
-                {loadingIntent ? '— — — —' : (accountNumber || '— — — —')}
-              </Text>
+              {loadingIntent ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <ActivityIndicator size="small" color="#8E8E93" />
+                  <Text style={{ fontSize: 15, fontFamily: 'Inter_400Regular', color: '#8E8E93' }}>
+                    Generating payment account...
+                  </Text>
+                </View>
+              ) : (
+                <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: '#000000', letterSpacing: 1 }}>
+                  {accountNumber || '— — — —'}
+                </Text>
+              )}
               {!loadingIntent && !!accountNumber && (
                 <TouchableOpacity
                   onPress={handleCopy}
@@ -1177,6 +1285,29 @@ function RequesterPaymentCard({
               )}
             </View>
 
+            {hasExhaustedRetry && (
+              <View style={{
+                backgroundColor: '#FFF2F2',
+                borderRadius: 10,
+                padding: 12,
+                marginTop: 8,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+              }}>
+                <Text style={{ fontSize: 13, color: '#FF3B30', fontFamily: 'Inter_400Regular', flex: 1 }}>
+                  Could not load payment details. Tap Refresh to try again.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => { autoRefreshAttemptedRef.current = false; handleRefreshPayment(); }}
+                  style={{ backgroundColor: '#FF3B30', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 }}
+                >
+                  <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>Refresh</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <View style={{ height: 1, backgroundColor: '#F2F2F7', marginBottom: 16 }} />
 
             {/* Account Name Row */}
@@ -1184,7 +1315,7 @@ function RequesterPaymentCard({
               ACCOUNT NAME
             </Text>
             <Text style={{ fontSize: 17, fontFamily: 'Inter_600SemiBold', color: loadingIntent ? '#8E8E93' : '#000000' }}>
-              {loadingIntent ? 'Loading...' : (paymentIntent?.monnify_account_name ?? 'FlashLocum')}
+              {loadingIntent ? 'Generating...' : (paymentIntent?.monnify_account_name ?? 'FlashLocum')}
             </Text>
           </View>
 
@@ -2655,6 +2786,7 @@ export default function RequesterHomeScreen() {
     setEnvironment('Normal');
     setNote('');
     setActiveRequestId(null);
+    setInitialPayment(null);
     transitionTo('idle');
   }, [transitionTo]);
 
@@ -2690,6 +2822,14 @@ export default function RequesterHomeScreen() {
   const [showEndShiftModal, setShowEndShiftModal] = useState(false);
   const [showPauseShiftModal, setShowPauseShiftModal] = useState(false);
   const [settledAmount, setSettledAmount] = useState<number | null>(null);
+  const [initialPayment, setInitialPayment] = useState<{
+    account_number: string;
+    bank_name: string;
+    account_name: string | null;
+    account_reference: string;
+    expiry_at: string;
+    amount_naira: number;
+  } | null>(null);
 
   const handleCancelRequest = async () => {
     setShowCancelModal(true);
@@ -2733,6 +2873,7 @@ export default function RequesterHomeScreen() {
       setConfirmedSession(snap);
       setShowPaymentSuccess(true);
     }
+    setInitialPayment(null);
     setActiveSession(null);
   }, []); // no deps — reads from ref so never goes stale
 
@@ -3007,6 +3148,13 @@ export default function RequesterHomeScreen() {
       const data = await callSessionEdge('end-shift', sid);
       console.log('[Requester] end-shift response:', JSON.stringify(data));
       const updated = data?.session as Partial<CoverageSession> | undefined;
+      // Seed payment details from response — eliminates race condition with DB insert
+      const paymentFromResponse = data?.payment ?? null;
+      if (paymentFromResponse?.account_number) {
+        setInitialPayment(paymentFromResponse);
+      } else {
+        setInitialPayment(null);
+      }
       // Always transition to payment_pending — do not gate on data.session being truthy.
       // If data.session is null (edge case), we still know the API succeeded and the session
       // is now payment_pending. The payment card must render.
@@ -3946,6 +4094,7 @@ export default function RequesterHomeScreen() {
               session={activeSession}
               bottomPadding={whiteCardPaddingBottom}
               onPaymentConfirmed={handlePaymentConfirmed}
+              initialPayment={initialPayment}
             />
           )}
 
