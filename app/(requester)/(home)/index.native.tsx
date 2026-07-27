@@ -33,6 +33,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
+import * as Font from 'expo-font';
 import * as Clipboard from 'expo-clipboard';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1765,9 +1766,19 @@ export default function RequesterHomeScreen() {
     _cachedRequesterCoords
   );
   const [userMarkerTracksViews, setUserMarkerTracksViews] = useState(true);
+  const [iconsReady, setIconsReady] = useState(() => Font.isLoaded('MaterialCommunityIcons'));
   const [onlineDoctors, setOnlineDoctors] = useState<{ id: string; lat: number; lng: number }[]>([]);
 
   const locationSub = useRef<Location.LocationSubscription | null>(null);
+
+  useEffect(() => {
+    if (iconsReady) return;
+    let cancelled = false;
+    Font.loadAsync(require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf'))
+      .then(() => { if (!cancelled) setIconsReady(true); })
+      .catch(() => { if (!cancelled) setIconsReady(true); }); // fail open — don't block forever
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const doctorPoints = useMemo(() => {
     return onlineDoctors.map((doc) => ({
@@ -3435,6 +3446,7 @@ export default function RequesterHomeScreen() {
           </Marker>
         )}
         {clusters.map((point) => {
+          if (!iconsReady) return null;
           const [lng, lat] = point.geometry.coordinates;
           const { cluster: isCluster, point_count: pointCount } = point.properties as any;
 
@@ -3444,7 +3456,7 @@ export default function RequesterHomeScreen() {
                 key={`cluster-${point.id}`}
                 coordinate={{ latitude: lat, longitude: lng }}
                 anchor={{ x: 0.5, y: 0.5 }}
-                tracksViewChanges={false}
+                tracksViewChanges={!iconsReady}
                 onPress={() => {
                   console.log('[Map] Cluster marker pressed', { clusterId: point.id, pointCount });
                   if (!supercluster) return;
@@ -3496,7 +3508,7 @@ export default function RequesterHomeScreen() {
               key={`doctor-${doctorId}`}
               coordinate={{ latitude: lat, longitude: lng }}
               anchor={{ x: 0.5, y: 1.0 }}
-              tracksViewChanges={false}
+              tracksViewChanges={!iconsReady}
             >
               <View style={{ alignItems: 'center' }}>
                 {/* Teardrop pin shape */}
