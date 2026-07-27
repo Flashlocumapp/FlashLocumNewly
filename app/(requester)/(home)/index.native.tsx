@@ -915,7 +915,6 @@ function RequesterPaymentCard({
           .from('payment_intents')
           .select('*')
           .eq('session_id', session.id)
-          .eq('status', 'pending')
           .order('created_at', { ascending: false })
           .limit(1)
           .single();
@@ -976,19 +975,34 @@ function RequesterPaymentCard({
       const payment = data?.payment;
       if (payment) {
         const snap = paymentIntentRef.current;
-        setPaymentIntent(snap ? {
-          ...snap,
-          id: payment.id ?? snap.id,
-          amount_naira: payment.amount_naira ?? snap.amount_naira,
-          monnify_account_number: payment.account_number ?? snap.monnify_account_number,
-          monnify_bank_name: payment.bank_name ?? snap.monnify_bank_name,
-          monnify_account_name: payment.account_name ?? snap.monnify_account_name ?? null,
-          monnify_account_reference: payment.account_reference ?? snap.monnify_account_reference,
-          expiry_at: payment.expiry_at ?? snap.expiry_at,
-        } : snap);
+        const base = snap ?? {
+          id: '',
+          session_id: session.id,
+          amount_naira: payment.amount_naira ?? 0,
+          monnify_account_number: null,
+          monnify_bank_name: null,
+          monnify_account_name: null,
+          monnify_account_reference: null,
+          monnify_transaction_reference: null,
+          status: 'pending' as const,
+          expiry_at: payment.expiry_at ?? new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        setPaymentIntent({
+          ...base,
+          id: payment.id ?? base.id,
+          amount_naira: payment.amount_naira ?? base.amount_naira,
+          monnify_account_number: payment.account_number ?? base.monnify_account_number,
+          monnify_bank_name: payment.bank_name ?? base.monnify_bank_name,
+          monnify_account_name: payment.account_name ?? base.monnify_account_name ?? null,
+          monnify_account_reference: payment.account_reference ?? base.monnify_account_reference,
+          expiry_at: payment.expiry_at ?? base.expiry_at,
+        });
         if (payment.expiry_at) {
           startCountdown(payment.expiry_at);
         }
+        setLoadingIntent(false);
       }
     } catch (e: any) {
     } finally {
@@ -1007,8 +1021,8 @@ function RequesterPaymentCard({
 
   // ─── On mount: seed from initialPayment or fetch from DB ─────────────────
   useEffect(() => {
-    if (initialPayment?.account_number) {
-      // Happy path — seed from end-shift response, no DB query needed
+    // If initialPayment arrives (or changes) and we don't yet have account details, apply it
+    if (initialPayment?.account_number && !paymentIntentRef.current?.monnify_account_number) {
       const pi: import('@/types').PaymentIntent = {
         id: '',
         session_id: session.id,
@@ -1026,8 +1040,11 @@ function RequesterPaymentCard({
       setPaymentIntent(pi);
       startCountdown(initialPayment.expiry_at);
       setLoadingIntent(false);
-    } else {
-      // Fallback path — app restart, background recovery, or end-shift response had no payment
+      return;
+    }
+
+    // First mount with no initialPayment — fall back to DB fetch
+    if (!paymentIntentRef.current?.monnify_account_number) {
       fetchPaymentIntent();
     }
 
@@ -1043,9 +1060,15 @@ function RequesterPaymentCard({
 
     return () => {
       sub.remove();
+    };
+  }, [initialPayment]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Cleanup timer on unmount ─────────────────────────────────────────────
+  useEffect(() => {
+    return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // ─── One-time mount check: catches payment that happened while app was backgrounded ───
   useEffect(() => {
@@ -1300,7 +1323,11 @@ function RequesterPaymentCard({
                   Could not load payment details. Tap Refresh to try again.
                 </Text>
                 <TouchableOpacity
-                  onPress={() => { autoRefreshAttemptedRef.current = false; handleRefreshPayment(); }}
+                  onPress={() => {
+                    autoRefreshAttemptedRef.current = false;
+                    setLoadingIntent(true);
+                    fetchPaymentIntent();
+                  }}
                   style={{ backgroundColor: '#FF3B30', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 }}
                 >
                   <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_600SemiBold' }}>Refresh</Text>
@@ -2786,7 +2813,6 @@ export default function RequesterHomeScreen() {
     setEnvironment('Normal');
     setNote('');
     setActiveRequestId(null);
-    setInitialPayment(null);
     transitionTo('idle');
   }, [transitionTo]);
 
@@ -2822,14 +2848,7 @@ export default function RequesterHomeScreen() {
   const [showEndShiftModal, setShowEndShiftModal] = useState(false);
   const [showPauseShiftModal, setShowPauseShiftModal] = useState(false);
   const [settledAmount, setSettledAmount] = useState<number | null>(null);
-  const [initialPayment, setInitialPayment] = useState<{
-    account_number: string;
-    bank_name: string;
-    account_name: string | null;
-    account_reference: string;
-    expiry_at: string;
-    amount_naira: number;
-  } | null>(null);
+
 
   const handleCancelRequest = async () => {
     setShowCancelModal(true);
@@ -2873,7 +2892,6 @@ export default function RequesterHomeScreen() {
       setConfirmedSession(snap);
       setShowPaymentSuccess(true);
     }
-    setInitialPayment(null);
     setActiveSession(null);
   }, []); // no deps — reads from ref so never goes stale
 
@@ -3150,18 +3168,15 @@ export default function RequesterHomeScreen() {
       const updated = data?.session as Partial<CoverageSession> | undefined;
       // Seed payment details from response — eliminates race condition with DB insert
       const paymentFromResponse = data?.payment ?? null;
-      if (paymentFromResponse?.account_number) {
-        setInitialPayment(paymentFromResponse);
-      } else {
-        setInitialPayment(null);
-      }
       // Always transition to payment_pending — do not gate on data.session being truthy.
       // If data.session is null (edge case), we still know the API succeeded and the session
       // is now payment_pending. The payment card must render.
+      // Store _initialPayment atomically on the session object to avoid timing gaps.
       setActiveSession((prev) => prev ? {
         ...prev,
         ...(updated ?? {}),
         status: 'payment_pending',
+        _initialPayment: paymentFromResponse?.account_number ? paymentFromResponse : null,
       } : prev);
       if (updated?.price != null) {
         console.log('[Requester] end-shift updated price from backend:', updated.price);
@@ -4094,7 +4109,7 @@ export default function RequesterHomeScreen() {
               session={activeSession}
               bottomPadding={whiteCardPaddingBottom}
               onPaymentConfirmed={handlePaymentConfirmed}
-              initialPayment={initialPayment}
+              initialPayment={(activeSession as any)._initialPayment ?? null}
             />
           )}
 
