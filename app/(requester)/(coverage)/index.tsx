@@ -12,6 +12,8 @@ import {
   TextInput,
   KeyboardAvoidingView,
   PanResponder,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
@@ -23,6 +25,8 @@ import { useTabData } from '@/hooks/useTabData';
 
 const SUPABASE_URL = 'https://juilousufwlsiqdcgllu.supabase.co';
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
+
+const COVERAGE_CACHE_STALE_MS = 60_000;
 
 type CoverageSession = {
   id: string;
@@ -431,6 +435,8 @@ export default function RequesterCoverageScreen() {
 
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
   const [selectedSession, setSelectedSession] = useState<CoverageSession | null>(null);
+  const lastFetchedAtRef = useRef<number>(0);
+  const wasBackgroundedRef = useRef(false);
 
   const cacheKey = `requester-coverage-${user?.id ?? 'anon'}`;
 
@@ -470,19 +476,37 @@ export default function RequesterCoverageScreen() {
 
       return sessions;
     }, [user?.id]), // eslint-disable-line react-hooks/exhaustive-deps
-    alwaysRefresh: true,
+    alwaysRefresh: false,
   });
 
-  // Refresh history whenever this tab gains focus
+  // AppState listener — track backgrounding so we always recover on foreground
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'background' || state === 'inactive') {
+        wasBackgroundedRef.current = true;
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Refresh history whenever this tab gains focus (staleness-gated)
   useFocusEffect(
     useCallback(() => {
-      refreshHistory();
+      const now = Date.now();
+      const isStale = now - lastFetchedAtRef.current > COVERAGE_CACHE_STALE_MS;
+      const needsRecovery = wasBackgroundedRef.current;
+      if (isStale || needsRecovery) {
+        lastFetchedAtRef.current = now;
+        wasBackgroundedRef.current = false;
+        refreshHistory();
+      }
     }, [refreshHistory])
   );
 
   // Realtime: refresh history when coverage_sessions rows change for this requester
   useEffect(() => {
     if (!user?.id) return;
+    const HISTORY_STATUSES = ['completed', 'cancelled', 'requester_paid'];
     const ch = supabase
       .channel(`coverage-history-requester:${user.id}`)
       .on(
@@ -494,11 +518,11 @@ export default function RequesterCoverageScreen() {
           filter: `requester_id=eq.${user.id}`,
         },
         (payload) => {
-          const newStatus = (payload.new as any)?.status;
-          if (['completed', 'cancelled', 'requester_paid', 'payment_pending', 'active'].includes(newStatus)) {
-            console.log('[RequesterCoverage] Realtime coverage_sessions change, status:', newStatus, '— refreshing history');
-            refreshHistory();
-          }
+          const row = payload.new as CoverageSession | undefined;
+          if (!row || !HISTORY_STATUSES.includes(row.status)) return;
+          // useTabData does not expose a setter — use refreshHistory() as safe path
+          refreshHistory();
+          lastFetchedAtRef.current = Date.now();
         }
       )
       .subscribe();

@@ -16,6 +16,8 @@ import {
   TextInput,
   KeyboardAvoidingView,
   PanResponder,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
@@ -34,6 +36,8 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const SUPABASE_URL = 'https://juilousufwlsiqdcgllu.supabase.co';
+
+const COVERAGE_CACHE_STALE_MS = 60_000; // 60 seconds
 
 const TABS = ['Upcoming', 'History'] as const;
 type TabType = typeof TABS[number];
@@ -340,6 +344,8 @@ export default function DoctorCoverageScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('Upcoming');
+  const lastFetchedAtRef = useRef<number>(0);
+  const wasBackgroundedRef = useRef(false);
 
   // Use shared context state — single source of truth
   const { upcomingSessions, setUpcomingSessions, reconcileUpcomingSessions } = useDoctorDispatch();
@@ -367,7 +373,7 @@ export default function DoctorCoverageScreen() {
       const data = await res.json();
       return data?.sessions ?? [];
     }, [user?.id]), // eslint-disable-line react-hooks/exhaustive-deps
-    alwaysRefresh: true,
+    alwaysRefresh: false,
   });
 
   const [historySessions, setHistorySessions] = useState<CoverageSession[]>([]);
@@ -391,16 +397,34 @@ export default function DoctorCoverageScreen() {
       });
   }, [historyData, user?.id]);
 
-  // Refresh history whenever this tab gains focus
+  // AppState listener — track backgrounding so we always recover on foreground
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'background' || state === 'inactive') {
+        wasBackgroundedRef.current = true;
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Refresh history whenever this tab gains focus (staleness-gated)
   useFocusEffect(
     useCallback(() => {
-      refreshHistory();
+      const now = Date.now();
+      const isStale = now - lastFetchedAtRef.current > COVERAGE_CACHE_STALE_MS;
+      const needsRecovery = wasBackgroundedRef.current;
+      if (isStale || needsRecovery) {
+        lastFetchedAtRef.current = now;
+        wasBackgroundedRef.current = false;
+        refreshHistory();
+      }
     }, [refreshHistory])
   );
 
-  // Realtime: refresh history when coverage_sessions rows change for this doctor
+  // Realtime: surgical merge on coverage_sessions changes for this doctor
   useEffect(() => {
     if (!user?.id) return;
+    const HISTORY_STATUSES = ['completed', 'cancelled', 'requester_paid'];
     const ch = supabase
       .channel(`coverage-history-doctor:${user.id}`)
       .on(
@@ -412,11 +436,19 @@ export default function DoctorCoverageScreen() {
           filter: `doctor_id=eq.${user.id}`,
         },
         (payload) => {
-          const newStatus = (payload.new as any)?.status;
-          if (['completed', 'cancelled', 'requester_paid', 'payment_pending', 'active'].includes(newStatus)) {
-            console.log('[DoctorCoverage] Realtime coverage_sessions change, status:', newStatus, '— refreshing history');
-            refreshHistory();
-          }
+          const row = payload.new as CoverageSession | undefined;
+          if (!row || !HISTORY_STATUSES.includes(row.status)) return;
+          // Surgical merge — update existing row or prepend if new
+          setHistorySessions(prev => {
+            const idx = prev.findIndex(s => s.id === row.id);
+            if (idx !== -1) {
+              const next = [...prev];
+              next[idx] = { ...prev[idx], ...row };
+              return next;
+            }
+            return [row, ...prev];
+          });
+          lastFetchedAtRef.current = Date.now(); // treat merge as a fresh sync
         }
       )
       .subscribe();

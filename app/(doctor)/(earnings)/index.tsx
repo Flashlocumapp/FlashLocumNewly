@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -8,6 +8,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Platform,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -23,6 +25,8 @@ import { BodyScrollView } from '@/components/BodyScrollView';
 type Period = 'this_week' | 'last_week' | 'last_month' | 'last_3_months';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+
+const EARNINGS_CACHE_STALE_MS = 60_000;
 
 const PERIODS: Period[] = ['this_week', 'last_week', 'last_month', 'last_3_months'];
 
@@ -197,6 +201,8 @@ function TransactionCard({
 export default function DoctorEarningsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const lastFetchedAtRef = useRef<number>(0);
+  const wasBackgroundedRef = useRef(false);
 
   const [earnings, setEarnings] = useState<DoctorEarning[]>(() => getCached<DoctorEarning[]>('doctor_earnings') ?? []);
   const [refreshing, setRefreshing] = useState(false);
@@ -225,6 +231,7 @@ export default function DoctorEarningsScreen() {
       setEarnings(rows);
       setCached('doctor_earnings', rows);
       setError(null);
+      lastFetchedAtRef.current = Date.now();
     } catch (e: any) {
       console.log('[Earnings] Fetch exception:', e.message);
       setError(e.message);
@@ -237,15 +244,31 @@ export default function DoctorEarningsScreen() {
     fetchEarnings();
   }, [user, fetchEarnings]);
 
-  // ── Focus-triggered refresh ──────────────────────────────────────────────────
+  // ── AppState listener — track backgrounding ──────────────────────────────────
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'background' || state === 'inactive') {
+        wasBackgroundedRef.current = true;
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // ── Focus-triggered refresh (staleness-gated) ────────────────────────────────
   useFocusEffect(
     useCallback(() => {
       if (!user) return;
-      fetchEarnings();
+      const now = Date.now();
+      const isStale = now - lastFetchedAtRef.current > EARNINGS_CACHE_STALE_MS;
+      const needsRecovery = wasBackgroundedRef.current;
+      if (isStale || needsRecovery) {
+        wasBackgroundedRef.current = false;
+        fetchEarnings();
+      }
     }, [user, fetchEarnings])
   );
 
-  // ── Realtime: postgres_changes on doctor_earnings ────────────────────────────
+  // ── Realtime: surgical row merge on doctor_earnings ──────────────────────────
   useEffect(() => {
     if (!user?.id) return;
     const ch = supabase
@@ -258,9 +281,24 @@ export default function DoctorEarningsScreen() {
           table: 'doctor_earnings',
           filter: `doctor_id=eq.${user.id}`,
         },
-        () => {
-          console.log('[Earnings] Realtime doctor_earnings change — refreshing');
-          fetchEarnings();
+        (payload) => {
+          const row = payload.new as DoctorEarning | undefined;
+          if (!row) return;
+          setEarnings(prev => {
+            const idx = prev.findIndex(e => e.session_id === row.session_id);
+            if (idx !== -1) {
+              // Update existing row in place — no network call needed
+              const next = [...prev];
+              next[idx] = { ...prev[idx], ...row };
+              setCached('doctor_earnings', next);
+              return next;
+            }
+            // Genuinely new row — prepend and cache
+            const next = [row, ...prev];
+            setCached('doctor_earnings', next);
+            return next;
+          });
+          lastFetchedAtRef.current = Date.now();
         }
       )
       .subscribe();
