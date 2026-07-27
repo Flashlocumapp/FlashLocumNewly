@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import useSupercluster from 'use-supercluster';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -844,7 +844,7 @@ function RequesterPaymentCard({
   // Payment intent state — always sourced from backend
   const [paymentIntent, setPaymentIntent] = useState<import('@/types').PaymentIntent | null>(null);
   const paymentIntentRef = useRef<import('@/types').PaymentIntent | null>(null);
-  const [loadingIntent, setLoadingIntent] = useState(!initialPayment);
+  const [loadingIntent, setLoadingIntent] = useState(true);
   const autoRefreshAttemptedRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -1015,13 +1015,15 @@ function RequesterPaymentCard({
 
   // Keep ref in sync with latest handleRefreshPayment so startCountdown's tick
   // always calls the version that has the current paymentIntent in scope.
-  useEffect(() => {
+  // useLayoutEffect runs synchronously before paint, ensuring the ref is populated
+  // before any setTimeout (e.g. the 500ms retry in fetchPaymentIntent) can fire.
+  useLayoutEffect(() => {
     handleRefreshPaymentRef.current = handleRefreshPayment;
   }, [handleRefreshPayment]);
 
   // ─── On mount: seed from initialPayment or fetch from DB ─────────────────
   useEffect(() => {
-    // If initialPayment arrives (or changes) and we don't yet have account details, apply it
+    // Apply initialPayment if it arrives and we don't yet have account details
     if (initialPayment?.account_number && !paymentIntentRef.current?.monnify_account_number) {
       const pi: import('@/types').PaymentIntent = {
         id: '',
@@ -1040,14 +1042,13 @@ function RequesterPaymentCard({
       setPaymentIntent(pi);
       startCountdown(initialPayment.expiry_at);
       setLoadingIntent(false);
-      return;
-    }
-
-    // First mount with no initialPayment — fall back to DB fetch
-    if (!paymentIntentRef.current?.monnify_account_number) {
+      // NOTE: do NOT return here — fall through to register AppState listener
+    } else if (!paymentIntentRef.current?.monnify_account_number) {
+      // No initialPayment and no account details yet — fetch from DB
       fetchPaymentIntent();
     }
 
+    // Always register AppState listener for background recovery
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active') {
         // Only re-fetch if we don't already have account details
@@ -1107,19 +1108,34 @@ function RequesterPaymentCard({
         const payment = payload?.payload?.payment;
         if (payment) {
           const snap = paymentIntentRef.current;
-          setPaymentIntent(snap ? {
-            ...snap,
-            id: payment.id ?? snap.id,
-            amount_naira: payment.amount_naira ?? snap.amount_naira,
-            monnify_account_number: payment.account_number ?? snap.monnify_account_number,
-            monnify_bank_name: payment.bank_name ?? snap.monnify_bank_name,
-            monnify_account_name: payment.account_name ?? snap.monnify_account_name ?? null,
-            monnify_account_reference: payment.account_reference ?? snap.monnify_account_reference,
-            expiry_at: payment.expiry_at ?? snap.expiry_at,
-          } : snap);
+          const base = snap ?? {
+            id: '',
+            session_id: session.id,
+            amount_naira: payment.amount_naira ?? 0,
+            monnify_account_number: null,
+            monnify_bank_name: null,
+            monnify_account_name: null,
+            monnify_account_reference: null,
+            monnify_transaction_reference: null,
+            status: 'pending' as const,
+            expiry_at: payment.expiry_at ?? new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          setPaymentIntent({
+            ...base,
+            id: payment.id ?? base.id,
+            amount_naira: payment.amount_naira ?? base.amount_naira,
+            monnify_account_number: payment.account_number ?? base.monnify_account_number,
+            monnify_bank_name: payment.bank_name ?? base.monnify_bank_name,
+            monnify_account_name: payment.account_name ?? base.monnify_account_name ?? null,
+            monnify_account_reference: payment.account_reference ?? base.monnify_account_reference,
+            expiry_at: payment.expiry_at ?? base.expiry_at,
+          });
           if (payment.expiry_at) {
             startCountdown(payment.expiry_at);
           }
+          setLoadingIntent(false);
         }
       })
       .subscribe((status) => {
