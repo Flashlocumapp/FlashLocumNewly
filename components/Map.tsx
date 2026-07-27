@@ -111,6 +111,13 @@ export const Map = ({
                 style={styles.webview}
                 scrollEnabled={false}
                 startInLoadingState={true}
+                javaScriptEnabled={true}
+                domStorageEnabled={true}
+                mixedContentMode="always"
+                allowUniversalAccessFromFileURLs={true}
+                allowFileAccessFromFileURLs={true}
+                allowFileAccess={true}
+                androidLayerType="hardware"
                 renderLoading={() => <View style={styles.loading}><ActivityIndicator /></View>}
             />
         </View>
