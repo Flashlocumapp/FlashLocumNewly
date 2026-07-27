@@ -376,18 +376,48 @@ export default function DoctorPayout() {
         return;
       }
 
-      // Step 2b: Provision Monnify reserved account for this doctor (non-blocking)
+      // Step 2b: Provision Monnify reserved account — blocking with retry
       console.log('[Payout] Step 2b: provisioning reserved account');
       setLoadingLabel('Setting up payment account...');
-      try {
-        const provisionResponse = await fetchWithAuth(MONNIFY_PROVISION_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        await provisionResponse.text();
-      } catch {
-        // Non-blocking: don't fail onboarding if this step fails
+      const MAX_PROVISION_ATTEMPTS = 3;
+      let provisionSuccess = false;
+      let provisionError = '';
+
+      for (let attempt = 1; attempt <= MAX_PROVISION_ATTEMPTS; attempt++) {
+        try {
+          console.log(`[Payout] Step 2b: provision attempt ${attempt}/${MAX_PROVISION_ATTEMPTS}`);
+          const provisionResponse = await fetchWithAuth(MONNIFY_PROVISION_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          });
+          if (provisionResponse.ok) {
+            const provisionData = await provisionResponse.json();
+            if (provisionData?.account_number || provisionData?.already_existed) {
+              console.log('[Payout] Step 2b: provision succeeded');
+              provisionSuccess = true;
+              break;
+            }
+          }
+          // Non-OK or missing account_number — wait before retry
+          console.log(`[Payout] Step 2b: provision attempt ${attempt} failed (non-ok or missing account_number)`);
+          if (attempt < MAX_PROVISION_ATTEMPTS) {
+            await new Promise(r => setTimeout(r, 2000 * attempt));
+          }
+        } catch (e: any) {
+          provisionError = e?.message ?? 'Network error';
+          console.log(`[Payout] Step 2b: provision attempt ${attempt} error: ${provisionError}`);
+          if (attempt < MAX_PROVISION_ATTEMPTS) {
+            await new Promise(r => setTimeout(r, 2000 * attempt));
+          }
+        }
+      }
+
+      if (!provisionSuccess) {
+        console.log('[Payout] Step 2b: all provision attempts failed');
+        setSubmitError('Could not set up your payment account. Please check your connection and try again.');
+        setLoading(false);
+        return;
       }
 
       // Step 3: Mark onboarding complete — only reached if subaccount succeeded
