@@ -1723,6 +1723,36 @@ export default function RequesterHomeScreen() {
     return () => { supabase.removeChannel(ch); };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── postgres_changes — requester_profiles: Layer 3 for Ratings ───────────
+  useEffect(() => {
+    if (!user?.id) return;
+    const ch = supabase
+      .channel(`requester-profile-pg:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'requester_profiles',
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          const row = payload.new as any;
+          console.log('[Requester] requester_profiles UPDATE via postgres_changes — rating:', row.rating, 'reliability:', row.reliability);
+          if (row.rating !== undefined && row.rating !== null) {
+            setRequesterRating(Number(row.rating));
+          }
+          if (row.reliability !== undefined && row.reliability !== null) {
+            setRequesterReliability(Number(row.reliability));
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Requester] requester-profile-pg channel:', status);
+      });
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const mapRef = useRef<MapView>(null);
   const [mapRegion, setMapRegion] = useState<{
     latitude: number;
@@ -2114,6 +2144,20 @@ export default function RequesterHomeScreen() {
             setConfirmedSession(snap);
             setShowPaymentSuccess(true);
           }
+        }
+        // Rating recovery — re-fetch own scores in case RATING_UPDATED broadcast was missed
+        if (user?.id) {
+          try {
+            const { data: profileSnap } = await supabase
+              .from('requester_profiles')
+              .select('rating, reliability')
+              .eq('id', user.id)
+              .single();
+            if (profileSnap) {
+              if (profileSnap.rating !== null && profileSnap.rating !== undefined) setRequesterRating(Number(profileSnap.rating));
+              if (profileSnap.reliability !== null && profileSnap.reliability !== undefined) setRequesterReliability(Number(profileSnap.reliability));
+            }
+          } catch { /* non-fatal */ }
         }
       }
     };

@@ -837,6 +837,20 @@ export default function DoctorLayout() {
         // Do NOT check isOnlineRef here — it can be stale.
         // The Queue → state sync effect will transition to 'incoming' when isOnline is true.
       })
+      .on('broadcast', { event: 'EVICT_REQUEST' }, (payload) => {
+        // Layer 2 — another doctor accepted this request; remove it instantly
+        const { request_id } = payload.payload as { request_id: string };
+        if (!request_id) return;
+        console.log('[Doctor] EVICT_REQUEST received — removing from queue:', request_id);
+        setRequestQueue((prev) => prev.filter((r) => r.id !== request_id));
+      })
+      .on('broadcast', { event: 'WITHDRAW_REQUEST' }, (payload) => {
+        // Layer 2 — requester withdrew/edited this request; remove it instantly
+        const { request_id } = payload.payload as { request_id: string };
+        if (!request_id) return;
+        console.log('[Doctor] WITHDRAW_REQUEST received — removing from queue:', request_id);
+        setRequestQueue((prev) => prev.filter((r) => r.id !== request_id));
+      })
       .subscribe((status) => {
         console.log('[Doctor] dispatch channel subscribe status:', status);
       });
@@ -1208,6 +1222,36 @@ export default function DoctorLayout() {
     return () => { supabase.removeChannel(ch); };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── postgres_changes — doctor_profiles: Layer 3 for Ratings ──────────────
+  useEffect(() => {
+    if (!user?.id) return;
+    const ch = supabase
+      .channel(`doctor-profile-pg:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'doctor_profiles',
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          const row = payload.new as any;
+          console.log('[Doctor] doctor_profiles UPDATE via postgres_changes — rating:', row.rating, 'reliability:', row.reliability);
+          if (row.rating !== undefined && row.rating !== null) {
+            setDoctorRatingScore(Number(row.rating));
+          }
+          if (row.reliability !== undefined && row.reliability !== null) {
+            setDoctorReliabilityScore(Number(row.reliability));
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[Doctor] doctor-profile-pg channel:', status);
+      });
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Postgres Changes fallback: fires when coverage_sessions row status → requester_paid ──
   useEffect(() => {
     if (!activeSessionId) return;
@@ -1354,6 +1398,27 @@ export default function DoctorLayout() {
             // non-fatal
           }
 
+          // Rating recovery — re-fetch own scores in case RATING_UPDATED broadcast was missed
+          if (user?.id) {
+            try {
+              const { data: profileSnap } = await supabase
+                .from('doctor_profiles')
+                .select('rating, reliability')
+                .eq('id', user.id)
+                .single();
+              if (profileSnap) {
+                if (profileSnap.rating !== null && profileSnap.rating !== undefined) {
+                  setDoctorRatingScore(Number(profileSnap.rating));
+                }
+                if (profileSnap.reliability !== null && profileSnap.reliability !== undefined) {
+                  setDoctorReliabilityScore(Number(profileSnap.reliability));
+                }
+              }
+            } catch {
+              // non-fatal
+            }
+          }
+
           // 4. Dispatch reconciliation
           if (user) await forceSync();
         } else {
@@ -1361,6 +1426,20 @@ export default function DoctorLayout() {
           console.log('[AppState] active — syncing session');
           if (isOnlineRef.current && user) await forceSync();
           fetchActiveSession();
+          // Short foreground rating recovery
+          if (user?.id) {
+            try {
+              const { data: profileSnap } = await supabase
+                .from('doctor_profiles')
+                .select('rating, reliability')
+                .eq('id', user.id)
+                .single();
+              if (profileSnap) {
+                if (profileSnap.rating !== null && profileSnap.rating !== undefined) setDoctorRatingScore(Number(profileSnap.rating));
+                if (profileSnap.reliability !== null && profileSnap.reliability !== undefined) setDoctorReliabilityScore(Number(profileSnap.reliability));
+              }
+            } catch { /* non-fatal */ }
+          }
         }
       }
     });
