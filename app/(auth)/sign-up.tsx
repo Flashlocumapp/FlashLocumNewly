@@ -152,9 +152,25 @@ export default function SignUpScreen() {
           .select('*')
           .eq('id', data.user.id)
           .single();
+
+        // Portal eligibility check
+        if (role === 'doctor' && profileData?.doctor_onboarding_complete !== true && profileData?.requester_onboarding_complete === true) {
+          console.log('[sign-up] Portal mismatch: doctor portal attempted by requester account', { userId: data.user.id });
+          await supabase.auth.signOut();
+          setError('This account is registered as a Requester. Please sign in through the Requester portal.');
+          return;
+        }
+        if (role === 'requester' && profileData?.requester_onboarding_complete !== true && profileData?.doctor_onboarding_complete === true) {
+          console.log('[sign-up] Portal mismatch: requester portal attempted by doctor account', { userId: data.user.id });
+          await supabase.auth.signOut();
+          setError('This account is registered as a Doctor. Please sign in through the Doctor portal.');
+          return;
+        }
+
         await SecureStore.setItemAsync('flashlocum_last_pathway', role);
         if (!profileData) {
           // No profile yet — go to onboarding
+          console.log('[sign-up] No profile found, routing to onboarding', { role });
           const dest = role === 'doctor'
             ? '/(onboarding)/doctor/basic-profile'
             : '/(onboarding)/requester/basic-profile';
@@ -163,6 +179,7 @@ export default function SignUpScreen() {
         }
         const doctorComplete = profileData.doctor_onboarding_complete === true;
         const requesterComplete = profileData.requester_onboarding_complete === true;
+        console.log('[sign-up] Routing after sign-in', { role, doctorComplete, requesterComplete });
         if (doctorComplete && !requesterComplete) {
           router.replace('/(doctor)/(home)' as any);
         } else if (requesterComplete && !doctorComplete) {

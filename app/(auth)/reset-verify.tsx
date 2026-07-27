@@ -67,11 +67,36 @@ export default function ResetVerifyScreen() {
       type: 'recovery',
     });
 
-    setLoading(false);
-
     if (verifyError) {
+      setLoading(false);
       setError(verifyError.message || 'Invalid code. Please try again.');
     } else {
+      // Fetch profile for portal eligibility check
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user?.id ?? '')
+        .single();
+
+      // Portal eligibility check
+      if (role === 'doctor' && profileData?.doctor_onboarding_complete !== true && profileData?.requester_onboarding_complete === true) {
+        console.log('[reset-verify] Portal mismatch: doctor portal attempted by requester account', { userId: user?.id });
+        await supabase.auth.signOut();
+        setLoading(false);
+        setError('This account is registered as a Requester. Please sign in through the Requester portal.');
+        return;
+      }
+      if (role === 'requester' && profileData?.requester_onboarding_complete !== true && profileData?.doctor_onboarding_complete === true) {
+        console.log('[reset-verify] Portal mismatch: requester portal attempted by doctor account', { userId: user?.id });
+        await supabase.auth.signOut();
+        setLoading(false);
+        setError('This account is registered as a Doctor. Please sign in through the Doctor portal.');
+        return;
+      }
+
+      setLoading(false);
+      console.log('[reset-verify] OTP verified, routing to new-password', { role });
       router.push(
         `/(auth)/new-password?email=${encodeURIComponent(email)}&role=${role}` as any
       );
