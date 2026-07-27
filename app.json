@@ -77,6 +77,12 @@
         }
       ],
       "expo-font",
+      [
+        "react-native-maps",
+        {
+          "googleMapsApiKey": "AIzaSyAC\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+        }
+      ],
       "expo-router",
       "expo-web-browser",
       "expo-secure-store",
