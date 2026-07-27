@@ -1761,7 +1761,7 @@ export default function RequesterHomeScreen() {
     longitude: number;
     latitudeDelta: number;
     longitudeDelta: number;
-  }>(LAGOS_REGION);
+  }>(_cachedRequesterRegion ?? LAGOS_REGION);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(
     _cachedRequesterCoords
   );
@@ -1774,10 +1774,12 @@ export default function RequesterHomeScreen() {
   useEffect(() => {
     if (iconsReady) return;
     let cancelled = false;
+    // Timeout fallback: if font load hangs in production, fail open after 3s
+    const timeout = setTimeout(() => { if (!cancelled) setIconsReady(true); }, 3000);
     Font.loadAsync(require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf'))
-      .then(() => { if (!cancelled) setIconsReady(true); })
-      .catch(() => { if (!cancelled) setIconsReady(true); }); // fail open — don't block forever
-    return () => { cancelled = true; };
+      .then(() => { if (!cancelled) { clearTimeout(timeout); setIconsReady(true); } })
+      .catch(() => { if (!cancelled) { clearTimeout(timeout); setIconsReady(true); } });
+    return () => { cancelled = true; clearTimeout(timeout); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const doctorPoints = useMemo(() => {
@@ -3455,7 +3457,11 @@ export default function RequesterHomeScreen() {
         customMapStyle={MINIMALIST_MAP_STYLE}
         minZoomLevel={10}
         maxZoomLevel={18}
-        onMapReady={() => {}}
+        onMapReady={() => {
+          console.log('[Map] onMapReady fired');
+          const region = _cachedRequesterRegion ?? LAGOS_REGION;
+          setMapRegion(region);
+        }}
       >
         {userCoords && (
           <Marker coordinate={userCoords} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={userMarkerTracksViews}>
