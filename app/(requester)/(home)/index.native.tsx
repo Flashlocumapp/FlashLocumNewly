@@ -838,7 +838,6 @@ function RequesterPaymentCard({
     amount_naira: number;
   } | null;
 }) {
-  console.log(`[TRACE] ${Date.now()} RequesterPaymentCard render: initialPayment=${JSON.stringify(initialPayment)}`);
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
 
@@ -920,7 +919,6 @@ function RequesterPaymentCard({
           .limit(1)
           .single();
 
-        console.log(`[TRACE] ${Date.now()} fetchPaymentIntent: DB result monnify_account_number=${data?.monnify_account_number ?? 'null'}, status=${data?.status ?? 'null'}`);
         if (data) {
           // Row found — check if account details are populated
           if (data.monnify_account_number) {
@@ -1025,7 +1023,6 @@ function RequesterPaymentCard({
 
   // ─── On mount: seed from initialPayment or fetch from DB ─────────────────
   useEffect(() => {
-    console.log(`[TRACE] ${Date.now()} RequesterPaymentCard mount effect: initialPayment=${JSON.stringify(initialPayment)}, paymentIntentRef.current?.monnify_account_number=${paymentIntentRef.current?.monnify_account_number ?? 'null'}`);
     // Apply initialPayment if it arrives and we don't yet have account details
     if (initialPayment?.account_number && !paymentIntentRef.current?.monnify_account_number) {
       const pi: import('@/types').PaymentIntent = {
@@ -2002,9 +1999,7 @@ export default function RequesterHomeScreen() {
       }
       const data = await res.json();
       const session: CoverageSession | null = data?.session ?? null;
-      console.log(`[TRACE] ${Date.now()} fetchActiveSession: about to replace activeSession. new status=${session?.status}, prev _initialPayment will be lost`);
       setActiveSession(session);
-      console.log(`[TRACE] ${Date.now()} fetchActiveSession: setActiveSession(session) called — _initialPayment is now gone`);
       if (session) {
         setActiveSessionId(session.id);
       }
@@ -2190,7 +2185,6 @@ export default function RequesterHomeScreen() {
         PollingManager.stop('end-shift');
         console.log('[Requester] broadcast SHIFT_ENDED received');
         const updated = payload?.payload?.session as Partial<CoverageSession>;
-        console.log(`[TRACE] ${Date.now()} SHIFT_ENDED broadcast: about to mergeSession. updated.status=${updated?.status}`);
         setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
         // Start polling immediately — catches PAYMENT_CONFIRMED if broadcast is missed
         startRequesterPaymentPollingRef.current();
@@ -2304,7 +2298,6 @@ export default function RequesterHomeScreen() {
           const status = newRow?.status;
           console.log('[Requester] coverage_sessions UPDATE via postgres_changes — status:', status, 'id:', newRow.id);
           if (status === 'upcoming' || status === 'active' || status === 'paused' || status === 'payment_pending') {
-            console.log(`[TRACE] ${Date.now()} postgres_changes coverage_sessions UPDATE: status=${status}, id=${newRow.id} — about to call fetchActiveSession`);
             fetchActiveSessionRef.current();
           } else if (status === 'requester_paid' || status === 'settled' || status === 'payment_complete') {
             handlePaymentConfirmedWithFallbackRef.current(newRow.id);
@@ -3218,7 +3211,6 @@ export default function RequesterHomeScreen() {
       const updated = data?.session as Partial<CoverageSession> | undefined;
       // Seed payment details from response — eliminates race condition with DB insert
       const paymentFromResponse = data?.payment ?? null;
-      console.log(`[TRACE] ${Date.now()} handleConfirmEndShift: HTTP response received. payment present=${!!paymentFromResponse}, account_number=${paymentFromResponse?.account_number ?? 'null'}`);
       // Always transition to payment_pending — do not gate on data.session being truthy.
       // If data.session is null (edge case), we still know the API succeeded and the session
       // is now payment_pending. The payment card must render.
@@ -3229,7 +3221,6 @@ export default function RequesterHomeScreen() {
         status: 'payment_pending',
         _initialPayment: paymentFromResponse?.account_number ? paymentFromResponse : null,
       } : prev);
-      console.log(`[TRACE] ${Date.now()} handleConfirmEndShift: setActiveSession called with _initialPayment=${JSON.stringify(paymentFromResponse)}`);
       if (updated?.price != null) {
         console.log('[Requester] end-shift updated price from backend:', updated.price);
       }
