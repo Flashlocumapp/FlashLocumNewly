@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 
 export default function RoleSelectScreen() {
@@ -50,7 +51,7 @@ export default function RoleSelectScreen() {
               </Text>
             </View>
             <View style={styles.arrowButton}>
-              <Text style={styles.arrowText}>→</Text>
+              <Ionicons name="arrow-forward" size={18} color="#0A0A0A" />
             </View>
           </View>
         </AnimatedPressable>
@@ -65,7 +66,7 @@ export default function RoleSelectScreen() {
               </Text>
             </View>
             <View style={styles.arrowButton}>
-              <Text style={styles.arrowText}>→</Text>
+              <Ionicons name="arrow-forward" size={18} color="#0A0A0A" />
             </View>
           </View>
         </AnimatedPressable>
@@ -151,10 +152,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F2',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  arrowText: {
-    fontSize: 18,
-    color: '#0A0A0A',
   },
   footer: {
     position: 'absolute',
