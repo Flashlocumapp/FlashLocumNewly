@@ -15,9 +15,15 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 
 // Prevent splash from auto-hiding before fonts + auth are ready
+const LAUNCH_TIME = Date.now();
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const LAST_PATHWAY_KEY = 'flashlocum_last_pathway';
+
+export const SplashContext = React.createContext<{ signalScreenReady: () => void }>({
+  signalScreenReady: () => {},
+});
+export function useSplash() { return React.useContext(SplashContext); }
 
 const DevErrorBoundary = __DEV__
   ? ErrorBoundary
@@ -218,12 +224,21 @@ export default function RootLayout() {
     Inter_700Bold,
   });
   const [navigationReady, setNavigationReady] = useState(false);
+  const [screenReady, setScreenReady] = useState(false);
 
-  // Hide splash only when BOTH fonts are loaded AND navigation has resolved auth state.
+  // Hide splash only when ALL THREE conditions are met: fonts loaded, navigation ready, screen ready.
   useEffect(() => {
-    if (!fontsLoaded || !navigationReady) return;
-    SplashScreen.hideAsync().catch(() => {});
-  }, [fontsLoaded, navigationReady]);
+    if (!fontsLoaded || !navigationReady || !screenReady) return;
+    const elapsed = Date.now() - LAUNCH_TIME;
+    if (elapsed >= 2000) {
+      SplashScreen.hideAsync().catch(() => {});
+    } else {
+      const timer = setTimeout(() => {
+        SplashScreen.hideAsync().catch(() => {});
+      }, 2000 - elapsed);
+      return () => clearTimeout(timer);
+    }
+  }, [fontsLoaded, navigationReady, screenReady]);
 
   // Safety-net: hide after 8s in case NavigationGuard never fires (e.g. error path).
   useEffect(() => {
@@ -236,12 +251,14 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <DevErrorBoundary>
-      <AuthProvider>
-        <NotificationProvider>
-          <RootLayoutInner onNavigationReady={() => setNavigationReady(true)} />
-        </NotificationProvider>
-      </AuthProvider>
-    </DevErrorBoundary>
+    <SplashContext.Provider value={{ signalScreenReady: () => setScreenReady(true) }}>
+      <DevErrorBoundary>
+        <AuthProvider>
+          <NotificationProvider>
+            <RootLayoutInner onNavigationReady={() => setNavigationReady(true)} />
+          </NotificationProvider>
+        </AuthProvider>
+      </DevErrorBoundary>
+    </SplashContext.Provider>
   );
 }

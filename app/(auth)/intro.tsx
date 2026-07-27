@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useSplash } from '@/app/_layout';
 
 const PHRASES = ["Let's request", "Let's accept", "Let's cover"];
 
@@ -12,6 +13,17 @@ const BG_TRANSITION_DURATION = 400;
 export default function IntroScreen() {
   const router = useRouter();
   const { dest } = useLocalSearchParams<{ dest?: string }>();
+  const { signalScreenReady } = useSplash();
+  const splashSignalledRef = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!splashSignalledRef.current) {
+        splashSignalledRef.current = true;
+        signalScreenReady();
+      }
+    }, [signalScreenReady])
+  );
 
   const unmountedRef = useRef(false);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);

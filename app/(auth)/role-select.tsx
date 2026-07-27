@@ -1,17 +1,29 @@
-import React from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSplash } from '@/app/_layout';
 import { Ionicons } from '@expo/vector-icons';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 
 export default function RoleSelectScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { signalScreenReady } = useSplash();
+  const splashSignalledRef = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!splashSignalledRef.current) {
+        splashSignalledRef.current = true;
+        signalScreenReady();
+      }
+    }, [signalScreenReady])
+  );
 
   const handleRequestCoverage = () => {
     router.push('/(auth)/sign-up?role=requester');

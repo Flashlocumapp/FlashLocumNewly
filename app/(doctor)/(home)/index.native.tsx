@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSplash } from '@/app/_layout';
 import {
   View,
   Text,
@@ -401,6 +402,18 @@ export default function DoctorHomeScreen() {
         clearTimeout(t2);
       };
     }, [])
+  );
+
+  // ─── Signal splash screen ready on first focus ───────────────────────────────
+  const { signalScreenReady } = useSplash();
+  const splashSignalledRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!splashSignalledRef.current) {
+        splashSignalledRef.current = true;
+        signalScreenReady();
+      }
+    }, [signalScreenReady])
   );
 
   // ─── Toggle online/offline ───────────────────────────────────────────────────

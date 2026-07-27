@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,8 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useSplash } from '@/app/_layout';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,6 +25,17 @@ export default function RequesterBasicProfile() {
   const insets = useSafeAreaInsets();
   const { user, profile, refreshProfile } = useAuth();
   const { from } = useLocalSearchParams<{ from?: string }>();
+  const { signalScreenReady } = useSplash();
+  const splashSignalledRef = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!splashSignalledRef.current) {
+        splashSignalledRef.current = true;
+        signalScreenReady();
+      }
+    }, [signalScreenReady])
+  );
 
   const [phone, setPhone] = useState('');
   const [gender, setGender] = useState<Gender>(null);
