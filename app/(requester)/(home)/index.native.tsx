@@ -1557,6 +1557,29 @@ function RequesterRatingCard({
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Safely merges an incoming partial session payload (from a broadcast or HTTP response)
+ * into the existing React state. Frontend-only properties that are not present in the
+ * incoming payload are always preserved from `prev`.
+ *
+ * This prevents broadcast handlers from silently deleting UI-only state such as
+ * `_initialPayment` when they spread a plain database row over the full state object.
+ */
+function mergeSession(
+  prev: CoverageSession,
+  incoming: Partial<CoverageSession> | undefined | null
+): CoverageSession {
+  if (!incoming) return prev;
+  const merged: any = {
+    ...prev,
+    ...incoming,
+    // Preserve frontend-only fields that are never present in DB/broadcast payloads.
+    // Add new frontend-only fields here as the app grows.
+    _initialPayment: (prev as any)._initialPayment,
+  };
+  return merged as CoverageSession;
+}
+
 export default function RequesterHomeScreen() {
   const insets = useSafeAreaInsets();
   const { setTabBarVisible } = useTabBarVisibility();
@@ -2142,23 +2165,27 @@ export default function RequesterHomeScreen() {
     const ch = supabase.channel(channelName)
       .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
         PollingManager.stop('start-shift');
+        console.log('[Requester] broadcast SHIFT_STARTED received');
         const updated = payload?.payload?.session as Partial<CoverageSession>;
-        setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+        setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
       })
       .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
         PollingManager.stop('pause-shift');
+        console.log('[Requester] broadcast SHIFT_PAUSED received');
         const updated = payload?.payload?.session as Partial<CoverageSession>;
-        setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+        setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
       })
       .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
         PollingManager.stop('resume-shift');
+        console.log('[Requester] broadcast SHIFT_RESUMED received');
         const updated = payload?.payload?.session as Partial<CoverageSession>;
-        setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+        setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
         PollingManager.stop('end-shift');
+        console.log('[Requester] broadcast SHIFT_ENDED received');
         const updated = payload?.payload?.session as Partial<CoverageSession>;
-        setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+        setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
         // Start polling immediately — catches PAYMENT_CONFIRMED if broadcast is missed
         startRequesterPaymentPollingRef.current();
       })
@@ -3089,7 +3116,7 @@ export default function RequesterHomeScreen() {
       console.log('[Requester] handleStartShift for session:', sid);
       const data = await callSessionEdge('start-shift', sid);
       const updated = data?.session as Partial<CoverageSession>;
-      if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
       console.log('[Requester] Starting start-shift poll for session:', sid);
       PollingManager.start('start-shift', async () => {
         const { data: s } = await supabase
@@ -3114,7 +3141,7 @@ export default function RequesterHomeScreen() {
     try {
       const data = await callSessionEdge('resume-shift', sid);
       const updated = data?.session as Partial<CoverageSession>;
-      if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
       PollingManager.start('resume-shift', async () => {
         const { data: s } = await supabase
           .from('coverage_sessions')
@@ -3145,7 +3172,7 @@ export default function RequesterHomeScreen() {
       console.log('[Requester] handleConfirmPauseShift for session:', sid);
       const data = await callSessionEdge('pause-shift', sid);
       const updated = data?.session as Partial<CoverageSession>;
-      if (updated) setActiveSession((prev) => prev ? { ...prev, ...updated } : prev);
+      if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
       console.log('[Requester] Starting pause-shift poll for session:', sid);
       PollingManager.start('pause-shift', async () => {
         const { data: s } = await supabase
