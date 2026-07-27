@@ -344,7 +344,7 @@ export default function DoctorCoverageScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('Upcoming');
-  const lastFetchedAtRef = useRef<number>(0);
+  const lastFetchedAtRef = useRef<number>(Date.now());
   const wasBackgroundedRef = useRef(false);
 
   // Use shared context state — single source of truth

@@ -435,7 +435,7 @@ export default function RequesterCoverageScreen() {
 
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
   const [selectedSession, setSelectedSession] = useState<CoverageSession | null>(null);
-  const lastFetchedAtRef = useRef<number>(0);
+  const lastFetchedAtRef = useRef<number>(Date.now());
   const wasBackgroundedRef = useRef(false);
 
   const cacheKey = `requester-coverage-${user?.id ?? 'anon'}`;
