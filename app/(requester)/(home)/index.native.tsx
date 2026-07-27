@@ -1003,6 +1003,7 @@ function RequesterPaymentCard({
           startCountdown(payment.expiry_at);
         }
         setLoadingIntent(false);
+        autoRefreshAttemptedRef.current = false;
       }
     } catch (e: any) {
     } finally {
