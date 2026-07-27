@@ -25,7 +25,7 @@
         "NSPhotoLibraryAddUsageDescription": "FlashLocum needs permission to save photos to your library."
       },
       "config": {
-        "googleMapsApiKey": "AIzaSyBF\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+        "googleMapsApiKey": "AIzaSyBF•••••••••••••••••••••••••••••••"
       }
     },
     "android": {
@@ -50,7 +50,7 @@
       "versionCode": 10,
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyAC\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+          "apiKey": "AIzaSyAC•••••••••••••••••••••••••••••••"
         }
       },
       "navigationBar": {
@@ -77,12 +77,6 @@
         }
       ],
       "expo-font",
-      [
-        "react-native-maps",
-        {
-          "googleMapsApiKey": "AIzaSyAC\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
-        }
-      ],
       "expo-router",
       "expo-web-browser",
       "expo-secure-store",
