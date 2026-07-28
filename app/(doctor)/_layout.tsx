@@ -1294,7 +1294,7 @@ export default function DoctorLayout() {
             const hospital = newRow.hospital_name ?? '';
             void (async () => {
               const verifiedAmount = await fetchVerifiedAmount(sid);
-              const amt = verifiedAmount || newRow.total_cost ?? newRow.price ?? 0;
+              const amt = verifiedAmount || (newRow.total_cost ?? newRow.price ?? 0);
               void maybeShowDoctorRating(sid, hospital, amt);
             })();
           }
