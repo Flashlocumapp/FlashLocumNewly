@@ -1828,27 +1828,9 @@ export default function RequesterHomeScreen() {
     _cachedRequesterCoords
   );
   const [userMarkerTracksViews, setUserMarkerTracksViews] = useState(true);
-  const [iconsReady, setIconsReady] = useState(() => Font.isLoaded('MaterialCommunityIcons'));
   const [onlineDoctors, setOnlineDoctors] = useState<{ id: string; lat: number; lng: number }[]>([]);
 
   const locationSub = useRef<Location.LocationSubscription | null>(null);
-
-  useEffect(() => {
-    if (iconsReady) return;
-    let cancelled = false;
-    // Timeout fallback: if font load hangs in production, fail open after 3s
-    const timeout = setTimeout(() => { if (!cancelled) setIconsReady(true); }, 3000);
-    Font.loadAsync(require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf'))
-      .then(() => { if (!cancelled) { clearTimeout(timeout); setIconsReady(true); } })
-      .catch(() => { if (!cancelled) { clearTimeout(timeout); setIconsReady(true); } });
-    return () => { cancelled = true; clearTimeout(timeout); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (iconsReady) {
-      setMapRegion(prev => ({ ...prev }));
-    }
-  }, [iconsReady]);
 
   const doctorPoints = useMemo(() => {
     return onlineDoctors.map((doc) => ({
@@ -3558,7 +3540,7 @@ export default function RequesterHomeScreen() {
                 key={`cluster-${point.id}`}
                 coordinate={{ latitude: lat, longitude: lng }}
                 anchor={{ x: 0.5, y: 0.5 }}
-                tracksViewChanges={!iconsReady}
+                tracksViewChanges={false}
                 onPress={() => {
                   console.log('[Map] Cluster marker pressed', { clusterId: point.id, pointCount });
                   if (!supercluster) return;
@@ -3588,7 +3570,7 @@ export default function RequesterHomeScreen() {
                   shadowRadius: 4,
                   elevation: 5,
                 }}>
-                  <MaterialCommunityIcons name="stethoscope" size={16} color="#FFFFFF" />
+                  <Text style={{ fontSize: 18, lineHeight: 22 }}>🩺</Text>
                   <Text style={{
                     color: '#FFFFFF',
                     fontSize: 13,
@@ -3610,7 +3592,7 @@ export default function RequesterHomeScreen() {
               key={`doctor-${doctorId}`}
               coordinate={{ latitude: lat, longitude: lng }}
               anchor={{ x: 0.5, y: 1.0 }}
-              tracksViewChanges={!iconsReady}
+              tracksViewChanges={false}
             >
               <View style={{ alignItems: 'center' }}>
                 {/* Teardrop pin shape */}
@@ -3627,7 +3609,7 @@ export default function RequesterHomeScreen() {
                   shadowRadius: 3,
                   elevation: 4,
                 }}>
-                  <MaterialCommunityIcons name="stethoscope" size={18} color="#1C1C1E" />
+                  <Text style={{ fontSize: 18, lineHeight: 22 }}>🩺</Text>
                   {/* Green online dot */}
                   <View style={{
                     position: 'absolute',
