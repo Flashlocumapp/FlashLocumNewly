@@ -21,6 +21,7 @@ import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { getCached, setCached } from '@/utils/tabCache';
 import DeleteAccountModal from '@/components/DeleteAccountModal';
+import SignOutModal from '@/components/SignOutModal';
 
 interface RequesterProfile {
   first_name: string | null;
@@ -91,6 +92,7 @@ export default function RequesterAccountScreen() {
 
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showSignOutModal, setShowSignOutModal] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -171,16 +173,15 @@ export default function RequesterAccountScreen() {
   };
 
   const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out', style: 'destructive',
-        onPress: async () => {
-          await supabase.auth.signOut();
-          router.replace('/(auth)/role-select' as any);
-        },
-      },
-    ]);
+    console.log('[Requester Account] Sign Out pressed — opening sign out modal');
+    setShowSignOutModal(true);
+  };
+
+  const handleConfirmSignOut = async () => {
+    console.log('[Requester Account] Sign Out confirmed');
+    setShowSignOutModal(false);
+    await supabase.auth.signOut();
+    router.replace('/(auth)/role-select' as any);
   };
 
   const handleDeleteAccount = () => {
@@ -339,6 +340,12 @@ export default function RequesterAccountScreen() {
         onCancel={() => setShowDeleteModal(false)}
         onConfirm={handleConfirmDelete}
         isDeleting={deleting}
+      />
+
+      <SignOutModal
+        visible={showSignOutModal}
+        onCancel={() => setShowSignOutModal(false)}
+        onConfirm={handleConfirmSignOut}
       />
     </>
   );

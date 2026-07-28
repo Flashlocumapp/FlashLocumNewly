@@ -11,7 +11,6 @@ import {
   Platform,
   Animated,
 } from 'react-native';
-import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/Theme';
 
 interface DeleteAccountModalProps {
   visible: boolean;
@@ -85,8 +84,7 @@ export default function DeleteAccountModal({
     }
   };
 
-  const confirmBtnBg = isConfirmEnabled ? COLORS.danger : '#C7C7CC';
-  const confirmBtnOpacity = isConfirmEnabled ? 1 : 0.7;
+  const confirmBtnBg = isConfirmEnabled ? '#FF3B30' : '#3A3A3C';
 
   return (
     <Modal
@@ -96,95 +94,94 @@ export default function DeleteAccountModal({
       onRequestClose={handleRequestClose}
     >
       <KeyboardAvoidingView
-        behavior="padding"
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.overlay}
       >
-        <View style={styles.overlay}>
-          <View style={styles.card}>
+        <TouchableOpacity
+          style={styles.overlayTouchable}
+          activeOpacity={1}
+          onPress={handleRequestClose}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={styles.card}>
 
-            {/* ── Step 1: Warning ── */}
-            {step === 'warning' && (
-              <Animated.View style={{ opacity: warningOpacity }}>
-                <Text style={styles.warningIcon}>⚠️</Text>
-                <Text style={styles.title}>Delete Account</Text>
-                <Text style={styles.message}>
-                  Are you sure you want to permanently delete your account? This action cannot be undone.
-                </Text>
-                <View style={styles.buttons}>
+              {/* ── Step 1: Warning ── */}
+              {step === 'warning' && (
+                <Animated.View style={{ opacity: warningOpacity }}>
+                  <Text style={styles.title}>Delete Account</Text>
+                  <Text style={styles.message}>
+                    Are you sure you want to permanently delete your account? This action cannot be undone.
+                  </Text>
                   <TouchableOpacity
-                    style={styles.cancelBtn}
+                    style={styles.primaryBtn}
                     onPress={handleCancel}
-                    activeOpacity={0.7}
+                    activeOpacity={0.85}
                   >
-                    <Text style={styles.cancelText}>Cancel</Text>
+                    <Text style={styles.primaryText}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.yesDeleteBtn]}
+                    style={styles.destructiveBtn}
                     onPress={handleYesDelete}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.yesDeleteText}>Yes, Delete My Account</Text>
+                    <Text style={styles.destructiveText}>Yes, Delete My Account</Text>
                   </TouchableOpacity>
-                </View>
-              </Animated.View>
-            )}
+                </Animated.View>
+              )}
 
-            {/* ── Step 2: Type to confirm ── */}
-            {step === 'confirm' && (
-              <Animated.View style={{ opacity: confirmOpacity }}>
-                <Text style={styles.title}>Delete Account</Text>
-                <Text style={styles.message}>
-                  This action is permanent and cannot be undone. Type{' '}
-                  <Text style={styles.deleteWord}>DELETE</Text>
-                  {' '}below to confirm.
-                </Text>
+              {/* ── Step 2: Type to confirm ── */}
+              {step === 'confirm' && (
+                <Animated.View style={{ opacity: confirmOpacity }}>
+                  <Text style={styles.title}>Confirm Deletion</Text>
+                  <Text style={styles.message}>
+                    This action is permanent and cannot be undone. Type{' '}
+                    <Text style={styles.deleteWord}>DELETE</Text>
+                    {' '}below to confirm.
+                  </Text>
 
-                <TextInput
-                  style={styles.input}
-                  value={inputText}
-                  onChangeText={(t) => {
-                    setInputText(t);
-                  }}
-                  placeholder="Type DELETE to confirm"
-                  placeholderTextColor="#ADADAD"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!isDeleting}
-                />
+                  <TextInput
+                    style={styles.input}
+                    value={inputText}
+                    onChangeText={(t) => {
+                      setInputText(t);
+                    }}
+                    placeholder="Type DELETE to confirm"
+                    placeholderTextColor="#636366"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isDeleting}
+                  />
 
-                {isDeleting ? (
-                  <View style={styles.loadingRow}>
-                    <ActivityIndicator size="small" color={COLORS.danger} />
-                    <Text style={styles.loadingText}>Deleting account...</Text>
-                  </View>
-                ) : (
-                  <View style={styles.buttons}>
-                    <TouchableOpacity
-                      style={styles.cancelBtn}
-                      onPress={handleCancel}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.cancelText}>Cancel</Text>
-                    </TouchableOpacity>
+                  {isDeleting ? (
+                    <View style={styles.loadingRow}>
+                      <ActivityIndicator size="small" color="#FF3B30" />
+                      <Text style={styles.loadingText}>Deleting account...</Text>
+                    </View>
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        style={styles.primaryBtn}
+                        onPress={handleCancel}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.primaryText}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.confirmBtn, { backgroundColor: confirmBtnBg }]}
+                        onPress={handleConfirm}
+                        disabled={!isConfirmEnabled}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.confirmText}>Confirm Deletion</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </Animated.View>
+              )}
 
-                    <TouchableOpacity
-                      style={[
-                        styles.confirmBtn,
-                        { backgroundColor: confirmBtnBg, opacity: confirmBtnOpacity },
-                      ]}
-                      onPress={handleConfirm}
-                      disabled={!isConfirmEnabled}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.confirmText}>Confirm Deletion</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </Animated.View>
-            )}
-
-          </View>
-        </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -193,66 +190,46 @@ export default function DeleteAccountModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  overlayTouchable: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: 24,
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: RADIUS.xl,
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.xl,
-    paddingBottom: SPACING.xxl,
+    backgroundColor: '#1C1C1E',
+    borderRadius: 24,
+    padding: 28,
     width: '100%',
-    maxWidth: 380,
   },
-  // ── Step 1 styles ──
-  warningIcon: {
-    fontSize: 40,
-    textAlign: 'center',
-    marginBottom: SPACING.sm,
-  },
-  yesDeleteBtn: {
-    flex: 1,
-    backgroundColor: COLORS.danger,
-    borderRadius: RADIUS.full,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  yesDeleteText: {
-    fontSize: 14,
+  title: {
+    fontSize: 20,
     fontWeight: '700',
     color: '#FFFFFF',
     textAlign: 'center',
-  },
-  // ── Shared styles ──
-  title: {
-    ...TYPOGRAPHY.h3,
-    color: '#1C1C1E',
-    textAlign: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: 8,
   },
   message: {
-    ...TYPOGRAPHY.body,
-    color: '#6B6B6B',
+    fontSize: 14,
+    color: '#8E8E93',
     textAlign: 'center',
-    marginBottom: SPACING.lg,
-    lineHeight: 22,
+    lineHeight: 20,
+    marginBottom: 28,
   },
   deleteWord: {
-    fontFamily: 'Inter_700Bold',
-    color: '#1C1C1E',
+    fontWeight: '700',
+    color: '#FF3B30',
   },
   input: {
-    backgroundColor: '#EFEFEF',
-    borderRadius: RADIUS.full,
-    paddingHorizontal: SPACING.base,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#0A0A0A',
-    marginBottom: SPACING.base,
+    backgroundColor: '#2C2C2E',
+    borderRadius: 999,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    fontSize: 15,
+    color: '#FFFFFF',
+    marginBottom: 16,
     textAlign: 'center',
     letterSpacing: 1,
   },
@@ -260,40 +237,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING.sm,
-    paddingVertical: SPACING.md,
+    gap: 8,
+    paddingVertical: 16,
   },
   loadingText: {
-    ...TYPOGRAPHY.bodyMedium,
+    fontSize: 14,
+    fontWeight: '500',
     color: '#8E8E93',
   },
-  buttons: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    marginTop: SPACING.xs,
-  },
-  cancelBtn: {
-    flex: 1,
-    backgroundColor: '#EFEFEF',
-    borderRadius: RADIUS.full,
-    paddingVertical: 14,
+  primaryBtn: {
+    backgroundColor: '#F9F9F6',
+    borderRadius: 999,
+    paddingVertical: 16,
     alignItems: 'center',
+    marginBottom: 12,
   },
-  cancelText: {
+  primaryText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#1C1C1E',
   },
-  confirmBtn: {
-    flex: 1,
-    borderRadius: RADIUS.full,
-    paddingVertical: 14,
+  destructiveBtn: {
+    backgroundColor: '#2C2C2E',
+    borderRadius: 999,
+    paddingVertical: 16,
     alignItems: 'center',
-    justifyContent: 'center',
+  },
+  destructiveText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FF3B30',
+  },
+  confirmBtn: {
+    borderRadius: 999,
+    paddingVertical: 16,
+    alignItems: 'center',
   },
   confirmText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#FFFFFF',
   },
 });
