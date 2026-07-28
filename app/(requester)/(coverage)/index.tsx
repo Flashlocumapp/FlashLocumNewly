@@ -40,7 +40,7 @@ type CoverageSession = {
   shift_end: string;
   shift_type: string;
   coverage_type: string;
-  status: 'upcoming' | 'active' | 'paused' | 'completed' | 'cancelled' | 'requester_paid';
+  status: 'upcoming' | 'active' | 'paused' | 'completed' | 'cancelled' | 'requester_paid' | 'settled';
   cancelled_by?: 'doctor' | 'requester' | null;
   started_at: string | null;
   ended_at: string | null;
@@ -253,7 +253,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const bookedPrice = displayBookedPrice ? `₦${Number(displayBookedPrice).toLocaleString()}` : '';
   const shiftSummaryLine = `${session.shift_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd}${bookedPrice ? ` · ${bookedPrice}` : ''}`;
 
-  const settlementStatus = session.status === 'cancelled' ? 'Cancelled' : (session.status === 'requester_paid' || session.status === 'completed' ? 'Paid' : 'Pending');
+  const settlementStatus = session.status === 'cancelled' ? 'Cancelled' : (session.status === 'requester_paid' || session.status === 'settled' || session.status === 'completed' ? 'Paid' : 'Pending');
   const settlementColor = settlementStatus === 'Cancelled' ? '#EF4444' : settlementStatus === 'Paid' ? '#34C759' : '#FFFFFF';
 
   const formatDateTime = (iso: string | null | undefined) => {

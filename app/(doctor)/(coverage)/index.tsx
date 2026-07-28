@@ -176,7 +176,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
   const shiftSummaryLine = `${session.shift_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd} · ${hoursDisplay} · ₦${Number(session.booked_price ?? session.price ?? 0).toLocaleString()}`;
 
-  const settlementStatus = session.status === 'cancelled' ? 'Cancelled' : (session.status === 'requester_paid' || session.status === 'completed' || session.status === 'payment_complete' ? 'Paid' : 'Pending');
+  const settlementStatus = session.status === 'cancelled' ? 'Cancelled' : (session.status === 'requester_paid' || session.status === 'settled' || session.status === 'completed' ? 'Paid' : 'Pending');
   const settlementColor = settlementStatus === 'Cancelled' ? '#EF4444' : settlementStatus === 'Paid' ? '#34C759' : '#FFFFFF';
 
   const formatDateTime = (iso: string | null | undefined) => {
@@ -364,7 +364,7 @@ export default function DoctorCoverageScreen() {
       if (!user?.id) return [];
       console.log('[DoctorCoverage] fetching history sessions for', user.id);
       const res = await fetchWithAuth(
-        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=completed,cancelled,requester_paid,settled,payment_complete`,
+        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=doctor&status=completed,cancelled,requester_paid,settled`,
         { headers: { 'Content-Type': 'application/json' } },
       );
       if (!res.ok) {

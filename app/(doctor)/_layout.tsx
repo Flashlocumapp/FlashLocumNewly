@@ -58,7 +58,7 @@ async function prefetchTabData(userId: string) {
       try {
         console.log('[prefetch] fetching doctor coverage history');
         const data = await fetchWithAuth(
-          `${EDGE_BASE}/get-coverage-sessions?role=doctor&status=completed,cancelled,requester_paid,settled,payment_complete`
+          `${EDGE_BASE}/get-coverage-sessions?role=doctor&status=completed,cancelled,requester_paid,settled`
         );
         setCached(coverageHistoryKey, data?.sessions ?? []);
         console.log('[prefetch] doctor coverage history cached', (data?.sessions ?? []).length, 'sessions');
@@ -492,7 +492,7 @@ export default function DoctorLayout() {
         .select('status')
         .eq('id', resolvedSessionId)
         .maybeSingle();
-      const paidStatuses = ['requester_paid', 'settled', 'payment_complete'];
+      const paidStatuses = ['requester_paid'];
       if (!sessionSnap || !paidStatuses.includes(sessionSnap.status)) {
         console.log('[Doctor] maybeShowDoctorRating — session not yet paid, suppressing overlay', sessionSnap?.status);
         return;
@@ -539,7 +539,7 @@ export default function DoctorLayout() {
         if (res.ok) {
           const data = await res.json();
           const snap = data?.session ?? null;
-          const paidStatuses = ['settled', 'requester_paid', 'payment_complete'];
+          const paidStatuses = ['requester_paid'];
           if (snap && paidStatuses.includes(snap.status)) {
             console.log('[Doctor] paymentPoll (primary) — paid status confirmed:', snap.status);
             const resolvedHospital = hospitalName || (snap.hospital_name ?? '');
@@ -559,7 +559,7 @@ export default function DoctorLayout() {
             .select('id, status, total_cost, hospital_name')
             .eq('id', sessionId)
             .maybeSingle();
-          const paidStatuses = ['settled', 'requester_paid', 'payment_complete'];
+          const paidStatuses = ['requester_paid'];
           if (snap2 && paidStatuses.includes(snap2.status)) {
             console.log('[Doctor] paymentPoll (fallback) — paid status confirmed:', snap2.status);
             const resolvedHospital = hospitalName || (snap2.hospital_name ?? '');
@@ -648,7 +648,7 @@ export default function DoctorLayout() {
   // ─── Keep activeSessionId in sync — only set, never clear ───────────────────
   useEffect(() => {
     if (activeSession?.id) {
-      const terminalStatuses = ['settled', 'requester_paid', 'payment_complete'];
+      const terminalStatuses = ['requester_paid', 'settled'];
       if (!terminalStatuses.includes(activeSession.status)) {
         setActiveSessionId(activeSession.id);
       }
@@ -976,7 +976,7 @@ export default function DoctorLayout() {
         const hospitalName = payload?.payload?.hospital_name ?? '';
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] PAYMENT_CONFIRMED broadcast received', { sessionId, hospitalName, amount });
-        setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
+        setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
         startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
         invalidate(`doctor-coverage-history-${user.id}`);
@@ -988,7 +988,7 @@ export default function DoctorLayout() {
         const hospitalName = payload?.payload?.hospital_name ?? '';
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] payment_confirmed broadcast received', { sessionId, hospitalName, amount });
-        setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
+        setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
         startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
         invalidate(`doctor-coverage-history-${user.id}`);
@@ -996,7 +996,7 @@ export default function DoctorLayout() {
         invalidate('doctor_earnings');
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
-        setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
+        setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         PollingManager.stop('cancel');
@@ -1431,7 +1431,7 @@ export default function DoctorLayout() {
             if (snapRes.ok) {
               const snapData = await snapRes.json();
               const snap = snapData?.session ?? null;
-              if (snap && (snap.status === 'settled' || snap.status === 'requester_paid' || snap.status === 'payment_complete')) {
+              if (snap && (snap.status === 'requester_paid' || snap.status === 'settled')) {
                 console.log('[Doctor] AppState active — session in paid state:', snap.status, '— triggering rating overlay');
                 void maybeShowDoctorRating(snap.id, snap.hospital_name ?? '', snap.total_cost ?? 0);
               }

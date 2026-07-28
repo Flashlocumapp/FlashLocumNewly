@@ -1105,8 +1105,7 @@ function RequesterPaymentCard({
         if (!cancelled && rawStatus && (
           rawStatus === 'requester_paid' ||
           rawStatus === 'settled' ||
-          rawStatus === 'disbursed' ||
-          rawStatus === 'payment_complete'
+          rawStatus === 'disbursed'
         )) {
           if (timerRef.current) clearInterval(timerRef.current);
           onPaymentConfirmed();
@@ -2143,7 +2142,7 @@ export default function RequesterHomeScreen() {
       _cachedActiveSession = session;
       _sessionCachePopulated = true;
       // If session is already paid, use persistent guard to decide whether to show modal
-      if (session && (session.status === 'requester_paid' || session.status === 'settled' || session.status === 'payment_complete')) {
+      if (session && session.status === 'requester_paid') {
         // Synchronous check first — avoids async gap
         if (_requesterPaidSessions.has(session.id) || _requesterRatingInFlight.has(session.id) || _requesterDismissedSessions.has(session.id)) {
         } else {
@@ -2244,7 +2243,7 @@ export default function RequesterHomeScreen() {
         // Check the pre-fetch snap first (covers the case where session was paid before fetch)
         const snapAfter = activeSessionRef.current;
         const snap = snapAfter ?? snapBefore;
-        if (snap && (snap.status === 'requester_paid' || snap.status === 'settled' || snap.status === 'payment_complete')) {
+        if (snap && snap.status === 'requester_paid') {
           if (!_requesterPaidSessions.has(snap.id) && !_requesterDismissedSessions.has(snap.id)) {
             console.log('[Requester] AppState active — session in paid state:', snap.status, '— showing overlay');
             setConfirmedSession(snap);
@@ -2381,7 +2380,7 @@ export default function RequesterHomeScreen() {
         setPartialOutstandingBalance(outstanding_balance ?? 0);
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
-        setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
+        setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         PollingManager.stop('cancel');
@@ -2435,7 +2434,7 @@ export default function RequesterHomeScreen() {
           console.log('[Requester] coverage_sessions INSERT via postgres_changes — status:', status, 'id:', newRow.id);
           if (status === 'upcoming' || status === 'active' || status === 'paused' || status === 'payment_pending') {
             fetchActiveSessionRef.current();
-          } else if (status === 'requester_paid' || status === 'settled' || status === 'payment_complete') {
+          } else if (status === 'requester_paid' || status === 'settled') {
             handlePaymentConfirmedWithFallbackRef.current(newRow.id);
           } else if (status === 'cancelled') {
             setActiveSession(null);
@@ -2456,7 +2455,7 @@ export default function RequesterHomeScreen() {
           console.log('[Requester] coverage_sessions UPDATE via postgres_changes — status:', status, 'id:', newRow.id);
           if (status === 'upcoming' || status === 'active' || status === 'paused' || status === 'payment_pending') {
             fetchActiveSessionRef.current();
-          } else if (status === 'requester_paid' || status === 'settled' || status === 'payment_complete') {
+          } else if (status === 'requester_paid' || status === 'settled') {
             handlePaymentConfirmedWithFallbackRef.current(newRow.id);
           } else if (status === 'cancelled') {
             setActiveSession(null);
@@ -3180,7 +3179,7 @@ export default function RequesterHomeScreen() {
         _sessionCachePopulated = true;
         const fetchedSid = sessionIdFromPayload ?? session.id;
         if (
-          (session.status === 'requester_paid' || session.status === 'settled' || session.status === 'payment_complete') &&
+          (session.status === 'requester_paid' || session.status === 'settled') &&
           fetchedSid &&
           !_requesterPaidSessions.has(fetchedSid) &&
           !_requesterRatingInFlight.has(fetchedSid) &&
@@ -3217,7 +3216,7 @@ export default function RequesterHomeScreen() {
         if (res.ok) {
           const data = await res.json();
           const snap = data?.session ?? null;
-          const paidStatuses = ['requester_paid', 'settled', 'payment_complete'];
+          const paidStatuses = ['requester_paid'];
           if (snap && paidStatuses.includes(snap.status)) {
             console.log('[Requester] paymentPoll — paid status confirmed:', snap.status, '— showing overlay');
             if (!_requesterPaidSessions.has(snap.id) && !_requesterDismissedSessions.has(snap.id)) {
@@ -4362,7 +4361,6 @@ export default function RequesterHomeScreen() {
             activeSession.status === 'cancelled' ||
             activeSession.status === 'requester_paid' ||
             activeSession.status === 'settled' ||
-            activeSession.status === 'payment_complete' ||
             (activeSession.status !== 'upcoming' &&
              activeSession.status !== 'paused' &&
              activeSession.status !== 'active' &&
