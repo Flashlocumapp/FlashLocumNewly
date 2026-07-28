@@ -21,7 +21,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
-import { useTabData } from '@/hooks/useTabData';
+import { getCached, setCached } from '@/utils/tabCache';
 
 const SUPABASE_URL = 'https://juilousufwlsiqdcgllu.supabase.co';
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
@@ -429,6 +429,8 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
+const HISTORY_STATUSES = ['completed', 'cancelled', 'requester_paid'];
+
 export default function RequesterCoverageScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -440,44 +442,80 @@ export default function RequesterCoverageScreen() {
 
   const cacheKey = `requester-coverage-${user?.id ?? 'anon'}`;
 
-  const { data: historySessions, loading, refreshing, refresh: refreshHistory } = useTabData<CoverageSession[]>({
-    cacheKey,
-    fetcher: useCallback(async () => {
-      if (!user?.id) return [];
-      console.log('[RequesterCoverage] fetching coverage history for', user.id);
+  // Stale-while-revalidate: seed from cache so first render is instant
+  const [sessions, setSessions] = useState<CoverageSession[]>(() => getCached<CoverageSession[]>(cacheKey) ?? []);
+  const [loading, setLoading] = useState(() => getCached(cacheKey) === null);
+
+  const fetchSessions = useCallback(async (isBackground = true) => {
+    if (!user?.id) return;
+    console.log('[RequesterCoverage] fetchSessions called, background=', isBackground, 'user=', user.id);
+    if (!isBackground) setLoading(true);
+    try {
       const res = await fetchWithAuth(
         `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=requester&status=completed,cancelled,requester_paid`,
         { headers: { 'Content-Type': 'application/json' } },
       );
       if (!res.ok) {
-        await res.text();
-        throw new Error('Failed to load coverage history');
+        const errText = await res.text();
+        console.log('[RequesterCoverage] fetch error:', errText);
+        return;
       }
       const data = await res.json();
-      const sessions: CoverageSession[] = data?.sessions ?? [];
+      const newSessions: CoverageSession[] = data?.sessions ?? [];
+      console.log('[RequesterCoverage] fetched', newSessions.length, 'sessions');
 
       // Check which requester_paid sessions have already been reviewed
-      const paidIds = sessions
-        .filter((s) => s.status === 'requester_paid')
-        .map((s) => s.id);
-
-      if (paidIds.length > 0 && user?.id) {
+      const paidIds = newSessions.filter((s) => s.status === 'requester_paid').map((s) => s.id);
+      if (paidIds.length > 0) {
         const { data: reviews, error: reviewErr } = await supabase
           .from('shift_reviews')
           .select('session_id')
           .eq('reviewer_id', user.id)
           .in('session_id', paidIds);
-
         if (!reviewErr) {
           const ids = new Set<string>((reviews ?? []).map((r: { session_id: string }) => r.session_id));
           setReviewedIds(ids);
         }
       }
 
-      return sessions;
-    }, [user?.id]), // eslint-disable-line react-hooks/exhaustive-deps
-    alwaysRefresh: false,
-  });
+      setSessions(prev => {
+        const merged = [...prev];
+        let changed = false;
+        // Update existing rows and insert new ones at the front
+        for (const row of newSessions) {
+          const idx = merged.findIndex(s => s.id === row.id);
+          if (idx !== -1) {
+            if (JSON.stringify(merged[idx]) !== JSON.stringify(row)) {
+              merged[idx] = { ...merged[idx], ...row };
+              changed = true;
+            }
+          } else {
+            merged.unshift(row);
+            changed = true;
+          }
+        }
+        // Remove rows no longer present
+        const newIds = new Set(newSessions.map(s => s.id));
+        const filtered = merged.filter(s => newIds.has(s.id));
+        if (filtered.length !== merged.length) changed = true;
+        if (!changed) return prev; // no re-render
+        setCached(cacheKey, filtered);
+        return filtered;
+      });
+    } catch (e: any) {
+      console.log('[RequesterCoverage] fetchSessions exception:', e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id, cacheKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Initial load
+  useEffect(() => {
+    if (!user?.id) return;
+    const hasCache = getCached(cacheKey) !== null;
+    fetchSessions(!hasCache);
+    lastFetchedAtRef.current = Date.now();
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // AppState listener — track backgrounding so we always recover on foreground
   useEffect(() => {
@@ -489,7 +527,7 @@ export default function RequesterCoverageScreen() {
     return () => sub.remove();
   }, []);
 
-  // Refresh history whenever this tab gains focus (staleness-gated)
+  // Refresh whenever this tab gains focus (staleness-gated)
   useFocusEffect(
     useCallback(() => {
       const now = Date.now();
@@ -498,15 +536,15 @@ export default function RequesterCoverageScreen() {
       if (isStale || needsRecovery) {
         lastFetchedAtRef.current = now;
         wasBackgroundedRef.current = false;
-        refreshHistory();
+        console.log('[RequesterCoverage] focus refresh triggered, stale=', isStale, 'recovery=', needsRecovery);
+        fetchSessions(true); // always background — cache already seeded
       }
-    }, [refreshHistory])
+    }, [fetchSessions])
   );
 
-  // Realtime: refresh history when coverage_sessions rows change for this requester
+  // Realtime: surgical in-place merge — no network call, no loading state
   useEffect(() => {
     if (!user?.id) return;
-    const HISTORY_STATUSES = ['completed', 'cancelled', 'requester_paid'];
     const ch = supabase
       .channel(`coverage-history-requester:${user.id}`)
       .on(
@@ -520,26 +558,37 @@ export default function RequesterCoverageScreen() {
         (payload) => {
           const row = payload.new as CoverageSession | undefined;
           if (!row || !HISTORY_STATUSES.includes(row.status)) return;
-          // useTabData does not expose a setter — use refreshHistory() as safe path
-          refreshHistory();
+          console.log('[RequesterCoverage] realtime update for session', row.id, 'status=', row.status);
+          setSessions(prev => {
+            const idx = prev.findIndex(s => s.id === row.id);
+            if (idx !== -1) {
+              const next = [...prev];
+              next[idx] = { ...prev[idx], ...row };
+              setCached(cacheKey, next);
+              return next;
+            }
+            const next = [row, ...prev];
+            setCached(cacheKey, next);
+            return next;
+          });
           lastFetchedAtRef.current = Date.now();
         }
       )
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id, cacheKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   type DateRange = 'this_month' | 'last_month' | 'last_3_months';
   const [dateRange, setDateRange] = useState<DateRange>('this_month');
 
-  function filterByDateRange(sessions: CoverageSession[], range: DateRange): CoverageSession[] {
+  function filterByDateRange(list: CoverageSession[], range: DateRange): CoverageSession[] {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
     const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
 
-    return sessions.filter(s => {
+    return list.filter(s => {
       const d = new Date(s.shift_date);
       if (range === 'this_month') return d >= startOfMonth;
       if (range === 'last_month') return d >= startOfLastMonth && d <= endOfLastMonth;
@@ -547,12 +596,12 @@ export default function RequesterCoverageScreen() {
     });
   }
 
-  const sessions = [...(historySessions ?? [])].sort((a, b) => {
+  const sortedSessions = [...sessions].sort((a, b) => {
     const aTime = new Date(a.ended_at ?? a.created_at ?? a.shift_date).getTime();
     const bTime = new Date(b.ended_at ?? b.created_at ?? b.shift_date).getTime();
     return bTime - aTime;
   });
-  const filteredSessions = filterByDateRange(sessions, dateRange);
+  const filteredSessions = filterByDateRange(sortedSessions, dateRange);
 
   const alreadyReviewed = selectedSession ? reviewedIds.has(selectedSession.id) : false;
 

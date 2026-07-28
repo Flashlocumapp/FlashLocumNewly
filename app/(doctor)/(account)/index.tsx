@@ -177,7 +177,10 @@ export default function DoctorAccountScreen() {
           selfie_url: doctorProfileRes.data?.selfie_url ?? null,
           subaccount_code: doctorProfileRes.data?.subaccount_code ?? null,
         };
-        setProfile(mergedProfile);
+        setProfile(prev => {
+          if (prev && JSON.stringify(prev) === JSON.stringify(mergedProfile)) return prev; // no re-render
+          return mergedProfile;
+        });
         setCached('doctor_profile', { ...mergedProfile });
         const rawSelfieUrl = doctorProfileRes.data?.selfie_url ?? null;
         if (rawSelfieUrl) {

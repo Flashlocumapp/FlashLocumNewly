@@ -228,8 +228,32 @@ export default function DoctorEarningsScreen() {
 
       const rows = (data as DoctorEarning[]) ?? [];
       console.log('[Earnings] Fetched', rows.length, 'rows');
-      setEarnings(rows);
-      setCached('doctor_earnings', rows);
+
+      setEarnings(prev => {
+        const merged = [...prev];
+        let changed = false;
+        // Update existing rows and insert new ones at the front
+        for (const row of rows) {
+          const idx = merged.findIndex(e => e.session_id === row.session_id);
+          if (idx !== -1) {
+            if (JSON.stringify(merged[idx]) !== JSON.stringify(row)) {
+              merged[idx] = { ...merged[idx], ...row };
+              changed = true;
+            }
+          } else {
+            merged.unshift(row);
+            changed = true;
+          }
+        }
+        // Remove rows no longer present
+        const newIds = new Set(rows.map(r => r.session_id));
+        const filtered = merged.filter(r => newIds.has(r.session_id));
+        if (filtered.length !== merged.length) changed = true;
+        if (!changed) return prev; // no re-render
+        setCached('doctor_earnings', filtered);
+        return filtered;
+      });
+
       setError(null);
       lastFetchedAtRef.current = Date.now();
     } catch (e: any) {

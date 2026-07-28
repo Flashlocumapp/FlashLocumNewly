@@ -108,7 +108,10 @@ export default function RequesterAccountScreen() {
           phone: authProfile?.phone ?? data?.phone ?? null,
           gender: authProfile?.gender ?? data?.gender ?? null,
         };
-        setProfile(mergedProfile);
+        setProfile(prev => {
+          if (prev && JSON.stringify(prev) === JSON.stringify(mergedProfile)) return prev; // no re-render
+          return mergedProfile;
+        });
         setCached('requester_profile', { ...mergedProfile });
         setLoading(false);
       };
