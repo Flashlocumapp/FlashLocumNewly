@@ -71,10 +71,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-fullscreen.png",
-          "resizeMode": "contain",
-          "backgroundColor": "#2B2B2B",
-          "imageWidth": 180
+          "ios": {
+            "image": "./assets/images/splash-fullscreen.png",
+            "resizeMode": "contain",
+            "backgroundColor": "#2B2B2B",
+            "imageWidth": 180
+          }
         }
       ],
       "expo-font",
