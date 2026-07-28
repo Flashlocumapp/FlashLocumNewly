@@ -1292,8 +1292,11 @@ export default function DoctorLayout() {
             console.log('[Doctor] postgres_changes — session status requester_paid, showing rating overlay');
             const sid = newRow.id ?? activeSessionId;
             const hospital = newRow.hospital_name ?? '';
-            const amt = newRow.total_cost ?? newRow.price ?? 0;
-            void maybeShowDoctorRating(sid, hospital, amt);
+            void (async () => {
+              const verifiedAmount = await fetchVerifiedAmount(sid);
+              const amt = verifiedAmount || newRow.total_cost ?? newRow.price ?? 0;
+              void maybeShowDoctorRating(sid, hospital, amt);
+            })();
           }
         }
       )
