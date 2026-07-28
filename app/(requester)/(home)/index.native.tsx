@@ -1844,6 +1844,12 @@ export default function RequesterHomeScreen() {
     return () => { cancelled = true; clearTimeout(timeout); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (iconsReady) {
+      setMapRegion(prev => ({ ...prev }));
+    }
+  }, [iconsReady]);
+
   const doctorPoints = useMemo(() => {
     return onlineDoctors.map((doc) => ({
       type: 'Feature' as const,
@@ -1858,10 +1864,10 @@ export default function RequesterHomeScreen() {
   const bounds = useMemo((): [number, number, number, number] => {
     const { latitude, longitude, latitudeDelta, longitudeDelta } = mapRegion;
     return [
-      longitude - longitudeDelta,   // west
-      latitude - latitudeDelta,     // south
-      longitude + longitudeDelta,   // east
-      latitude + latitudeDelta,     // north
+      longitude - longitudeDelta / 2,   // west
+      latitude - latitudeDelta / 2,     // south
+      longitude + longitudeDelta / 2,   // east
+      latitude + latitudeDelta / 2,     // north
     ];
   }, [mapRegion]);
 
@@ -3543,7 +3549,6 @@ export default function RequesterHomeScreen() {
           </Marker>
         )}
         {clusters.map((point) => {
-          if (!iconsReady) return null;
           const [lng, lat] = point.geometry.coordinates;
           const { cluster: isCluster, point_count: pointCount } = point.properties as any;
 
