@@ -827,6 +827,8 @@ function RequesterPaymentCard({
   bottomPadding,
   onPaymentConfirmed,
   initialPayment,
+  amountPaid,
+  outstandingBalance,
 }: {
   session: CoverageSession;
   bottomPadding: number;
@@ -839,6 +841,8 @@ function RequesterPaymentCard({
     expiry_at: string;
     amount_naira: number;
   } | null;
+  amountPaid?: number;
+  outstandingBalance?: number;
 }) {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -1266,6 +1270,58 @@ function RequesterPaymentCard({
             </View>
           )}
 
+          {/* Partial Payment Banner */}
+          {amountPaid != null && amountPaid > 0 && outstandingBalance != null && outstandingBalance > 0 && (
+            <View style={{
+              backgroundColor: '#FFFBEB',
+              borderRadius: 16,
+              padding: 16,
+              marginBottom: 16,
+              borderWidth: 1,
+              borderColor: '#F59E0B',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.06,
+              shadowRadius: 8,
+              elevation: 2,
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 6 }}>
+                <View style={{ backgroundColor: '#F59E0B', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
+                  <Text style={{ fontSize: 10, letterSpacing: 1.2, color: '#FFFFFF', fontFamily: 'Inter_700Bold' }}>
+                    PARTIAL PAYMENT RECEIVED
+                  </Text>
+                </View>
+              </View>
+              <View style={{ gap: 8 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 14, color: '#78716C', fontFamily: 'Inter_400Regular' }}>
+                    Total Due
+                  </Text>
+                  <Text style={{ fontSize: 14, color: '#1C1917', fontFamily: 'Inter_600SemiBold' }}>
+                    {`₦${Number(amountNaira).toLocaleString()}`}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 14, color: '#78716C', fontFamily: 'Inter_400Regular' }}>
+                    Amount Paid
+                  </Text>
+                  <Text style={{ fontSize: 14, color: '#16A34A', fontFamily: 'Inter_600SemiBold' }}>
+                    {`₦${Number(amountPaid).toLocaleString()}`}
+                  </Text>
+                </View>
+                <View style={{ height: 1, backgroundColor: '#FDE68A', marginVertical: 2 }} />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 14, color: '#78716C', fontFamily: 'Inter_600SemiBold' }}>
+                    Outstanding Balance
+                  </Text>
+                  <Text style={{ fontSize: 16, color: '#D97706', fontFamily: 'Inter_700Bold' }}>
+                    {`₦${Number(outstandingBalance).toLocaleString()}`}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+
           {/* Account Card */}
           <View style={{
             backgroundColor: '#FFFFFF',
@@ -1661,6 +1717,12 @@ export default function RequesterHomeScreen() {
         handlePaymentConfirmedWithFallbackRef.current(sessionId);
         startRequesterPaymentPollingRef.current();
       })
+      .on('broadcast', { event: 'PAYMENT_PARTIAL' }, (payload) => {
+        console.log('[Requester] user channel PAYMENT_PARTIAL received', payload?.payload);
+        const { amount_paid, outstanding_balance } = payload?.payload ?? {};
+        setPartialAmountPaid(amount_paid ?? 0);
+        setPartialOutstandingBalance(outstanding_balance ?? 0);
+      })
       // From channel 7 (shift cancelled on requester channel)
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         console.log('[Requester] requester-user channel SHIFT_CANCELLED received');
@@ -2005,6 +2067,10 @@ export default function RequesterHomeScreen() {
   const [ratingError, setRatingError] = useState('');
   const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
+  // Partial payment state — updated by PAYMENT_PARTIAL broadcast, reset on session clear
+  const [partialAmountPaid, setPartialAmountPaid] = useState<number>(0);
+  const [partialOutstandingBalance, setPartialOutstandingBalance] = useState<number>(0);
+
 
   // Realtime refs for matching
   const matchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2285,6 +2351,12 @@ export default function RequesterHomeScreen() {
         const sessionId = payload?.payload?.session_id;
         handlePaymentConfirmedWithFallbackRef.current(sessionId);
         startRequesterPaymentPollingRef.current();
+      })
+      .on('broadcast', { event: 'PAYMENT_PARTIAL' }, (payload) => {
+        console.log('[Requester] session channel PAYMENT_PARTIAL received', payload?.payload);
+        const { amount_paid, outstanding_balance } = payload?.payload ?? {};
+        setPartialAmountPaid(amount_paid ?? 0);
+        setPartialOutstandingBalance(outstanding_balance ?? 0);
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
         setActiveSession((prev) => prev ? { ...prev, status: 'payment_complete' } : prev);
@@ -3024,6 +3096,8 @@ export default function RequesterHomeScreen() {
       setShowPaymentSuccess(true);
     }
     setActiveSession(null);
+    setPartialAmountPaid(0);
+    setPartialOutstandingBalance(0);
   }, []); // no deps — reads from ref so never goes stale
 
   const fetchAndSetSettledAmount = useCallback(async (sessionId: string) => {
@@ -3031,14 +3105,14 @@ export default function RequesterHomeScreen() {
       console.log('[Requester] fetchAndSetSettledAmount — fetching payment_intents for session', sessionId);
       const { data } = await supabase
         .from('payment_intents')
-        .select('amount_naira')
+        .select('amount_paid')
         .eq('session_id', sessionId)
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
-      if (data?.amount_naira != null) {
-        console.log('[Requester] fetchAndSetSettledAmount — amount_naira:', data.amount_naira);
-        setSettledAmount(Number(data.amount_naira));
+      if (data?.amount_paid != null) {
+        console.log('[Requester] fetchAndSetSettledAmount — amount_paid:', data.amount_paid);
+        setSettledAmount(Number(data.amount_paid));
       }
     } catch {
       // non-fatal — overlay will fall back to confirmedSession.price
@@ -4246,6 +4320,8 @@ export default function RequesterHomeScreen() {
               bottomPadding={whiteCardPaddingBottom}
               onPaymentConfirmed={handlePaymentConfirmed}
               initialPayment={(activeSession as any)._initialPayment ?? null}
+              amountPaid={partialAmountPaid}
+              outstandingBalance={partialOutstandingBalance}
             />
           )}
 

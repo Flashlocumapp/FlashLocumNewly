@@ -495,6 +495,22 @@ export default function DoctorLayout() {
     setShowDoctorRating(true);
   }, [activeSessionIdRef]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Fetch verified settled amount from payment_intents ──
+  const fetchVerifiedAmount = useCallback(async (sessionId: string): Promise<number> => {
+    try {
+      const { data } = await supabase
+        .from('payment_intents')
+        .select('amount_paid')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      return data?.amount_paid ?? 0;
+    } catch {
+      return 0;
+    }
+  }, []);
+
   // ── Payment polling: tries get-active-session first, falls back to direct DB query ──
   const startPaymentPolling = useCallback((sessionId: string, hospitalName: string, amount: number) => {
     console.log('[Doctor] startPaymentPolling — dual-check poll (no cap)', { sessionId });
@@ -509,8 +525,11 @@ export default function DoctorLayout() {
           if (snap && paidStatuses.includes(snap.status)) {
             console.log('[Doctor] paymentPoll (primary) — paid status confirmed:', snap.status);
             const resolvedHospital = hospitalName || (snap.hospital_name ?? '');
-            const resolvedAmount = amount || (snap.total_cost ?? snap.price ?? 0);
-            void maybeShowDoctorRating(sessionId || snap.id, resolvedHospital, resolvedAmount);
+            const resolvedSessionId = sessionId || snap.id;
+            const verifiedAmount = await fetchVerifiedAmount(resolvedSessionId);
+            const resolvedAmount = verifiedAmount || amount || (snap.total_cost ?? snap.price ?? 0);
+            console.log('[Doctor] paymentPoll (primary) — verifiedAmount:', verifiedAmount, 'resolvedAmount:', resolvedAmount);
+            void maybeShowDoctorRating(resolvedSessionId, resolvedHospital, resolvedAmount);
             return true;
           }
         }
@@ -526,7 +545,9 @@ export default function DoctorLayout() {
           if (snap2 && paidStatuses.includes(snap2.status)) {
             console.log('[Doctor] paymentPoll (fallback) — paid status confirmed:', snap2.status);
             const resolvedHospital = hospitalName || (snap2.hospital_name ?? '');
-            const resolvedAmount = amount || (snap2.total_cost ?? 0);
+            const verifiedAmount = await fetchVerifiedAmount(sessionId);
+            const resolvedAmount = verifiedAmount || amount || (snap2.total_cost ?? 0);
+            console.log('[Doctor] paymentPoll (fallback) — verifiedAmount:', verifiedAmount, 'resolvedAmount:', resolvedAmount);
             void maybeShowDoctorRating(sessionId, resolvedHospital, resolvedAmount);
             return true;
           }
@@ -536,7 +557,7 @@ export default function DoctorLayout() {
       }
       return false;
     });
-  }, [maybeShowDoctorRating]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [maybeShowDoctorRating, fetchVerifiedAmount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startPaymentPollingRef = useRef(startPaymentPolling);
   useEffect(() => { startPaymentPollingRef.current = startPaymentPolling; }, [startPaymentPolling]);

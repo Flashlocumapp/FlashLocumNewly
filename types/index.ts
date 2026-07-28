@@ -13,6 +13,8 @@ export type PaymentIntent = {
   expiry_at: string; // ISO 8601
   created_at: string;
   updated_at: string;
+  amount_paid?: number;        // cumulative verified amount received so far
+  outstanding_balance?: number; // amount_naira - amount_paid
 };
 
 export type { Session, User };
