@@ -485,6 +485,24 @@ export default function DoctorLayout() {
       // Non-fatal — proceed to show overlay if DB check fails
     }
 
+    // DB guard: only show overlay if session is genuinely in a paid state
+    try {
+      const { data: sessionSnap } = await supabase
+        .from('coverage_sessions')
+        .select('status')
+        .eq('id', resolvedSessionId)
+        .maybeSingle();
+      const paidStatuses = ['requester_paid', 'settled', 'payment_complete'];
+      if (!sessionSnap || !paidStatuses.includes(sessionSnap.status)) {
+        console.log('[Doctor] maybeShowDoctorRating — session not yet paid, suppressing overlay', sessionSnap?.status);
+        return;
+      }
+    } catch {
+      // Non-fatal — if DB check fails, suppress overlay to be safe
+      console.log('[Doctor] maybeShowDoctorRating — DB status check failed, suppressing overlay');
+      return;
+    }
+
     // Only reach here if no review exists anywhere
     setDoctorRatingSessionId(resolvedSessionId);
     setDoctorRatingHospitalName(hospitalName);
