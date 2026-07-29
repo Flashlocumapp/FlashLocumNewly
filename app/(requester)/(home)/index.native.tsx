@@ -3652,12 +3652,12 @@ export default function RequesterHomeScreen() {
               tracksViewChanges={false}
             >
               <View style={{ alignItems: 'center' }}>
-                {/* Circular pin head — smaller, grey background */}
+                {/* Circular pin head */}
                 <View style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: 13,
-                  backgroundColor: '#8E8E93',
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  backgroundColor: '#D3D3D3',
                   alignItems: 'center',
                   justifyContent: 'center',
                   shadowColor: '#000',
@@ -3667,25 +3667,30 @@ export default function RequesterHomeScreen() {
                   elevation: 5,
                   zIndex: 2,
                 }}>
-                  <IconSymbol name="stethoscope" size={12} color="#FFFFFF" />
+                  <IconSymbol
+                    ios_icon_name="stethoscope"
+                    android_material_icon_name="medical-services"
+                    size={10}
+                    color="#FFFFFF"
+                  />
                   {/* Green online dot */}
                   <View style={{
                     position: 'absolute',
                     top: 1,
                     right: 1,
-                    width: 7,
-                    height: 7,
-                    borderRadius: 3.5,
+                    width: 6,
+                    height: 6,
+                    borderRadius: 3,
                     backgroundColor: '#22C55E',
                     borderWidth: 1,
                     borderColor: '#FFFFFF',
                   }} />
                 </View>
-                {/* Blunt rounded tail — no sharp point */}
+                {/* Blunt rounded tail */}
                 <View style={{
-                  width: 8,
-                  height: 6,
-                  backgroundColor: '#8E8E93',
+                  width: 7,
+                  height: 5,
+                  backgroundColor: '#D3D3D3',
                   borderBottomLeftRadius: 4,
                   borderBottomRightRadius: 4,
                   marginTop: -2,
