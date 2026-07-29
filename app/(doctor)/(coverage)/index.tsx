@@ -598,7 +598,7 @@ export default function DoctorCoverageScreen() {
     : 'No upcoming shifts. Stay online to receive requests.';
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#F7F7F5' }}>
     <ScrollView
       style={{ flex: 1, backgroundColor: '#F7F7F5' }}
       contentContainerStyle={{
