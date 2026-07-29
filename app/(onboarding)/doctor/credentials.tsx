@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import { decode } from 'base64-arraybuffer';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
@@ -180,28 +181,28 @@ export default function DoctorCredentials() {
     return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : 'bin';
   };
 
-  const uploadFile = async (uri: string, path: string, mimeType?: string): Promise<string> => {
+  const uploadFile = async (
+    uri: string,
+    path: string,
+    label: string,
+    mimeType?: string,
+  ): Promise<string> => {
+    console.log(`[Credentials] Uploading ${label} → ${path}`);
     const base64 = await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
-
-    // Convert base64 to binary using a reliable method
-    const binaryString = globalThis.atob ? globalThis.atob(base64) : Buffer.from(base64, 'base64').toString('binary');
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-
     const contentType = mimeType ?? 'application/octet-stream';
-
     const { error } = await supabase.storage
       .from('doctor-documents')
-      .upload(path, bytes.buffer, {
+      .upload(path, decode(base64), {
         upsert: true,
         contentType,
       });
-
-    if (error) throw error;
+    if (error) {
+      console.error(`[Credentials] Upload failed for ${label}:`, error.message);
+      throw new Error(`Failed to upload ${label}: ${error.message}`);
+    }
+    console.log(`[Credentials] Upload succeeded for ${label}`);
     return path;
   };
 
@@ -242,9 +243,9 @@ export default function DoctorCredentials() {
       const licenceExt = getExtension(licenceFile!.name);
 
       const [nyscPath, licencePath, selfiePath] = await Promise.all([
-        uploadFile(nyscFile!.uri, `${userId}/nysc-cert.${nyscExt}`, nyscFile!.mimeType),
-        uploadFile(licenceFile!.uri, `${userId}/medical-licence.${licenceExt}`, licenceFile!.mimeType),
-        uploadFile(selfieUri!, `${userId}/selfie.jpg`, 'image/jpeg'),
+        uploadFile(nyscFile!.uri, `${userId}/nysc-cert.${nyscExt}`, 'NYSC certificate', nyscFile!.mimeType),
+        uploadFile(licenceFile!.uri, `${userId}/medical-licence.${licenceExt}`, 'medical licence', licenceFile!.mimeType),
+        uploadFile(selfieUri!, `${userId}/selfie.jpg`, 'selfie', 'image/jpeg'),
       ]);
 
       const { error: doctorProfileError } = await supabase
