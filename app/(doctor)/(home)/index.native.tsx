@@ -631,7 +631,7 @@ export default function DoctorHomeScreen() {
             anchor={{ x: 0.5, y: 0.5 }}
             tracksViewChanges={markerTracksViews}
           >
-            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#34C759', borderWidth: 2.5, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#34C759', borderWidth: 2.5, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ fontSize: 18, lineHeight: 22 }}>🩺</Text>
               </View>
           </Marker>
