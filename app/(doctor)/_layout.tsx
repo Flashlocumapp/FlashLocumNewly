@@ -89,6 +89,10 @@ async function prefetchTabData(userId: string) {
 // Module-level GPS cache for go-online/heartbeat — written by the location watcher
 let _layoutCachedCoords: { lat: number; lng: number } | null = null;
 
+// Tracks the user's intended online state during an in-flight toggle.
+// null = no toggle in flight. true/false = user tapped and backend is processing.
+let _toggleIntent: boolean | null = null;
+
 // ─── Persistent deduplication for doctor rating overlay ──────────────────────
 const DOCTOR_RATED_SESSIONS_KEY = 'doctor_rated_sessions_v1';
 const DOCTOR_DISMISSED_SESSIONS_KEY = 'doctor_dismissed_sessions_v1';
@@ -667,6 +671,8 @@ export default function DoctorLayout() {
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
+        // Only apply if no user-initiated toggle has occurred yet
+        if (_toggleIntent !== null) return;
         if (data && typeof data.is_online === 'boolean') {
           setIsOnline(data.is_online);
         }
@@ -708,9 +714,11 @@ export default function DoctorLayout() {
         },
         (payload) => {
           const newRow = payload.new as { is_online?: boolean };
-          if (typeof newRow.is_online === 'boolean') {
-            setIsOnline(newRow.is_online);
-          }
+          if (typeof newRow.is_online !== 'boolean') return;
+          // If a toggle is in flight, only apply if the incoming value matches the intent
+          // (i.e. the DB confirmed what we already set). Discard contradicting events.
+          if (_toggleIntent !== null && newRow.is_online !== _toggleIntent) return;
+          setIsOnline(newRow.is_online);
         }
       )
       .subscribe();
@@ -760,6 +768,7 @@ export default function DoctorLayout() {
     if (prevIsOnlineRef.current === isOnline) return;
     prevIsOnlineRef.current = isOnline;
     const toggle = async () => {
+      _toggleIntent = isOnline;
       const fn = isOnline ? 'go-online' : 'go-offline';
       try {
         const goOnlineBody = isOnline
@@ -775,22 +784,12 @@ export default function DoctorLayout() {
                 Alert.alert('Max Shifts Reached', 'Complete a shift to go online again.');
                 setIsOnline(false);
               } else {
-                let body = '';
-                try { body = await res?.text() ?? ''; } catch (_) {}
-                Alert.alert(
-                  'Could not go online',
-                  `Error ${res?.status ?? 'unknown'}: ${body || 'No response from server'}`,
-                  [{ text: 'OK' }]
-                );
+                // Non-CAP_REACHED failure — revert silently
+                setIsOnline(false);
               }
             } else {
-              let body = '';
-              try { body = await res?.text() ?? ''; } catch (_) {}
-              Alert.alert(
-                'Could not go online',
-                `Error ${res?.status ?? 'unknown'}: ${body || 'No response from server'}`,
-                [{ text: 'OK' }]
-              );
+              // Network/server error — revert silently
+              setIsOnline(false);
             }
           } else {
             await forceSyncRef.current();
@@ -802,14 +801,16 @@ export default function DoctorLayout() {
               }
               return current; // no change to queue itself
             });
-
           }
         } else {
           setRequestQueue([]);
           setDoctorScreenState('idle');
         }
       } catch (e: any) {
-        // non-fatal
+        // non-fatal — revert silently
+        setIsOnline(!isOnline);
+      } finally {
+        _toggleIntent = null;
       }
     };
     toggle();
