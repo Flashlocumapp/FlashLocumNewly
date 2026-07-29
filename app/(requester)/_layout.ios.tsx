@@ -23,9 +23,8 @@ export default function RequesterLayoutIOS() {
 
   const renderTabBar = (props: BottomTabBarProps) => {
     const activeIndex = props.state.index;
-    const isCoverageActive = activeIndex === 1;
-    const activeColor = isCoverageActive ? '#FFFFFF' : '#1C1C1E';
-    const bgColor = isCoverageActive ? '#1C1C1E' : '#F9F9F6';
+    const activeColor = '#1C1C1E';
+    const bgColor = '#F9F9F6';
 
     return (
       <Animated.View
