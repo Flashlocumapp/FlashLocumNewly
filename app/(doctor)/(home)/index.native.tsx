@@ -72,6 +72,45 @@ function formatElapsed(startedAt: string): string {
 
 
 
+// ─── HomePaymentPendingContent — renders inside the shared subCard wrapper ────
+function HomePaymentPendingContent({ session }: { session: CoverageSession }) {
+  const shiftPillText = buildShiftPillText(session);
+  return (
+    <>
+      {/* Header row */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <Text style={styles.subCardLabel}>PAYMENT PENDING</Text>
+        <EnvironmentBadge environment={session.environment} />
+      </View>
+
+      {/* Hospital name */}
+      <Text style={[styles.subCardHeading, { flexShrink: 1 }]} numberOfLines={1}>
+        {session.hospital_name}
+      </Text>
+
+      {/* Address */}
+      <Text style={[styles.subCardBody, { marginTop: 0 }]} numberOfLines={1}>
+        {session.hospital_address}
+      </Text>
+
+      {/* Shift pill */}
+      <View style={styles.shiftPill}>
+        <Text style={styles.shiftPillText} numberOfLines={1}>{shiftPillText}</Text>
+      </View>
+
+      {/* Amber waiting banner — identical to DoctorUpcomingCoverageCard */}
+      <View style={{ backgroundColor: '#3A2A00', borderRadius: 10, padding: 12, marginTop: 12 }}>
+        <Text style={{ fontSize: 13, fontWeight: '600', color: '#D97706', fontFamily: 'Inter_600SemiBold' }}>
+          {'⏳ Waiting for Payment'}
+        </Text>
+        <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 4, fontFamily: 'Inter_400Regular' }}>
+          The requester has been sent a payment request. You will be notified once payment is confirmed.
+        </Text>
+      </View>
+    </>
+  );
+}
+
 // ─── HomeUpcomingContent — renders inside the shared subCard wrapper ──────────
 function HomeUpcomingContent({
   session,
@@ -566,6 +605,7 @@ export default function DoctorHomeScreen() {
 
   // Determine which sub-card to show
   const hasActiveSession = activeSession !== null;
+  const isPaymentPending = hasActiveSession && activeSession.status === 'payment_pending';
   const isUpcomingOrPaused = hasActiveSession && (activeSession.status === 'upcoming' || activeSession.status === 'paused');
   const isActive = hasActiveSession && activeSession.status === 'active';
   const nextUpcomingSession = upcomingSessions.find(s => s.id !== activeSession?.id) ?? null;
@@ -672,13 +712,20 @@ export default function DoctorHomeScreen() {
           <View style={styles.dragHandle} />
 
           {/* No session */}
-          {(!isUpcomingOrPaused && !isActive && !nextUpcomingSession) && (
+          {(!isPaymentPending && !isUpcomingOrPaused && !isActive && !nextUpcomingSession) && (
             <View style={styles.subCard}>
               <Text style={styles.subCardLabel}>COVERAGE</Text>
               <Text style={styles.subCardHeading}>No coverage yet</Text>
               <Text style={styles.subCardBody}>
                 Stay online to start receiving dispatch requests.
               </Text>
+            </View>
+          )}
+
+          {/* Payment pending — shift ended, awaiting payment */}
+          {isPaymentPending && activeSession && (
+            <View style={styles.subCard}>
+              <HomePaymentPendingContent session={activeSession} />
             </View>
           )}
 
