@@ -3615,9 +3615,9 @@ export default function RequesterHomeScreen() {
                 }}
               >
                 <View style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
+                  width: 24,
+                  height: 24,
+                  borderRadius: 12,
                   backgroundColor: '#1C1C1E',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -3627,13 +3627,12 @@ export default function RequesterHomeScreen() {
                   shadowRadius: 4,
                   elevation: 5,
                 }}>
-                  <IconSymbol name="stethoscope" size={16} color="#FFFFFF" />
+                  <IconSymbol name="stethoscope" size={9} color="#FFFFFF" />
                   <Text style={{
                     color: '#FFFFFF',
-                    fontSize: 13,
+                    fontSize: 9,
                     fontWeight: '700',
-                    lineHeight: 15,
-                    marginTop: 1,
+                    lineHeight: 11,
                   }}>
                     {pointCount}
                   </Text>
