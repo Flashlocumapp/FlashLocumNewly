@@ -3629,45 +3629,49 @@ export default function RequesterHomeScreen() {
               tracksViewChanges={false}
             >
               <View style={{ alignItems: 'center' }}>
-                {/* Teardrop pin shape */}
+                {/* Circular pin head */}
                 <View style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
                   backgroundColor: '#FFFFFF',
                   alignItems: 'center',
                   justifyContent: 'center',
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.15,
-                  shadowRadius: 3,
-                  elevation: 4,
+                  shadowOpacity: 0.2,
+                  shadowRadius: 4,
+                  elevation: 5,
+                  zIndex: 2,
                 }}>
-                  <IconSymbol name="stethoscope" size={16} color="#1C1C1E" />
+                  <IconSymbol name="stethoscope" size={17} color="#1C1C1E" />
                   {/* Green online dot */}
                   <View style={{
                     position: 'absolute',
                     top: 2,
                     right: 2,
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
+                    width: 9,
+                    height: 9,
+                    borderRadius: 4.5,
                     backgroundColor: '#22C55E',
                     borderWidth: 1.5,
                     borderColor: '#FFFFFF',
                   }} />
                 </View>
-                {/* Pin tail */}
+                {/* Teardrop tail — rotated square overlapping circle bottom */}
                 <View style={{
-                  width: 0,
-                  height: 0,
-                  borderLeftWidth: 5,
-                  borderRightWidth: 5,
-                  borderTopWidth: 7,
-                  borderLeftColor: 'transparent',
-                  borderRightColor: 'transparent',
-                  borderTopColor: '#FFFFFF',
-                  marginTop: -1,
+                  width: 14,
+                  height: 14,
+                  backgroundColor: '#FFFFFF',
+                  transform: [{ rotate: '45deg' }],
+                  marginTop: -8,
+                  borderBottomRightRadius: 2,
+                  elevation: 4,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 1, height: 2 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 2,
+                  zIndex: 1,
                 }} />
               </View>
             </Marker>
