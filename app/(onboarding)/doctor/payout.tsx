@@ -120,9 +120,59 @@ export default function DoctorPayout() {
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState('Saving...');
   const [submitError, setSubmitError] = useState('');
+  const [profileLoading, setProfileLoading] = useState(true);
 
   // Holds the AbortController for any in-flight account lookup.
   const lookupAbortRef = useRef<AbortController | null>(null);
+
+  // Pre-fill bank details from doctor_profiles on mount
+  useEffect(() => {
+    const loadSavedDetails = async () => {
+      if (!user?.id) {
+        setProfileLoading(false);
+        return;
+      }
+      try {
+        console.log('[Payout] Loading saved bank details from profile');
+        const { data, error } = await supabase
+          .from('doctor_profiles')
+          .select('bank_code, bank_name, account_number, account_name')
+          .eq('id', user.id)
+          .single();
+
+        if (error || !data) {
+          console.log('[Payout] No saved bank details found');
+          return;
+        }
+
+        if (data.account_number) {
+          console.log('[Payout] Pre-filling account number from saved profile');
+          setAccountNumber(String(data.account_number));
+        }
+
+        if (data.bank_code && data.bank_name) {
+          const match = FALLBACK_BANKS.find(b => b.code === data.bank_code);
+          const bankToSet: Bank = match ?? { name: String(data.bank_name), code: String(data.bank_code) };
+          console.log(`[Payout] Pre-filling bank from saved profile: ${bankToSet.name}`);
+          setSelectedBank(bankToSet);
+        }
+
+        // Set account name directly — skip re-lookup since it was already verified.
+        // The useEffect on [selectedBank, accountNumber] will fire and trigger a
+        // fresh lookup anyway (correct behaviour per spec).
+        if (data.account_name) {
+          console.log('[Payout] Pre-filling account name from saved profile');
+          setAccountName(String(data.account_name));
+        }
+      } catch (err) {
+        console.log('[Payout] Error loading saved bank details:', err);
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+    loadSavedDetails();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load banks from Monnify, fall back to hardcoded list
   useEffect(() => {
@@ -371,8 +421,12 @@ export default function DoctorPayout() {
       if (!subaccountResponse.ok || subaccountResult.error) {
         const code: string | undefined =
           typeof subaccountResult?.error === 'string' ? subaccountResult.error : undefined;
-        console.log(`[Payout] Submit failed: errorCode=${code ?? 'unknown'}`);
-        setSubmitError(mapErrorCode(code));
+        const providerMessage: string | undefined =
+          typeof subaccountResult?.message === 'string' && subaccountResult.message
+            ? subaccountResult.message
+            : undefined;
+        console.log(`[Payout] Submit failed: errorCode=${code ?? 'unknown'}, message=${providerMessage ?? 'none'}`);
+        setSubmitError(providerMessage ?? mapErrorCode(code));
         return;
       }
 
@@ -415,7 +469,8 @@ export default function DoctorPayout() {
 
       if (!provisionSuccess) {
         console.log('[Payout] Step 2b: all provision attempts failed');
-        setSubmitError('Could not set up your payment account. Please check your connection and try again.');
+        const provisionMsg = provisionError || 'Could not set up your payment account. Please check your connection and try again.';
+        setSubmitError(provisionMsg);
         setLoading(false);
         return;
       }
@@ -549,9 +604,9 @@ export default function DoctorPayout() {
         {/* Submit button */}
         <AnimatedPressable
           onPress={handleSubmit}
-          disabled={loading}
+          disabled={loading || profileLoading}
           scaleValue={0.97}
-          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+          style={[styles.submitButton, (loading || profileLoading) && styles.submitButtonDisabled]}
         >
           {loading ? (
             <View style={styles.loadingRow}>
