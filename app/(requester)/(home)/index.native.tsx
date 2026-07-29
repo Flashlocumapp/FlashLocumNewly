@@ -3627,7 +3627,7 @@ export default function RequesterHomeScreen() {
                   shadowRadius: 4,
                   elevation: 5,
                 }}>
-                  <IconSymbol name="stethoscope" size={9} color="#FFFFFF" />
+                  <IconSymbol ios_icon_name="stethoscope" android_material_icon_name="medical-services" size={9} color="#FFFFFF" />
                   <Text style={{
                     color: '#FFFFFF',
                     fontSize: 9,
