@@ -204,7 +204,7 @@ export default function DoctorEarningsScreen() {
   const lastFetchedAtRef = useRef<number>(0);
   const wasBackgroundedRef = useRef(false);
 
-  const [earnings, setEarnings] = useState<DoctorEarning[]>(() => getCached<DoctorEarning[]>('doctor_earnings') ?? []);
+  const [earnings, setEarnings] = useState<DoctorEarning[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('this_week');
@@ -213,11 +213,14 @@ export default function DoctorEarningsScreen() {
   // ── Fetch ───────────────────────────────────────────────────────────────────
   const fetchEarnings = useCallback(async () => {
     console.log('[Earnings] fetchEarnings called');
+    if (!user) return;
+    const cacheKey = `doctor_earnings:${user.id}`;
     try {
-      console.log('[Earnings] Fetching doctor_earnings from Supabase');
+      console.log('[Earnings] Fetching doctor_earnings from Supabase for user', user.id);
       const { data, error: fetchError } = await supabase
         .from('doctor_earnings')
         .select('*')
+        .eq('doctor_id', user.id)
         .order('paid_at', { ascending: false });
 
       if (fetchError) {
@@ -250,7 +253,7 @@ export default function DoctorEarningsScreen() {
         const filtered = merged.filter(r => newIds.has(r.session_id));
         if (filtered.length !== merged.length) changed = true;
         if (!changed) return prev; // no re-render
-        setCached('doctor_earnings', filtered);
+        setCached(cacheKey, filtered);
         return filtered;
       });
 
@@ -260,11 +263,16 @@ export default function DoctorEarningsScreen() {
       console.log('[Earnings] Fetch exception:', e.message);
       setError(e.message);
     }
-  }, []);
+  }, [user]);
 
   // ── Initial load ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
+    // Pre-populate from user-scoped cache immediately
+    const cached = getCached<DoctorEarning[]>(`doctor_earnings:${user.id}`);
+    if (cached && cached.length > 0) {
+      setEarnings(cached);
+    }
     fetchEarnings();
   }, [user, fetchEarnings]);
 
@@ -309,17 +317,18 @@ export default function DoctorEarningsScreen() {
           const row = payload.new as DoctorEarning | undefined;
           if (!row) return;
           setEarnings(prev => {
+            const realtimeCacheKey = `doctor_earnings:${user?.id ?? ''}`;
             const idx = prev.findIndex(e => e.session_id === row.session_id);
             if (idx !== -1) {
               // Update existing row in place — no network call needed
               const next = [...prev];
               next[idx] = { ...prev[idx], ...row };
-              setCached('doctor_earnings', next);
+              setCached(realtimeCacheKey, next);
               return next;
             }
             // Genuinely new row — prepend and cache
             const next = [row, ...prev];
-            setCached('doctor_earnings', next);
+            setCached(realtimeCacheKey, next);
             return next;
           });
           lastFetchedAtRef.current = Date.now();
