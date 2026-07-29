@@ -3651,34 +3651,21 @@ export default function RequesterHomeScreen() {
               tracksViewChanges={false}
             >
               <View style={{ alignItems: 'center' }}>
-                {/* Circular pin head — 3D sphere effect */}
+                {/* Circular pin head — flat */}
                 <View style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 11,
-                  backgroundColor: '#A8A8A8',
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  backgroundColor: '#D3D3D3',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  borderWidth: 1,
-                  borderColor: '#707070',
                   shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.45,
-                  shadowRadius: 5,
-                  elevation: 8,
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 2,
+                  elevation: 3,
                   zIndex: 2,
-                  overflow: 'hidden',
                 }}>
-                  {/* Top-left highlight arc — simulates light hitting a sphere */}
-                  <View style={{
-                    position: 'absolute',
-                    top: -4,
-                    left: -4,
-                    width: 16,
-                    height: 16,
-                    borderRadius: 8,
-                    backgroundColor: 'rgba(255,255,255,0.35)',
-                  }} />
                   <IconSymbol
                     ios_icon_name="stethoscope"
                     android_material_icon_name="medical-services"
@@ -3698,17 +3685,13 @@ export default function RequesterHomeScreen() {
                     borderColor: '#FFFFFF',
                   }} />
                 </View>
-                {/* Tail — solid, matches sphere */}
+                {/* Tail */}
                 <View style={{
-                  width: 7,
+                  width: 6,
                   height: 5,
-                  backgroundColor: '#909090',
-                  borderBottomLeftRadius: 4,
-                  borderBottomRightRadius: 4,
-                  borderLeftWidth: 1,
-                  borderRightWidth: 1,
-                  borderBottomWidth: 1,
-                  borderColor: '#606060',
+                  backgroundColor: '#D3D3D3',
+                  borderBottomLeftRadius: 3,
+                  borderBottomRightRadius: 3,
                   marginTop: -2,
                   zIndex: 1,
                 }} />
