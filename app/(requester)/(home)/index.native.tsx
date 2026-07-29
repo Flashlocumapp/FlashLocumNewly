@@ -45,6 +45,7 @@ import type { CoverageSession } from '@/contexts/DoctorDispatchContext';
 import { getCached, setCached, invalidate } from '@/utils/tabCache';
 import PollingManager from '../../../utils/pollingManager';
 import { buildShiftPillText, EnvironmentBadge as SessionEnvBadge } from '@/components/sessionUtils';
+import { IconSymbol } from '@/components/IconSymbol';
 
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 
@@ -3591,9 +3592,9 @@ export default function RequesterHomeScreen() {
                 }}
               >
                 <View style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 26,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
                   backgroundColor: '#1C1C1E',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -3603,7 +3604,7 @@ export default function RequesterHomeScreen() {
                   shadowRadius: 4,
                   elevation: 5,
                 }}>
-                  <Text style={{ fontSize: 18, lineHeight: 22 }}>🩺</Text>
+                  <IconSymbol name="stethoscope" size={16} color="#FFFFFF" />
                   <Text style={{
                     color: '#FFFFFF',
                     fontSize: 13,
@@ -3642,7 +3643,7 @@ export default function RequesterHomeScreen() {
                   shadowRadius: 3,
                   elevation: 4,
                 }}>
-                  <Text style={{ fontSize: 18, lineHeight: 22 }}>🩺</Text>
+                  <IconSymbol name="stethoscope" size={16} color="#1C1C1E" />
                   {/* Green online dot */}
                   <View style={{
                     position: 'absolute',
