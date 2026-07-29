@@ -3659,11 +3659,13 @@ export default function RequesterHomeScreen() {
                   backgroundColor: '#D3D3D3',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  borderWidth: 2,
+                  borderColor: '#FFFFFF',
                   shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.15,
-                  shadowRadius: 2,
-                  elevation: 3,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 4,
+                  elevation: 6,
                   zIndex: 2,
                 }}>
                   <IconSymbol

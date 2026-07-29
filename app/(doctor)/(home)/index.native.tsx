@@ -15,6 +15,7 @@ import {
   Pressable,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { IconSymbol } from '@/components/IconSymbol';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import Feather from '@expo/vector-icons/Feather';
@@ -632,7 +633,12 @@ export default function DoctorHomeScreen() {
             tracksViewChanges={markerTracksViews}
           >
             <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#34C759', borderWidth: 2.5, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 18, lineHeight: 22 }}>🩺</Text>
+                <IconSymbol
+                  ios_icon_name="stethoscope"
+                  android_material_icon_name="medical-services"
+                  size={12}
+                  color="#FFFFFF"
+                />
               </View>
           </Marker>
         )}
