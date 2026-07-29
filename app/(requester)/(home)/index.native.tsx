@@ -2103,6 +2103,15 @@ export default function RequesterHomeScreen() {
   const [partialAmountPaid, setPartialAmountPaid] = useState<number>(0);
   const [partialOutstandingBalance, setPartialOutstandingBalance] = useState<number>(0);
 
+  // Reset partial payment state whenever the active session is cleared —
+  // prevents stale values from bleeding into the next booking
+  useEffect(() => {
+    if (activeSession === null) {
+      console.log('[RequesterHome] activeSession cleared — resetting partial payment state');
+      setPartialAmountPaid(0);
+      setPartialOutstandingBalance(0);
+    }
+  }, [activeSession]);
 
   // Realtime refs for matching
   const matchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2146,6 +2155,10 @@ export default function RequesterHomeScreen() {
       }
       const data = await res.json();
       const session: CoverageSession | null = data?.session ?? null;
+      // Always start a new session with clean partial payment state
+      console.log('[RequesterHome] fetchActiveSession — resetting partial payment state before applying session', session?.id ?? 'null');
+      setPartialAmountPaid(0);
+      setPartialOutstandingBalance(0);
       setActiveSession(session);
       if (session) {
         setActiveSessionId(session.id);
@@ -3127,9 +3140,9 @@ export default function RequesterHomeScreen() {
       setConfirmedSession(snap);
       setShowPaymentSuccess(true);
     }
-    setActiveSession(null);
     setPartialAmountPaid(0);
     setPartialOutstandingBalance(0);
+    setActiveSession(null);
   }, []); // no deps — reads from ref so never goes stale
 
   const fetchAndSetSettledAmount = useCallback(async (sessionId: string) => {
