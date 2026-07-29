@@ -2176,15 +2176,13 @@ export default function RequesterHomeScreen() {
           if (alreadyHandled) {
             _requesterRatingInFlight.delete(session.id);
           } else {
-            // Check DB — ultimate source of truth
+            // Check DB — ultimate source of truth (review + dismissal)
             try {
-              const { data: existingReview } = await supabase
-                .from('shift_reviews')
-                .select('id')
-                .eq('session_id', session.id)
-                .eq('reviewer_role', 'requester')
-                .maybeSingle();
-              if (existingReview) {
+              const [existingReview, existingDismissal] = await Promise.all([
+                supabase.from('shift_reviews').select('id').eq('session_id', session.id).eq('reviewer_role', 'requester').maybeSingle(),
+                supabase.from('rating_dismissals').select('id').eq('session_id', session.id).eq('user_id', user?.id ?? '').eq('reviewer_role', 'requester').maybeSingle(),
+              ]);
+              if (existingReview.data || existingDismissal.data) {
                 markRequesterSessionPaid(session.id);
                 _requesterRatingInFlight.delete(session.id);
               } else {
@@ -3070,12 +3068,24 @@ export default function RequesterHomeScreen() {
   }, [handleReset]);
 
   const handleEditRequest = async () => {
+    console.log('[Requester] handleEditRequest pressed', { activeRequestId });
     if (activeRequestId) {
-      fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ request_id: activeRequestId }),
-      }).catch(() => {});
+      try {
+        const res = await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ request_id: activeRequestId }),
+        });
+        if (res.status === 409) {
+          const body = await res.json().catch(() => ({}));
+          if (body.error === 'SHIFT_LOCKED') {
+            console.log('[Requester] handleEditRequest — SHIFT_LOCKED, doctor is mid-accept');
+            await fetchActiveSession();
+            Alert.alert('Request Already Accepted', 'A doctor just accepted your request. Check your Upcoming Coverage.');
+            return;
+          }
+        }
+      } catch {}
     }
     // Clear match timer and realtime channel
     if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
@@ -3099,15 +3109,26 @@ export default function RequesterHomeScreen() {
 
 
   const handleCancelRequest = async () => {
+    console.log('[Requester] handleCancelRequest pressed', { activeRequestId });
     setShowCancelModal(true);
     // Immediately withdraw in background
     if (activeRequestId) {
       try {
-        await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
+        const res = await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ request_id: activeRequestId }),
         });
+        if (res.status === 409) {
+          const body = await res.json().catch(() => ({}));
+          if (body.error === 'SHIFT_LOCKED') {
+            console.log('[Requester] handleCancelRequest — SHIFT_LOCKED, doctor is mid-accept');
+            setShowCancelModal(false);
+            await fetchActiveSession();
+            Alert.alert('Request Already Accepted', 'A doctor just accepted your request. Check your Upcoming Coverage.');
+            return;
+          }
+        }
         setCancelWithdrawn(true);
       } catch (e) {
       }
@@ -4482,6 +4503,14 @@ export default function RequesterHomeScreen() {
           console.log('[Requester] Rating card dismissed', { sessionId: sid });
           // Record as dismissed so the overlay never re-appears for this session
           if (sid) markRequesterSessionDismissed(sid);
+          // Persist dismissal server-side so it survives app reinstalls / new devices
+          if (user?.id && sid) {
+            supabase.from('rating_dismissals').insert({
+              session_id: sid,
+              user_id: user.id,
+              reviewer_role: 'requester',
+            }).then(() => {}).catch(() => {});
+          }
           setShowPaymentSuccess(false);
           setConfirmedSession(null);
           setSettledAmount(null);

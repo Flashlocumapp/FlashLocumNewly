@@ -487,18 +487,16 @@ export default function DoctorLayout() {
       }
     } catch {}
 
-    // Pre-check DB — if review already exists, mark locally and skip overlay entirely
+    // Pre-check DB — if review or dismissal already exists, mark locally and skip overlay entirely
     try {
-      const { data: existingReview } = await supabase
-        .from('shift_reviews')
-        .select('id')
-        .eq('session_id', resolvedSessionId)
-        .eq('reviewer_role', 'doctor')
-        .maybeSingle();
-      if (existingReview) {
+      const [existingReview, existingDismissal] = await Promise.all([
+        supabase.from('shift_reviews').select('id').eq('session_id', resolvedSessionId).eq('reviewer_role', 'doctor').maybeSingle(),
+        supabase.from('rating_dismissals').select('id').eq('session_id', resolvedSessionId).eq('user_id', user?.id ?? '').eq('reviewer_role', 'doctor').maybeSingle(),
+      ]);
+      if (existingReview.data || existingDismissal.data) {
         markDoctorSessionRated(resolvedSessionId);
         markDoctorSessionDismissed(resolvedSessionId);
-        return; // review exists — never show overlay
+        return; // review or dismissal exists — never show overlay
       }
     } catch {
       // Non-fatal — proceed to show overlay if DB check fails
@@ -908,6 +906,9 @@ export default function DoctorLayout() {
       })
       .subscribe((status) => {
         console.log('[Doctor] dispatch channel subscribe status:', status);
+        if (status === 'SUBSCRIBED' && isOnlineRef.current && user) {
+          forceSyncRef.current();
+        }
       });
     channelRef.current = channel;
     return () => {
@@ -1200,8 +1201,11 @@ export default function DoctorLayout() {
           } else if (newStatus === 'cancelled') {
             // Reconcile upcoming to remove the cancelled session
             reconcileUpcomingRef.current();
+          } else if (newStatus === 'payment_pending') {
+            // Fetch active session immediately so the proactive payment poll useEffect can start
+            fetchActiveSession();
           }
-          // payment_pending, settled, requester_paid are handled by existing payment polling
+          // settled, requester_paid are handled by existing payment polling
         }
       )
       .subscribe((status) => {
@@ -1223,7 +1227,6 @@ export default function DoctorLayout() {
           event: 'INSERT',
           schema: 'public',
           table: 'coverage_requests',
-          filter: `doctor_id=eq.${user.id}`,
         },
         (payload) => {
           const row = payload.new as any;
@@ -1382,6 +1385,32 @@ export default function DoctorLayout() {
         invalidate(`doctor-coverage-history-${user.id}`);
         invalidate(`doctor-coverage-upcoming-${user.id}`);
         invalidate('doctor_earnings');
+      })
+      .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
+        console.log('[Doctor] user channel SHIFT_STARTED received');
+        startShiftInProgressRef.current = true;
+        setActiveSession((prev) => prev ? { ...prev, status: 'active' } : prev);
+        fetchActiveSession().finally(() => { startShiftInProgressRef.current = false; });
+        PollingManager.start('start-confirm-user', async () => {
+          const { data: s } = await supabase
+            .from('coverage_sessions')
+            .select('id, status')
+            .eq('id', activeSessionIdRef.current ?? '')
+            .maybeSingle();
+          if (s?.status === 'active') return true;
+          return false;
+        });
+      })
+      .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
+        const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
+        console.log('[Doctor] user channel SHIFT_ENDED received', { sessionId: (updated as any)?.id ?? activeSessionIdRef.current });
+        if (updated) {
+          setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
+        }
+        const sid = (updated as any)?.id ?? activeSessionIdRef.current ?? '';
+        const hospital = (updated as any)?.hospital_name ?? '';
+        const amt = (updated as any)?.total_cost ?? (updated as any)?.price ?? 0;
+        startPaymentPollingRef.current(sid, hospital, amt);
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
@@ -1588,6 +1617,14 @@ export default function DoctorLayout() {
         markDoctorSessionDismissed(sid),
         markDoctorSessionRated(sid),
       ]);
+      // Persist dismissal server-side so it survives app reinstalls / new devices
+      if (user?.id) {
+        supabase.from('rating_dismissals').insert({
+          session_id: sid,
+          user_id: user.id,
+          reviewer_role: 'doctor',
+        }).then(() => {}).catch(() => {});
+      }
     }
     console.log('[Doctor] Rating card dismissed', { sessionId: sid });
     setShowDoctorRating(false);
