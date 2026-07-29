@@ -1210,6 +1210,11 @@ function RequesterPaymentCard({
           console.log('[RequesterPaymentCard] payment_intents UPDATE via postgres_changes — amount_naira:', row.amount_naira, 'amount_paid:', row.amount_paid, 'outstanding_balance:', row.outstanding_balance);
           // Merge updated fields — do NOT restart the countdown timer
           setPaymentIntent(prev => prev ? { ...prev, ...row } : row);
+          // If DB row confirms a partial payment, sync parent state immediately
+          // (covers the case where the broadcast arrived late or was missed)
+          if ((row.amount_paid ?? 0) > 0 && (row.outstanding_balance ?? 0) > 0) {
+            onPartialPaymentRestored?.(row.amount_paid!, row.outstanding_balance!);
+          }
         }
       )
       .subscribe();
@@ -1220,9 +1225,14 @@ function RequesterPaymentCard({
   // ─── Derived display values ───────────────────────────────────────────────
   // Fix 1: when a partial payment has been received, show the outstanding balance
   // as the "Transfer Exactly" amount instead of the original full amount.
-  const hasPartialPayment = (amountPaid ?? 0) > 0 && (outstandingBalance ?? 0) > 0;
+  // A partial payment exists if either the parent props say so OR the local DB row says so
+  const dbOutstanding = (paymentIntent?.outstanding_balance ?? 0) > 0 ? paymentIntent!.outstanding_balance! : null;
+  const dbAmountPaid = (paymentIntent?.amount_paid ?? 0) > 0 ? paymentIntent!.amount_paid! : null;
+  const hasPartialPayment =
+    ((amountPaid ?? 0) > 0 && (outstandingBalance ?? 0) > 0) ||
+    (dbAmountPaid != null && dbOutstanding != null);
   const amountNaira = hasPartialPayment
-    ? (outstandingBalance ?? paymentIntent?.amount_naira ?? session.price)
+    ? (outstandingBalance ?? dbOutstanding ?? paymentIntent?.amount_naira ?? session.price)
     : (paymentIntent?.amount_naira ?? session.price);
   const amountDisplay = `₦${Number(amountNaira).toLocaleString()}`;
   const hasAccountDetails = !!(paymentIntent?.monnify_account_number);
