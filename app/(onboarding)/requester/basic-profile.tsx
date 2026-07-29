@@ -94,6 +94,9 @@ export default function RequesterBasicProfile() {
       const spaceIdx = strippedFull.indexOf(' ');
       const firstName = spaceIdx > -1 ? strippedFull.slice(0, spaceIdx).trim() : strippedFull.trim();
       const lastName = spaceIdx > -1 ? strippedFull.slice(spaceIdx + 1).trim() : '';
+
+      // Write 1: profile data only — no completion flags yet
+      console.log('[RequesterOnboarding] Write 1 — upserting profile data');
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert({
@@ -102,17 +105,29 @@ export default function RequesterBasicProfile() {
           last_name: lastName,
           phone: cleanedPhone,
           gender,
-          onboarding_complete: true,
-          requester_onboarding_complete: true,
         });
 
       if (profileError) throw profileError;
 
+      // Write 2: create requester_profiles row
+      console.log('[RequesterOnboarding] Write 2 — upserting requester_profiles');
       const { error: requesterError } = await supabase
         .from('requester_profiles')
         .upsert({ id: user!.id }, { onConflict: 'id' });
 
       if (requesterError) throw requesterError;
+
+      // Write 3: mark onboarding complete — only reached if both writes above succeeded
+      console.log('[RequesterOnboarding] Write 3 — marking onboarding complete');
+      const { error: completionError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user!.id,
+          onboarding_complete: true,
+          requester_onboarding_complete: true,
+        });
+
+      if (completionError) throw completionError;
 
       refreshProfile();
       router.replace('/(requester)/(home)' as any);

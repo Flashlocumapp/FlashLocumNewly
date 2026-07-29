@@ -54,6 +54,8 @@ const POLL_INTERVAL = __DEV__ ? 8000 : 10000;
 
 // ─── Module-level retry flag for handleRequestCoverage ───────────────────────
 let _submitRetried = false;
+// ─── Module-level idempotency key for submit-request (server-side dedup) ─────
+let _submitIdempotencyKey: string | null = null;
 
 // ─── Persistent deduplication for payment success modal ──────────────────────
 const REQUESTER_PAID_SESSIONS_KEY = 'requester_paid_sessions_v1';
@@ -2960,6 +2962,10 @@ export default function RequesterHomeScreen() {
     console.log('[handleRequestCoverage] Submit button pressed');
     _submitRetried = false;
     if (!selectedPlace) return;
+    if (!_submitIdempotencyKey) {
+      _submitIdempotencyKey = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
+    console.log('[handleRequestCoverage] idempotency_key:', _submitIdempotencyKey);
     // Guard: ensure the selected start time is still in the future
     const startDateObj = new Date(shiftDate);
     startDateObj.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
@@ -3003,6 +3009,7 @@ export default function RequesterHomeScreen() {
           coverage_length: coverageLength,
           environment,
           note: note || null,
+          idempotency_key: _submitIdempotencyKey,
         }),
       });
       if (!res.ok) {
@@ -3013,6 +3020,8 @@ export default function RequesterHomeScreen() {
       const reqId = data.request_id || data.id || null;
       setActiveRequestId(reqId);
       transitionTo('matching');
+      _submitIdempotencyKey = null;
+      console.log('[handleRequestCoverage] Submission successful, idempotency key cleared');
       if (reqId) {
         console.log('[Requester] Starting match poll for request:', reqId);
         PollingManager.start('match', async () => {
@@ -3048,6 +3057,8 @@ export default function RequesterHomeScreen() {
   };
 
   const handleReset = useCallback(() => {
+    console.log('[handleReset] Resetting request state');
+    _submitIdempotencyKey = null;
     setSelectedPlace(null);
     setCoverageType('Standard');
     setShiftDate(new Date());
