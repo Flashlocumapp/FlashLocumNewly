@@ -3652,48 +3652,43 @@ export default function RequesterHomeScreen() {
               tracksViewChanges={false}
             >
               <View style={{ alignItems: 'center' }}>
-                {/* Circular pin head */}
+                {/* Circular pin head — smaller, grey background */}
                 <View style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: 19,
-                  backgroundColor: '#FFFFFF',
+                  width: 26,
+                  height: 26,
+                  borderRadius: 13,
+                  backgroundColor: '#8E8E93',
                   alignItems: 'center',
                   justifyContent: 'center',
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.2,
-                  shadowRadius: 4,
+                  shadowRadius: 3,
                   elevation: 5,
                   zIndex: 2,
                 }}>
-                  <IconSymbol name="stethoscope" size={17} color="#1C1C1E" />
+                  <IconSymbol name="stethoscope" size={12} color="#FFFFFF" />
                   {/* Green online dot */}
                   <View style={{
                     position: 'absolute',
-                    top: 2,
-                    right: 2,
-                    width: 9,
-                    height: 9,
-                    borderRadius: 4.5,
+                    top: 1,
+                    right: 1,
+                    width: 7,
+                    height: 7,
+                    borderRadius: 3.5,
                     backgroundColor: '#22C55E',
-                    borderWidth: 1.5,
+                    borderWidth: 1,
                     borderColor: '#FFFFFF',
                   }} />
                 </View>
-                {/* Teardrop tail — rotated square overlapping circle bottom */}
+                {/* Blunt rounded tail — no sharp point */}
                 <View style={{
-                  width: 14,
-                  height: 14,
-                  backgroundColor: '#FFFFFF',
-                  transform: [{ rotate: '45deg' }],
-                  marginTop: -8,
-                  borderBottomRightRadius: 2,
-                  elevation: 4,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 1, height: 2 },
-                  shadowOpacity: 0.15,
-                  shadowRadius: 2,
+                  width: 8,
+                  height: 6,
+                  backgroundColor: '#8E8E93',
+                  borderBottomLeftRadius: 4,
+                  borderBottomRightRadius: 4,
+                  marginTop: -2,
                   zIndex: 1,
                 }} />
               </View>
