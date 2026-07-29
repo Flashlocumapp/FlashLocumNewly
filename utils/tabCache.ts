@@ -30,3 +30,19 @@ export function clearAll(): void {
   console.log('[tabCache] clearAll — wiping all cached tab data');
   cache.clear();
 }
+
+// In-flight prefetch promise registry — lets screens await an in-progress prefetch
+// instead of firing a duplicate request or showing a loading state.
+const prefetchPromises = new Map<string, Promise<void>>();
+
+export function setPrefetchPromise(key: string, promise: Promise<void>): void {
+  prefetchPromises.set(key, promise);
+}
+
+export function clearPrefetchPromise(key: string): void {
+  prefetchPromises.delete(key);
+}
+
+export function getPrefetchPromise(key: string): Promise<void> | null {
+  return prefetchPromises.get(key) ?? null;
+}

@@ -21,7 +21,7 @@ import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
-import { getCached, setCached } from '@/utils/tabCache';
+import { getCached, setCached, getPrefetchPromise } from '@/utils/tabCache';
 
 const SUPABASE_URL = 'https://juilousufwlsiqdcgllu.supabase.co';
 const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
@@ -444,7 +444,11 @@ export default function RequesterCoverageScreen() {
 
   // Stale-while-revalidate: seed from cache so first render is instant
   const [sessions, setSessions] = useState<CoverageSession[]>(() => getCached<CoverageSession[]>(cacheKey) ?? []);
-  const [loading, setLoading] = useState(() => getCached(cacheKey) === null);
+  const [loading, setLoading] = useState(() => {
+    const hasCache = getCached(cacheKey) !== null;
+    const hasPrefetch = getPrefetchPromise(cacheKey) !== null;
+    return !hasCache && !hasPrefetch;
+  });
 
   const fetchSessions = useCallback(async (isBackground = true) => {
     if (!user?.id) return;
@@ -513,6 +517,23 @@ export default function RequesterCoverageScreen() {
   useEffect(() => {
     if (!user?.id) return;
     const hasCache = getCached(cacheKey) !== null;
+    const inflight = getPrefetchPromise(cacheKey);
+
+    if (inflight) {
+      // Prefetch already in flight — await it silently, then read from cache
+      console.log('[RequesterCoverage] prefetch in flight, awaiting silently');
+      inflight.then(() => {
+        const cached = getCached<CoverageSession[]>(cacheKey);
+        if (cached) {
+          setSessions(cached);
+        }
+        setLoading(false);
+        lastFetchedAtRef.current = Date.now();
+      });
+      return;
+    }
+
+    // No prefetch in flight — fetch ourselves (show skeleton only if no cache)
     fetchSessions(!hasCache);
     lastFetchedAtRef.current = Date.now();
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps

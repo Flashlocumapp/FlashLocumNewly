@@ -7,7 +7,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { TabBarVisibilityContext, TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
-import { setCached, isStale } from '@/utils/tabCache';
+import { setCached, isStale, setPrefetchPromise, clearPrefetchPromise } from '@/utils/tabCache';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 
 const REQUESTER_TABS = [
@@ -65,17 +65,24 @@ export default function RequesterLayout() {
         (async () => {
           const key = `requester-coverage-${user.id}`;
           if (!isStale(key)) return;
-          try {
-            console.log('[RequesterLayout] Prefetching coverage sessions, key:', key);
-            const res = await fetchWithAuth(
-              'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/get-coverage-sessions?role=requester&status=completed,cancelled,requester_paid',
-              { headers: { 'Content-Type': 'application/json' } }
-            );
-            if (!res.ok) return;
-            const data = await res.json();
-            setCached(key, data?.sessions ?? []);
-            console.log('[RequesterLayout] Coverage sessions cached, count:', (data?.sessions ?? []).length);
-          } catch {}
+          const promise = (async () => {
+            try {
+              console.log('[RequesterLayout] Prefetching coverage sessions, key:', key);
+              const res = await fetchWithAuth(
+                'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/get-coverage-sessions?role=requester&status=completed,cancelled,requester_paid',
+                { headers: { 'Content-Type': 'application/json' } }
+              );
+              if (!res.ok) return;
+              const data = await res.json();
+              setCached(key, data?.sessions ?? []);
+              console.log('[RequesterLayout] Coverage sessions cached, count:', (data?.sessions ?? []).length);
+            } catch {}
+            finally {
+              clearPrefetchPromise(key);
+            }
+          })();
+          setPrefetchPromise(key, promise);
+          await promise;
         })(),
         // 2. Requester Account profile
         (async () => {
