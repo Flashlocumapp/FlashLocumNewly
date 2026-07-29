@@ -76,6 +76,12 @@
             "resizeMode": "contain",
             "backgroundColor": "#2B2B2B",
             "imageWidth": 180
+          },
+          "android": {
+            "image": "./assets/images/splash-fullscreen.png",
+            "resizeMode": "contain",
+            "backgroundColor": "#2B2B2B",
+            "imageWidth": 180
           }
         }
       ],
