@@ -555,7 +555,7 @@ function RequesterUpcomingCard({
       });
   }, [session.doctor_id]);
 
-  const ratingDisplay = liveRating != null ? liveRating.toFixed(1) : '--';
+  const ratingDisplay = liveRating != null ? liveRating.toFixed(2) : '--';
   const reliabilityDisplay = liveReliability != null ? `${Math.round(liveReliability)}` : '--';
 
   return (
@@ -718,7 +718,7 @@ function RequesterActiveCard({
       });
   }, [session.doctor_id]);
 
-  const ratingDisplay = liveRatingActive != null ? liveRatingActive.toFixed(1) : '--';
+  const ratingDisplay = liveRatingActive != null ? liveRatingActive.toFixed(2) : '--';
   const reliabilityDisplay = liveReliabilityActive != null ? `${Math.round(liveReliabilityActive)}` : '--';
   const shiftPillText = buildShiftPillText(session);
   const showDayPill = session.coverage_length > 1;
@@ -4418,7 +4418,7 @@ export default function RequesterHomeScreen() {
                     {'★ '}
                   </Text>
                   <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>
-                    {requesterRating !== null ? requesterRating.toFixed(1) : '--'}
+                    {requesterRating !== null ? requesterRating.toFixed(2) : '--'}
                   </Text>
                   <TouchableOpacity onPress={() => { console.log('[Requester] Info icon pressed: rating tooltip'); setTooltipVisible('rating'); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 3 }}>
                     <Feather name="info" size={11} color="#8E8E93" />

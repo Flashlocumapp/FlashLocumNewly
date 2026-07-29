@@ -70,8 +70,8 @@ function HistoryCoverageCard({ session, onPress }: {
   onPress: (session: CoverageSession) => void;
 }) {
   const ratingDisplay = session.final_requester_rating != null
-    ? Number(session.final_requester_rating).toFixed(1)
-    : (session.requester_rating != null ? Number(session.requester_rating).toFixed(1) : '5.0');
+    ? Number(session.final_requester_rating).toFixed(2)
+    : (session.requester_rating != null ? Number(session.requester_rating).toFixed(2) : '5.00');
 
   const reliabilityDisplay = session.final_requester_reliability != null
     ? `${Math.round(Number(session.final_requester_reliability))}`
@@ -161,8 +161,8 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   if (!session) return null;
 
   const ratingDisplay = session.final_requester_rating != null
-    ? Number(session.final_requester_rating).toFixed(1)
-    : (session.requester_rating != null ? Number(session.requester_rating).toFixed(1) : '5.0');
+    ? Number(session.final_requester_rating).toFixed(2)
+    : (session.requester_rating != null ? Number(session.requester_rating).toFixed(2) : '5.00');
 
   const reliabilityDisplay = session.final_requester_reliability != null
     ? `${Math.round(Number(session.final_requester_reliability))}`

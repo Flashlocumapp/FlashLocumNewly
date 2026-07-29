@@ -151,7 +151,7 @@ function HomeUpcomingContent({
 
   const canCancel = session.status === 'upcoming' && session.current_day === 1;
   const shiftPillText = buildShiftPillText(session);
-  const requesterRatingDisplay = liveRequesterRating != null ? liveRequesterRating.toFixed(1) : '--';
+  const requesterRatingDisplay = liveRequesterRating != null ? liveRequesterRating.toFixed(2) : '--';
   const reliabilityDisplay = liveRequesterReliability != null ? `${Math.round(liveRequesterReliability)}` : '--';
 
   return (
@@ -244,7 +244,7 @@ function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCal
       });
   }, [session.requester_id]);
 
-  const requesterRatingDisplay = liveRequesterRating != null ? liveRequesterRating.toFixed(1) : '--';
+  const requesterRatingDisplay = liveRequesterRating != null ? liveRequesterRating.toFixed(2) : '--';
   const reliabilityDisplay = liveRequesterReliability != null ? `${Math.round(liveRequesterReliability)}` : '--';
   const shiftPillText = buildShiftPillText(session);
   const showDayPill = session.coverage_length > 1;
@@ -776,7 +776,7 @@ export default function DoctorHomeScreen() {
                 </TouchableOpacity>
               </View>
               <View style={styles.ratingValueRow}>
-                <Text style={styles.statValue}>{doctorRating !== null ? doctorRating.toFixed(1) : '--'}</Text>
+                <Text style={styles.statValue}>{doctorRating !== null ? doctorRating.toFixed(2) : '--'}</Text>
                 <Text style={styles.starIcon}>★</Text>
               </View>
             </View>
