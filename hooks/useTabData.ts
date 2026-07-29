@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getCached, setCached, isStale } from '@/utils/tabCache';
+import { getCached, setCached, isStale, getPrefetchPromise } from '@/utils/tabCache';
 
 interface UseTabDataOptions<T> {
   cacheKey: string;
@@ -110,7 +110,24 @@ export function useTabData<T>({
     const hasCache = getCached(cacheKey) !== null;
     const stale = isStale(cacheKey);
     if (!hasCache) {
-      doFetch(false); // first load — show spinner
+      // Check for an in-flight prefetch — await it silently instead of showing a spinner
+      const inflight = getPrefetchPromise(cacheKey);
+      if (inflight) {
+        inflight.then(() => {
+          if (!mountedRef.current) return;
+          const prefetched = getCached<T>(cacheKey);
+          if (prefetched !== null) {
+            setData(prefetched);
+            dataRef.current = prefetched;
+            setLoading(false);
+          } else {
+            // Prefetch failed or returned nothing — fall back to own fetch
+            doFetch(false);
+          }
+        });
+      } else {
+        doFetch(false); // first load — show spinner
+      }
     } else if (stale || alwaysRefresh) {
       doFetch(true);  // background refresh — keep showing cached data
     }

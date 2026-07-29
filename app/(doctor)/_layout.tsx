@@ -24,7 +24,7 @@ import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
 import { DoctorDispatchContext, CoverageSession, registerResetCallback } from '@/contexts/DoctorDispatchContext';
-import { getCached, setCached, invalidate, isStale } from '@/utils/tabCache';
+import { getCached, setCached, invalidate, isStale, setPrefetchPromise, clearPrefetchPromise } from '@/utils/tabCache';
 import PollingManager from '../../utils/pollingManager';
 
 
@@ -34,37 +34,51 @@ const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
 async function prefetchTabData(userId: string) {
   const coverageUpcomingKey = `doctor-coverage-upcoming-${userId}`;
   const coverageHistoryKey = `doctor-coverage-history-${userId}`;
-  const earningsKey = 'doctor_earnings';
+  const earningsKey = `doctor_earnings:${userId}`;
 
   await Promise.allSettled([
     // 1. Coverage — Upcoming
     (async () => {
       if (!isStale(coverageUpcomingKey)) return;
-      try {
-        console.log('[prefetch] fetching doctor coverage upcoming');
-        const data = await fetchWithAuth(
-          `${EDGE_BASE}/get-coverage-sessions?role=doctor&status=upcoming,paused,payment_pending`
-        );
-        setCached(coverageUpcomingKey, data?.sessions ?? []);
-        console.log('[prefetch] doctor coverage upcoming cached', (data?.sessions ?? []).length, 'sessions');
-      } catch (e) {
-        console.log('[prefetch] doctor coverage upcoming failed (silent)', e);
-      }
+      const promise = (async (): Promise<void> => {
+        try {
+          console.log('[prefetch] fetching doctor coverage upcoming');
+          const res = await fetchWithAuth(
+            `${EDGE_BASE}/get-coverage-sessions?role=doctor&status=upcoming,paused,payment_pending`
+          );
+          const json = await res.json();
+          setCached(coverageUpcomingKey, json?.sessions ?? []);
+          console.log('[prefetch] doctor coverage upcoming cached', (json?.sessions ?? []).length, 'sessions');
+        } catch (e) {
+          console.log('[prefetch] doctor coverage upcoming failed (silent)', e);
+        } finally {
+          clearPrefetchPromise(coverageUpcomingKey);
+        }
+      })();
+      setPrefetchPromise(coverageUpcomingKey, promise);
+      await promise;
     })(),
 
     // 2. Coverage — History
     (async () => {
       if (!isStale(coverageHistoryKey)) return;
-      try {
-        console.log('[prefetch] fetching doctor coverage history');
-        const data = await fetchWithAuth(
-          `${EDGE_BASE}/get-coverage-sessions?role=doctor&status=completed,cancelled,requester_paid,settled`
-        );
-        setCached(coverageHistoryKey, data?.sessions ?? []);
-        console.log('[prefetch] doctor coverage history cached', (data?.sessions ?? []).length, 'sessions');
-      } catch (e) {
-        console.log('[prefetch] doctor coverage history failed (silent)', e);
-      }
+      const promise = (async (): Promise<void> => {
+        try {
+          console.log('[prefetch] fetching doctor coverage history');
+          const res = await fetchWithAuth(
+            `${EDGE_BASE}/get-coverage-sessions?role=doctor&status=completed,cancelled,requester_paid,settled`
+          );
+          const json = await res.json();
+          setCached(coverageHistoryKey, json?.sessions ?? []);
+          console.log('[prefetch] doctor coverage history cached', (json?.sessions ?? []).length, 'sessions');
+        } catch (e) {
+          console.log('[prefetch] doctor coverage history failed (silent)', e);
+        } finally {
+          clearPrefetchPromise(coverageHistoryKey);
+        }
+      })();
+      setPrefetchPromise(coverageHistoryKey, promise);
+      await promise;
     })(),
 
     // 3. Earnings
@@ -75,6 +89,7 @@ async function prefetchTabData(userId: string) {
         const { data, error } = await supabase
           .from('doctor_earnings')
           .select('*')
+          .eq('doctor_id', userId)
           .order('paid_at', { ascending: false });
         if (error) throw error;
         setCached(earningsKey, data ?? []);
