@@ -4425,10 +4425,10 @@ export default function RequesterHomeScreen() {
                   </TouchableOpacity>
                   <Text style={{ fontSize: 13, color: '#8E8E93', marginHorizontal: 6 }}>{'·'}</Text>
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759', marginRight: 4 }} />
-                  <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>
+                  <Text style={{ fontSize: 13, color: '#34C759', fontFamily: 'Inter_400Regular' }}>
                     {requesterReliability !== null ? requesterReliability.toFixed(0) : '--'}
                   </Text>
-                  <Text style={{ fontSize: 13, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{'%'}</Text>
+                  <Text style={{ fontSize: 13, color: '#34C759', fontFamily: 'Inter_400Regular' }}>{'%'}</Text>
                   <TouchableOpacity onPress={() => { console.log('[Requester] Info icon pressed: reliability tooltip'); setTooltipVisible('reliability'); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 3 }}>
                     <Feather name="info" size={11} color="#8E8E93" />
                   </TouchableOpacity>
