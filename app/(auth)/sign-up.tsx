@@ -183,13 +183,13 @@ export default function SignUpScreen() {
         if (role === 'doctor' && profileData?.doctor_onboarding_complete !== true && profileData?.requester_onboarding_complete === true) {
           console.log('[sign-up] Portal mismatch: doctor portal attempted by requester account', { userId: data.user.id });
           await supabase.auth.signOut();
-          setError('This account is registered as a Requester. Please sign in through the Requester portal.');
+          dispatch({ type: 'SET_ERROR', value: 'This account is registered as a Requester. Please sign in through the Requester portal.' });
           return;
         }
         if (role === 'requester' && profileData?.requester_onboarding_complete !== true && profileData?.doctor_onboarding_complete === true) {
           console.log('[sign-up] Portal mismatch: requester portal attempted by doctor account', { userId: data.user.id });
           await supabase.auth.signOut();
-          setError('This account is registered as a Doctor. Please sign in through the Doctor portal.');
+          dispatch({ type: 'SET_ERROR', value: 'This account is registered as a Doctor. Please sign in through the Doctor portal.' });
           return;
         }
 
