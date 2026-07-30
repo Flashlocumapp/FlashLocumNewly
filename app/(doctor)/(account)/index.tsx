@@ -278,6 +278,7 @@ export default function DoctorAccountScreen() {
   };
 
   const handleRetrySubaccount = async () => {
+    console.log('[Doctor Account] Retry Payout Setup pressed');
     if (!profile?.bank_code || !profile?.account_number || !profile?.account_name || !profile?.bank_name) {
       setRetryError('Bank details are incomplete. Please contact support.');
       return;
@@ -286,6 +287,7 @@ export default function DoctorAccountScreen() {
     setRetryError('');
     setRetrySuccess(false);
     try {
+      console.log('[Doctor Account] Calling create-subaccount edge function', { doctor_id: user!.id });
       const res = await fetchWithAuth(
         'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/create-subaccount',
         {
@@ -301,12 +303,27 @@ export default function DoctorAccountScreen() {
         }
       );
       const result = await res.json();
-      if (!res.ok || result.error) {
-        throw new Error(result.error || 'Payout setup failed. Please try again.');
+      console.log('[Doctor Account] create-subaccount response', { status: res.status, result });
+
+      // SUBACCOUNT_EXISTS means setup is already complete — treat as success
+      const isSuccess = (res.ok && !result.error) || result.error === 'SUBACCOUNT_EXISTS';
+
+      if (!isSuccess) {
+        throw new Error(result.message || result.error || 'Payout setup failed. Please try again.');
       }
+
+      // Re-fetch the profile from DB to get the real subaccount_code
+      const { data: refreshed } = await supabase
+        .from('doctor_profiles')
+        .select('subaccount_code')
+        .eq('id', user!.id)
+        .single();
+
+      console.log('[Doctor Account] Refreshed subaccount_code from DB', refreshed?.subaccount_code);
+      setProfile(prev => prev ? { ...prev, subaccount_code: refreshed?.subaccount_code ?? result.subaccount_code ?? 'set' } : prev);
       setRetrySuccess(true);
-      setProfile(prev => prev ? { ...prev, subaccount_code: result.subAccountCode } : prev);
     } catch (err: unknown) {
+      console.log('[Doctor Account] Retry payout setup error', err instanceof Error ? err.message : err);
       setRetryError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
       setRetryingSubaccount(false);
