@@ -23,8 +23,6 @@ const MONNIFY_VERIFY_URL =
   'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/monnify-verify-account';
 const MONNIFY_SUBACCOUNT_URL =
   'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/create-subaccount';
-const MONNIFY_PROVISION_URL =
-  'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/provision-reserved-account';
 
 // Verified Monnify split-payment subaccount whitelist (commercial banks only).
 // Fintechs (VFD, Kuda, OPay, PalmPay, Moniepoint, Carbon) are excluded until
@@ -437,51 +435,6 @@ export default function DoctorPayout() {
             ? `${baseError}\n(Monnify: ${monnifyMessage})`
             : baseError;
         setSubmitError(displayError);
-        return;
-      }
-
-      // Step 2b: Provision Monnify reserved account — blocking with retry
-      console.log('[Payout] Step 2b: provisioning reserved account');
-      setLoadingLabel('Setting up payment account...');
-      const MAX_PROVISION_ATTEMPTS = 3;
-      let provisionSuccess = false;
-      let provisionError = '';
-
-      for (let attempt = 1; attempt <= MAX_PROVISION_ATTEMPTS; attempt++) {
-        try {
-          console.log(`[Payout] Step 2b: provision attempt ${attempt}/${MAX_PROVISION_ATTEMPTS}`);
-          const provisionResponse = await fetchWithAuth(MONNIFY_PROVISION_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}),
-          });
-          if (provisionResponse.ok) {
-            const provisionData = await provisionResponse.json();
-            if (provisionData?.account_number || provisionData?.already_existed) {
-              console.log('[Payout] Step 2b: provision succeeded');
-              provisionSuccess = true;
-              break;
-            }
-          }
-          // Non-OK or missing account_number — wait before retry
-          console.log(`[Payout] Step 2b: provision attempt ${attempt} failed (non-ok or missing account_number)`);
-          if (attempt < MAX_PROVISION_ATTEMPTS) {
-            await new Promise(r => setTimeout(r, 2000 * attempt));
-          }
-        } catch (e: any) {
-          provisionError = e?.message ?? 'Network error';
-          console.log(`[Payout] Step 2b: provision attempt ${attempt} error: ${provisionError}`);
-          if (attempt < MAX_PROVISION_ATTEMPTS) {
-            await new Promise(r => setTimeout(r, 2000 * attempt));
-          }
-        }
-      }
-
-      if (!provisionSuccess) {
-        console.log('[Payout] Step 2b: all provision attempts failed');
-        const provisionMsg = provisionError || 'Could not set up your payment account. Please check your connection and try again.';
-        setSubmitError(provisionMsg);
-        setLoading(false);
         return;
       }
 
