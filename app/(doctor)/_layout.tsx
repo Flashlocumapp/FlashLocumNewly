@@ -496,6 +496,7 @@ export default function DoctorLayout() {
       if (existingReview.data || existingDismissal.data) {
         markDoctorSessionRated(resolvedSessionId);
         markDoctorSessionDismissed(resolvedSessionId);
+        setActiveSessionId(null); // session is paid and already handled — stop subscriptions
         return; // review or dismissal exists — never show overlay
       }
     } catch {
@@ -517,6 +518,13 @@ export default function DoctorLayout() {
     } catch {
       // Non-fatal — if DB check fails, suppress overlay to be safe
       console.log('[Doctor] maybeShowDoctorRating — DB status check failed, suppressing overlay');
+      return;
+    }
+
+    // DB guard passed — session IS paid. Check in-memory dedup sets again (may have been
+    // populated by the async AsyncStorage check above while we awaited the DB guard).
+    if (_doctorRatedSessions.has(resolvedSessionId) || _doctorDismissedSessions.has(resolvedSessionId)) {
+      setActiveSessionId(null); // session is paid and already handled — stop subscriptions
       return;
     }
 
@@ -1479,6 +1487,10 @@ export default function DoctorLayout() {
               if (snap && (snap.status === 'requester_paid' || snap.status === 'settled')) {
                 console.log('[Doctor] AppState active — session in paid state:', snap.status, '— triggering rating overlay');
                 void maybeShowDoctorRating(snap.id, snap.hospital_name ?? '', snap.total_cost ?? 0);
+              }
+              // settled is fully terminal — clear activeSessionId to stop the subscription and payment poll
+              if (snap && snap.status === 'settled') {
+                setActiveSessionId(null);
               }
             }
           } catch {

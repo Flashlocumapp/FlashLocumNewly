@@ -3294,19 +3294,34 @@ export default function RequesterHomeScreen() {
 
   const handleCancelReasonSelected = async (reason: string) => {
     console.log('[Requester] Cancel reason selected:', reason, 'for request:', activeRequestId);
-    // Update the request with cancellation reason
     if (activeRequestId) {
       try {
-        const { error } = await supabase.from('coverage_requests')
-          .update({ status: 'cancelled', cancellation_reason: reason, cancelled_by: 'requester' })
-          .eq('id', activeRequestId);
-        if (error) {
-          console.error('[Requester] Failed to record cancellation reason:', error);
+        const res = await fetchWithAuth(`${EDGE_BASE}/cancel-request`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ request_id: activeRequestId, cancellation_reason: reason }),
+        });
+        if (res.status === 409) {
+          const body = await res.json().catch(() => ({}));
+          if (body.error === 'SESSION_EXISTS') {
+            // A doctor accepted mid-cancel — show the session instead
+            setShowCancelReasons(false);
+            setCancelWithdrawn(false);
+            await fetchActiveSession();
+            Alert.alert('Request Already Accepted', 'A doctor accepted your request just before you cancelled. Check your Upcoming Coverage.');
+            return;
+          }
+        }
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          console.error('[Requester] cancel-request failed:', body);
+          // Non-fatal — still reset UI so user is not stuck
         } else {
-          console.log('[Requester] Cancellation reason recorded successfully');
+          console.log('[Requester] Cancellation recorded successfully via edge function');
         }
       } catch (e) {
-        console.error('[Requester] Exception recording cancellation reason:', e);
+        console.error('[Requester] Exception calling cancel-request:', e);
+        // Non-fatal — still reset UI
       }
     }
     setShowCancelReasons(false);
@@ -3436,6 +3451,10 @@ export default function RequesterHomeScreen() {
   }, [activeSession]);
 
   const handleConfirmEndShift = async () => {
+    if (endShiftInProgressRef.current) {
+      console.log('[Requester] handleConfirmEndShift — already in progress, ignoring double-tap');
+      return;
+    }
     if (!activeSession) return;
     const sid = activeSession.id;
     endShiftInProgressRef.current = true;
