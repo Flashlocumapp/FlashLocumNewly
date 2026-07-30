@@ -101,7 +101,7 @@ async function prefetchTabData(userId: string) {
   ]);
 }
 
-// Module-level GPS cache for go-online/heartbeat — written by the location watcher
+// Module-level GPS cache for go-online — written by the location watcher
 let _layoutCachedCoords: { lat: number; lng: number } | null = null;
 
 // Tracks the user's intended online state during an in-flight toggle.
