@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -44,6 +44,33 @@ export default function RequesterBasicProfile() {
   const [phoneError, setPhoneError] = useState('');
   const [genderError, setGenderError] = useState('');
   const [submitError, setSubmitError] = useState('');
+
+  // Pre-fill phone and gender from DB on mount
+  useEffect(() => {
+    if (!user?.id) return;
+    const prefill = async () => {
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('phone, gender')
+          .eq('id', user.id)
+          .single();
+        if (!data) return;
+        if (data.phone) {
+          console.log('[RequesterBasicProfile] Pre-filling phone from profile');
+          setPhone(data.phone);
+        }
+        if (data.gender === 'male' || data.gender === 'female') {
+          console.log('[RequesterBasicProfile] Pre-filling gender from profile:', data.gender);
+          setGender(data.gender);
+        }
+      } catch {
+        // silently ignore
+      }
+    };
+    prefill();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleBack = () => {
     if (from === 'doctor-account') {

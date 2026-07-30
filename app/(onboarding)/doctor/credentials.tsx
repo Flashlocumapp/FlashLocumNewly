@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -93,15 +93,53 @@ export default function DoctorCredentials() {
 
   const [nyscFile, setNyscFile] = useState<PickedFile | null>(null);
   const [nyscError, setNyscError] = useState('');
+  const [nyscAlreadyUploaded, setNyscAlreadyUploaded] = useState(false);
 
   const [licenceFile, setLicenceFile] = useState<PickedFile | null>(null);
   const [licenceError, setLicenceError] = useState('');
+  const [licenceAlreadyUploaded, setLicenceAlreadyUploaded] = useState(false);
 
   const [selfieUri, setSelfieUri] = useState<string | null>(null);
   const [selfieError, setSelfieError] = useState('');
+  const [selfieAlreadyUploaded, setSelfieAlreadyUploaded] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
+
+  // Pre-fill MDCN and previously uploaded file status on mount
+  useEffect(() => {
+    if (!user?.id) return;
+    const prefill = async () => {
+      try {
+        const { data } = await supabase
+          .from('doctor_profiles')
+          .select('mdcn_number, nysc_cert_url, medical_licence_url, selfie_url')
+          .eq('id', user.id)
+          .single();
+        if (!data) return;
+        if (data.mdcn_number) {
+          console.log('[Credentials] Pre-filling MDCN number from profile');
+          setMdcnNumber(data.mdcn_number);
+        }
+        if (data.nysc_cert_url) {
+          console.log('[Credentials] NYSC cert previously uploaded');
+          setNyscAlreadyUploaded(true);
+        }
+        if (data.medical_licence_url) {
+          console.log('[Credentials] Medical licence previously uploaded');
+          setLicenceAlreadyUploaded(true);
+        }
+        if (data.selfie_url) {
+          console.log('[Credentials] Selfie previously uploaded');
+          setSelfieAlreadyUploaded(true);
+        }
+      } catch {
+        // silently ignore
+      }
+    };
+    prefill();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleBack = () => {
     if (profile?.doctor_onboarding_complete) {
@@ -220,15 +258,15 @@ export default function DoctorCredentials() {
       setMdcnError(MDCN_HINT);
       valid = false;
     }
-    if (!nyscFile) {
+    if (!nyscFile && !nyscAlreadyUploaded) {
       setNyscError('Please upload your NYSC certificate');
       valid = false;
     }
-    if (!licenceFile) {
+    if (!licenceFile && !licenceAlreadyUploaded) {
       setLicenceError('Please upload your medical licence');
       valid = false;
     }
-    if (!selfieUri) {
+    if (!selfieUri && !selfieAlreadyUploaded) {
       setSelfieError('Please take a selfie');
       valid = false;
     }
@@ -239,24 +277,41 @@ export default function DoctorCredentials() {
     try {
       const userId = user!.id;
 
-      const nyscExt = getExtension(nyscFile!.name);
-      const licenceExt = getExtension(licenceFile!.name);
+      // Only upload files that are newly picked
+      const uploadPromises: Promise<string | null>[] = [];
+      const uploadKeys: string[] = [];
 
-      const [nyscPath, licencePath, selfiePath] = await Promise.all([
-        uploadFile(nyscFile!.uri, `${userId}/nysc-cert.${nyscExt}`, 'NYSC certificate', nyscFile!.mimeType),
-        uploadFile(licenceFile!.uri, `${userId}/medical-licence.${licenceExt}`, 'medical licence', licenceFile!.mimeType),
-        uploadFile(selfieUri!, `${userId}/selfie.jpg`, 'selfie', 'image/jpeg'),
-      ]);
+      if (nyscFile) {
+        const nyscExt = getExtension(nyscFile.name);
+        uploadPromises.push(uploadFile(nyscFile.uri, `${userId}/nysc-cert.${nyscExt}`, 'NYSC certificate', nyscFile.mimeType));
+        uploadKeys.push('nysc');
+      }
+      if (licenceFile) {
+        const licenceExt = getExtension(licenceFile.name);
+        uploadPromises.push(uploadFile(licenceFile.uri, `${userId}/medical-licence.${licenceExt}`, 'medical licence', licenceFile.mimeType));
+        uploadKeys.push('licence');
+      }
+      if (selfieUri) {
+        uploadPromises.push(uploadFile(selfieUri, `${userId}/selfie.jpg`, 'selfie', 'image/jpeg'));
+        uploadKeys.push('selfie');
+      }
+
+      const uploadResults = await Promise.all(uploadPromises);
+
+      // Build upsert payload dynamically — only include fields for newly uploaded files
+      const upsertPayload: Record<string, string> = { id: userId, mdcn_number: mdcnNumber };
+      uploadKeys.forEach((key, idx) => {
+        const path = uploadResults[idx];
+        if (path) {
+          if (key === 'nysc') upsertPayload.nysc_cert_url = path;
+          if (key === 'licence') upsertPayload.medical_licence_url = path;
+          if (key === 'selfie') upsertPayload.selfie_url = path;
+        }
+      });
 
       const { error: doctorProfileError } = await supabase
         .from('doctor_profiles')
-        .upsert({
-          id: userId,
-          mdcn_number: mdcnNumber,
-          nysc_cert_url: nyscPath,
-          medical_licence_url: licencePath,
-          selfie_url: selfiePath,
-        });
+        .upsert(upsertPayload);
       if (doctorProfileError) throw doctorProfileError;
 
       router.push('/(onboarding)/doctor/payout');
@@ -309,14 +364,18 @@ export default function DoctorCredentials() {
             )}
             <View style={styles.selfieTextBlock}>
               <Text style={styles.selfieTitle}>Live selfie required</Text>
-              <Text style={styles.selfieSubtitle}>Front camera only</Text>
+              {selfieAlreadyUploaded && !selfieUri ? (
+                <Text style={styles.alreadyUploadedText}>Previously captured — tap to retake</Text>
+              ) : (
+                <Text style={styles.selfieSubtitle}>Front camera only</Text>
+              )}
             </View>
             <AnimatedPressable
               onPress={handleTakeSelfie}
               scaleValue={0.95}
               style={styles.captureButton}
             >
-              <Text style={styles.captureButtonText}>{selfieUri ? 'Retake' : 'Capture'}</Text>
+              <Text style={styles.captureButtonText}>{selfieUri || selfieAlreadyUploaded ? 'Retake' : 'Capture'}</Text>
             </AnimatedPressable>
           </View>
           {selfieError ? <Text style={styles.inlineError}>{selfieError}</Text> : null}
@@ -362,6 +421,10 @@ export default function DoctorCredentials() {
                   <RemoveIcon />
                 </AnimatedPressable>
               </View>
+            ) : licenceAlreadyUploaded ? (
+              <View style={styles.uploadRow}>
+                <Text style={styles.alreadyUploadedText}>✓ Previously uploaded — tap to replace</Text>
+              </View>
             ) : (
               <View style={styles.uploadRow}>
                 <Text style={styles.uploadText}>Tap to upload PDF or image</Text>
@@ -390,6 +453,10 @@ export default function DoctorCredentials() {
                 >
                   <RemoveIcon />
                 </AnimatedPressable>
+              </View>
+            ) : nyscAlreadyUploaded ? (
+              <View style={styles.uploadRow}>
+                <Text style={styles.alreadyUploadedText}>✓ Previously uploaded — tap to replace</Text>
               </View>
             ) : (
               <View style={styles.uploadRow}>
@@ -585,6 +652,10 @@ const styles = StyleSheet.create({
   uploadText: {
     fontSize: 15,
     color: '#ADADAD',
+  },
+  alreadyUploadedText: {
+    fontSize: 15,
+    color: '#0A0A0A',
   },
   fileRow: {
     flexDirection: 'row',

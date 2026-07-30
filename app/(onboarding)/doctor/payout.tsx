@@ -419,23 +419,29 @@ export default function DoctorPayout() {
       if (!subaccountResponse.ok || subaccountResult.error) {
         const code: string | undefined =
           typeof subaccountResult?.error === 'string' ? subaccountResult.error : undefined;
-        const providerMessage: string | undefined =
-          typeof subaccountResult?.message === 'string' && subaccountResult.message
-            ? subaccountResult.message
-            : undefined;
-        console.log(`[Payout] Submit failed: errorCode=${code ?? 'unknown'}, message=${providerMessage ?? 'none'}`);
-        const monnifyMessage: string | undefined =
-          typeof subaccountResult?.monnify_message === 'string' && subaccountResult.monnify_message
-            ? subaccountResult.monnify_message
-            : undefined;
-        console.error('[Payout] Monnify raw error:', monnifyMessage);
-        const baseError = providerMessage ?? mapErrorCode(code);
-        const displayError =
-          monnifyMessage && monnifyMessage !== providerMessage
-            ? `${baseError}\n(Monnify: ${monnifyMessage})`
-            : baseError;
-        setSubmitError(displayError);
-        return;
+
+        // SUBACCOUNT_EXISTS means a previous attempt already created the subaccount — treat as success
+        if (code === 'SUBACCOUNT_EXISTS') {
+          console.log('[Payout] Subaccount already exists — treating as success, proceeding to step 3');
+        } else {
+          const providerMessage: string | undefined =
+            typeof subaccountResult?.message === 'string' && subaccountResult.message
+              ? subaccountResult.message
+              : undefined;
+          console.log(`[Payout] Submit failed: errorCode=${code ?? 'unknown'}, message=${providerMessage ?? 'none'}`);
+          const monnifyMessage: string | undefined =
+            typeof subaccountResult?.monnify_message === 'string' && subaccountResult.monnify_message
+              ? subaccountResult.monnify_message
+              : undefined;
+          console.error('[Payout] Monnify raw error:', monnifyMessage);
+          const baseError = providerMessage ?? mapErrorCode(code);
+          const displayError =
+            monnifyMessage && monnifyMessage !== providerMessage
+              ? `${baseError}\n(Monnify: ${monnifyMessage})`
+              : baseError;
+          setSubmitError(displayError);
+          return;
+        }
       }
 
       // Step 3: Mark onboarding complete — only reached if subaccount succeeded

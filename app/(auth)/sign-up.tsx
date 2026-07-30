@@ -197,10 +197,11 @@ export default function SignUpScreen() {
         if (!profileData) {
           // No profile yet — go to onboarding
           console.log('[sign-up] No profile found, routing to onboarding', { role });
-          const dest = role === 'doctor'
-            ? '/(onboarding)/doctor/basic-profile'
-            : '/(onboarding)/requester/basic-profile';
-          router.replace(dest as any);
+          if (role === 'doctor') {
+            router.replace('/(onboarding)/doctor/basic-profile' as any);
+          } else {
+            router.replace('/(onboarding)/requester/basic-profile' as any);
+          }
           return;
         }
         const doctorComplete = profileData.doctor_onboarding_complete === true;
@@ -213,12 +214,37 @@ export default function SignUpScreen() {
         } else if (doctorComplete && requesterComplete) {
           const dest = role === 'doctor' ? '/(doctor)/(home)' : '/(requester)/(home)';
           router.replace(dest as any);
+        } else if (role === 'requester') {
+          // Requester onboarding — single step, always go to basic-profile
+          router.replace('/(onboarding)/requester/basic-profile' as any);
         } else {
-          // Neither complete — go to onboarding
-          const dest = role === 'doctor'
-            ? '/(onboarding)/doctor/basic-profile'
-            : '/(onboarding)/requester/basic-profile';
-          router.replace(dest as any);
+          // Doctor onboarding — detect which step to resume
+          console.log('[sign-up] Doctor onboarding incomplete, detecting resume step', { userId: data.user.id });
+          try {
+            const [profileStepResult, doctorProfileResult] = await Promise.all([
+              supabase.from('profiles').select('doctor_basic_profile_complete').eq('id', data.user.id).single(),
+              supabase.from('doctor_profiles').select('mdcn_number, subaccount_code').eq('id', data.user.id).single(),
+            ]);
+            const profileStep = profileStepResult.data;
+            const doctorStep = doctorProfileResult.data;
+
+            if (!profileStep || profileStep.doctor_basic_profile_complete !== true) {
+              console.log('[sign-up] Routing to doctor basic-profile (step 1)');
+              router.replace('/(onboarding)/doctor/basic-profile' as any);
+            } else if (!doctorStep?.mdcn_number) {
+              console.log('[sign-up] Routing to doctor credentials (step 2)');
+              router.replace('/(onboarding)/doctor/credentials' as any);
+            } else if (!doctorStep?.subaccount_code) {
+              console.log('[sign-up] Routing to doctor payout (step 3)');
+              router.replace('/(onboarding)/doctor/payout' as any);
+            } else {
+              console.log('[sign-up] Fallback routing to doctor basic-profile');
+              router.replace('/(onboarding)/doctor/basic-profile' as any);
+            }
+          } catch (err) {
+            console.log('[sign-up] Step detection error, routing to doctor basic-profile', err);
+            router.replace('/(onboarding)/doctor/basic-profile' as any);
+          }
         }
       }
     }
