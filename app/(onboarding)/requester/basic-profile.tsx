@@ -198,7 +198,8 @@ export default function RequesterBasicProfile() {
             onPress={() => {
               setGenderModalVisible(true);
             }}
-            scaleValue={0.98}
+            scaleValue={0.95}
+            hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
             style={[styles.dropdownContainer, genderError ? styles.inputError : null]}
           >
             <Text style={[styles.dropdownText, !gender && styles.dropdownPlaceholder]}>
@@ -215,7 +216,7 @@ export default function RequesterBasicProfile() {
         <AnimatedPressable
           onPress={handleSubmit}
           disabled={loading}
-          scaleValue={0.97}
+          scaleValue={0.95}
           style={[styles.submitButton, loading && styles.submitButtonDisabled]}
         >
           {loading ? (

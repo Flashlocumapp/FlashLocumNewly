@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useReducer } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,42 @@ import { AnimatedPressable } from '@/components/AnimatedPressable';
 
 type Mode = 'signup' | 'signin';
 type Role = 'doctor' | 'requester';
+
+type FormState = {
+  fullName: string;
+  email: string;
+  password: string;
+  showPassword: boolean;
+  error: string;
+};
+
+const initialFormState: FormState = {
+  fullName: '',
+  email: '',
+  password: '',
+  showPassword: false,
+  error: '',
+};
+
+type FormAction =
+  | { type: 'SET_FULL_NAME'; value: string }
+  | { type: 'SET_EMAIL'; value: string }
+  | { type: 'SET_PASSWORD'; value: string }
+  | { type: 'TOGGLE_PASSWORD' }
+  | { type: 'SET_ERROR'; value: string }
+  | { type: 'CLEAR' };
+
+function formReducer(state: FormState, action: FormAction): FormState {
+  switch (action.type) {
+    case 'SET_FULL_NAME': return { ...state, fullName: action.value };
+    case 'SET_EMAIL': return { ...state, email: action.value };
+    case 'SET_PASSWORD': return { ...state, password: action.value };
+    case 'TOGGLE_PASSWORD': return { ...state, showPassword: !state.showPassword };
+    case 'SET_ERROR': return { ...state, error: action.value };
+    case 'CLEAR': return initialFormState;
+    default: return state;
+  }
+}
 
 function EyeOpen() {
   return (
@@ -74,26 +110,14 @@ export default function SignUpScreen() {
   const [mode, setMode] = useState<Mode>(initialMode);
   const [role] = useState<Role>(initialRole);
 
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [form, dispatch] = useReducer(formReducer, initialFormState);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
 
-  const clearForm = () => {
-    setFullName('');
-    setEmail('');
-    setPassword('');
-    setShowPassword(false);
-    setError('');
-  };
-
   const switchMode = (next: Mode) => {
-    clearForm();
+    dispatch({ type: 'CLEAR' });
     setMode(next);
   };
 
@@ -102,49 +126,51 @@ export default function SignUpScreen() {
   };
 
   const handleTogglePassword = () => {
-    setShowPassword(prev => !prev);
+    dispatch({ type: 'TOGGLE_PASSWORD' });
   };
 
   const handleSubmit = async () => {
     if (loading) return;
 
-    if (!email.trim() || !password.trim()) {
-      setError('Please fill in all fields.');
+    if (!form.email.trim() || !form.password.trim()) {
+      dispatch({ type: 'SET_ERROR', value: 'Please fill in all fields.' });
       return;
     }
-    if (mode === 'signup' && !fullName.trim()) {
-      setError('Please enter your full name.');
+    if (mode === 'signup' && !form.fullName.trim()) {
+      dispatch({ type: 'SET_ERROR', value: 'Please enter your full name.' });
       return;
     }
 
     setLoading(true);
-    setError('');
+    dispatch({ type: 'SET_ERROR', value: '' });
 
     if (mode === 'signup') {
+      console.log('[sign-up] Sign up submitted', { email: form.email.trim(), role });
       const { error: signUpError } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
+        email: form.email.trim(),
+        password: form.password,
         options: {
           data: {
-            full_name: fullName.trim(),
+            full_name: form.fullName.trim(),
             role,
           },
         },
       });
       setLoading(false);
       if (signUpError) {
-        setError(signUpError.message || 'Sign up failed. Please try again.');
+        dispatch({ type: 'SET_ERROR', value: signUpError.message || 'Sign up failed. Please try again.' });
       } else {
-        router.push(`/(auth)/verify?email=${encodeURIComponent(email.trim())}&role=${role}`);
+        router.push(`/(auth)/verify?email=${encodeURIComponent(form.email.trim())}&role=${role}`);
       }
     } else {
+      console.log('[sign-up] Sign in submitted', { email: form.email.trim(), role });
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
+        email: form.email.trim(),
+        password: form.password,
       });
       setLoading(false);
       if (signInError) {
-        setError(signInError.message || 'Sign in failed. Please try again.');
+        dispatch({ type: 'SET_ERROR', value: signInError.message || 'Sign in failed. Please try again.' });
       } else {
         // Fetch profile to determine correct destination
         const { data: profileData } = await supabase
@@ -206,6 +232,7 @@ export default function SignUpScreen() {
   const submitLabel = mode === 'signup' ? 'Create account' : 'Sign in';
   const roleLabel = role === 'requester' ? 'REQUEST COVERAGE' : 'COVER & EARN';
   const isSignup = mode === 'signup';
+  const { fullName, email, password, showPassword, error } = form;
 
   return (
     <KeyboardAvoidingView
@@ -241,7 +268,8 @@ export default function SignUpScreen() {
         <View style={styles.toggleTrack}>
           <AnimatedPressable
             onPress={() => switchMode('signup')}
-            scaleValue={0.97}
+            scaleValue={0.93}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             style={[styles.toggleTab, isSignup && styles.toggleTabActive]}
           >
             <Text style={[styles.toggleTabText, isSignup && styles.toggleTabTextActive]}>
@@ -250,7 +278,8 @@ export default function SignUpScreen() {
           </AnimatedPressable>
           <AnimatedPressable
             onPress={() => switchMode('signin')}
-            scaleValue={0.97}
+            scaleValue={0.93}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             style={[styles.toggleTab, !isSignup && styles.toggleTabActive]}
           >
             <Text style={[styles.toggleTabText, !isSignup && styles.toggleTabTextActive]}>
@@ -271,7 +300,7 @@ export default function SignUpScreen() {
                   placeholder={namePlaceholder}
                   placeholderTextColor="#ADADAD"
                   value={fullName}
-                  onChangeText={setFullName}
+                  onChangeText={value => dispatch({ type: 'SET_FULL_NAME', value })}
                   autoCapitalize="words"
                   returnKeyType="next"
                   onSubmitEditing={() => emailRef.current?.focus()}
@@ -290,7 +319,7 @@ export default function SignUpScreen() {
                 placeholder="name@mail.com"
                 placeholderTextColor="#ADADAD"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={value => dispatch({ type: 'SET_EMAIL', value })}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -310,7 +339,7 @@ export default function SignUpScreen() {
                 placeholder="••••••••"
                 placeholderTextColor="#ADADAD"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={value => dispatch({ type: 'SET_PASSWORD', value })}
                 secureTextEntry={!showPassword}
                 returnKeyType="done"
                 onSubmitEditing={handleSubmit}

@@ -54,7 +54,7 @@ export default function RoleSelectScreen() {
       {/* Cards */}
       <View style={styles.cardsContainer}>
         {/* Request Coverage */}
-        <AnimatedPressable onPress={handleRequestCoverage} scaleValue={0.97} style={styles.card}>
+        <AnimatedPressable onPress={handleRequestCoverage} scaleValue={0.94} style={styles.card}>
           <View style={styles.cardInner}>
             <View style={styles.cardLeft}>
               <Text style={styles.cardTitle}>Request Coverage</Text>
@@ -69,7 +69,7 @@ export default function RoleSelectScreen() {
         </AnimatedPressable>
 
         {/* Cover & Earn */}
-        <AnimatedPressable onPress={handleCoverAndEarn} scaleValue={0.97} style={styles.card}>
+        <AnimatedPressable onPress={handleCoverAndEarn} scaleValue={0.94} style={styles.card}>
           <View style={styles.cardInner}>
             <View style={styles.cardLeft}>
               <Text style={styles.cardTitle}>Cover & Earn</Text>
