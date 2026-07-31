@@ -1275,7 +1275,7 @@ export default function DoctorLayout() {
         },
         (payload) => {
           const row = payload.new as any;
-          const evictStatuses = ['matched', 'expired', 'cancelled'];
+          const evictStatuses = ['matched', 'expired', 'cancelled', 'withdrawn'];
           if (evictStatuses.includes(row?.status)) {
             console.log('[Doctor] coverage_requests UPDATE via postgres_changes — evicting from queue:', row.id, 'status:', row.status);
             setRequestQueue((prev) => prev.filter((r) => r.id !== row.id));

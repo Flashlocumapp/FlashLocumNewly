@@ -2120,6 +2120,7 @@ export default function RequesterHomeScreen() {
   const realtimeChannelRef = useRef<any>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shouldPollRef = useRef(false);
+  const activeRequestIdRef = useRef<string | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const fetchActiveSessionRef = useRef<() => void>(() => {});
   // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -2612,6 +2613,7 @@ export default function RequesterHomeScreen() {
   // ─── Keep stable refs in sync with latest callbacks ──────────────────────────
   useEffect(() => { fetchActiveSessionRef.current = fetchActiveSession; }, [fetchActiveSession]);
   useEffect(() => { transitionToRef.current = transitionTo; }, [transitionTo]);
+  useEffect(() => { activeRequestIdRef.current = activeRequestId; }, [activeRequestId]);
 
   // ─── Clean up search state when leaving searching ─────────────────────────────
   useEffect(() => {
@@ -2742,11 +2744,32 @@ export default function RequesterHomeScreen() {
   useEffect(() => {
     if (activeRequestId) {
 
-      matchTimerRef.current = setTimeout(() => {
+      matchTimerRef.current = setTimeout(async () => {
+        console.log('[Requester] matchTimer fired — withdrawing request and notifying user');
+        // Stop polling
+        shouldPollRef.current = false;
+        if (pollIntervalRef.current) {
+          clearTimeout(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+        // Terminate the request on the backend before notifying the user
+        const reqId = activeRequestIdRef.current;
+        if (reqId) {
+          try {
+            console.log('[Requester] matchTimer calling withdraw-request for:', reqId);
+            await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ request_id: reqId }),
+            });
+          } catch (e) {
+            console.warn('[Requester] matchTimer withdraw-request failed:', e);
+          }
+        }
         Alert.alert(
           'No Match Found',
           'No doctor accepted your request at this time. Please try again or adjust your request parameters.',
-          [{ text: 'OK', onPress: () => transitionTo('summary') }]
+          [{ text: 'OK', onPress: () => transitionToRef.current('summary') }]
         );
       }, 180000);
 
@@ -2763,13 +2786,27 @@ export default function RequesterHomeScreen() {
           fetchActiveSessionRef.current();
           transitionToRef.current('idle');
         })
-        .on('broadcast', { event: 'REQUEST_EXPIRED' }, () => {
+        .on('broadcast', { event: 'REQUEST_EXPIRED' }, async () => {
+          console.log('[Requester] REQUEST_EXPIRED broadcast received — withdrawing request');
           shouldPollRef.current = false;
           if (pollIntervalRef.current) {
             clearTimeout(pollIntervalRef.current);
             pollIntervalRef.current = null;
           }
           if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+          const reqId = activeRequestIdRef.current;
+          if (reqId) {
+            try {
+              console.log('[Requester] REQUEST_EXPIRED calling withdraw-request for:', reqId);
+              await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ request_id: reqId }),
+              });
+            } catch (e) {
+              console.warn('[Requester] REQUEST_EXPIRED withdraw-request failed:', e);
+            }
+          }
           Alert.alert('Request Expired', 'Your request expired. Please try again.');
           transitionToRef.current('summary');
         })
@@ -2990,7 +3027,8 @@ export default function RequesterHomeScreen() {
     setSubmitting(true);
     try {
       // Construct ISO datetime strings for start_date and end_date
-      const shiftDateStr = shiftDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      const d = shiftDate;
+      const shiftDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; // YYYY-MM-DD (local date, not UTC)
 
       const startDateObj = new Date(shiftDate);
       startDateObj.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
