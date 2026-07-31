@@ -18,6 +18,7 @@ import {
   PanResponder,
   AppState,
   AppStateStatus,
+  Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Clock } from 'lucide-react-native';
@@ -381,6 +382,7 @@ export default function DoctorCoverageScreen() {
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
   const [showCancelReasons, setShowCancelReasons] = useState(false);
   const [pendingCancelSession, setPendingCancelSession] = useState<CoverageSession | null>(null);
+  const [showCancelConfirmModal, setShowCancelConfirmModal] = useState(false);
 
   useEffect(() => {
     if (!historyData || !user?.id) return;
@@ -498,18 +500,8 @@ export default function DoctorCoverageScreen() {
 
   const handleCancel = useCallback((session: CoverageSession) => {
     console.log('[DoctorCoverage] Cancel shift pressed for session:', session.id);
-    Alert.alert('Cancel Shift?', 'This will cancel the booking.', [
-      { text: 'Keep', style: 'cancel' },
-      {
-        text: 'Cancel Shift',
-        style: 'destructive',
-        onPress: () => {
-          console.log('[DoctorCoverage] Cancel confirmed, showing reason picker for session:', session.id);
-          setPendingCancelSession(session);
-          setShowCancelReasons(true);
-        },
-      },
-    ]);
+    setPendingCancelSession(session);
+    setShowCancelConfirmModal(true);
   }, []);
 
   const handleCancelReasonSelected = useCallback(async (reason: string) => {
@@ -716,6 +708,46 @@ export default function DoctorCoverageScreen() {
         onReviewSubmitted={handleReviewSubmitted}
       />
     </ScrollView>
+
+    {/* ── CANCEL SHIFT CONFIRMATION MODAL ── */}
+    <Modal
+      visible={showCancelConfirmModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowCancelConfirmModal(false)}
+    >
+      <Pressable
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}
+        onPress={() => setShowCancelConfirmModal(false)}
+      >
+        <Pressable onPress={(e) => e.stopPropagation()}>
+          <View style={{ backgroundColor: '#1C1C1E', borderRadius: 24, padding: 28, width: '100%' }}>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
+              Cancel Shift?
+            </Text>
+            <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
+              You have already accepted this shift. Cancelling will affect your reliability score.
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowCancelConfirmModal(false)}
+              style={{ backgroundColor: '#F9F9F6', borderRadius: 999, paddingVertical: 16, alignItems: 'center', marginBottom: 12 }}
+            >
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Keep Shift</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                console.log('[DoctorCoverage] Cancel confirmed, showing reason picker for session:', pendingCancelSession?.id);
+                setShowCancelConfirmModal(false);
+                setShowCancelReasons(true);
+              }}
+              style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center' }}
+            >
+              <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>Cancel Shift</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
 
     {/* ── CANCEL SHIFT REASON MODAL ── */}
     <Modal
