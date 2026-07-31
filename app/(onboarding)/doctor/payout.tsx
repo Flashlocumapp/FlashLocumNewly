@@ -428,17 +428,13 @@ export default function DoctorPayout() {
             typeof subaccountResult?.message === 'string' && subaccountResult.message
               ? subaccountResult.message
               : undefined;
-          console.log(`[Payout] Submit failed: errorCode=${code ?? 'unknown'}, message=${providerMessage ?? 'none'}`);
           const monnifyMessage: string | undefined =
             typeof subaccountResult?.monnify_message === 'string' && subaccountResult.monnify_message
               ? subaccountResult.monnify_message
               : undefined;
-          console.error('[Payout] Monnify raw error:', monnifyMessage);
-          const baseError = providerMessage ?? mapErrorCode(code);
-          const displayError =
-            monnifyMessage && monnifyMessage !== providerMessage
-              ? `${baseError}\n(Monnify: ${monnifyMessage})`
-              : baseError;
+          console.log(`[Payout] Submit failed: errorCode=${code ?? 'unknown'}, message=${providerMessage ?? 'none'}, monnify_message=${monnifyMessage ?? 'none'}`);
+          // Never show raw Monnify provider messages to the doctor — use the clean mapped error only
+          const displayError = providerMessage ?? mapErrorCode(code);
           setSubmitError(displayError);
           return;
         }
