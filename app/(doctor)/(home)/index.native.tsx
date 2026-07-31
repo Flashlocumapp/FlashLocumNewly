@@ -604,12 +604,26 @@ export default function DoctorHomeScreen() {
   const pillTop = insets.top + 12;
   const sheetPaddingBottom = 80 + 16 + (Platform.OS === 'android' ? insets.bottom : 0);
 
-  // Determine which sub-card to show
-  const hasActiveSession = activeSession !== null;
-  const isPaymentPending = hasActiveSession && activeSession.status === 'payment_pending';
-  const isUpcomingOrPaused = hasActiveSession && (activeSession.status === 'upcoming' || activeSession.status === 'paused');
-  const isActive = hasActiveSession && activeSession.status === 'active';
-  const nextUpcomingSession = upcomingSessions.find(s => s.id !== activeSession?.id) ?? null;
+  // Determine which single sub-card to show (strict priority — never more than one)
+  const homeCardSession: CoverageSession | null = (() => {
+    if (activeSession) {
+      if (activeSession.status === 'active' || activeSession.status === 'paused') return activeSession;
+      if (activeSession.status === 'payment_pending') return activeSession;
+    }
+    const activeLive = upcomingSessions.find(s => s.status === 'active' || s.status === 'paused');
+    if (activeLive) return activeLive;
+    const pendingLive = upcomingSessions.find(s => s.status === 'payment_pending');
+    if (pendingLive) return pendingLive;
+    const upcomingOnly = upcomingSessions.filter(s => s.status === 'upcoming');
+    if (upcomingOnly.length === 0) return null;
+    return upcomingOnly.reduce((earliest, s) =>
+      new Date(s.shift_start) < new Date(earliest.shift_start) ? s : earliest
+    );
+  })();
+  const homeCardStatus = homeCardSession?.status ?? null;
+  const showActive = homeCardStatus === 'active';
+  const showPaymentPending = homeCardStatus === 'payment_pending';
+  const showUpcomingOrPaused = homeCardStatus === 'upcoming' || homeCardStatus === 'paused';
 
   return (
     <View style={styles.container}>
@@ -718,7 +732,7 @@ export default function DoctorHomeScreen() {
           <View style={styles.dragHandle} />
 
           {/* No session */}
-          {(!isPaymentPending && !isUpcomingOrPaused && !isActive && !nextUpcomingSession) && (
+          {!homeCardSession && (
             <View style={styles.subCard}>
               <Text style={styles.subCardLabel}>COVERAGE</Text>
               <Text style={styles.subCardHeading}>No coverage yet</Text>
@@ -729,28 +743,17 @@ export default function DoctorHomeScreen() {
           )}
 
           {/* Payment pending — shift ended, awaiting payment */}
-          {isPaymentPending && activeSession && (
+          {showPaymentPending && homeCardSession && (
             <View style={styles.subCard}>
-              <HomePaymentPendingContent session={activeSession} />
+              <HomePaymentPendingContent session={homeCardSession} />
             </View>
           )}
 
-          {/* Upcoming/paused active session — content inside subCard */}
-          {isUpcomingOrPaused && activeSession && (
+          {/* Upcoming or paused */}
+          {showUpcomingOrPaused && homeCardSession && (
             <View style={styles.subCard}>
               <HomeUpcomingContent
-                session={activeSession}
-                onCancel={(s) => handleCancelShift(s)}
-                onCall={(s) => handleCallRequester(s)}
-              />
-            </View>
-          )}
-
-          {/* Next upcoming session */}
-          {nextUpcomingSession && (
-            <View style={styles.subCard}>
-              <HomeUpcomingContent
-                session={nextUpcomingSession}
+                session={homeCardSession}
                 onCancel={(s) => handleCancelShift(s)}
                 onCall={(s) => handleCallRequester(s)}
               />
@@ -758,10 +761,10 @@ export default function DoctorHomeScreen() {
           )}
 
           {/* Active session — DoctorActiveCard has its own subCard wrapper */}
-          {isActive && activeSession && (
+          {showActive && homeCardSession && (
             <DoctorActiveCard
-              session={activeSession}
-              onCall={handleCallRequester}
+              session={homeCardSession}
+              onCall={() => handleCallRequester(homeCardSession)}
             />
           )}
 
