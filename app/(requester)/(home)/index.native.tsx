@@ -2866,45 +2866,53 @@ export default function RequesterHomeScreen() {
     setTabBarVisible(sheetState === 'idle');
   }, [sheetState]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── Standalone price fetch (used by both debounce and handleGoToSummary) ─────
+  const fetchPreviewPrice = useCallback(async () => {
+    console.log('[fetchPreviewPrice] Fetching price preview', { startTime, endTime, coverageType, environment, coverageLength });
+    const startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
+    const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
+    let durationMinutes = endMinutes - startMinutes;
+    if (durationMinutes <= 0) durationMinutes += 24 * 60; // handle overnight
+    const durationHours = durationMinutes / 60;
+    const shiftType = coverageType === 'Home Care' ? 'Home Care' : 'Standard';
+    const toHHMM = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    setPreviewLoading(true);
+    try {
+      const res = await fetch(`${EDGE_BASE}/calculate-price`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          coverage_type: coverageType,
+          shift_type: shiftType,
+          environment,
+          duration_hours: durationHours,
+          coverage_length: coverageLength,
+          start_hour: startTime.getHours(),
+          start_time: toHHMM(startTime),
+          end_time: toHHMM(endTime),
+        }),
+      });
+      if (!res.ok) {
+        console.log('[fetchPreviewPrice] Non-OK response:', res.status);
+        return;
+      }
+      const data = await res.json();
+      console.log('[fetchPreviewPrice] Price received:', data.price, 'hours:', data.duration_hours);
+      setPreviewPrice(data.price ?? 0);
+      setPreviewHours(data.duration_hours ?? 0);
+      setPreviewLabel(data.label ?? '');
+    } catch (e: any) {
+      console.log('[fetchPreviewPrice] Error:', e?.message);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [startTime, endTime, coverageType, environment, coverageLength]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Debounced live price preview from calculate-price edge function ──────────
   useEffect(() => {
     if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
-    previewDebounceRef.current = setTimeout(async () => {
-      const startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
-      const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
-      let durationMinutes = endMinutes - startMinutes;
-      if (durationMinutes <= 0) durationMinutes += 24 * 60; // handle overnight
-      const durationHours = durationMinutes / 60;
-      const shiftType = coverageType === 'Home Care' ? 'Home Care' : 'Standard';
-      const toHHMM = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-      setPreviewLoading(true);
-      try {
-        const res = await fetch(`${EDGE_BASE}/calculate-price`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            coverage_type: coverageType,
-            shift_type: shiftType,
-            environment,
-            duration_hours: durationHours,
-            coverage_length: coverageLength,
-            start_hour: startTime.getHours(),
-            start_time: toHHMM(startTime),
-            end_time: toHHMM(endTime),
-          }),
-        });
-        if (!res.ok) {
-          const errText = await res.text().catch(() => '');
-          return;
-        }
-        const data = await res.json();
-        setPreviewPrice(data.price ?? 0);
-        setPreviewHours(data.duration_hours ?? 0);
-        setPreviewLabel(data.label ?? '');
-      } catch (e: any) {
-      } finally {
-        setPreviewLoading(false);
-      }
+    previewDebounceRef.current = setTimeout(() => {
+      fetchPreviewPrice();
     }, 300);
     return () => {
       if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
@@ -2955,7 +2963,11 @@ export default function RequesterHomeScreen() {
   };
 
   const handleGoToSummary = () => {
+    console.log('[Requester Home] handleGoToSummary pressed — fetching fresh price before showing summary');
+    if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
+    setPreviewLoading(true);
     transitionTo('summary');
+    fetchPreviewPrice();
   };
 
   const handleRequestCoverage = async () => {
@@ -3090,10 +3102,20 @@ export default function RequesterHomeScreen() {
         if (res.status === 409) {
           const body = await res.json().catch(() => ({}));
           if (body.error === 'SHIFT_LOCKED') {
-            console.log('[Requester] handleEditRequest — SHIFT_LOCKED, doctor is mid-accept');
-            await fetchActiveSession();
-            Alert.alert('Request Already Accepted', 'A doctor just accepted your request. Check your Upcoming Coverage.');
-            return;
+            console.log('[Requester] handleEditRequest — SHIFT_LOCKED, verifying DB status');
+            const { data: reqCheck } = await supabase
+              .from('coverage_requests')
+              .select('status, matched_doctor_id')
+              .eq('id', activeRequestId)
+              .maybeSingle();
+            if (reqCheck?.status === 'matched' && reqCheck?.matched_doctor_id) {
+              console.log('[Requester] handleEditRequest — DB confirms matched, showing alert');
+              await fetchActiveSession();
+              Alert.alert('Request Already Accepted', 'A doctor just accepted your request. Check your Upcoming Coverage.');
+              return;
+            }
+            // DB says still pending — transient race condition, proceed with edit
+            console.log('[Requester] handleEditRequest — SHIFT_LOCKED but DB shows pending, proceeding with edit');
           }
         }
       } catch {}
@@ -3133,11 +3155,21 @@ export default function RequesterHomeScreen() {
         if (res.status === 409) {
           const body = await res.json().catch(() => ({}));
           if (body.error === 'SHIFT_LOCKED') {
-            console.log('[Requester] handleCancelRequest — SHIFT_LOCKED, doctor is mid-accept');
-            setShowCancelModal(false);
-            await fetchActiveSession();
-            Alert.alert('Request Already Accepted', 'A doctor just accepted your request. Check your Upcoming Coverage.');
-            return;
+            console.log('[Requester] handleCancelRequest — SHIFT_LOCKED, verifying DB status');
+            const { data: reqCheck } = await supabase
+              .from('coverage_requests')
+              .select('status, matched_doctor_id')
+              .eq('id', activeRequestId)
+              .maybeSingle();
+            if (reqCheck?.status === 'matched' && reqCheck?.matched_doctor_id) {
+              console.log('[Requester] handleCancelRequest — DB confirms matched, showing alert');
+              setShowCancelModal(false);
+              await fetchActiveSession();
+              Alert.alert('Request Already Accepted', 'A doctor just accepted your request. Check your Upcoming Coverage.');
+              return;
+            }
+            // DB says still pending — transient race condition, continue with cancel
+            console.log('[Requester] handleCancelRequest — SHIFT_LOCKED but DB shows pending, continuing cancel');
           }
         }
         setCancelWithdrawn(true);
