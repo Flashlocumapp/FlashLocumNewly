@@ -14,6 +14,7 @@ export type SessionLike = {
   status?: string;
   current_day?: number | null;
   environment?: string | null;
+  coverage_type?: string | null;
 };
 
 function formatTime(iso: string) {
@@ -44,7 +45,7 @@ export function buildShiftPillText(session: SessionLike): string {
   if (shiftHours >= 24) {
     const startDate = new Date(session.shift_date);
     const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + 1);
+    endDate.setDate(startDate.getDate() + session.coverage_length);
     const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
     const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
     return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;

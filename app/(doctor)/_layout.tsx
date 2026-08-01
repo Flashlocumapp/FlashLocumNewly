@@ -218,7 +218,7 @@ function formatShiftSummary(req: DispatchRequest): string {
   const [sh, sm] = req.start_time.split(':').map(Number);
   const [eh, em] = req.end_time.split(':').map(Number);
   let perDayHours = (eh * 60 + em - (sh * 60 + sm)) / 60;
-  if (perDayHours <= 0) perDayHours = 24; // same-time = straight 24h per day
+  if (perDayHours <= 0) perDayHours += 24; // overnight shift: add 24 to get correct duration
   const totalHours = perDayHours * coverageLength;
   const hoursLabel = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
 
@@ -226,9 +226,12 @@ function formatShiftSummary(req: DispatchRequest): string {
   const endFormatted = formatHHMM(req.end_time);
   const priceDisplay = `₦${Number(req.price).toLocaleString()}`;
 
+  // Straight Coverage: same start/end time means 24h per day
+  const isStraight = req.start_time === req.end_time;
+
   if (coverageLength > 1) {
     const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + coverageLength - 1);
+    endDate.setDate(startDate.getDate() + (isStraight ? coverageLength : coverageLength - 1));
     const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
     const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
     return `${req.shift_type}${sep}${startDay} - ${endDay}${sep}${startFormatted} - ${endFormatted}${sep}${hoursLabel}${sep}${priceDisplay}${sep}Day 1 of ${coverageLength}`;
@@ -245,7 +248,7 @@ function ShiftDetails({ request, note }: { request: DispatchRequest | null; note
   const [sh, sm] = request.start_time.split(':').map(Number);
   const [eh, em] = request.end_time.split(':').map(Number);
   let perDayHours = (eh * 60 + em - (sh * 60 + sm)) / 60;
-  if (perDayHours <= 0) perDayHours = 24;
+  if (perDayHours <= 0) perDayHours += 24; // overnight shift: add 24 to get correct duration
   const totalHours = perDayHours * coverageLength;
   const hoursLabel = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
 
@@ -254,6 +257,13 @@ function ShiftDetails({ request, note }: { request: DispatchRequest | null; note
   const startFormatted = formatHHMM(request.start_time);
   const endFormatted = formatHHMM(request.end_time);
   const priceDisplay = `₦${Number(request.price).toLocaleString()}`;
+
+  // Straight Coverage: same start/end time means 24h per day
+  const isStraight = request.start_time === request.end_time;
+  const endDate = new Date(startDate);
+  endDate.setDate(startDate.getDate() + (isStraight ? coverageLength : coverageLength - 1));
+  const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
+  const dayRange = coverageLength > 1 ? `${startDay} – ${endDay}` : startDay;
 
   return (
     <View style={{ marginTop: 8 }}>
@@ -264,7 +274,7 @@ function ShiftDetails({ request, note }: { request: DispatchRequest | null; note
         </Text>
         <Text style={{ color: '#8E8E93', fontSize: 13 }}> · </Text>
         <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
-          {startDay}
+          {dayRange}
         </Text>
         <Text style={{ color: '#8E8E93', fontSize: 13 }}> · </Text>
         <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
