@@ -216,7 +216,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
     ? (session.cancelled_by === 'doctor' ? 'YOU CANCELLED THIS SHIFT' : 'CANCELLED SHIFT')
     : 'COMPLETED SHIFT';
   const financialRows = [
-    { label: 'Amount', value: `₦${Number((session as any).total_cost ?? session.price ?? 0).toLocaleString()}`, bold: true, valueColor: undefined as string | undefined },
+    { label: 'Amount', value: `₦${Number((session as any).total_cost ?? (session as any).booked_price ?? session.price ?? 0).toLocaleString()}`, bold: true, valueColor: undefined as string | undefined },
     { label: 'Settlement', value: settlementStatus, bold: true, valueColor: settlementColor },
     { label: 'Started', value: formatDateTime(session.started_at), bold: true, valueColor: undefined as string | undefined },
     { label: 'Ended', value: formatDateTime(session.ended_at), bold: true, valueColor: undefined as string | undefined },

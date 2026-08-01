@@ -290,7 +290,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
     ? (session.cancelled_by === 'requester' ? 'YOU CANCELLED THIS SHIFT' : 'CANCELLED SHIFT')
     : 'COMPLETED SHIFT';
 
-  const amountValue = `₦${Number(session.total_cost ?? session.price ?? 0).toLocaleString()}`;
+  const amountValue = `₦${Number(session.total_cost ?? session.booked_price ?? session.price ?? 0).toLocaleString()}`;
 
   const detailRows = [
     { label: 'Amount', value: amountValue, valueColor: undefined as string | undefined },

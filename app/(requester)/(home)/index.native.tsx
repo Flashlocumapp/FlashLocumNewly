@@ -1234,8 +1234,8 @@ function RequesterPaymentCard({
     ((amountPaid ?? 0) > 0 && (outstandingBalance ?? 0) > 0) ||
     (dbAmountPaid != null && dbOutstanding != null);
   const amountNaira = hasPartialPayment
-    ? (outstandingBalance ?? dbOutstanding ?? paymentIntent?.amount_naira ?? session.price)
-    : (paymentIntent?.amount_naira ?? session.price);
+    ? (outstandingBalance ?? dbOutstanding ?? paymentIntent?.amount_naira ?? (session as any).booked_price ?? session.price)
+    : (paymentIntent?.amount_naira ?? (session as any).booked_price ?? session.price);
   const amountDisplay = `₦${Number(amountNaira).toLocaleString()}`;
   const hasAccountDetails = !!(paymentIntent?.monnify_account_number);
   const accountNumber = paymentIntent?.monnify_account_number ?? '';
@@ -1546,7 +1546,7 @@ function RequesterRatingCard({
   const doctorName = rawName
     ? (rawName.toLowerCase().startsWith('dr') ? rawName : `Dr. ${rawName}`)
     : 'the doctor';
-  const displayAmount = amount > 0 ? amount : (session.price ?? 0);
+  const displayAmount = amount > 0 ? amount : ((session as any).booked_price ?? session.price ?? 0);
 
   return (
     <Modal
@@ -3068,10 +3068,12 @@ export default function RequesterHomeScreen() {
       }
       const data = await res.json();
       const reqId = data.request_id || data.id || null;
+      const bookedPrice = data.booked_price ?? null;
+      console.log('[handleRequestCoverage] Submission successful — request_id:', reqId, 'booked_price:', bookedPrice);
       setActiveRequestId(reqId);
       transitionTo('matching');
       _submitIdempotencyKey = null;
-      console.log('[handleRequestCoverage] Submission successful, idempotency key cleared');
+      console.log('[handleRequestCoverage] Idempotency key cleared');
       if (reqId) {
         console.log('[Requester] Starting match poll for request:', reqId);
         PollingManager.start('match', async () => {
@@ -4593,7 +4595,7 @@ export default function RequesterHomeScreen() {
       <RequesterRatingCard
         visible={showPaymentSuccess}
         session={confirmedSession}
-        amount={settledAmount ?? confirmedSession?.price ?? 0}
+        amount={settledAmount ?? (confirmedSession as any)?.booked_price ?? confirmedSession?.price ?? 0}
         ratingStars={ratingStars}
         ratingComment={ratingComment}
         ratingError={ratingError}
