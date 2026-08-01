@@ -4590,7 +4590,7 @@ export default function RequesterHomeScreen() {
       <RequesterRatingCard
         visible={showPaymentSuccess}
         session={confirmedSession}
-        amount={settledAmount ?? (confirmedSession as any)?.booked_price ?? confirmedSession?.price ?? 0}
+        amount={settledAmount ?? (confirmedSession as any)?.total_cost ?? confirmedSession?.price ?? 0}
         ratingStars={ratingStars}
         ratingComment={ratingComment}
         ratingError={ratingError}
