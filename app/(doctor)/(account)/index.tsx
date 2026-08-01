@@ -142,6 +142,7 @@ export default function DoctorAccountScreen() {
   const [retryingSubaccount, setRetryingSubaccount] = useState(false);
   const [retryError, setRetryError] = useState('');
   const [retrySuccess, setRetrySuccess] = useState(false);
+  const [subaccountFailed, setSubaccountFailed] = useState(false);
 
   // Delete account
   const [deleting, setDeleting] = useState(false);
@@ -179,6 +180,20 @@ export default function DoctorAccountScreen() {
           selfie_url: doctorProfileRes.data?.selfie_url ?? null,
           subaccount_code: doctorProfileRes.data?.subaccount_code ?? null,
         };
+        // Check whether subaccount creation has previously failed for this doctor.
+        // Signal: any coverage_sessions row where manual_settlement_required=true
+        // AND session_subaccount_code IS NULL — meaning end-shift ran, tried to
+        // create the subaccount, and it failed.
+        const { data: failedSessionRows } = await supabase
+          .from('coverage_sessions')
+          .select('id')
+          .eq('doctor_id', user.id)
+          .eq('manual_settlement_required', true)
+          .is('session_subaccount_code', null)
+          .limit(1);
+
+        setSubaccountFailed((failedSessionRows ?? []).length > 0);
+
         setProfile(prev => {
           if (prev && JSON.stringify(prev) === JSON.stringify(mergedProfile)) return prev; // no re-render
           return mergedProfile;
@@ -466,7 +481,7 @@ export default function DoctorAccountScreen() {
               <ReadOnlyRow label="Account Number" value={accountNumber} />
               <CardDivider />
               <ReadOnlyRow label="Account Name" value={accountName} />
-              {!profile?.subaccount_code && !retrySuccess && (
+              {!profile?.subaccount_code && subaccountFailed && !retrySuccess && (
                 <>
                   <CardDivider />
                   <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
