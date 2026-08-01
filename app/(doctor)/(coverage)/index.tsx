@@ -173,7 +173,8 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const shiftEnd = new Date(session.shift_end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   const dayLabel = session.shift_date ? new Date(session.shift_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }) : '';
   const shiftHours = session.per_day_hours && Number(session.per_day_hours) > 0 ? Number(session.per_day_hours) : 8;
-  const totalHours = shiftHours * (session.coverage_length ?? 1);
+  const isStraight = (session.coverage_type ?? '').toLowerCase().includes('straight');
+  const totalHours = isStraight ? shiftHours : shiftHours * (session.coverage_length ?? 1);
   const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
   const shiftSummaryLine = `${session.shift_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd} · ${hoursDisplay} · ₦${Number(session.booked_price ?? session.price ?? 0).toLocaleString()}`;
 

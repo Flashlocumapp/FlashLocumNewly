@@ -31,7 +31,8 @@ export function buildShiftPillText(session: SessionLike): string {
   const shiftHours = (session.per_day_hours && Number(session.per_day_hours) > 0)
     ? Number(session.per_day_hours)
     : (msHours > 0 ? msHours : 24);
-  const totalHours = shiftHours * session.coverage_length;
+  const isStraight = session.coverage_type?.toLowerCase().includes('straight') ?? false;
+  const totalHours = isStraight ? shiftHours : shiftHours * session.coverage_length;
   const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
   const priceDisplay = `₦${Number(session.booked_price ?? session.price ?? 0).toLocaleString()}`;
   const shiftStart = formatTime(session.shift_start);
