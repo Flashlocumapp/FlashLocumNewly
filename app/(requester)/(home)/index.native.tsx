@@ -2999,12 +2999,11 @@ export default function RequesterHomeScreen() {
     transitionTo('searching');
   };
 
-  const handleGoToSummary = () => {
+  const handleGoToSummary = async () => {
     console.log('[Requester Home] handleGoToSummary pressed — fetching fresh price before showing summary');
     if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
-    setPreviewLoading(true);
+    await fetchPreviewPrice();
     transitionTo('summary');
-    fetchPreviewPrice();
   };
 
   const handleRequestCoverage = async () => {
