@@ -2927,6 +2927,7 @@ export default function RequesterHomeScreen() {
           start_hour: startTime.getHours(),
           start_time: toHHMM(startTime),
           end_time: toHHMM(endTime),
+          shift_date: shiftDate.toISOString().split('T')[0],
         }),
       });
       if (!res.ok) {
@@ -2943,7 +2944,7 @@ export default function RequesterHomeScreen() {
     } finally {
       setPreviewLoading(false);
     }
-  }, [startTime, endTime, coverageType, environment, coverageLength]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [startTime, endTime, coverageType, environment, coverageLength, shiftDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Debounced live price preview from calculate-price edge function ──────────
   useEffect(() => {
@@ -2954,7 +2955,7 @@ export default function RequesterHomeScreen() {
     return () => {
       if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
     };
-  }, [startTime, endTime, coverageType, environment, coverageLength]);
+  }, [startTime, endTime, coverageType, environment, coverageLength, shiftDate]);
 
   // ─── Drag handle PanResponder ─────────────────────────────────────────────────
   const handleResetRef = useRef<() => void>(() => {});
