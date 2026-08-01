@@ -287,6 +287,28 @@ export default function DoctorAccountScreen() {
     setRetryError('');
     setRetrySuccess(false);
     try {
+      // Step 1: Verify bank account before attempting sub-account creation
+      console.log('[Doctor Account] Verifying bank account', { accountNumber: profile.account_number, bankCode: profile.bank_code });
+      const verifyRes = await fetch(
+        'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/monnify-verify-account',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            accountNumber: profile.account_number,
+            bankCode: profile.bank_code,
+          }),
+        }
+      );
+      const verifyResult = await verifyRes.json();
+      console.log('[Doctor Account] monnify-verify-account response', { status: verifyRes.status, verifyResult });
+
+      if (!verifyRes.ok || verifyResult.error) {
+        setRetryError(verifyResult.message || 'Could not verify your bank account. Please try again.');
+        return;
+      }
+
+      // Step 2: Proceed to sub-account creation
       console.log('[Doctor Account] Calling create-subaccount edge function', { doctor_id: user!.id });
       const res = await fetchWithAuth(
         'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/create-subaccount',
