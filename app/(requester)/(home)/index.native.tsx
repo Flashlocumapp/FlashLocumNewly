@@ -2906,13 +2906,10 @@ export default function RequesterHomeScreen() {
   // ─── Standalone price fetch (used by both debounce and handleGoToSummary) ─────
   const fetchPreviewPrice = useCallback(async () => {
     console.log('[fetchPreviewPrice] Fetching price preview', { startTime, endTime, coverageType, environment, coverageLength });
-    const startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
-    const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
-    let durationMinutes = endMinutes - startMinutes;
-    if (durationMinutes <= 0) durationMinutes += 24 * 60; // handle overnight
-    const durationHours = durationMinutes / 60;
     const shiftType = coverageType === 'Home Care' ? 'Home Care' : 'Standard';
     const toHHMM = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const d = shiftDate;
+    const shiftDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     setPreviewLoading(true);
     try {
       const res = await fetch(`${EDGE_BASE}/calculate-price`, {
@@ -2922,12 +2919,10 @@ export default function RequesterHomeScreen() {
           coverage_type: coverageType,
           shift_type: shiftType,
           environment,
-          duration_hours: durationHours,
           coverage_length: coverageLength,
-          start_hour: startTime.getHours(),
           start_time: toHHMM(startTime),
           end_time: toHHMM(endTime),
-          shift_date: shiftDate.toISOString().split('T')[0],
+          shift_date: shiftDateStr,
         }),
       });
       if (!res.ok) {
