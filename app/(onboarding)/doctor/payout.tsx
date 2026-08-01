@@ -21,8 +21,6 @@ const MONNIFY_BANKS_URL =
   'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/monnify-verify-account/banks';
 const MONNIFY_VERIFY_URL =
   'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/monnify-verify-account';
-const MONNIFY_SUBACCOUNT_URL =
-  'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/create-subaccount';
 
 // Verified Monnify split-payment subaccount whitelist (commercial banks only).
 // Fintechs (VFD, Kuda, OPay, PalmPay, Moniepoint, Carbon) are excluded until
@@ -82,8 +80,6 @@ function mapErrorCode(code: string | undefined): string {
       return 'Verification is taking longer than expected. Please try again.';
     case 'PROVIDER_ERROR':
       return 'We could not verify your account at this time. Please try again.';
-    case 'SUBACCOUNT_EXISTS':
-      return 'A payout account is already registered. Contact support to update it.';
     default:
       return 'Account could not be verified. Please check your details and try again.';
   }
@@ -392,56 +388,9 @@ export default function DoctorPayout() {
         });
       if (doctorProfileError) throw doctorProfileError;
 
-      // Step 2: Create Monnify subaccount — BLOCKING, must succeed
-      console.log('[Payout] Step 2: creating subaccount');
-      setLoadingLabel('Setting up payout account...');
-      const subaccountResponse = await fetchWithAuth(MONNIFY_SUBACCOUNT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          doctor_id: userId,
-          bank_code: selectedBank!.code,
-          account_number: accountNumber,
-          account_name: accountName,
-          bank_name: selectedBank!.name,
-        }),
-      });
-
-      // Safe JSON parse for subaccount response
-      const subaccountText = await subaccountResponse.text();
-      let subaccountResult: any;
-      try {
-        subaccountResult = JSON.parse(subaccountText);
-      } catch {
-        subaccountResult = {};
-      }
-
-      if (!subaccountResponse.ok || subaccountResult.error) {
-        const code: string | undefined =
-          typeof subaccountResult?.error === 'string' ? subaccountResult.error : undefined;
-
-        // SUBACCOUNT_EXISTS means a previous attempt already created the subaccount — treat as success
-        if (code === 'SUBACCOUNT_EXISTS') {
-          console.log('[Payout] Subaccount already exists — treating as success, proceeding to step 3');
-        } else {
-          const providerMessage: string | undefined =
-            typeof subaccountResult?.message === 'string' && subaccountResult.message
-              ? subaccountResult.message
-              : undefined;
-          const monnifyMessage: string | undefined =
-            typeof subaccountResult?.monnify_message === 'string' && subaccountResult.monnify_message
-              ? subaccountResult.monnify_message
-              : undefined;
-          console.log(`[Payout] Submit failed: errorCode=${code ?? 'unknown'}, message=${providerMessage ?? 'none'}, monnify_message=${monnifyMessage ?? 'none'}`);
-          // Never show raw Monnify provider messages to the doctor — use the clean mapped error only
-          const displayError = providerMessage ?? mapErrorCode(code);
-          setSubmitError(displayError);
-          return;
-        }
-      }
-
-      // Step 3: Mark onboarding complete — only reached if subaccount succeeded
-      console.log('[Payout] Step 3: marking onboarding complete');
+      // Step 2: Mark onboarding complete
+      // Sub-account creation is a lazy operation that happens during the first End Shift.
+      console.log('[Payout] Step 2: marking onboarding complete');
       setLoadingLabel('Almost done...');
       const { error: profileError } = await supabase
         .from('profiles')
