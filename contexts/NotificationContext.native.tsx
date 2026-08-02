@@ -40,6 +40,23 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     OneSignal.initialize(appId);
     console.log('[OneSignal] Initialized appId=', appId);
 
+    // Android notification channels
+    // onesignal-expo-plugin v2 does NOT support androidNotificationChannels or
+    // androidDefaultNotificationChannel config options — confirmed by inspecting
+    // node_modules/onesignal-expo-plugin/dist/index.js (v2.7.0).
+    // react-native-onesignal v5 also does NOT expose a createChannel() runtime API.
+    //
+    // Android channels must be registered natively. The two required channels are:
+    //   • new_coverage_request — vibration ON, default sound, high importance
+    //     Used for New Coverage Request broadcast notifications.
+    //   • default_flashlocum   — vibration OFF, default sound, high importance
+    //     Used for all other FlashLocum notifications.
+    //
+    // To register these channels, add expo-notifications to the project and call
+    // Notifications.setNotificationChannelAsync() here, or write a custom Expo
+    // config plugin that injects channel creation into the Android MainApplication.
+    // Until then, OneSignal will fall back to its own default channel on Android.
+
     // Read initial permission state
     const initPermission = async () => {
       const granted = await OneSignal.Notifications.hasPermission();
