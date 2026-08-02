@@ -650,7 +650,8 @@ export default function DoctorHomeScreen() {
                 <IconSymbol
                   ios_icon_name="stethoscope"
                   android_material_icon_name="medical-services"
-                  size={12}
+                  android_material_community_icon_name="stethoscope"
+                  size={13}
                   color="#FFFFFF"
                 />
               </View>

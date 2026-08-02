@@ -3745,7 +3745,7 @@ export default function RequesterHomeScreen() {
                   shadowRadius: 4,
                   elevation: 5,
                 }}>
-                  <IconSymbol ios_icon_name="stethoscope" android_material_icon_name="medical-services" size={9} color="#FFFFFF" />
+                  <IconSymbol ios_icon_name="stethoscope" android_material_icon_name="medical-services" android_material_community_icon_name="stethoscope" size={10} color="#FFFFFF" />
                   <Text style={{
                     color: '#FFFFFF',
                     fontSize: 9,
@@ -3784,7 +3784,8 @@ export default function RequesterHomeScreen() {
                   <IconSymbol
                     ios_icon_name="stethoscope"
                     android_material_icon_name="medical-services"
-                    size={10}
+                    android_material_community_icon_name="stethoscope"
+                    size={11}
                     color="#FFFFFF"
                   />
                   {/* Green online dot */}
