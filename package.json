@@ -34,6 +34,7 @@
     "difflib": "^0.2.4",
     "eas": "^0.1.0",
     "expo": "~54.0.36",
+    "expo-av": "~16.0.8",
     "expo-blur": "^15.0.6",
     "expo-clipboard": "~8.0.8",
     "expo-constants": "~18.0.8",
