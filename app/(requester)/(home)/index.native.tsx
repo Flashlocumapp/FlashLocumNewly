@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import useSupercluster from 'use-supercluster';
 import { useFocusEffect } from '@react-navigation/native';
-import { OneSignal } from 'react-native-onesignal';
+import { IS_EXPO_GO } from '@/utils/expoGoGuard';
 import NotificationPermissionModal from '@/components/NotificationPermissionModal';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useSplash } from '@/app/_layout';
@@ -1710,7 +1710,9 @@ export default function RequesterHomeScreen() {
       (async () => {
         const flagSet = await SecureStore.getItemAsync(flagKey);
         if (flagSet === 'true') return;
-        const granted = await OneSignal.Notifications.hasPermission();
+        const granted = IS_EXPO_GO
+          ? false
+          : await (require('react-native-onesignal').OneSignal as typeof import('react-native-onesignal').OneSignal).Notifications.hasPermission();
         if (!granted) {
           setShowNotifModal(true);
         }

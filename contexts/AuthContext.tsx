@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { AppState, AppStateStatus } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import * as Location from 'expo-location';
-import { OneSignal } from 'react-native-onesignal';
+import { IS_EXPO_GO } from '@/utils/expoGoGuard';
 import { supabase, getValidToken, setForegroundRefreshPromise, clearRefreshPromise, registerAuthFailureCallback } from '@/lib/supabase';
 import { AuthContextType, Profile } from '@/types';
 import { clearAll } from '@/utils/tabCache';
@@ -107,8 +107,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         // Wire OneSignal identity on session restore
-        if (_oneSignalExternalId !== session.user.id) {
+        if (!IS_EXPO_GO && _oneSignalExternalId !== session.user.id) {
           _oneSignalExternalId = session.user.id;
+          const { OneSignal } = require('react-native-onesignal');
           OneSignal.login(session.user.id);
           console.log('[AuthContext] OneSignal.login (session restore) userId=', session.user.id);
         }
@@ -133,8 +134,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user) {
           fetchProfile(session.user.id);
           // Wire OneSignal identity on sign-in / user update
-          if (_oneSignalExternalId !== session.user.id) {
+          if (!IS_EXPO_GO && _oneSignalExternalId !== session.user.id) {
             _oneSignalExternalId = session.user.id;
+            const { OneSignal } = require('react-native-onesignal');
             OneSignal.login(session.user.id);
             console.log('[AuthContext] OneSignal.login userId=', session.user.id);
           }
@@ -151,8 +153,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } else if (event === 'SIGNED_OUT') {
         // Unlink OneSignal identity on sign-out
-        if (_oneSignalExternalId !== null) {
+        if (!IS_EXPO_GO && _oneSignalExternalId !== null) {
           _oneSignalExternalId = null;
+          const { OneSignal } = require('react-native-onesignal');
           OneSignal.logout();
           console.log('[AuthContext] OneSignal.logout');
         }
@@ -274,8 +277,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAll();
     triggerDispatchReset();
     // Unlink OneSignal identity before signing out
-    if (_oneSignalExternalId !== null) {
+    if (!IS_EXPO_GO && _oneSignalExternalId !== null) {
       _oneSignalExternalId = null;
+      const { OneSignal } = require('react-native-onesignal');
       OneSignal.logout();
       console.log('[AuthContext] OneSignal.logout (signOut)');
     }

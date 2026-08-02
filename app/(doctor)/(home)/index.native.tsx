@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
-import { OneSignal } from 'react-native-onesignal';
+import { IS_EXPO_GO } from '@/utils/expoGoGuard';
 import NotificationPermissionModal from '@/components/NotificationPermissionModal';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useSplash } from '@/app/_layout';
@@ -334,7 +334,9 @@ export default function DoctorHomeScreen() {
       (async () => {
         const flagSet = await SecureStore.getItemAsync(flagKey);
         if (flagSet === 'true') return;
-        const granted = await OneSignal.Notifications.hasPermission();
+        const granted = IS_EXPO_GO
+          ? false
+          : await (require('react-native-onesignal').OneSignal as typeof import('react-native-onesignal').OneSignal).Notifications.hasPermission();
         if (!granted) {
           setShowNotifModal(true);
         }

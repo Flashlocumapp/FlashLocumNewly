@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useCallback, useEffect, useState, ReactNode } from 'react';
-import { OneSignal, LogLevel } from 'react-native-onesignal';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { IS_EXPO_GO } from '@/utils/expoGoGuard';
 
 export interface NotificationContextType {
   hasPermission: boolean;
@@ -24,7 +24,32 @@ interface NotificationProviderProps {
   children: ReactNode;
 }
 
-export function NotificationProvider({ children }: NotificationProviderProps) {
+// ─── No-op provider used in Expo Go ──────────────────────────────────────────
+function ExpoGoNotificationProvider({ children }: NotificationProviderProps) {
+  return (
+    <NotificationContext.Provider
+      value={{
+        hasPermission: false,
+        permissionDenied: false,
+        loading: false,
+        isWeb: false,
+        requestPermission: async () => false,
+        sendTag: () => {},
+        deleteTag: () => {},
+        lastNotification: null,
+      }}
+    >
+      {children}
+    </NotificationContext.Provider>
+  );
+}
+
+// ─── Full OneSignal provider used in native builds ────────────────────────────
+function NativeNotificationProvider({ children }: NotificationProviderProps) {
+  // Dynamic import so react-native-onesignal is never evaluated in Expo Go
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { OneSignal, LogLevel } = require('react-native-onesignal');
+
   const router = useRouter();
   const [hasPermission, setHasPermission] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -33,10 +58,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   useEffect(() => {
     const appId: string = Constants.expoConfig?.extra?.oneSignalAppId ?? '';
 
-    // Set log level before initialize
     OneSignal.Debug.setLogLevel(__DEV__ ? LogLevel.Verbose : LogLevel.None);
-
-    // Initialize SDK
     OneSignal.initialize(appId);
     console.log('[OneSignal] Initialized appId=', appId);
 
@@ -48,43 +70,33 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     //
     // Android channels must be registered natively. The two required channels are:
     //   • new_coverage_request — vibration ON, default sound, high importance
-    //     Used for New Coverage Request broadcast notifications.
     //   • default_flashlocum   — vibration OFF, default sound, high importance
-    //     Used for all other FlashLocum notifications.
     //
-    // To register these channels, add expo-notifications to the project and call
-    // Notifications.setNotificationChannelAsync() here, or write a custom Expo
-    // config plugin that injects channel creation into the Android MainApplication.
-    // Until then, OneSignal will fall back to its own default channel on Android.
+    // To register these channels, add expo-notifications and call
+    // Notifications.setNotificationChannelAsync() here, or write a custom config plugin.
 
-    // Read initial permission state
     const initPermission = async () => {
       const granted = await OneSignal.Notifications.hasPermission();
       setHasPermission(granted);
       console.log('[OneSignal] Permission state: granted=', granted);
-
       const promptedFlag = await SecureStore.getItemAsync(PERMISSION_PROMPTED_KEY);
       setPrompted(promptedFlag === 'true');
-
       setLoading(false);
     };
     initPermission();
 
-    // Listen for permission changes
     const permissionChangeHandler = (granted: boolean) => {
       console.log('[OneSignal] Permission state: granted=', granted);
       setHasPermission(granted);
     };
     OneSignal.Notifications.addEventListener('permissionChange', permissionChangeHandler);
 
-    // Foreground suppression — prevent OS banners when app is active
     const foregroundHandler = (event: { preventDefault: () => void; notification: { title?: string } }) => {
       event.preventDefault();
       console.log('[OneSignal] Foreground notification suppressed:', event.notification.title);
     };
     OneSignal.Notifications.addEventListener('foregroundWillDisplay', foregroundHandler as any);
 
-    // Notification tap handler — navigate to role-appropriate home
     const clickHandler = async (event: { notification: { title?: string } }) => {
       const title = event.notification.title ?? '';
       try {
@@ -107,7 +119,6 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     };
     OneSignal.Notifications.addEventListener('click', clickHandler as any);
 
-    // Subscription state logging (diagnostics only — no DB writes)
     const subscriptionChangeHandler = (subscription: { current: { optedIn: boolean; id?: string } }) => {
       console.log('[OneSignal] Subscription change optedIn=', subscription.current.optedIn, 'id=', subscription.current.id);
     };
@@ -124,8 +135,9 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   const permissionDenied = prompted && !hasPermission;
 
   const requestPermission = useCallback(async (): Promise<boolean> => {
+    const { OneSignal: OS } = require('react-native-onesignal');
     console.log('[OneSignal] Permission requested');
-    const result = await OneSignal.Notifications.requestPermission(true);
+    const result = await OS.Notifications.requestPermission(true);
     console.log('[OneSignal] Permission requested result=', result);
     setHasPermission(result);
     await SecureStore.setItemAsync(PERMISSION_PROMPTED_KEY, 'true');
@@ -134,13 +146,15 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   }, []);
 
   const sendTag = useCallback((key: string, value: string) => {
+    const { OneSignal: OS } = require('react-native-onesignal');
     console.log('[OneSignal] sendTag key=', key, 'value=', value);
-    OneSignal.User.addTag(key, value);
+    OS.User.addTag(key, value);
   }, []);
 
   const deleteTag = useCallback((key: string) => {
+    const { OneSignal: OS } = require('react-native-onesignal');
     console.log('[OneSignal] deleteTag key=', key);
-    OneSignal.User.removeTag(key);
+    OS.User.removeTag(key);
   }, []);
 
   return (
@@ -159,6 +173,14 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       {children}
     </NotificationContext.Provider>
   );
+}
+
+// ─── Public export — switches on IS_EXPO_GO ───────────────────────────────────
+export function NotificationProvider({ children }: NotificationProviderProps) {
+  if (IS_EXPO_GO) {
+    return <ExpoGoNotificationProvider>{children}</ExpoGoNotificationProvider>;
+  }
+  return <NativeNotificationProvider>{children}</NativeNotificationProvider>;
 }
 
 export function useNotifications() {
