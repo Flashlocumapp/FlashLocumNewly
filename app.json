@@ -69,6 +69,12 @@
     },
     "plugins": [
       [
+        "onesignal-expo-plugin",
+        {
+          "mode": "production"
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "ios": {
@@ -105,8 +111,7 @@
     "extra": {
       "router": {},
       "backendUrl": "https://bm7mn4rkap7zw8ax5ddfbmfaz9q8m3ru.app.specular.dev",
-      "oneSignalAppId": "e865db07-c6ae-412a-ba03-d139e934eeb0",
-      "_onesignal_disabled": "Re-add onesignal-expo-plugin to plugins and restore NotificationContext.native.tsx when Apple Developer account is approved",
+      "oneSignalAppId": "78be9474-8dc2-43cb-b23a-b78121f533c1",
       "supabaseUrl": "https://juilousufwlsiqdcgllu.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1aWxvdXN1Zndsc2lxZGNnbGx1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3MjE1MTEsImV4cCI6MjA5ODI5NzUxMX0.XOE0UTfZrfLp_giDlGkBsffhRBhVT1njaETm7vtmTxA"
     }

@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import * as SecureStore from 'expo-secure-store';
+import { OneSignal } from 'react-native-onesignal';
+import NotificationPermissionModal from '@/components/NotificationPermissionModal';
+import { useNotifications } from '@/contexts/NotificationContext';
 import { useSplash } from '@/app/_layout';
 import {
   View,
@@ -308,6 +312,7 @@ export default function DoctorHomeScreen() {
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
   const { user, profile } = useAuth();
+  const { requestPermission } = useNotifications();
   const verificationStatus = profile?.verification_status ?? 'pending';
   const isVerified = verificationStatus === 'verified';
   const isPending = verificationStatus === 'pending' || verificationStatus == null;
@@ -317,6 +322,40 @@ export default function DoctorHomeScreen() {
   const isBlocked = !isVerified; // covers all non-verified states
 
   const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcomingSessions } = useDoctorDispatch();
+
+  // ─── Notification permission modal ──────────────────────────────────────────
+  const [showNotifModal, setShowNotifModal] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user || !profile?.doctor_onboarding_complete) return;
+      const userId = user.id;
+      const flagKey = `notification_permission_prompted:${userId}`;
+      (async () => {
+        const flagSet = await SecureStore.getItemAsync(flagKey);
+        if (flagSet === 'true') return;
+        const granted = await OneSignal.Notifications.hasPermission();
+        if (!granted) {
+          setShowNotifModal(true);
+        }
+      })();
+    }, [user, profile?.doctor_onboarding_complete])
+  );
+
+  const handleNotifContinue = useCallback(async () => {
+    if (!user) return;
+    const flagKey = `notification_permission_prompted:${user.id}`;
+    await SecureStore.setItemAsync(flagKey, 'true');
+    setShowNotifModal(false);
+    await requestPermission();
+  }, [user, requestPermission]);
+
+  const handleNotifDismiss = useCallback(async () => {
+    if (!user) return;
+    const flagKey = `notification_permission_prompted:${user.id}`;
+    await SecureStore.setItemAsync(flagKey, 'true');
+    setShowNotifModal(false);
+  }, [user]);
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCancelReasons, setShowCancelReasons] = useState(false);
@@ -905,6 +944,14 @@ export default function DoctorHomeScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* ── NOTIFICATION PERMISSION MODAL ── */}
+      <NotificationPermissionModal
+        visible={showNotifModal}
+        role="doctor"
+        onContinue={handleNotifContinue}
+        onDismiss={handleNotifDismiss}
+      />
     </View>
   );
 }

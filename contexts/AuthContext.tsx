@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { AppState, AppStateStatus } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import * as Location from 'expo-location';
+import { OneSignal } from 'react-native-onesignal';
 import { supabase, getValidToken, setForegroundRefreshPromise, clearRefreshPromise, registerAuthFailureCallback } from '@/lib/supabase';
 import { AuthContextType, Profile } from '@/types';
 import { clearAll } from '@/utils/tabCache';
@@ -9,6 +10,9 @@ import { triggerDispatchReset } from '@/contexts/DoctorDispatchContext';
 
 // Module-level flag — resets on app restart, not on re-render
 let _requesterSnapshotFiredThisSession = false;
+
+// Module-level ref to track the currently logged-in OneSignal External ID
+let _oneSignalExternalId: string | null = null;
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -102,6 +106,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
+        // Wire OneSignal identity on session restore
+        if (_oneSignalExternalId !== session.user.id) {
+          _oneSignalExternalId = session.user.id;
+          OneSignal.login(session.user.id);
+          console.log('[AuthContext] OneSignal.login (session restore) userId=', session.user.id);
+        }
         fetchProfile(session.user.id).finally(() => {
           setLoading(false);
           setIsReady(true);
@@ -122,6 +132,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         if (session?.user) {
           fetchProfile(session.user.id);
+          // Wire OneSignal identity on sign-in / user update
+          if (_oneSignalExternalId !== session.user.id) {
+            _oneSignalExternalId = session.user.id;
+            OneSignal.login(session.user.id);
+            console.log('[AuthContext] OneSignal.login userId=', session.user.id);
+          }
         } else {
           setProfile(null);
         }
@@ -134,6 +150,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           profileChannelRef.current = subscribeProfileChannel(session.user.id);
         }
       } else if (event === 'SIGNED_OUT') {
+        // Unlink OneSignal identity on sign-out
+        if (_oneSignalExternalId !== null) {
+          _oneSignalExternalId = null;
+          OneSignal.logout();
+          console.log('[AuthContext] OneSignal.logout');
+        }
         setSession(null);
         setUser(null);
         setProfile(null);
@@ -251,6 +273,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearRefreshPromise(); // prevent stale promise from blocking post-login fetches
     clearAll();
     triggerDispatchReset();
+    // Unlink OneSignal identity before signing out
+    if (_oneSignalExternalId !== null) {
+      _oneSignalExternalId = null;
+      OneSignal.logout();
+      console.log('[AuthContext] OneSignal.logout (signOut)');
+    }
     await supabase.auth.signOut();
     setProfile(null);
   }, []);

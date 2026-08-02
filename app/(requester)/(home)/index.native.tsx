@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import useSupercluster from 'use-supercluster';
 import { useFocusEffect } from '@react-navigation/native';
+import { OneSignal } from 'react-native-onesignal';
+import NotificationPermissionModal from '@/components/NotificationPermissionModal';
+import { useNotifications } from '@/contexts/NotificationContext';
 import { useSplash } from '@/app/_layout';
 import {
   View,
@@ -1689,11 +1692,46 @@ export default function RequesterHomeScreen() {
   const insets = useSafeAreaInsets();
   const { setTabBarVisible } = useTabBarVisibility();
   const { user, profile } = useAuth();
+  const { requestPermission } = useNotifications();
   const recentPlaceKey = user?.id ? `flashlocum_recent_place_${user.id}` : null;
   const accountStatus = profile?.verification_status ?? 'verified'; // default verified for requesters until explicitly set
   const isAccountBlocked = accountStatus === 'under_review' || accountStatus === 'suspended';
   const isUnderReview = accountStatus === 'under_review';
   const isSuspended = accountStatus === 'suspended';
+
+  // ─── Notification permission modal ──────────────────────────────────────────
+  const [showNotifModal, setShowNotifModal] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user || !profile?.requester_onboarding_complete) return;
+      const userId = user.id;
+      const flagKey = `notification_permission_prompted:${userId}`;
+      (async () => {
+        const flagSet = await SecureStore.getItemAsync(flagKey);
+        if (flagSet === 'true') return;
+        const granted = await OneSignal.Notifications.hasPermission();
+        if (!granted) {
+          setShowNotifModal(true);
+        }
+      })();
+    }, [user, profile?.requester_onboarding_complete])
+  );
+
+  const handleNotifContinue = useCallback(async () => {
+    if (!user) return;
+    const flagKey = `notification_permission_prompted:${user.id}`;
+    await SecureStore.setItemAsync(flagKey, 'true');
+    setShowNotifModal(false);
+    await requestPermission();
+  }, [user, requestPermission]);
+
+  const handleNotifDismiss = useCallback(async () => {
+    if (!user) return;
+    const flagKey = `notification_permission_prompted:${user.id}`;
+    await SecureStore.setItemAsync(flagKey, 'true');
+    setShowNotifModal(false);
+  }, [user]);
 
   // Live requester scores — seeded from cache to avoid flicker
   const _cachedRScores = getCached<{ rating: number; reliability: number }>('requester_scores');
@@ -5132,6 +5170,14 @@ export default function RequesterHomeScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* ── NOTIFICATION PERMISSION MODAL ── */}
+      <NotificationPermissionModal
+        visible={showNotifModal}
+        role="requester"
+        onContinue={handleNotifContinue}
+        onDismiss={handleNotifDismiss}
+      />
     </View>
   );
 }

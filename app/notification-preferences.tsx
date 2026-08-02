@@ -21,24 +21,24 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useNotifications } from "@/contexts/NotificationContext";
 
-// Notification categories - customize these for your app
+// Notification categories for FlashLocum
 const NOTIFICATION_CATEGORIES = [
   {
-    key: "updates",
-    label: "App Updates",
-    description: "New features and improvements",
+    key: "coverage_requests",
+    label: "Coverage Requests",
+    description: "New requests and doctor acceptances",
     defaultEnabled: true,
   },
   {
-    key: "promotions",
-    label: "Promotions",
-    description: "Special offers and discounts",
+    key: "shift_updates",
+    label: "Shift Updates",
+    description: "Shift start, pause, resume, and end events",
     defaultEnabled: true,
   },
   {
-    key: "reminders",
-    label: "Reminders",
-    description: "Activity reminders and tips",
+    key: "payment_alerts",
+    label: "Payment Alerts",
+    description: "Payment confirmations and settlement updates",
     defaultEnabled: true,
   },
 ];
