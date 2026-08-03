@@ -69,12 +69,6 @@
     },
     "plugins": [
       [
-        "onesignal-expo-plugin",
-        {
-          "mode": "production"
-        }
-      ],
-      [
         "expo-splash-screen",
         {
           "ios": {
