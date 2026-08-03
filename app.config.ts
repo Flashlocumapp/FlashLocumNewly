@@ -2,13 +2,16 @@ import appJson from './app.json';
 import { ExpoConfig } from 'expo/config';
 
 /**
- * TEMPORARY: onesignal-expo-plugin is excluded when EXPO_PUBLIC_IS_EXPO_GO=true
- * so the Expo Go compatibility warning is suppressed.
+ * TEMPORARY: onesignal-expo-plugin is always excluded here so Expo Go
+ * does not show the "Not compatible with Expo Go" screen.
  *
- * For all native builds (EAS dev build, APK, TestFlight, production) the plugin
- * is always included. Remove the filter below when Expo Go support is no longer needed.
+ * Native builds (EAS dev build, APK, AAB, TestFlight, production) use
+ * app.json directly and always include the plugin — this file only affects
+ * the Expo Go / Metro dev-server config path.
+ *
+ * To re-enable: set isExpoGo = false, or delete this file entirely.
  */
-const isExpoGo = process.env.EXPO_PUBLIC_IS_EXPO_GO === 'true';
+const isExpoGo = true; // TEMPORARY — flip to false when native push testing resumes
 
 const config: ExpoConfig = {
   ...(appJson.expo as unknown as ExpoConfig),
