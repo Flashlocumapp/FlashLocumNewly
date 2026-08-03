@@ -1581,7 +1581,24 @@ function RequesterPaymentCard({
                 </Text>
               </View>
             ) : (
-              <TouchableOpacity
+              <>
+                <View style={{
+                  backgroundColor: '#F5F5F5',
+                  borderRadius: 12,
+                  padding: 16,
+                  marginBottom: 16,
+                }}>
+                  <Text style={{
+                    fontSize: 14,
+                    fontFamily: 'Inter_400Regular',
+                    color: '#555555',
+                    lineHeight: 20,
+                    textAlign: 'center',
+                  }}>
+                    Once you've completed the transfer, tap the button below so we can confirm your payment and complete your coverage.
+                  </Text>
+                </View>
+                <TouchableOpacity
                 onPress={handleClaimPayment}
                 disabled={claiming}
                 activeOpacity={0.8}
@@ -1601,6 +1618,7 @@ function RequesterPaymentCard({
                   </Text>
                 )}
               </TouchableOpacity>
+              </>
             )
           )}
         </ScrollView>
