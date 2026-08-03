@@ -101,6 +101,31 @@ export function DoctorUpcomingCoverageCard({ session, onCall, onCancel, variant 
         </Text>
       </View>
 
+      {/* Note */}
+      {!!session.note?.trim() && (
+        <View style={{
+          backgroundColor: isDark ? '#3A3A3C' : '#F4F4F4',
+          borderRadius: 10,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          marginTop: 10,
+        }}>
+          <Text style={{
+            fontSize: 11,
+            fontFamily: 'Inter_600SemiBold',
+            color: '#8E8E93',
+            letterSpacing: 0.5,
+            marginBottom: 3,
+          }}>NOTE</Text>
+          <Text style={{
+            fontSize: 13,
+            fontFamily: 'Inter_400Regular',
+            color: isDark ? '#EBEBF5' : '#1C1C1E',
+            fontStyle: 'italic',
+          }}>{session.note}</Text>
+        </View>
+      )}
+
       {/* Payment pending banner */}
       {session.status === 'payment_pending' && (
         <View style={{ backgroundColor: '#3A2A00', borderRadius: 10, padding: 12, marginTop: 12 }}>

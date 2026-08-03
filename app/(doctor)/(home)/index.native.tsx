@@ -160,6 +160,31 @@ function HomeUpcomingContent({
         <Text style={styles.shiftPillText} numberOfLines={1}>{shiftPillText}</Text>
       </View>
 
+      {/* Note */}
+      {!!session.note?.trim() && (
+        <View style={{
+          backgroundColor: '#2C2C2E',
+          borderRadius: 10,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          marginTop: 10,
+        }}>
+          <Text style={{
+            fontSize: 11,
+            fontFamily: 'Inter_600SemiBold',
+            color: '#8E8E93',
+            letterSpacing: 0.5,
+            marginBottom: 3,
+          }}>NOTE</Text>
+          <Text style={{
+            fontSize: 13,
+            fontFamily: 'Inter_400Regular',
+            color: '#EBEBF5',
+            fontStyle: 'italic',
+          }}>{session.note}</Text>
+        </View>
+      )}
+
       {/* Action buttons */}
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
         {canCancel && (
@@ -229,6 +254,31 @@ function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCal
       <View style={styles.shiftPill}>
         <Text style={styles.shiftPillText} numberOfLines={1}>{shiftPillText}</Text>
       </View>
+
+      {/* Note */}
+      {!!session.note?.trim() && (
+        <View style={{
+          backgroundColor: '#2C2C2E',
+          borderRadius: 10,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          marginTop: 10,
+        }}>
+          <Text style={{
+            fontSize: 11,
+            fontFamily: 'Inter_600SemiBold',
+            color: '#8E8E93',
+            letterSpacing: 0.5,
+            marginBottom: 3,
+          }}>NOTE</Text>
+          <Text style={{
+            fontSize: 13,
+            fontFamily: 'Inter_400Regular',
+            color: '#EBEBF5',
+            fontStyle: 'italic',
+          }}>{session.note}</Text>
+        </View>
+      )}
 
       {/* Timer row */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
