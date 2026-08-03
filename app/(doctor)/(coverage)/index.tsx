@@ -176,7 +176,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const isStraight = (session.coverage_type ?? '').toLowerCase().includes('straight');
   const totalHours = isStraight ? shiftHours : shiftHours * (session.coverage_length ?? 1);
   const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
-  const shiftSummaryLine = `${session.shift_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd} · ${hoursDisplay} · ₦${Number(session.booked_price ?? session.price ?? 0).toLocaleString()}`;
+  const shiftSummaryLine = `${session.coverage_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd} · ${hoursDisplay} · ₦${Number(session.booked_price ?? session.price ?? 0).toLocaleString()}`;
 
   const settlementStatus = session.status === 'cancelled' ? 'Cancelled' : (session.status === 'requester_paid' || session.status === 'settled' || session.status === 'completed' ? 'Paid' : 'Pending');
   const settlementColor = settlementStatus === 'Cancelled' ? '#EF4444' : settlementStatus === 'Paid' ? '#34C759' : '#FFFFFF';

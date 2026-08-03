@@ -6,7 +6,7 @@ export type SessionLike = {
   shift_start: string;
   shift_end: string;
   shift_date: string;
-  shift_type: string;
+  coverage_type: string;
   coverage_length: number;
   per_day_hours?: number | null;
   booked_price?: number | null;
@@ -14,7 +14,6 @@ export type SessionLike = {
   status?: string;
   current_day?: number | null;
   environment?: string | null;
-  coverage_type?: string | null;
 };
 
 function formatTime(iso: string) {
@@ -40,7 +39,7 @@ export function buildShiftPillText(session: SessionLike): string {
   const sep = '  ·  ';
 
   if (session.status === 'paused') {
-    return `${session.shift_type}${sep}Day ${session.current_day} of ${session.coverage_length}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
+    return `${session.coverage_type}${sep}Day ${session.current_day} of ${session.coverage_length}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
   }
 
   if (shiftHours >= 24) {
@@ -49,7 +48,7 @@ export function buildShiftPillText(session: SessionLike): string {
     endDate.setDate(startDate.getDate() + session.coverage_length);
     const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
     const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
-    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
+    return `${session.coverage_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
   }
 
   if (session.coverage_length > 1) {
@@ -58,11 +57,11 @@ export function buildShiftPillText(session: SessionLike): string {
     endDate.setDate(startDate.getDate() + session.coverage_length - 1);
     const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
     const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
-    return `${session.shift_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
+    return `${session.coverage_type}${sep}${startDay} - ${endDay}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
   }
 
   const dayLabel = new Date(session.shift_date).toLocaleDateString('en-US', { weekday: 'short' });
-  return `${session.shift_type}${sep}${dayLabel}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
+  return `${session.coverage_type}${sep}${dayLabel}${sep}${shiftStart} - ${shiftEnd}${sep}${hoursDisplay}${sep}${priceDisplay}`;
 }
 
 export function EnvironmentBadge({ environment }: { environment: string }) {

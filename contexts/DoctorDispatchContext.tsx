@@ -43,7 +43,6 @@ export type CoverageSession = {
   shift_date: string;
   shift_start: string;
   shift_end: string;
-  shift_type: string;
   coverage_type: string;
   coverage_length: number;
   per_day_hours: number | null;
