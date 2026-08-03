@@ -273,4 +273,19 @@ config.server.enhanceMiddleware = (middleware) => {
   };
 };
 
+// TEMPORARY: In Expo Go, redirect react-native-onesignal to a no-op stub so
+// TurboModuleRegistry.getEnforcing("OneSignal") is never called at bundle time.
+// Expo Go shows "Not compatible with Expo Go" because that call fires before
+// any JS runs — runtime IS_EXPO_GO guards cannot prevent it.
+//
+// To re-enable OneSignal for native builds: delete these 8 lines.
+// The stub at utils/onesignal-stub.ts can also be deleted.
+const IS_EXPO_GO = true; // TEMPORARY — flip to false when native push testing resumes
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (IS_EXPO_GO && moduleName === 'react-native-onesignal') {
+    return { filePath: path.resolve(__dirname, 'utils/onesignal-stub.ts'), type: 'sourceFile' };
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = config;
