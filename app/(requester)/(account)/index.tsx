@@ -115,24 +115,34 @@ export default function RequesterAccountScreen() {
 
       const fetchProfile = async () => {
         try {
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('first_name, last_name, phone, gender, rating, reliability')
-            .eq('id', user.id)
-            .single();
+          const [profileRes, requesterProfileRes] = await Promise.all([
+            supabase
+              .from('profiles')
+              .select('first_name, last_name, phone, gender')
+              .eq('id', user.id)
+              .single(),
+            supabase
+              .from('requester_profiles')
+              .select('rating, reliability')
+              .eq('id', user.id)
+              .single(),
+          ]);
 
-          if (error) {
-            console.warn('[RequesterAccount] Background fetch failed:', error.message);
+          if (profileRes.error) {
+            console.warn('[RequesterAccount] Background fetch failed:', profileRes.error.message);
             return; // leave existing UI untouched
           }
+
+          const data = profileRes.data;
+          const repData = requesterProfileRes.data;
 
           const mergedProfile: RequesterProfile = {
             first_name: authProfile?.first_name ?? data?.first_name ?? null,
             last_name: authProfile?.last_name ?? data?.last_name ?? null,
             phone: authProfile?.phone ?? data?.phone ?? null,
             gender: authProfile?.gender ?? data?.gender ?? null,
-            rating: data?.rating ?? null,
-            reliability: data?.reliability ?? null,
+            rating: repData?.rating ?? null,
+            reliability: repData?.reliability ?? null,
           };
           setProfile(prev => {
             if (prev && JSON.stringify(prev) === JSON.stringify(mergedProfile)) return prev;
