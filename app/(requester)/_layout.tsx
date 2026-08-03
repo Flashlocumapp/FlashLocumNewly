@@ -86,7 +86,7 @@ export default function RequesterLayout() {
         })(),
         // 2. Requester Account profile
         (async () => {
-          const key = 'requester_profile';
+          const key = `requester_profile_${user.id}`;
           if (!isStale(key)) return;
           try {
             console.log('[RequesterLayout] Prefetching account profile, key:', key);
@@ -104,6 +104,23 @@ export default function RequesterLayout() {
             };
             setCached(key, merged);
             console.log('[RequesterLayout] Account profile cached:', merged.first_name, merged.last_name);
+          } catch {}
+        })(),
+
+        // 3. Requester active session
+        (async () => {
+          const key = `requester-active-session-${user.id}`;
+          if (!isStale(key)) return;
+          try {
+            console.log('[RequesterLayout] Prefetching active session, key:', key);
+            const res = await fetchWithAuth(
+              'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/get-active-session?role=requester',
+              { headers: { 'Content-Type': 'application/json' } }
+            );
+            if (!res.ok) return;
+            const data = await res.json();
+            setCached(key, data?.session ?? null);
+            console.log('[RequesterLayout] Active session cached:', data?.session?.id ?? 'null');
           } catch {}
         })(),
       ]);

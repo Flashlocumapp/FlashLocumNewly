@@ -121,6 +121,44 @@ async function prefetchTabData(userId: string) {
         console.log('[prefetch] doctor earnings failed (silent)', e);
       }
     })(),
+
+    // 4. Doctor Account profile
+    (async () => {
+      const key = `doctor_profile_${userId}`;
+      if (!isStale(key)) return;
+      try {
+        console.log('[prefetch] fetching doctor account profile');
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('first_name, last_name, phone, gender, verification_status')
+          .eq('id', userId)
+          .single();
+        const { data: doctorData } = await supabase
+          .from('doctor_profiles')
+          .select('mdcn_number, bank_name, bank_code, account_number, account_name, selfie_url, subaccount_code, rating, reliability')
+          .eq('id', userId)
+          .single();
+        if (profileData || doctorData) {
+          setCached(key, {
+            first_name: profileData?.first_name ?? null,
+            last_name: profileData?.last_name ?? null,
+            phone: profileData?.phone ?? null,
+            gender: profileData?.gender ?? null,
+            verification_status: profileData?.verification_status ?? null,
+            mdcn_number: doctorData?.mdcn_number ?? null,
+            bank_name: doctorData?.bank_name ?? null,
+            bank_code: doctorData?.bank_code ?? null,
+            account_number: doctorData?.account_number ?? null,
+            account_name: doctorData?.account_name ?? null,
+            selfie_url: doctorData?.selfie_url ?? null,
+            subaccount_code: doctorData?.subaccount_code ?? null,
+          });
+          console.log('[prefetch] doctor account profile cached');
+        }
+      } catch (e) {
+        console.log('[prefetch] doctor account failed (silent)', e);
+      }
+    })(),
   ]);
 }
 
@@ -354,7 +392,9 @@ export default function DoctorLayout() {
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
   const router = useRouter();
-  const [isOnline, setIsOnline] = useState(false);
+  const _cachedOnline = getCached<boolean>(`doctor_is_online:${user?.id ?? ''}`);
+  const [isOnline, setIsOnline] = useState<boolean>(_cachedOnline ?? false);
+  const [criticalDataReady, setCriticalDataReady] = useState(false);
   const [doctorScreenState, setDoctorScreenState] = useState<DoctorScreenState>('idle');
   const [requestQueue, setRequestQueue] = useState<DispatchRequest[]>([]);
   const [confirmedRequest, setConfirmedRequest] = useState<DispatchRequest | null>(null);
@@ -729,26 +769,30 @@ export default function DoctorLayout() {
         if (_toggleIntent !== null) return;
         if (data && typeof data.is_online === 'boolean') {
           setIsOnline(data.is_online);
+          setCached(`doctor_is_online:${user.id}`, data.is_online);
         }
       });
     _doctorWarmPromise = Promise.all([warmDoctorRatedCache(), warmDoctorDismissedCache()]).then(() => {
       warmCompleteRef.current = true;
       setWarmComplete(true);
+      // Fire prefetch immediately — does not depend on active session result
+      console.log('[DoctorLayout] starting background tab prefetch for user', user.id);
+      prefetchTabData(user.id);
+      // Fetch active session in parallel
       fetchActiveSession().then(() => {
         // Guard 2 — Boot-time: force offline if doctor is not verified
         const bootStatus = profile?.verification_status;
         if (bootStatus && bootStatus !== 'verified') {
           console.log('[DoctorLayout] boot-time verification gate — status is', bootStatus, '— forcing offline');
           setIsOnline(false);
+          setCached(`doctor_is_online:${user.id}`, false);
           fetchWithAuth(`${EDGE_BASE}/go-offline`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
           }).catch(() => {});
         }
-        // Fire-and-forget background prefetch — must not block home screen render
-        console.log('[DoctorLayout] starting background tab prefetch for user', user.id);
-        prefetchTabData(user.id);
+        setCriticalDataReady(true);
       });
     });
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -773,6 +817,7 @@ export default function DoctorLayout() {
           // (i.e. the DB confirmed what we already set). Discard contradicting events.
           if (_toggleIntent !== null && newRow.is_online !== _toggleIntent) return;
           setIsOnline(newRow.is_online);
+          if (user?.id) setCached(`doctor_is_online:${user.id}`, newRow.is_online);
         }
       )
       .subscribe();
@@ -837,15 +882,19 @@ export default function DoctorLayout() {
               if (body409.error === 'CAP_REACHED') {
                 Alert.alert('Max Shifts Reached', 'Complete a shift to go online again.');
                 setIsOnline(false);
+                if (user?.id) setCached(`doctor_is_online:${user.id}`, false);
               } else {
                 // Non-CAP_REACHED failure — revert silently
                 setIsOnline(false);
+                if (user?.id) setCached(`doctor_is_online:${user.id}`, false);
               }
             } else {
               // Network/server error — revert silently
               setIsOnline(false);
+              if (user?.id) setCached(`doctor_is_online:${user.id}`, false);
             }
           } else {
+            if (user?.id) setCached(`doctor_is_online:${user.id}`, true);
             await forceSyncRef.current();
             // Explicitly trigger the card if the sync found requests.
             // Don't rely on the async React re-render cycle — read the ref directly.
@@ -857,12 +906,14 @@ export default function DoctorLayout() {
             });
           }
         } else {
+          if (user?.id) setCached(`doctor_is_online:${user.id}`, false);
           setRequestQueue([]);
           setDoctorScreenState('idle');
         }
       } catch (e: any) {
         // non-fatal — revert silently
         setIsOnline(!isOnline);
+        if (user?.id) setCached(`doctor_is_online:${user.id}`, !isOnline);
       } finally {
         _toggleIntent = null;
       }
@@ -1763,7 +1814,8 @@ export default function DoctorLayout() {
     upcomingSessions,
     setUpcomingSessions,
     reconcileUpcomingSessions: reconcileUpcoming,
-  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcoming]);
+    criticalDataReady,
+  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcoming, criticalDataReady]);
 
   return (
     <DoctorDispatchContext.Provider value={contextValue}>

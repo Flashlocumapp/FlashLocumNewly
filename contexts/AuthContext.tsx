@@ -21,7 +21,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
 
@@ -121,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const ch = subscribeProfileChannel(session.user.id);
         profileChannelRef.current = ch;
       } else {
+        setProfileLoading(false);
         setLoading(false);
         setIsReady(true);
       }
@@ -170,7 +171,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // TOKEN_REFRESHED, INITIAL_SESSION, PASSWORD_RECOVERY, etc.
         // Update session/user state but do NOT re-fetch profile — it hasn't changed
         setSession(session);
-        setUser(session?.user ?? null);
+        // Only update user if the identity actually changed — avoids unnecessary re-renders on TOKEN_REFRESHED
+        setUser(prev => {
+          if (prev?.id === session?.user?.id) return prev; // same identity — keep stable reference
+          return session?.user ?? null;
+        });
       }
       setLoading(false);
     });

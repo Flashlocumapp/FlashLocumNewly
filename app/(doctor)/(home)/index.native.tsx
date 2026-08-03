@@ -312,15 +312,17 @@ export default function DoctorHomeScreen() {
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
   const { user, profile } = useAuth();
   const { requestPermission } = useNotifications();
-  const verificationStatus = profile?.verification_status ?? 'pending';
+  const verificationStatus = profile?.verification_status ?? null;
   const isVerified = verificationStatus === 'verified';
-  const isPending = verificationStatus === 'pending' || verificationStatus == null;
+  const isPending = verificationStatus === 'pending';
   const isUnderReview = verificationStatus === 'under_review';
   const isRejected = verificationStatus === 'rejected';
   const isSuspended = verificationStatus === 'suspended';
   const isBlocked = !isVerified; // covers all non-verified states
+  // null means profile not yet loaded — show nothing
+  const isProfileLoading = verificationStatus === null;
 
-  const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcomingSessions } = useDoctorDispatch();
+  const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcomingSessions, criticalDataReady } = useDoctorDispatch();
 
   // ─── Notification permission modal ──────────────────────────────────────────
   const [showNotifModal, setShowNotifModal] = useState(false);
@@ -367,29 +369,16 @@ export default function DoctorHomeScreen() {
   const [doctorRating, setDoctorRating] = useState<number | null>(_cachedScores?.rating ?? null);
   const [doctorReliability, setDoctorReliability] = useState<number | null>(_cachedScores?.reliability ?? null);
 
-  // ─── Fetch doctor scores on mount ────────────────────────────────────────────
-  useEffect(() => {
-    if (!user) return;
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('doctor_profiles')
-          .select('rating, reliability')
-          .eq('id', user.id)
-          .single();
-        if (error) {
-          return;
-        }
-        if (data) {
-          setDoctorRating(data.rating ?? null);
-          setDoctorReliability(data.reliability ?? null);
-          setCached('doctor_scores', { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
-        }
-      } catch (e: any) {
-        // ignore
+  // ─── Re-read doctor scores from cache on focus (layout is authoritative source) ──
+  useFocusEffect(
+    useCallback(() => {
+      const cached = getCached<{ rating: number; reliability: number }>('doctor_scores');
+      if (cached) {
+        setDoctorRating(cached.rating ?? null);
+        setDoctorReliability(cached.reliability ?? null);
       }
-    })();
-  }, [user]);
+    }, [])
+  );
 
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(
     _cachedDoctorCoords
@@ -514,17 +503,16 @@ export default function DoctorHomeScreen() {
     }, [])
   );
 
-  // ─── Signal splash screen ready on first focus ───────────────────────────────
+  // ─── Signal splash screen ready — wait for criticalDataReady + profile ──────
   const { signalScreenReady } = useSplash();
   const splashSignalledRef = useRef(false);
-  useFocusEffect(
-    useCallback(() => {
-      if (!splashSignalledRef.current) {
-        splashSignalledRef.current = true;
-        signalScreenReady();
-      }
-    }, [signalScreenReady])
-  );
+  useEffect(() => {
+    if (splashSignalledRef.current) return;
+    if (!criticalDataReady) return; // wait until layout has fetched activeSession + isOnline
+    if (!profile) return; // wait until profile is known
+    splashSignalledRef.current = true;
+    signalScreenReady();
+  }, [criticalDataReady, profile, signalScreenReady]);
 
   // ─── Toggle online/offline ───────────────────────────────────────────────────
   const handleToggleStatus = () => {
@@ -700,7 +688,10 @@ export default function DoctorHomeScreen() {
       </MapView>
 
       {/* Verification gate / Online-Offline pill */}
-      {isPending ? (
+      {isProfileLoading ? (
+        // Profile not yet loaded — render nothing (splash is still visible or neutral)
+        null
+      ) : isPending ? (
         <View style={[styles.pill, { top: pillTop, backgroundColor: '#1C1C1E', flexDirection: 'column', alignItems: 'center', gap: 4, paddingHorizontal: 16, paddingVertical: 10 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <MaterialCommunityIcons name="clock-outline" size={14} color="#FF9F0A" />
