@@ -163,7 +163,7 @@ function HomeUpcomingContent({
       {/* Note */}
       {!!session.note?.trim() && (
         <View style={{
-          backgroundColor: '#2C2C2E',
+          backgroundColor: '#3A3A3C',
           borderRadius: 10,
           paddingHorizontal: 12,
           paddingVertical: 8,
@@ -258,7 +258,7 @@ function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCal
       {/* Note */}
       {!!session.note?.trim() && (
         <View style={{
-          backgroundColor: '#2C2C2E',
+          backgroundColor: '#3A3A3C',
           borderRadius: 10,
           paddingHorizontal: 12,
           paddingVertical: 8,
