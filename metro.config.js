@@ -273,4 +273,17 @@ config.server.enhanceMiddleware = (middleware) => {
   };
 };
 
+// Redirect react-native-onesignal to a no-op stub so Expo Go does not show
+// "Not compatible with Expo Go". Native EAS builds bypass Metro's resolveRequest
+// entirely, so this has no effect on production builds.
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === 'react-native-onesignal') {
+    return {
+      filePath: require('path').resolve(__dirname, 'utils/onesignal-stub.ts'),
+      type: 'sourceFile',
+    };
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = config;
