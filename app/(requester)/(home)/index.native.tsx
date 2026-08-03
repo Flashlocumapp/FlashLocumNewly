@@ -4684,27 +4684,6 @@ export default function RequesterHomeScreen() {
                 >
                   <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
                 </View>
-                {/* Requester scores row */}
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 }}>
-                  <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>
-                    {'★ '}
-                  </Text>
-                  <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>
-                    {requesterRating !== null ? requesterRating.toFixed(2) : '--'}
-                  </Text>
-                  <TouchableOpacity onPress={() => { console.log('[Requester] Info icon pressed: rating tooltip'); setTooltipVisible('rating'); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 3 }}>
-                    <Feather name="info" size={11} color="#8E8E93" />
-                  </TouchableOpacity>
-                  <Text style={{ fontSize: 13, color: '#8E8E93', marginHorizontal: 6 }}>{'·'}</Text>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759', marginRight: 4 }} />
-                  <Text style={{ fontSize: 13, color: '#34C759', fontFamily: 'Inter_400Regular' }}>
-                    {requesterReliability !== null ? requesterReliability.toFixed(0) : '--'}
-                  </Text>
-                  <Text style={{ fontSize: 13, color: '#34C759', fontFamily: 'Inter_400Regular' }}>{'%'}</Text>
-                  <TouchableOpacity onPress={() => { console.log('[Requester] Info icon pressed: reliability tooltip'); setTooltipVisible('reliability'); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 3 }}>
-                    <Feather name="info" size={11} color="#8E8E93" />
-                  </TouchableOpacity>
-                </View>
                 {/* Search capsule */}
                 {isAccountBlocked ? (
                   <View style={{ backgroundColor: '#2C2C2E', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'column', alignItems: 'center', gap: 6 }}>

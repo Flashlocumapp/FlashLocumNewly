@@ -28,6 +28,8 @@ interface RequesterProfile {
   last_name: string | null;
   phone: string | null;
   gender: string | null;
+  rating: number | null;
+  reliability: number | null;
 }
 
 function SectionHeader({ title }: { title: string }) {
@@ -77,6 +79,8 @@ export default function RequesterAccountScreen() {
       last_name: authProfile.last_name ?? null,
       phone: authProfile.phone ?? null,
       gender: authProfile.gender ?? null,
+      rating: null,
+      reliability: null,
     };
   });
   // Only block render if we have no cache and no seed data at all
@@ -100,7 +104,7 @@ export default function RequesterAccountScreen() {
       const fetchProfile = async () => {
         const { data } = await supabase
           .from('profiles')
-          .select('first_name, last_name, phone, gender')
+          .select('first_name, last_name, phone, gender, rating, reliability')
           .eq('id', user.id)
           .single();
 
@@ -109,6 +113,8 @@ export default function RequesterAccountScreen() {
           last_name: authProfile?.last_name ?? data?.last_name ?? null,
           phone: authProfile?.phone ?? data?.phone ?? null,
           gender: authProfile?.gender ?? data?.gender ?? null,
+          rating: data?.rating ?? null,
+          reliability: data?.reliability ?? null,
         };
         setProfile(prev => {
           if (prev && JSON.stringify(prev) === JSON.stringify(mergedProfile)) return prev; // no re-render
@@ -246,7 +252,18 @@ export default function RequesterAccountScreen() {
           <View style={styles.avatarCircle}>
             <Text style={styles.avatarInitials}>{initials}</Text>
           </View>
-          <Text style={styles.displayName}>{fullName}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Text style={styles.displayName}>{fullName}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={{ fontSize: 13, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>
+                {'★ '}{profile?.rating != null ? profile.rating.toFixed(2) : '--'}
+              </Text>
+              <Text style={{ fontSize: 13, color: '#8E8E93' }}>{'·'}</Text>
+              <Text style={{ fontSize: 13, color: '#34C759', fontFamily: 'Inter_400Regular' }}>
+                {profile?.reliability != null ? Math.round(profile.reliability).toString() : '--'}{'%'}
+              </Text>
+            </View>
+          </View>
           {verifBadge && (
             <View style={{ backgroundColor: verifBadge.bg, borderColor: verifBadge.border, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, marginTop: 6 }}>
               <Text style={{ fontSize: 13, color: verifBadge.color, fontWeight: '600' }}>{verifBadge.label}</Text>
