@@ -273,4 +273,19 @@ config.server.enhanceMiddleware = (middleware) => {
   };
 };
 
+// ─── TEMPORARY: redirect react-native-onesignal to a no-op stub in Expo Go ──
+// Expo Go detects native modules at bundle-scan time, before any JS runs, so
+// runtime IS_EXPO_GO guards alone are not enough. This hook intercepts the
+// require() at bundle time and substitutes the stub so the native module never
+// appears in the bundle.
+//
+// To re-enable OneSignal: delete these 8 lines.
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === 'react-native-onesignal') {
+    return { filePath: path.resolve(__dirname, 'utils/onesignal-stub.ts'), type: 'sourceFile' };
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 module.exports = config;
