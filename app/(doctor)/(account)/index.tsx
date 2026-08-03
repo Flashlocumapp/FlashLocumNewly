@@ -21,9 +21,15 @@ import { ChevronRight } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
-import { getCached, setCached } from '@/utils/tabCache';
+import { getCached, setCached, invalidate } from '@/utils/tabCache';
 import DeleteAccountModal from '@/components/DeleteAccountModal';
 import SignOutModal from '@/components/SignOutModal';
+
+const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const SELFIE_URL_TTL_MS = 50 * 60 * 1000;   // 50 minutes (signed URLs expire at 60)
+
+// Selfie URL cache — keyed by `${doctorId}:${rawPath}`, value: { url: string; cachedAt: number }
+const _selfieUrlCache = new Map<string, { url: string; cachedAt: number }>();
 
 interface DoctorProfile {
   first_name: string | null;
@@ -105,8 +111,10 @@ export default function DoctorAccountScreen() {
   const router = useRouter();
   const { user, profile: authProfile } = useAuth();
 
+  const profileCacheKey = user ? `doctor_profile_${user.id}` : 'doctor_profile';
+
   const [profile, setProfile] = useState<DoctorProfile | null>(() => {
-    const cached = getCached<DoctorProfile>('doctor_profile');
+    const cached = getCached<DoctorProfile>(user ? `doctor_profile_${user.id}` : 'doctor_profile');
     if (cached) return cached;
     if (!authProfile) return null;
     return {
@@ -125,8 +133,10 @@ export default function DoctorAccountScreen() {
     };
   });
   // Only show loading state if we have no profile at all (no cache and no authProfile seed)
-  const [loading, setLoading] = useState(getCached('doctor_profile') === null && profile === null);
+  const [loading, setLoading] = useState(getCached(user ? `doctor_profile_${user.id}` : 'doctor_profile') === null && profile === null);
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
+
+  const lastFetchedAtRef = useRef<number>(0);
 
   // Phone edit modal
   const [phoneModalVisible, setPhoneModalVisible] = useState(false);
@@ -151,65 +161,91 @@ export default function DoctorAccountScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!user) return;
+      if (!user?.id) return;
+      const now = Date.now();
+      const isFresh = (now - lastFetchedAtRef.current) < PROFILE_CACHE_TTL_MS;
+      if (isFresh && getCached(profileCacheKey)) return;
+
       const fetchProfile = async () => {
-        const [profileRes, doctorProfileRes] = await Promise.all([
-          supabase
-            .from('profiles')
-            .select('first_name, last_name, phone, gender, verification_status')
-            .eq('id', user.id)
-            .single(),
-          supabase
-            .from('doctor_profiles')
-            .select('mdcn_number, bank_name, bank_code, account_number, account_name, selfie_url, subaccount_code')
-            .eq('id', user.id)
-            .single(),
-        ]);
+        try {
+          const [profileRes, doctorProfileRes] = await Promise.all([
+            supabase
+              .from('profiles')
+              .select('first_name, last_name, phone, gender, verification_status')
+              .eq('id', user.id)
+              .single(),
+            supabase
+              .from('doctor_profiles')
+              .select('mdcn_number, bank_name, bank_code, account_number, account_name, selfie_url, subaccount_code')
+              .eq('id', user.id)
+              .single(),
+          ]);
 
-        const mergedProfile: DoctorProfile = {
-          first_name: authProfile?.first_name ?? profileRes.data?.first_name ?? null,
-          last_name: authProfile?.last_name ?? profileRes.data?.last_name ?? null,
-          phone: authProfile?.phone ?? profileRes.data?.phone ?? null,
-          gender: authProfile?.gender ?? profileRes.data?.gender ?? null,
-          verification_status: profileRes.data?.verification_status ?? null,
-          mdcn_number: doctorProfileRes.data?.mdcn_number ?? null,
-          bank_name: doctorProfileRes.data?.bank_name ?? null,
-          bank_code: doctorProfileRes.data?.bank_code ?? null,
-          account_number: doctorProfileRes.data?.account_number ?? null,
-          account_name: doctorProfileRes.data?.account_name ?? null,
-          selfie_url: doctorProfileRes.data?.selfie_url ?? null,
-          subaccount_code: doctorProfileRes.data?.subaccount_code ?? null,
-        };
-        // Check whether subaccount creation has previously failed for this doctor.
-        // Signal: any coverage_sessions row where manual_settlement_required=true
-        // AND session_subaccount_code IS NULL — meaning end-shift ran, tried to
-        // create the subaccount, and it failed.
-        const { data: failedSessionRows } = await supabase
-          .from('coverage_sessions')
-          .select('id')
-          .eq('doctor_id', user.id)
-          .eq('manual_settlement_required', true)
-          .is('session_subaccount_code', null)
-          .limit(1);
+          if (profileRes.error && doctorProfileRes.error) {
+            console.warn('[DoctorAccount] Background fetch failed:', profileRes.error.message);
+            return; // leave existing UI untouched
+          }
 
-        setSubaccountFailed((failedSessionRows ?? []).length > 0);
+          const mergedProfile: DoctorProfile = {
+            first_name: authProfile?.first_name ?? profileRes.data?.first_name ?? null,
+            last_name: authProfile?.last_name ?? profileRes.data?.last_name ?? null,
+            phone: authProfile?.phone ?? profileRes.data?.phone ?? null,
+            gender: authProfile?.gender ?? profileRes.data?.gender ?? null,
+            verification_status: profileRes.data?.verification_status ?? null,
+            mdcn_number: doctorProfileRes.data?.mdcn_number ?? null,
+            bank_name: doctorProfileRes.data?.bank_name ?? null,
+            bank_code: doctorProfileRes.data?.bank_code ?? null,
+            account_number: doctorProfileRes.data?.account_number ?? null,
+            account_name: doctorProfileRes.data?.account_name ?? null,
+            selfie_url: doctorProfileRes.data?.selfie_url ?? null,
+            subaccount_code: doctorProfileRes.data?.subaccount_code ?? null,
+          };
 
-        setProfile(prev => {
-          if (prev && JSON.stringify(prev) === JSON.stringify(mergedProfile)) return prev; // no re-render
-          return mergedProfile;
-        });
-        setCached('doctor_profile', { ...mergedProfile });
-        const rawSelfieUrl = doctorProfileRes.data?.selfie_url ?? null;
-        if (rawSelfieUrl) {
-          const { data: signedData } = await supabase.storage
-            .from('doctor-documents')
-            .createSignedUrl(rawSelfieUrl, 3600);
-          if (signedData?.signedUrl) setSelfieUrl(signedData.signedUrl);
+          const { data: failedSessionRows } = await supabase
+            .from('coverage_sessions')
+            .select('id')
+            .eq('doctor_id', user.id)
+            .eq('manual_settlement_required', true)
+            .is('session_subaccount_code', null)
+            .limit(1);
+
+          setSubaccountFailed((failedSessionRows ?? []).length > 0);
+
+          setProfile(prev => {
+            if (prev && JSON.stringify(prev) === JSON.stringify(mergedProfile)) return prev;
+            return mergedProfile;
+          });
+          setCached(profileCacheKey, { ...mergedProfile });
+          lastFetchedAtRef.current = Date.now();
+
+          // Selfie URL — only regenerate if path changed or URL is stale
+          const rawSelfieUrl = doctorProfileRes.data?.selfie_url ?? null;
+          if (rawSelfieUrl) {
+            const selfieKey = `${user.id}:${rawSelfieUrl}`;
+            const cached = _selfieUrlCache.get(selfieKey);
+            const selfieIsStale = !cached || (Date.now() - cached.cachedAt) > SELFIE_URL_TTL_MS;
+            if (selfieIsStale) {
+              const { data: signedData } = await supabase.storage
+                .from('doctor-documents')
+                .createSignedUrl(rawSelfieUrl, 3600);
+              if (signedData?.signedUrl) {
+                _selfieUrlCache.set(selfieKey, { url: signedData.signedUrl, cachedAt: Date.now() });
+                setSelfieUrl(signedData.signedUrl);
+              }
+            } else {
+              // Reuse cached URL — no state update needed if already set
+              setSelfieUrl(prev => prev === cached.url ? prev : cached.url);
+            }
+          }
+        } catch (e: any) {
+          console.warn('[DoctorAccount] Background fetch error:', e.message);
+          // leave existing UI untouched
+        } finally {
+          setLoading(false);
         }
-        setLoading(false);
       };
       fetchProfile();
-    }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const firstName = profile?.first_name ?? '';
@@ -264,6 +300,8 @@ export default function DoctorAccountScreen() {
       return;
     }
     setProfile((prev) => prev ? { ...prev, phone: cleaned } : prev);
+    invalidate(profileCacheKey);
+    lastFetchedAtRef.current = 0; // force re-fetch on next focus
     setPhoneModalVisible(false);
   };
 
@@ -277,6 +315,8 @@ export default function DoctorAccountScreen() {
       return;
     }
     setProfile((prev) => prev ? { ...prev, gender: newGender } : prev);
+    invalidate(profileCacheKey);
+    lastFetchedAtRef.current = 0;
     setGenderModalVisible(false);
   };
 

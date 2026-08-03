@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -19,9 +19,12 @@ import { ChevronRight } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
-import { getCached, setCached } from '@/utils/tabCache';
+import { getCached, setCached, invalidate } from '@/utils/tabCache';
 import DeleteAccountModal from '@/components/DeleteAccountModal';
 import SignOutModal from '@/components/SignOutModal';
+
+const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const SELFIE_URL_TTL_MS = 50 * 60 * 1000;   // 50 minutes (signed URLs expire at 60)
 
 interface RequesterProfile {
   first_name: string | null;
@@ -70,8 +73,10 @@ export default function RequesterAccountScreen() {
   const router = useRouter();
   const { user, profile: authProfile } = useAuth();
 
+  const profileCacheKey = user ? `requester_profile_${user.id}` : 'requester_profile';
+
   const [profile, setProfile] = useState<RequesterProfile | null>(() => {
-    const cached = getCached<RequesterProfile>('requester_profile');
+    const cached = getCached<RequesterProfile>(user ? `requester_profile_${user.id}` : 'requester_profile');
     if (cached) return cached;
     if (!authProfile) return null;
     return {
@@ -84,7 +89,9 @@ export default function RequesterAccountScreen() {
     };
   });
   // Only block render if we have no cache and no seed data at all
-  const [loading, setLoading] = useState(getCached('requester_profile') === null && profile === null);
+  const [loading, setLoading] = useState(getCached(user ? `requester_profile_${user.id}` : 'requester_profile') === null && profile === null);
+
+  const lastFetchedAtRef = useRef<number>(0);
 
   const [phoneModalVisible, setPhoneModalVisible] = useState(false);
   const [editPhone, setEditPhone] = useState('');
@@ -100,31 +107,48 @@ export default function RequesterAccountScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (!user) return;
-      const fetchProfile = async () => {
-        const { data } = await supabase
-          .from('profiles')
-          .select('first_name, last_name, phone, gender, rating, reliability')
-          .eq('id', user.id)
-          .single();
+      if (!user?.id) return;
+      const now = Date.now();
+      const isFresh = (now - lastFetchedAtRef.current) < PROFILE_CACHE_TTL_MS;
+      // Skip fetch if cache is fresh — render existing data silently
+      if (isFresh && getCached(profileCacheKey)) return;
 
-        const mergedProfile: RequesterProfile = {
-          first_name: authProfile?.first_name ?? data?.first_name ?? null,
-          last_name: authProfile?.last_name ?? data?.last_name ?? null,
-          phone: authProfile?.phone ?? data?.phone ?? null,
-          gender: authProfile?.gender ?? data?.gender ?? null,
-          rating: data?.rating ?? null,
-          reliability: data?.reliability ?? null,
-        };
-        setProfile(prev => {
-          if (prev && JSON.stringify(prev) === JSON.stringify(mergedProfile)) return prev; // no re-render
-          return mergedProfile;
-        });
-        setCached('requester_profile', { ...mergedProfile });
-        setLoading(false);
+      const fetchProfile = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('first_name, last_name, phone, gender, rating, reliability')
+            .eq('id', user.id)
+            .single();
+
+          if (error) {
+            console.warn('[RequesterAccount] Background fetch failed:', error.message);
+            return; // leave existing UI untouched
+          }
+
+          const mergedProfile: RequesterProfile = {
+            first_name: authProfile?.first_name ?? data?.first_name ?? null,
+            last_name: authProfile?.last_name ?? data?.last_name ?? null,
+            phone: authProfile?.phone ?? data?.phone ?? null,
+            gender: authProfile?.gender ?? data?.gender ?? null,
+            rating: data?.rating ?? null,
+            reliability: data?.reliability ?? null,
+          };
+          setProfile(prev => {
+            if (prev && JSON.stringify(prev) === JSON.stringify(mergedProfile)) return prev;
+            return mergedProfile;
+          });
+          setCached(profileCacheKey, { ...mergedProfile });
+          lastFetchedAtRef.current = Date.now();
+        } catch (e: any) {
+          console.warn('[RequesterAccount] Background fetch error:', e.message);
+          // leave existing UI untouched
+        } finally {
+          setLoading(false);
+        }
       };
       fetchProfile();
-    }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const verifStatus = authProfile?.verification_status;
@@ -166,6 +190,8 @@ export default function RequesterAccountScreen() {
     setSavingPhone(false);
     if (error) { Alert.alert('Error', error.message); return; }
     setProfile((prev) => prev ? { ...prev, phone: cleaned } : prev);
+    invalidate(profileCacheKey);
+    lastFetchedAtRef.current = 0; // force re-fetch on next focus
     setPhoneModalVisible(false);
   };
 
@@ -175,6 +201,8 @@ export default function RequesterAccountScreen() {
     setSavingGender(false);
     if (error) { Alert.alert('Error', error.message); return; }
     setProfile((prev) => prev ? { ...prev, gender: newGender } : prev);
+    invalidate(profileCacheKey);
+    lastFetchedAtRef.current = 0;
     setGenderModalVisible(false);
   };
 
