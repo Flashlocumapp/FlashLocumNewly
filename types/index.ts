@@ -15,6 +15,9 @@ export type PaymentIntent = {
   updated_at: string;
   amount_paid?: number;        // cumulative verified amount received so far
   outstanding_balance?: number; // amount_naira - amount_paid
+  payment_route: string | null;
+  requester_claimed: boolean;
+  claimed_at: string | null;
 };
 
 export type { Session, User };

@@ -864,7 +864,13 @@ function RequesterPaymentCard({
   const autoRefreshAttemptedRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Manual payment claim state
+  const [claiming, setClaiming] = useState(false);
+  const [claimed, setClaimed] = useState(false);
   // paymentConfirmed is now driven entirely by the parent via onPaymentConfirmed
+
+  // Route-based rendering — manual FlashLocum route hides countdown and shows claim button
+  const isManualRoute = paymentIntent?.payment_route === 'flashlocum_manual';
 
   // Countdown state — recalculated from expiry_at, never persisted
   const [countdown, setCountdown] = useState('--:--');
@@ -886,6 +892,13 @@ function RequesterPaymentCard({
     pulse.start();
     return () => pulse.stop();
   }, [skeletonAnim]);
+
+  // Sync claimed state from paymentIntent (handles screen re-open after claim)
+  useEffect(() => {
+    if (paymentIntent?.requester_claimed) {
+      setClaimed(true);
+    }
+  }, [paymentIntent?.requester_claimed]);
 
   // ─── Start countdown from expiry_at ──────────────────────────────────────
   const startCountdown = useCallback((expiryAt: string) => {
@@ -1250,9 +1263,43 @@ function RequesterPaymentCard({
   const hasExhaustedRetry = !loadingIntent && !paymentIntent?.monnify_account_number && !refreshing;
 
   const handleCopy = async () => {
+    console.log('[RequesterPaymentCard] handleCopy: copying account number');
     await Clipboard.setStringAsync(accountNumber);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleClaimPayment = async () => {
+    if (claiming || claimed) return;
+    console.log('[RequesterPaymentCard] handleClaimPayment: user pressed I Have Made Payment');
+    setClaiming(true);
+    try {
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const token = authSession?.access_token;
+      console.log('[RequesterPaymentCard] handleClaimPayment: calling claim-manual-payment edge function');
+      const res = await fetch(
+        `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/claim-manual-payment`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ session_id: session.id }),
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.warn('[RequesterPaymentCard] claim-manual-payment error:', err);
+      }
+      // Transition to awaiting confirmation regardless — optimistic
+      setClaimed(true);
+    } catch (e) {
+      console.warn('[RequesterPaymentCard] handleClaimPayment exception:', e);
+      setClaimed(true); // Still transition — don't leave user stuck
+    } finally {
+      setClaiming(false);
+    }
   };
 
   return (
@@ -1470,44 +1517,92 @@ function RequesterPaymentCard({
             </Text>
           </View>
 
-          {/* Countdown Card */}
-          <View style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: 16,
-            padding: 20,
-            marginBottom: 28,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.06,
-            shadowRadius: 8,
-            elevation: 2,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}>
-            <View style={{ flex: 1, marginRight: 16 }}>
-              <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 6 }}>
-                PRICE HELD FOR
-              </Text>
-              <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', lineHeight: 18 }}>
-                Amount may increase if payment isn't made in time.
+          {/* Countdown Card — hidden for manual FlashLocum route */}
+          {!isManualRoute && (
+            <View style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 16,
+              padding: 20,
+              marginBottom: 28,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.06,
+              shadowRadius: 8,
+              elevation: 2,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}>
+              <View style={{ flex: 1, marginRight: 16 }}>
+                <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 6 }}>
+                  PRICE HELD FOR
+                </Text>
+                <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', lineHeight: 18 }}>
+                  Amount may increase if payment isn't made in time.
+                </Text>
+              </View>
+              <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: countdownColor, letterSpacing: 0.5 }}>
+                {countdownDisplay}
               </Text>
             </View>
-            <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: countdownColor, letterSpacing: 0.5 }}>
-              {countdownDisplay}
-            </Text>
-          </View>
+          )}
 
           {/* Footer Note */}
-          <Text style={{
-            fontSize: 13,
-            color: '#8E8E93',
-            fontFamily: 'Inter_400Regular',
-            lineHeight: 20,
-            textAlign: 'center',
-          }}>
-            Send the exact amount above from any Nigerian bank app. This page updates automatically once payment is received.
-          </Text>
+          {!isManualRoute && (
+            <Text style={{
+              fontSize: 13,
+              color: '#8E8E93',
+              fontFamily: 'Inter_400Regular',
+              lineHeight: 20,
+              textAlign: 'center',
+              marginBottom: 24,
+            }}>
+              Send the exact amount above from any Nigerian bank app. This page updates automatically once payment is received.
+            </Text>
+          )}
+
+          {/* Manual route — I Have Made Payment / Payment Awaiting Confirmation */}
+          {isManualRoute && (
+            claimed ? (
+              <View style={{
+                backgroundColor: '#F0FDF4',
+                borderRadius: 16,
+                padding: 20,
+                marginBottom: 28,
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: '#BBF7D0',
+              }}>
+                <Text style={{ fontSize: 17, fontFamily: 'Inter_600SemiBold', color: '#15803D', marginBottom: 6 }}>
+                  Payment Awaiting Confirmation
+                </Text>
+                <Text style={{ fontSize: 14, color: '#166534', fontFamily: 'Inter_400Regular', textAlign: 'center', lineHeight: 20 }}>
+                  We have received your transfer notification and will confirm your payment shortly.
+                </Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={handleClaimPayment}
+                disabled={claiming}
+                activeOpacity={0.8}
+                style={{
+                  backgroundColor: claiming ? '#A3A3A3' : '#000000',
+                  borderRadius: 14,
+                  paddingVertical: 18,
+                  alignItems: 'center',
+                  marginBottom: 28,
+                }}
+              >
+                {claiming ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={{ fontSize: 17, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>
+                    I Have Made Payment
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )
+          )}
         </ScrollView>
       </View>
     </Modal>
