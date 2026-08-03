@@ -126,37 +126,12 @@ function HomeUpcomingContent({
   onCancel: (s: CoverageSession) => void;
   onCall: (s: CoverageSession) => void;
 }) {
-  const _cachedRequesterStats = getCached<{ rating: number; reliability: number }>(`requester_stats_${session.requester_id}`);
-  const [liveRequesterRating, setLiveRequesterRating] = useState<number | null>(_cachedRequesterStats?.rating ?? null);
-  const [liveRequesterReliability, setLiveRequesterReliability] = useState<number | null>(_cachedRequesterStats?.reliability ?? null);
-
-  useEffect(() => {
-    if (!session.requester_id) return;
-    console.log('[Doctor Home] Fetching live requester stats for upcoming session, requester_id:', session.requester_id);
-    supabase
-      .from('requester_profiles')
-      .select('rating, reliability')
-      .eq('id', session.requester_id)
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) {
-          console.log('[Doctor Home] Requester stats fetch failed (upcoming), using defaults:', error?.message);
-          setLiveRequesterRating(5.0);
-          setLiveRequesterReliability(100);
-          setCached(`requester_stats_${session.requester_id}`, { rating: 5.0, reliability: 100 });
-        } else {
-          console.log('[Doctor Home] Live requester stats fetched (upcoming):', data);
-          setLiveRequesterRating(data.rating ?? 5.0);
-          setLiveRequesterReliability(data.reliability ?? 100);
-          setCached(`requester_stats_${session.requester_id}`, { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
-        }
-      });
-  }, [session.requester_id]);
+  // Frozen session snapshot — never re-fetches, never blinks
+  const requesterRatingDisplay = session.requester_rating != null ? Number(session.requester_rating).toFixed(2) : '5.00';
+  const reliabilityDisplay = session.requester_reliability != null ? `${Math.round(Number(session.requester_reliability))}` : '100';
 
   const canCancel = session.status === 'upcoming' && session.current_day === 1;
   const shiftPillText = buildShiftPillText(session);
-  const requesterRatingDisplay = liveRequesterRating != null ? liveRequesterRating.toFixed(2) : '--';
-  const reliabilityDisplay = liveRequesterReliability != null ? `${Math.round(liveRequesterReliability)}` : '--';
 
   return (
     <>
@@ -210,9 +185,9 @@ function HomeUpcomingContent({
 
 function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCall: () => void }) {
   const [elapsed, setElapsed] = useState('00:00:00');
-  const _cachedRequesterStats = getCached<{ rating: number; reliability: number }>(`requester_stats_${session.requester_id}`);
-  const [liveRequesterRating, setLiveRequesterRating] = useState<number | null>(_cachedRequesterStats?.rating ?? null);
-  const [liveRequesterReliability, setLiveRequesterReliability] = useState<number | null>(_cachedRequesterStats?.reliability ?? null);
+  // Frozen session snapshot — never re-fetches, never blinks
+  const requesterRatingDisplay = session.requester_rating != null ? Number(session.requester_rating).toFixed(2) : '5.00';
+  const reliabilityDisplay = session.requester_reliability != null ? `${Math.round(Number(session.requester_reliability))}` : '100';
 
   const currentDayLog = session.day_logs?.[session.current_day - 1];
   const startedAt = currentDayLog?.started_at ?? session.started_at;
@@ -224,32 +199,6 @@ function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCal
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [startedAt]);
-
-  useEffect(() => {
-    if (!session.requester_id) return;
-    console.log('[Doctor Home] Fetching live requester stats for active session, requester_id:', session.requester_id);
-    supabase
-      .from('requester_profiles')
-      .select('rating, reliability')
-      .eq('id', session.requester_id)
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) {
-          console.log('[Doctor Home] Requester stats fetch failed (active), using defaults:', error?.message);
-          setLiveRequesterRating(5.0);
-          setLiveRequesterReliability(100);
-          setCached(`requester_stats_${session.requester_id}`, { rating: 5.0, reliability: 100 });
-        } else {
-          console.log('[Doctor Home] Live requester stats fetched (active):', data);
-          setLiveRequesterRating(data.rating ?? 5.0);
-          setLiveRequesterReliability(data.reliability ?? 100);
-          setCached(`requester_stats_${session.requester_id}`, { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
-        }
-      });
-  }, [session.requester_id]);
-
-  const requesterRatingDisplay = liveRequesterRating != null ? liveRequesterRating.toFixed(2) : '--';
-  const reliabilityDisplay = liveRequesterReliability != null ? `${Math.round(liveRequesterReliability)}` : '--';
   const shiftPillText = buildShiftPillText(session);
   const showDayPill = session.coverage_length > 1;
   const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;

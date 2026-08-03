@@ -536,32 +536,9 @@ function RequesterUpcomingCard({
   const doctorName = cleanName && !cleanName.includes('@') ? `Dr. ${cleanName}` : 'Doctor';
   const initials = cleanName ? getSessionInitials(cleanName) : 'DR';
 
-  const [liveRating, setLiveRating] = useState<number | null>(null);
-  const [liveReliability, setLiveReliability] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!session.doctor_id) return;
-    console.log('[Requester Home] Fetching live doctor stats for doctor_id:', session.doctor_id);
-    supabase
-      .from('doctor_profiles')
-      .select('rating, reliability')
-      .eq('id', session.doctor_id)
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) {
-          console.log('[Requester Home] Doctor stats fetch failed (upcoming), using defaults:', error?.message);
-          setLiveRating(5.0);
-          setLiveReliability(100);
-        } else {
-          console.log('[Requester Home] Live doctor stats fetched (upcoming):', data);
-          setLiveRating(data.rating ?? 5.0);
-          setLiveReliability(data.reliability ?? 100);
-        }
-      });
-  }, [session.doctor_id]);
-
-  const ratingDisplay = liveRating != null ? liveRating.toFixed(2) : '--';
-  const reliabilityDisplay = liveReliability != null ? `${Math.round(liveReliability)}` : '--';
+  // Frozen session snapshot — never re-fetches, never blinks
+  const ratingDisplay = session.doctor_rating != null ? Number(session.doctor_rating).toFixed(2) : '5.00';
+  const reliabilityDisplay = session.doctor_reliability != null ? `${Math.round(Number(session.doctor_reliability))}` : '100';
 
   return (
     <View style={{
@@ -699,32 +676,9 @@ function RequesterActiveCard({
   const doctorName = cleanName && !cleanName.includes('@') ? `Dr. ${cleanName}` : 'Doctor';
   const initials = cleanName ? getSessionInitials(cleanName) : 'DR';
 
-  const [liveRatingActive, setLiveRatingActive] = useState<number | null>(null);
-  const [liveReliabilityActive, setLiveReliabilityActive] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!session.doctor_id) return;
-    console.log('[Requester Home] Fetching live doctor stats for active session, doctor_id:', session.doctor_id);
-    supabase
-      .from('doctor_profiles')
-      .select('rating, reliability')
-      .eq('id', session.doctor_id)
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) {
-          console.log('[Requester Home] Doctor stats fetch failed (active), using defaults:', error?.message);
-          setLiveRatingActive(5.0);
-          setLiveReliabilityActive(100);
-        } else {
-          console.log('[Requester Home] Live doctor stats fetched (active):', data);
-          setLiveRatingActive(data.rating ?? 5.0);
-          setLiveReliabilityActive(data.reliability ?? 100);
-        }
-      });
-  }, [session.doctor_id]);
-
-  const ratingDisplay = liveRatingActive != null ? liveRatingActive.toFixed(2) : '--';
-  const reliabilityDisplay = liveReliabilityActive != null ? `${Math.round(liveReliabilityActive)}` : '--';
+  // Frozen session snapshot — never re-fetches, never blinks
+  const ratingDisplay = session.doctor_rating != null ? Number(session.doctor_rating).toFixed(2) : '5.00';
+  const reliabilityDisplay = session.doctor_reliability != null ? `${Math.round(Number(session.doctor_reliability))}` : '100';
   const shiftPillText = buildShiftPillText(session);
   const showDayPill = session.coverage_length > 1;
   const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;
