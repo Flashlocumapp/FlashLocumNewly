@@ -848,6 +848,7 @@ function RequesterPaymentCard({
     account_reference: string;
     expiry_at: string;
     amount_naira: number;
+    payment_route?: string | null;
   } | null;
   amountPaid?: number;
   outstandingBalance?: number;
@@ -1033,6 +1034,7 @@ function RequesterPaymentCard({
           monnify_account_name: payment.account_name ?? base.monnify_account_name ?? null,
           monnify_account_reference: payment.account_reference ?? base.monnify_account_reference,
           expiry_at: payment.expiry_at ?? base.expiry_at,
+          payment_route: payment.payment_route ?? base.payment_route ?? null,
         });
         if (payment.expiry_at) {
           startCountdown(payment.expiry_at);
@@ -1077,6 +1079,9 @@ function RequesterPaymentCard({
         expiry_at: initialPayment.expiry_at,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        payment_route: initialPayment.payment_route ?? null,
+        requester_claimed: false,
+        claimed_at: null,
       };
       setPaymentIntent(pi);
       startCountdown(initialPayment.expiry_at);
