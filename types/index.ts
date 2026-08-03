@@ -46,18 +46,18 @@ export type DoctorEarning = {
   coverage_type: string;
   coverage_length: number;
   per_day_hours: number;
-  start_time: string;
-  end_time: string;
-  total_amount_naira: number;
-  platform_fee_naira: number;
-  net_payout_naira: number;
-  payment_status: string | null;
-  monnify_account_reference: string | null;
-  monnify_transaction_reference: string | null;
-  disbursement_reference: string | null;
-  disbursed_at: string | null;
-  paid_at: string | null;
-  hospital_name?: string;
+  start_time: string;        // coverage_sessions.shift_start
+  end_time: string;          // coverage_sessions.shift_end
+  total_amount_naira: number; // coverage_sessions.total_cost
+  platform_fee_naira: number; // calculated
+  net_payout_naira: number;   // calculated
+  hospital_name: string | null;
+  payment_status: string | null;              // payment_intents.status
+  monnify_account_reference: string | null;   // payment_intents.monnify_account_reference
+  monnify_transaction_reference: string | null; // payment_intents.monnify_transaction_reference
+  disbursement_reference: string | null;      // payment_intents.disbursement_reference
+  paid_at: string | null;     // payment_intents.settled_at — confirmed payment timestamp
+  settled_at: string | null;  // coverage_sessions.settled_at — doctor remittance timestamp
 };
 
 export interface AuthContextType {

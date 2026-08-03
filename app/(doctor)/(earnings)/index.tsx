@@ -113,9 +113,9 @@ function TransactionCard({
   onToggle: () => void;
 }) {
   const hospitalName = row.hospital_name ?? 'Hospital';
-  const isPaid = row.session_status === 'completed';
+  const isPaid = row.payment_status === 'paid';
   const statusDotColor = isPaid ? '#34C759' : '#F4A261';
-  const statusLabel = isPaid ? 'Completed' : 'Awaiting Disbursement';
+  const statusLabel = isPaid ? 'Paid' : 'Awaiting Payment';
   const statusTextColor = isPaid ? '#34C759' : '#F4A261';
   const shiftDateStr = formatShiftDate(row.paid_at ?? row.start_time);
   const coverageLabel = row.coverage_type ?? 'Standard';
@@ -123,9 +123,9 @@ function TransactionCard({
   const netPayoutDisplay = formatNaira(row.net_payout_naira);
   const totalChargedDisplay = formatNaira(row.total_amount_naira);
   const platformFeeDisplay = formatNaira(row.platform_fee_naira);
-  const disbursedStatus = isPaid ? 'Disbursed' : 'Awaiting Disbursement';
+  const paymentStatusDisplay = isPaid ? 'Paid' : 'Awaiting Payment';
   const paymentDateDisplay = formatDateTime(row.paid_at);
-  const disbursementDateDisplay = formatDateTime(row.disbursed_at);
+  const settledDateDisplay = formatDateTime(row.settled_at);
   const txRef = row.monnify_transaction_reference ?? '—';
   const accountRef = row.monnify_account_reference ?? '—';
   const disbursementRef = row.disbursement_reference ?? '—';
@@ -137,9 +137,9 @@ function TransactionCard({
     { label: 'Platform Fee (15%)', value: platformFeeDisplay },
     { label: 'Net Payout', value: netPayoutDisplay, green: true },
     { label: 'Payment Date', value: paymentDateDisplay },
-    { label: 'Disbursement Date', value: disbursementDateDisplay },
+    { label: 'Settled Date', value: settledDateDisplay },
     { label: 'Disbursement Ref', value: disbursementRef },
-    { label: 'Status', value: disbursedStatus },
+    { label: 'Status', value: paymentStatusDisplay },
   ];
 
   return (
@@ -216,12 +216,33 @@ export default function DoctorEarningsScreen() {
     if (!user) return;
     const cacheKey = `doctor_earnings:${user.id}`;
     try {
-      console.log('[Earnings] Fetching doctor_earnings from Supabase for user', user.id);
+      console.log('[Earnings] Fetching coverage_sessions+payment_intents from Supabase for user', user.id);
       const { data, error: fetchError } = await supabase
-        .from('doctor_earnings')
-        .select('*')
+        .from('coverage_sessions')
+        .select(`
+          id,
+          doctor_id,
+          requester_id,
+          status,
+          coverage_type,
+          coverage_length,
+          per_day_hours,
+          shift_start,
+          shift_end,
+          total_cost,
+          hospital_name,
+          settled_at,
+          payment_intents (
+            status,
+            monnify_account_reference,
+            monnify_transaction_reference,
+            disbursement_reference,
+            settled_at
+          )
+        `)
         .eq('doctor_id', user.id)
-        .order('paid_at', { ascending: false });
+        .in('status', ['payment_pending', 'requester_paid', 'completed', 'disbursed', 'payment_complete', 'settled', 'ended'])
+        .order('shift_start', { ascending: false });
 
       if (fetchError) {
         console.log('[Earnings] Fetch error:', fetchError.message);
@@ -229,7 +250,37 @@ export default function DoctorEarningsScreen() {
         return;
       }
 
-      const rows = (data as DoctorEarning[]) ?? [];
+      const rows: DoctorEarning[] = (data ?? []).map((cs: any) => {
+        const pi = Array.isArray(cs.payment_intents) ? cs.payment_intents[0] : cs.payment_intents;
+        const totalCost = Number(cs.total_cost ?? 0);
+        const platformFee = pi?.platform_commission_naira != null
+          ? Number(pi.platform_commission_naira)
+          : Math.round(totalCost * 0.15 / 10) * 10;
+        const netPayout = pi?.doctor_payout_naira != null
+          ? Number(pi.doctor_payout_naira)
+          : totalCost - platformFee;
+        return {
+          session_id: cs.id,
+          doctor_id: cs.doctor_id,
+          requester_id: cs.requester_id,
+          session_status: cs.status,
+          coverage_type: cs.coverage_type,
+          coverage_length: cs.coverage_length,
+          per_day_hours: cs.per_day_hours,
+          start_time: cs.shift_start,
+          end_time: cs.shift_end,
+          total_amount_naira: totalCost,
+          platform_fee_naira: platformFee,
+          net_payout_naira: netPayout,
+          hospital_name: cs.hospital_name ?? null,
+          payment_status: pi?.status ?? null,
+          monnify_account_reference: pi?.monnify_account_reference ?? null,
+          monnify_transaction_reference: pi?.monnify_transaction_reference ?? null,
+          disbursement_reference: pi?.disbursement_reference ?? null,
+          paid_at: pi?.settled_at ?? null,
+          settled_at: cs.settled_at ?? null,
+        };
+      });
       console.log('[Earnings] Fetched', rows.length, 'rows');
 
       setEarnings(prev => {
@@ -300,43 +351,42 @@ export default function DoctorEarningsScreen() {
     }, [user, fetchEarnings])
   );
 
-  // ── Realtime: surgical row merge on doctor_earnings ──────────────────────────
+  // ── Realtime: coverage_sessions changes for this doctor ──────────────────────
   useEffect(() => {
     if (!user?.id) return;
     const ch = supabase
-      .channel(`earnings-realtime:${user.id}`)
+      .channel(`earnings-sessions:${user.id}`)
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'UPDATE',
           schema: 'public',
-          table: 'doctor_earnings',
+          table: 'coverage_sessions',
           filter: `doctor_id=eq.${user.id}`,
         },
-        (payload) => {
-          const row = payload.new as DoctorEarning | undefined;
-          if (!row) return;
-          setEarnings(prev => {
-            const realtimeCacheKey = `doctor_earnings:${user?.id ?? ''}`;
-            const idx = prev.findIndex(e => e.session_id === row.session_id);
-            if (idx !== -1) {
-              // Update existing row in place — no network call needed
-              const next = [...prev];
-              next[idx] = { ...prev[idx], ...row };
-              setCached(realtimeCacheKey, next);
-              return next;
-            }
-            // Genuinely new row — prepend and cache
-            const next = [row, ...prev];
-            setCached(realtimeCacheKey, next);
-            return next;
-          });
-          lastFetchedAtRef.current = Date.now();
-        }
+        () => { fetchEarnings(); }
       )
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id, fetchEarnings]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Realtime: payment_intents changes (refetch on any update) ────────────────
+  useEffect(() => {
+    if (!user?.id) return;
+    const ch = supabase
+      .channel(`earnings-payments:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'payment_intents',
+        },
+        () => { fetchEarnings(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user?.id, fetchEarnings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Pull-to-refresh ─────────────────────────────────────────────────────────
   const handleRefresh = useCallback(async () => {
@@ -346,23 +396,7 @@ export default function DoctorEarningsScreen() {
     setRefreshing(false);
   }, [fetchEarnings]);
 
-  // ── Realtime: user channel for disbursement_confirmed ───────────────────────
-  useEffect(() => {
-    if (!user) return;
 
-    const userChannelName = `user:${user.id}`;
-
-    const ch = supabase
-      .channel(userChannelName)
-      .on('broadcast', { event: 'disbursement_confirmed' }, () => {
-        fetchEarnings();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [user, fetchEarnings]);
 
   // ── Derived values ──────────────────────────────────────────────────────────
   const filteredRows = earnings.filter(r =>
@@ -370,11 +404,11 @@ export default function DoctorEarningsScreen() {
   );
 
   const settledAmount = earnings
-    .filter(r => r.session_status === 'completed' && isInPeriod(r.disbursed_at ?? r.paid_at, period))
+    .filter(r => r.payment_status === 'paid' && isInPeriod(r.paid_at, period))
     .reduce((sum, r) => sum + Number(r.net_payout_naira), 0);
 
   const pendingAmount = earnings
-    .filter(r => r.session_status === 'requester_paid' && isInPeriod(r.paid_at, period))
+    .filter(r => r.payment_status !== 'paid' && isInPeriod(r.paid_at ?? r.start_time, period))
     .reduce((sum, r) => sum + Number(r.net_payout_naira), 0);
 
   const settledDisplay = formatNaira(settledAmount);

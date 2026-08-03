@@ -87,13 +87,36 @@ async function prefetchTabData(userId: string) {
       try {
         console.log('[prefetch] fetching doctor earnings');
         const { data, error } = await supabase
-          .from('doctor_earnings')
-          .select('*')
+          .from('coverage_sessions')
+          .select(`
+            id, doctor_id, requester_id, status, coverage_type, coverage_length,
+            per_day_hours, shift_start, shift_end, total_cost, hospital_name, settled_at,
+            payment_intents ( status, monnify_account_reference, monnify_transaction_reference, disbursement_reference, settled_at )
+          `)
           .eq('doctor_id', userId)
-          .order('paid_at', { ascending: false });
+          .in('status', ['payment_pending', 'requester_paid', 'completed', 'disbursed', 'payment_complete', 'settled', 'ended'])
+          .order('shift_start', { ascending: false });
         if (error) throw error;
-        setCached(earningsKey, data ?? []);
-        console.log('[prefetch] doctor earnings cached', (data ?? []).length, 'rows');
+        const rows = (data ?? []).map((cs: any) => {
+          const pi = Array.isArray(cs.payment_intents) ? cs.payment_intents[0] : cs.payment_intents;
+          const totalCost = Number(cs.total_cost ?? 0);
+          const platformFee = pi?.platform_commission_naira != null ? Number(pi.platform_commission_naira) : Math.round(totalCost * 0.15 / 10) * 10;
+          const netPayout = pi?.doctor_payout_naira != null ? Number(pi.doctor_payout_naira) : totalCost - platformFee;
+          return {
+            session_id: cs.id, doctor_id: cs.doctor_id, requester_id: cs.requester_id,
+            session_status: cs.status, coverage_type: cs.coverage_type, coverage_length: cs.coverage_length,
+            per_day_hours: cs.per_day_hours, start_time: cs.shift_start, end_time: cs.shift_end,
+            total_amount_naira: totalCost, platform_fee_naira: platformFee, net_payout_naira: netPayout,
+            hospital_name: cs.hospital_name ?? null, payment_status: pi?.status ?? null,
+            monnify_account_reference: pi?.monnify_account_reference ?? null,
+            monnify_transaction_reference: pi?.monnify_transaction_reference ?? null,
+            disbursement_reference: pi?.disbursement_reference ?? null,
+            paid_at: pi?.settled_at ?? null,
+            settled_at: cs.settled_at ?? null,
+          };
+        });
+        setCached(earningsKey, rows);
+        console.log('[prefetch] doctor earnings cached', rows.length, 'rows');
       } catch (e) {
         console.log('[prefetch] doctor earnings failed (silent)', e);
       }
@@ -1016,7 +1039,7 @@ export default function DoctorLayout() {
         startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
         invalidate(`doctor-coverage-history-${user.id}`);
         invalidate(`doctor-coverage-upcoming-${user.id}`);
-        invalidate('doctor_earnings');
+        invalidate(`doctor_earnings:${user.id}`);
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? activeSessionId;
@@ -1028,7 +1051,7 @@ export default function DoctorLayout() {
         startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
         invalidate(`doctor-coverage-history-${user.id}`);
         invalidate(`doctor-coverage-upcoming-${user.id}`);
-        invalidate('doctor_earnings');
+        invalidate(`doctor_earnings:${user.id}`);
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
@@ -1390,7 +1413,7 @@ export default function DoctorLayout() {
         startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
         invalidate(`doctor-coverage-history-${user.id}`);
         invalidate(`doctor-coverage-upcoming-${user.id}`);
-        invalidate('doctor_earnings');
+        invalidate(`doctor_earnings:${user.id}`);
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
@@ -1402,7 +1425,7 @@ export default function DoctorLayout() {
         startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
         invalidate(`doctor-coverage-history-${user.id}`);
         invalidate(`doctor-coverage-upcoming-${user.id}`);
-        invalidate('doctor_earnings');
+        invalidate(`doctor_earnings:${user.id}`);
       })
       .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
         console.log('[Doctor] user channel SHIFT_STARTED received');
