@@ -2027,6 +2027,18 @@ export default function RequesterHomeScreen() {
     _cachedRequesterCoords
   );
   const [userMarkerTracksViews, setUserMarkerTracksViews] = useState(true);
+  // ─── tracksViewChanges fix for doctor markers on Android ────────────────────
+  const [doctorMarkerTracksViews, setDoctorMarkerTracksViews] = useState(true);
+  useEffect(() => {
+    // On Android keep tracksViewChanges=true permanently (eliminates the native
+    // snapshot race that causes blank icons). On iOS freeze after 1500ms.
+    if (Platform.OS === 'ios') {
+      const t = setTimeout(() => setDoctorMarkerTracksViews(false), 1500);
+      return () => clearTimeout(t);
+    }
+    // Android: leave doctorMarkerTracksViews=true permanently
+    return undefined;
+  }, []); // runs once on mount
   const [onlineDoctors, setOnlineDoctors] = useState<{ id: string; lat: number; lng: number }[]>([]);
 
   const locationSub = useRef<Location.LocationSubscription | null>(null);
@@ -3868,7 +3880,7 @@ export default function RequesterHomeScreen() {
                 key={`cluster-${point.id}`}
                 coordinate={{ latitude: lat, longitude: lng }}
                 anchor={{ x: 0.5, y: 0.5 }}
-                tracksViewChanges={false}
+                tracksViewChanges={doctorMarkerTracksViews}
                 onPress={() => {
                   console.log('[Map] Cluster marker pressed', { clusterId: point.id, pointCount });
                   if (!supercluster) return;
@@ -3919,7 +3931,7 @@ export default function RequesterHomeScreen() {
               key={`doctor-${doctorId}`}
               coordinate={{ latitude: lat, longitude: lng }}
               anchor={{ x: 0.5, y: 1.0 }}
-              tracksViewChanges={false}
+              tracksViewChanges={doctorMarkerTracksViews}
             >
               <View style={{ alignItems: 'center' }}>
                 {/* Circular pin head — flat */}
