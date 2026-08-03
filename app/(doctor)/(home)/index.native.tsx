@@ -279,7 +279,7 @@ export default function DoctorHomeScreen() {
     useCallback(() => {
       if (!user || !profile?.doctor_onboarding_complete) return;
       const userId = user.id;
-      const flagKey = `notification_permission_prompted:${userId}`;
+      const flagKey = `notification_permission_prompted_${userId}`;
       (async () => {
         const flagSet = await SecureStore.getItemAsync(flagKey);
         if (flagSet === 'true') return;
@@ -295,7 +295,7 @@ export default function DoctorHomeScreen() {
 
   const handleNotifContinue = useCallback(async () => {
     if (!user) return;
-    const flagKey = `notification_permission_prompted:${user.id}`;
+    const flagKey = `notification_permission_prompted_${user.id}`;
     await SecureStore.setItemAsync(flagKey, 'true');
     setShowNotifModal(false);
     await requestPermission();
@@ -303,7 +303,7 @@ export default function DoctorHomeScreen() {
 
   const handleNotifDismiss = useCallback(async () => {
     if (!user) return;
-    const flagKey = `notification_permission_prompted:${user.id}`;
+    const flagKey = `notification_permission_prompted_${user.id}`;
     await SecureStore.setItemAsync(flagKey, 'true');
     setShowNotifModal(false);
   }, [user]);
