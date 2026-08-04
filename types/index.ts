@@ -58,6 +58,7 @@ export type DoctorEarning = {
   disbursement_reference: string | null;      // payment_intents.disbursement_reference
   paid_at: string | null;     // coverage_sessions.shift_end — session end time used as payment date proxy
   settled_at: string | null;  // coverage_sessions.settled_at — doctor remittance timestamp
+  payment_deadline_at: string | null; // coverage_sessions.payment_deadline_at — payment due date
 };
 
 export interface AuthContextType {
