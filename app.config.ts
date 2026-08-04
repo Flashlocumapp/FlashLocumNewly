@@ -11,7 +11,7 @@ import { ExpoConfig } from 'expo/config';
  *
  * To re-enable: set isExpoGo = false, or delete this file entirely.
  */
-const isExpoGo = true; // TEMPORARY — flip to false when native push testing resumes
+const isExpoGo = false; // Production — onesignal-expo-plugin is active
 
 const config: ExpoConfig = {
   ...(appJson.expo as unknown as ExpoConfig),
