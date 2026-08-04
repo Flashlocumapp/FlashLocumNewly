@@ -772,28 +772,45 @@ export default function DoctorLayout() {
           setCached(`doctor_is_online:${user.id}`, data.is_online);
         }
       });
-    _doctorWarmPromise = Promise.all([warmDoctorRatedCache(), warmDoctorDismissedCache()]).then(() => {
+    _doctorWarmPromise = Promise.all([warmDoctorRatedCache(), warmDoctorDismissedCache()]).then(async () => {
       warmCompleteRef.current = true;
       setWarmComplete(true);
       // Fire prefetch immediately — does not depend on active session result
       console.log('[DoctorLayout] starting background tab prefetch for user', user.id);
       prefetchTabData(user.id);
-      // Fetch active session in parallel
-      fetchActiveSession().then(() => {
-        // Guard 2 — Boot-time: force offline if doctor is not verified
-        const bootStatus = profile?.verification_status;
-        if (bootStatus && bootStatus !== 'verified') {
-          console.log('[DoctorLayout] boot-time verification gate — status is', bootStatus, '— forcing offline');
-          setIsOnline(false);
-          setCached(`doctor_is_online:${user.id}`, false);
-          fetchWithAuth(`${EDGE_BASE}/go-offline`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}),
-          }).catch(() => {});
-        }
-        setCriticalDataReady(true);
-      });
+      // Fetch active session AND doctor scores in parallel before marking critical data ready
+      await Promise.all([
+        fetchActiveSession(),
+        (async () => {
+          try {
+            const { data } = await supabase
+              .from('doctor_profiles')
+              .select('rating, reliability')
+              .eq('id', user.id)
+              .single();
+            if (data) {
+              setDoctorRatingScore(data.rating ?? null);
+              setDoctorReliabilityScore(data.reliability ?? null);
+              setCached('doctor_scores', { rating: data.rating ?? 5.0, reliability: data.reliability ?? 100 });
+            }
+          } catch {
+            // non-fatal
+          }
+        })(),
+      ]);
+      // Guard 2 — Boot-time: force offline if doctor is not verified
+      const bootStatus = profile?.verification_status;
+      if (bootStatus && bootStatus !== 'verified') {
+        console.log('[DoctorLayout] boot-time verification gate — status is', bootStatus, '— forcing offline');
+        setIsOnline(false);
+        setCached(`doctor_is_online:${user.id}`, false);
+        fetchWithAuth(`${EDGE_BASE}/go-offline`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        }).catch(() => {});
+      }
+      setCriticalDataReady(true);
     });
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
