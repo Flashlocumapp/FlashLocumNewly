@@ -53,13 +53,16 @@ function formatNaira(amount: number): string {
 
 function formatShiftDate(isoString: string | null): string {
   if (!isoString) return '—';
-  const d = new Date(isoString);
+  const normalized = /[Zz]$|[+-]\d{2}:\d{2}$/.test(isoString) ? isoString : isoString + 'Z';
+  const d = new Date(normalized);
   return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Africa/Lagos' });
 }
 
 function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';
-  const d = new Date(iso);
+  // Ensure the string is parsed as UTC (append Z if no timezone info present)
+  const normalized = /[Zz]$|[+-]\d{2}:\d{2}$/.test(iso) ? iso : iso + 'Z';
+  const d = new Date(normalized);
   const datePart = d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Africa/Lagos' });
   const timePart = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Africa/Lagos' });
   return datePart + ' at ' + timePart;
@@ -282,7 +285,7 @@ export default function DoctorEarningsScreen() {
           monnify_account_reference: pi?.monnify_account_reference ?? null,
           monnify_transaction_reference: pi?.monnify_transaction_reference ?? null,
           disbursement_reference: pi?.disbursement_reference ?? null,
-          paid_at: pi?.status === 'paid' ? (pi?.updated_at ?? null) : null,
+          paid_at: cs.shift_end ?? null,
           settled_at: cs.settled_at ?? null,
         };
       });
@@ -408,12 +411,18 @@ export default function DoctorEarningsScreen() {
     isInPeriod(r.paid_at ?? r.start_time, period)
   );
 
+  // "Settled" = Monnify has confirmed settlement to the doctor
   const settledAmount = earnings
-    .filter(r => r.payment_status === 'paid' && isInPeriod(r.paid_at, period))
+    .filter(r => r.session_status === 'settled' && isInPeriod(r.settled_at, period))
     .reduce((sum, r) => sum + Number(r.net_payout_naira), 0);
 
+  // "Pending" = requester has paid but Monnify has not yet settled
   const pendingAmount = earnings
-    .filter(r => r.payment_status !== 'paid' && isInPeriod(r.paid_at ?? r.start_time, period))
+    .filter(r =>
+      (r.session_status === 'requester_paid' || r.payment_status === 'paid') &&
+      r.session_status !== 'settled' &&
+      isInPeriod(r.paid_at ?? r.start_time, period)
+    )
     .reduce((sum, r) => sum + Number(r.net_payout_naira), 0);
 
   const settledDisplay = formatNaira(settledAmount);

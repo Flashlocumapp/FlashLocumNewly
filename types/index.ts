@@ -56,7 +56,7 @@ export type DoctorEarning = {
   monnify_account_reference: string | null;   // payment_intents.monnify_account_reference
   monnify_transaction_reference: string | null; // payment_intents.monnify_transaction_reference
   disbursement_reference: string | null;      // payment_intents.disbursement_reference
-  paid_at: string | null;     // payment_intents.updated_at when status='paid' — requester payment timestamp
+  paid_at: string | null;     // coverage_sessions.shift_end — session end time used as payment date proxy
   settled_at: string | null;  // coverage_sessions.settled_at — doctor remittance timestamp
 };
 
