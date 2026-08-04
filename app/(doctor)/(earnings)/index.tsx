@@ -53,7 +53,7 @@ function formatNaira(amount: number): string {
 
 function formatShiftDate(isoString: string | null): string {
   if (!isoString) return '—';
-  const normalized = /[Zz]$|[+-]\d{2}:\d{2}$/.test(isoString) ? isoString : isoString + 'Z';
+  const normalized = /[Zz]$|[+-]\d{2}:\d{2}$/.test(isoString) ? isoString : isoString + '+01:00';
   const d = new Date(normalized);
   return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Africa/Lagos' });
 }
@@ -61,7 +61,7 @@ function formatShiftDate(isoString: string | null): string {
 function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   // Ensure the string is parsed as UTC (append Z if no timezone info present)
-  const normalized = /[Zz]$|[+-]\d{2}:\d{2}$/.test(iso) ? iso : iso + 'Z';
+  const normalized = /[Zz]$|[+-]\d{2}:\d{2}$/.test(iso) ? iso : iso + '+01:00';
   const d = new Date(normalized);
   const datePart = d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Africa/Lagos' });
   const timePart = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Africa/Lagos' });
@@ -131,7 +131,7 @@ function TransactionCard({
   const totalChargedDisplay = formatNaira(row.total_amount_naira);
   const platformFeeDisplay = formatNaira(row.platform_fee_naira);
   const paymentStatusDisplay = statusLabel;
-  const paymentDateDisplay = formatDateTime(row.paid_at);
+  const paymentDateDisplay = formatDateTime(row.end_time);
   const settledDateDisplay = formatDateTime(row.settled_at);
   const txRef = row.monnify_transaction_reference ?? '—';
   const disbursementRef = row.disbursement_reference ?? '—';
@@ -285,7 +285,7 @@ export default function DoctorEarningsScreen() {
           monnify_account_reference: pi?.monnify_account_reference ?? null,
           monnify_transaction_reference: pi?.monnify_transaction_reference ?? null,
           disbursement_reference: pi?.disbursement_reference ?? null,
-          paid_at: cs.shift_end ?? null,
+          paid_at: pi?.status === 'paid' ? (pi?.updated_at ?? null) : null,
           settled_at: cs.settled_at ?? null,
         };
       });
