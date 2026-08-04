@@ -54,14 +54,14 @@ function formatNaira(amount: number): string {
 function formatShiftDate(isoString: string | null): string {
   if (!isoString) return '—';
   const d = new Date(isoString);
-  return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+  return d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Africa/Lagos' });
 }
 
 function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   const d = new Date(iso);
-  const datePart = d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
-  const timePart = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+  const datePart = d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Africa/Lagos' });
+  const timePart = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Africa/Lagos' });
   return datePart + ' at ' + timePart;
 }
 
@@ -113,26 +113,28 @@ function TransactionCard({
   onToggle: () => void;
 }) {
   const hospitalName = row.hospital_name ?? 'Hospital';
-  const isPaid = row.payment_status === 'paid';
-  const statusDotColor = isPaid ? '#34C759' : '#F4A261';
-  const statusLabel = isPaid ? 'Paid' : 'Awaiting Payment';
-  const statusTextColor = isPaid ? '#34C759' : '#F4A261';
+  const statusState = row.session_status === 'settled'
+    ? 'settled'
+    : row.session_status === 'requester_paid'
+      ? 'paid'
+      : 'awaiting';
+  const statusDotColor = statusState === 'settled' ? '#007AFF' : statusState === 'paid' ? '#34C759' : '#F4A261';
+  const statusLabel = statusState === 'settled' ? 'Settled' : statusState === 'paid' ? 'Paid' : 'Awaiting Payment';
+  const statusTextColor = statusDotColor;
   const shiftDateStr = formatShiftDate(row.paid_at ?? row.start_time);
   const coverageLabel = row.coverage_type ?? 'Standard';
   const subtitleText = coverageLabel + ' · ' + shiftDateStr;
   const netPayoutDisplay = formatNaira(row.net_payout_naira);
   const totalChargedDisplay = formatNaira(row.total_amount_naira);
   const platformFeeDisplay = formatNaira(row.platform_fee_naira);
-  const paymentStatusDisplay = isPaid ? 'Paid' : 'Awaiting Payment';
+  const paymentStatusDisplay = statusLabel;
   const paymentDateDisplay = formatDateTime(row.paid_at);
   const settledDateDisplay = formatDateTime(row.settled_at);
   const txRef = row.monnify_transaction_reference ?? '—';
-  const accountRef = row.monnify_account_reference ?? '—';
   const disbursementRef = row.disbursement_reference ?? '—';
 
   const detailRows: { label: string; value: string; green?: boolean }[] = [
     { label: 'Transaction Ref', value: txRef },
-    { label: 'Account Ref', value: accountRef },
     { label: 'Amount Charged', value: totalChargedDisplay },
     { label: 'Platform Fee (15%)', value: platformFeeDisplay },
     { label: 'Net Payout', value: netPayoutDisplay, green: true },
@@ -234,10 +236,13 @@ export default function DoctorEarningsScreen() {
           settled_at,
           payment_intents (
             status,
+            updated_at,
             monnify_account_reference,
             monnify_transaction_reference,
             disbursement_reference,
-            settled_at
+            settled_at,
+            platform_commission_naira,
+            doctor_payout_naira
           )
         `)
         .eq('doctor_id', user.id)
@@ -277,7 +282,7 @@ export default function DoctorEarningsScreen() {
           monnify_account_reference: pi?.monnify_account_reference ?? null,
           monnify_transaction_reference: pi?.monnify_transaction_reference ?? null,
           disbursement_reference: pi?.disbursement_reference ?? null,
-          paid_at: pi?.settled_at ?? null,
+          paid_at: pi?.status === 'paid' ? (pi?.updated_at ?? null) : null,
           settled_at: cs.settled_at ?? null,
         };
       });
