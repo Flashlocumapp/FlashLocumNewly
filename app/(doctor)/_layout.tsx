@@ -1852,7 +1852,9 @@ export default function DoctorLayout() {
     reconcileUpcomingSessions: reconcileUpcoming,
     criticalDataReady,
     resumeReady,
-  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcoming, criticalDataReady, resumeReady]);
+    doctorRatingScore,
+    doctorReliabilityScore,
+  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcoming, criticalDataReady, resumeReady, doctorRatingScore, doctorReliabilityScore]);
 
   return (
     <DoctorDispatchContext.Provider value={contextValue}>

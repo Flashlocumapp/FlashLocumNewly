@@ -322,7 +322,7 @@ export default function DoctorHomeScreen() {
   // null means profile not yet loaded — show nothing
   const isProfileLoading = verificationStatus === null;
 
-  const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcomingSessions, criticalDataReady, resumeReady } = useDoctorDispatch();
+  const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcomingSessions, criticalDataReady, resumeReady, doctorRatingScore, doctorReliabilityScore } = useDoctorDispatch();
 
   // ─── Notification permission modal ──────────────────────────────────────────
   const [showNotifModal, setShowNotifModal] = useState(false);
@@ -364,21 +364,6 @@ export default function DoctorHomeScreen() {
   const [showCancelReasons, setShowCancelReasons] = useState(false);
   const [tooltipVisible, setTooltipVisible] = useState<'rating' | 'reliability' | null>(null);
 
-  // Live rating/reliability state — seeded from cache to avoid flicker
-  const _cachedScores = getCached<{ rating: number; reliability: number }>('doctor_scores');
-  const [doctorRating, setDoctorRating] = useState<number | null>(_cachedScores?.rating ?? null);
-  const [doctorReliability, setDoctorReliability] = useState<number | null>(_cachedScores?.reliability ?? null);
-
-  // ─── Re-read doctor scores from cache on focus (layout is authoritative source) ──
-  useFocusEffect(
-    useCallback(() => {
-      const cached = getCached<{ rating: number; reliability: number }>('doctor_scores');
-      if (cached) {
-        setDoctorRating(cached.rating ?? null);
-        setDoctorReliability(cached.reliability ?? null);
-      }
-    }, [])
-  );
 
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(
     _cachedDoctorCoords
@@ -811,7 +796,7 @@ export default function DoctorHomeScreen() {
                 </TouchableOpacity>
               </View>
               <View style={styles.ratingValueRow}>
-                <Text style={styles.statValue}>{doctorRating !== null ? doctorRating.toFixed(2) : '--'}</Text>
+                <Text style={styles.statValue}>{doctorRatingScore !== null ? doctorRatingScore.toFixed(2) : '--'}</Text>
                 <Text style={styles.starIcon}>★</Text>
               </View>
             </View>
@@ -824,7 +809,7 @@ export default function DoctorHomeScreen() {
                   <Feather name="info" size={12} color="#8E8E93" />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.statValue}>{doctorReliability !== null ? `${Math.round(doctorReliability)}%` : '--'}</Text>
+              <Text style={styles.statValue}>{doctorReliabilityScore !== null ? `${Math.round(doctorReliabilityScore)}%` : '--'}</Text>
             </View>
           </View>
         </ScrollView>
