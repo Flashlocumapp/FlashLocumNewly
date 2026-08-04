@@ -28,6 +28,7 @@ import {
   Linking,
   AppState,
   AppStateStatus,
+  BackHandler,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-native';
@@ -3027,6 +3028,31 @@ export default function RequesterHomeScreen() {
     setTabBarVisible(sheetState === 'idle');
   }, [sheetState]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── Android back button — block dismiss during active search ─────────────────
+  useEffect(() => {
+    if (sheetState !== 'matching') return;
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      console.log('[BackHandler] Back pressed during matching state — showing cancel dialog');
+      Alert.alert(
+        'Cancel Search?',
+        'Your request is still being broadcast to nearby doctors. Are you sure you want to cancel?',
+        [
+          { text: 'Keep Searching', style: 'cancel' },
+          {
+            text: 'Cancel Request',
+            style: 'destructive',
+            onPress: () => handleCancelRequest(),
+          },
+        ],
+        { cancelable: true }
+      );
+      return true; // prevent default back navigation
+    });
+
+    return () => subscription.remove();
+  }, [sheetState, handleCancelRequest]);
+
   // ─── Standalone price fetch (used by both debounce and handleGoToSummary) ─────
   const fetchPreviewPrice = useCallback(async () => {
     console.log('[fetchPreviewPrice] Fetching price preview', { startTime, endTime, coverageType, environment, coverageLength });
@@ -4555,7 +4581,7 @@ export default function RequesterHomeScreen() {
       )}
 
       {/* ── MAP BACKDROP — above the sheet, covers only the map area above it ── */}
-      {(sheetState === 'searching' || sheetState === 'config' || sheetState === 'matching') && (
+      {(sheetState === 'searching' || sheetState === 'config') && (
         <Animated.View
           style={{
             position: 'absolute',
