@@ -25,8 +25,8 @@ interface MapProps {
 export const Map = ({
     markers = [],
     initialRegion = {
-        latitude: 37.78825,
-        longitude: -122.4324,
+        latitude: 6.5244,
+        longitude: 3.3792,
         latitudeDelta: 0.0922,
         longitudeDelta: 0.0421,
     },

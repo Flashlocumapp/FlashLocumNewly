@@ -7,6 +7,7 @@ import { supabase, getValidToken, setForegroundRefreshPromise, clearRefreshPromi
 import { AuthContextType, Profile } from '@/types';
 import { clearAll } from '@/utils/tabCache';
 import { triggerDispatchReset } from '@/contexts/DoctorDispatchContext';
+import { SUPABASE_URL } from '@/constants/api';
 
 // Module-level flag — resets on app restart, not on re-render
 let _requesterSnapshotFiredThisSession = false;
@@ -255,7 +256,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
         const { latitude, longitude } = pos.coords;
         console.log('[area-snapshot] Got location, posting snapshot', { lat: latitude, lng: longitude });
-        fetch('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/area-snapshot', {
+        fetch(`${SUPABASE_URL}/functions/v1/area-snapshot`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_id: user.id, role: 'requester', lat: latitude, lng: longitude }),

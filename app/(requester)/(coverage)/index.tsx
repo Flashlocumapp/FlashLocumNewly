@@ -22,9 +22,9 @@ import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { getCached, setCached, getPrefetchPromise } from '@/utils/tabCache';
+import { SUPABASE_URL } from '@/constants/api';
 
-const SUPABASE_URL = 'https://juilousufwlsiqdcgllu.supabase.co';
-const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
+const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
 const COVERAGE_CACHE_STALE_MS = 60_000;
 

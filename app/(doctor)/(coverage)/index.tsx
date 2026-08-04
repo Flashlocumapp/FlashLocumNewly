@@ -31,12 +31,11 @@ import { useTabData } from '@/hooks/useTabData';
 import { invalidate } from '@/utils/tabCache';
 import PollingManager from '@/utils/pollingManager';
 import { DoctorUpcomingCoverageCard, buildShiftPillText } from '@/components/DoctorUpcomingCoverageCard';
+import { SUPABASE_URL } from '@/constants/api';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-const SUPABASE_URL = 'https://juilousufwlsiqdcgllu.supabase.co';
 
 const COVERAGE_CACHE_STALE_MS = 60_000; // 60 seconds
 

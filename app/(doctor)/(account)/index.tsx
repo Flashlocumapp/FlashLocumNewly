@@ -22,6 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { getCached, setCached, invalidate } from '@/utils/tabCache';
+import { SUPABASE_URL } from '@/constants/api';
 import DeleteAccountModal from '@/components/DeleteAccountModal';
 import SignOutModal from '@/components/SignOutModal';
 
@@ -345,7 +346,7 @@ export default function DoctorAccountScreen() {
       // Step 1: Verify bank account before attempting sub-account creation
       console.log('[Doctor Account] Verifying bank account', { accountNumber: profile.account_number, bankCode: profile.bank_code });
       const verifyRes = await fetch(
-        'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/monnify-verify-account',
+        `${SUPABASE_URL}/functions/v1/monnify-verify-account`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -366,7 +367,7 @@ export default function DoctorAccountScreen() {
       // Step 2: Proceed to sub-account creation
       console.log('[Doctor Account] Calling create-subaccount edge function', { doctor_id: user!.id });
       const res = await fetchWithAuth(
-        'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/create-subaccount',
+        `${SUPABASE_URL}/functions/v1/create-subaccount`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -420,7 +421,7 @@ export default function DoctorAccountScreen() {
       await supabase.auth.refreshSession();
       console.log('[Doctor Account] Calling delete-account edge function');
       const res = await fetchWithAuth(
-        'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/delete-account',
+        `${SUPABASE_URL}/functions/v1/delete-account`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

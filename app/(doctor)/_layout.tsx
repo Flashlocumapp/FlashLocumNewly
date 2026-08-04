@@ -27,9 +27,9 @@ import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
 import { DoctorDispatchContext, CoverageSession, registerResetCallback } from '@/contexts/DoctorDispatchContext';
 import { getCached, setCached, invalidate, isStale, setPrefetchPromise, clearPrefetchPromise } from '@/utils/tabCache';
 import PollingManager from '../../utils/pollingManager';
+import { SUPABASE_URL } from '@/constants/api';
 
-
-const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
+const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
 // ─── Background tab prefetch ──────────────────────────────────────────────────
 async function prefetchTabData(userId: string) {
@@ -1976,13 +1976,13 @@ export default function DoctorLayout() {
                           {'₦'}{doctorRatingAmount.toLocaleString()}
                         </Text>
                         <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>
-                          {'₦'}{Math.round(doctorRatingAmount * 0.85).toLocaleString()} to be remitted to your account by 10PM today.
+                          {'₦'}{Math.round(doctorRatingAmount * 0.85).toLocaleString()} to be remitted to your account by 10:15PM today.
                         </Text>
                       </>
                     )}
                     {doctorRatingAmount === 0 && (
                       <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>
-                        To be remitted to your account by 10PM today.
+                        To be remitted to your account by 10:15PM today.
                       </Text>
                     )}
                   </View>

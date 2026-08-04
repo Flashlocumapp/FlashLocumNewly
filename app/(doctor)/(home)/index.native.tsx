@@ -39,8 +39,9 @@ import { getCached, setCached } from '@/utils/tabCache';
 import PollingManager from '../../../utils/pollingManager';
 import { buildShiftPillText, EnvironmentBadge } from '@/components/DoctorUpcomingCoverageCard';
 import { DOCTOR_CANCEL_REASONS } from '@/constants/Theme';
+import { SUPABASE_URL } from '@/constants/api';
 
-const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
+const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
 // Module-level flag — survives tab switches / screen remounts
 let _hasAnimatedToUser = false;

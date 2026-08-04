@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
+import { SUPABASE_URL } from '@/constants/api';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { getCached, setCached, invalidate } from '@/utils/tabCache';
 import DeleteAccountModal from '@/components/DeleteAccountModal';
@@ -241,7 +242,7 @@ export default function RequesterAccountScreen() {
       await supabase.auth.refreshSession();
       console.log('[Requester Account] Calling delete-account edge function');
       const res = await fetchWithAuth(
-        'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/delete-account',
+        `${SUPABASE_URL}/functions/v1/delete-account`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

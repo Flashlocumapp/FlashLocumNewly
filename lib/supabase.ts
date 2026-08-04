@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 import { AppState, Platform } from 'react-native';
+import { SUPABASE_URL } from '@/constants/api';
 
 const ExpoSecureStoreAdapter = Platform.OS === 'web'
   ? {
@@ -16,8 +17,7 @@ const ExpoSecureStoreAdapter = Platform.OS === 'web'
       removeItem: (key: string) => SecureStore.deleteItemAsync(key),
     };
 
-const SUPABASE_URL: string = Constants.expoConfig?.extra?.supabaseUrl ?? 'https://juilousufwlsiqdcgllu.supabase.co';
-const SUPABASE_ANON_KEY: string = Constants.expoConfig?.extra?.supabaseAnonKey ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp1aWxvdXN1Zndsc2lxZGNnbGx1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3MjE1MTEsImV4cCI6MjA5ODI5NzUxMX0.XOE0UTfZrfLp_giDlGkBsffhRBhVT1njaETm7vtmTxA';
+const SUPABASE_ANON_KEY: string = Constants.expoConfig?.extra?.supabaseAnonKey as string;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {

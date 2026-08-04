@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { setCached, isStale, setPrefetchPromise, clearPrefetchPromise } from '@/utils/tabCache';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { SUPABASE_URL } from '@/constants/api';
 
 const REQUESTER_TABS = [
   { name: '(home)',     icon: 'home'           as const, label: 'Home'     },
@@ -69,7 +70,7 @@ export default function RequesterLayout() {
             try {
               console.log('[RequesterLayout] Prefetching coverage sessions, key:', key);
               const res = await fetchWithAuth(
-                'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/get-coverage-sessions?role=requester&status=completed,cancelled,requester_paid',
+                `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=requester&status=completed,cancelled,requester_paid`,
                 { headers: { 'Content-Type': 'application/json' } }
               );
               if (!res.ok) return;
@@ -114,7 +115,7 @@ export default function RequesterLayout() {
           try {
             console.log('[RequesterLayout] Prefetching active session, key:', key);
             const res = await fetchWithAuth(
-              'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/get-active-session?role=requester',
+              `${SUPABASE_URL}/functions/v1/get-active-session?role=requester`,
               { headers: { 'Content-Type': 'application/json' } }
             );
             if (!res.ok) return;

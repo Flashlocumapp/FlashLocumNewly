@@ -50,8 +50,9 @@ import { getCached, setCached, invalidate } from '@/utils/tabCache';
 import PollingManager from '../../../utils/pollingManager';
 import { buildShiftPillText, EnvironmentBadge as SessionEnvBadge } from '@/components/sessionUtils';
 import { IconSymbol } from '@/components/IconSymbol';
+import { SUPABASE_URL } from '@/constants/api';
 
-const EDGE_BASE = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1';
+const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
 // POLL_INTERVAL: 8s in dev (Expo Go WebSocket unreliable), 10s in production.
 const POLL_INTERVAL = __DEV__ ? 8000 : 10000;
@@ -953,7 +954,7 @@ function RequesterPaymentCard({
     if (refreshing) return;
     setRefreshing(true);
     try {
-      const res = await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/refresh-payment', {
+      const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/refresh-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: session.id }),
@@ -2888,7 +2889,7 @@ export default function RequesterHomeScreen() {
         if (reqId) {
           try {
             console.log('[Requester] matchTimer calling withdraw-request for:', reqId);
-            await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
+            await fetchWithAuth(`${SUPABASE_URL}/functions/v1/withdraw-request`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ request_id: reqId }),
@@ -2929,7 +2930,7 @@ export default function RequesterHomeScreen() {
           if (reqId) {
             try {
               console.log('[Requester] REQUEST_EXPIRED calling withdraw-request for:', reqId);
-              await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
+              await fetchWithAuth(`${SUPABASE_URL}/functions/v1/withdraw-request`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ request_id: reqId }),
@@ -3193,7 +3194,7 @@ export default function RequesterHomeScreen() {
       const startDateISO = startDateObj.toISOString();
       const endDateISO = endDateObj.toISOString();
 
-      const res = await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/submit-request', {
+      const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/submit-request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3285,7 +3286,7 @@ export default function RequesterHomeScreen() {
     console.log('[Requester] handleEditRequest pressed', { activeRequestId });
     if (activeRequestId) {
       try {
-        const res = await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
+        const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/withdraw-request`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ request_id: activeRequestId }),
@@ -3338,7 +3339,7 @@ export default function RequesterHomeScreen() {
     // Immediately withdraw in background
     if (activeRequestId) {
       try {
-        const res = await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/withdraw-request', {
+        const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/withdraw-request`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ request_id: activeRequestId }),
@@ -3373,7 +3374,7 @@ export default function RequesterHomeScreen() {
     setShowCancelModal(false);
     if (activeRequestId && cancelWithdrawn) {
       try {
-        await fetchWithAuth('https://juilousufwlsiqdcgllu.supabase.co/functions/v1/rebroadcast-request', {
+        await fetchWithAuth(`${SUPABASE_URL}/functions/v1/rebroadcast-request`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ request_id: activeRequestId }),

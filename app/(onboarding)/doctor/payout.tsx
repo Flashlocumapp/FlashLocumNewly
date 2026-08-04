@@ -16,11 +16,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { SUPABASE_URL } from '@/constants/api';
 
 const MONNIFY_BANKS_URL =
-  'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/monnify-verify-account/banks';
+  `${SUPABASE_URL}/functions/v1/monnify-verify-account/banks`;
 const MONNIFY_VERIFY_URL =
-  'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/monnify-verify-account';
+  `${SUPABASE_URL}/functions/v1/monnify-verify-account`;
 
 // Verified Monnify split-payment subaccount whitelist (commercial banks only).
 // Fintechs (VFD, Kuda, OPay, PalmPay, Moniepoint, Carbon) are excluded until
