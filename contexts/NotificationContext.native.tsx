@@ -4,7 +4,13 @@ import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { IS_EXPO_GO } from '@/utils/expoGoGuard';
-// expo-av is available but no bundled sound asset exists — sound is skipped
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const _playedChimes = new Set<string>();
+const CHIME_STORAGE_KEY = '@flashlocum:played_chimes';
+AsyncStorage.getItem(CHIME_STORAGE_KEY).then(raw => {
+  if (raw) { try { (JSON.parse(raw) as string[]).forEach(k => _playedChimes.add(k)); } catch {} }
+}).catch(() => {});
 
 export interface InAppNotification {
   title: string;
@@ -22,6 +28,8 @@ export interface NotificationContextType {
   lastNotification: Record<string, unknown> | null;
   inAppNotification: InAppNotification | null;
   dismissInAppNotification: () => void;
+  playAcceptanceChime: (sessionId: string) => Promise<void>;
+  clearChimeForSession: (sessionId: string) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -49,6 +57,8 @@ function ExpoGoNotificationProvider({ children }: NotificationProviderProps) {
         lastNotification: null,
         inAppNotification: null,
         dismissInAppNotification: () => {},
+        playAcceptanceChime: async (_sessionId: string) => {},
+        clearChimeForSession: (_sessionId: string) => {},
       }}
     >
       {children}
@@ -202,6 +212,35 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
     OS.User.removeTag(key);
   }, []);
 
+  const playAcceptanceChime = useCallback(async (sessionId: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id ?? 'anon';
+    const key = `${userId}:${sessionId}`;
+    if (_playedChimes.has(key)) return;
+    _playedChimes.add(key);
+    try { await AsyncStorage.setItem(CHIME_STORAGE_KEY, JSON.stringify(Array.from(_playedChimes))); } catch {}
+    try {
+      const { Audio } = await import('expo-av');
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/sounds/acceptance_chime.mp3'),
+        { shouldPlay: true, volume: 1.0 }
+      );
+      sound.setOnPlaybackStatusUpdate(status => {
+        if (status.isLoaded && status.didJustFinish) { sound.unloadAsync().catch(() => {}); }
+      });
+    } catch (err) { console.warn('[NotificationContext] playAcceptanceChime error:', err); }
+  }, []);
+
+  const clearChimeForSession = useCallback((sessionId: string) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const userId = session?.user?.id ?? 'anon';
+      const key = `${userId}:${sessionId}`;
+      _playedChimes.delete(key);
+      AsyncStorage.setItem(CHIME_STORAGE_KEY, JSON.stringify(Array.from(_playedChimes))).catch(() => {});
+    }).catch(() => {});
+  }, []);
+
   return (
     <NotificationContext.Provider
       value={{
@@ -215,6 +254,8 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
         lastNotification: null,
         inAppNotification,
         dismissInAppNotification,
+        playAcceptanceChime,
+        clearChimeForSession,
       }}
     >
       {children}

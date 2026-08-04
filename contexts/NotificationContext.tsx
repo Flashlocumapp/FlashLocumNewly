@@ -24,6 +24,8 @@ interface NotificationContextType {
   lastNotification: Record<string, unknown> | null;
   inAppNotification: InAppNotification | null;
   dismissInAppNotification: () => void;
+  playAcceptanceChime: (sessionId: string) => Promise<void>;
+  clearChimeForSession: (sessionId: string) => void;
 }
 
 const NotificationContext = createContext<NotificationContextType>({
@@ -37,6 +39,8 @@ const NotificationContext = createContext<NotificationContextType>({
   lastNotification: null,
   inAppNotification: null,
   dismissInAppNotification: () => {},
+  playAcceptanceChime: async (_sessionId: string) => {},
+  clearChimeForSession: (_sessionId: string) => {},
 });
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
@@ -53,6 +57,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         lastNotification: null,
         inAppNotification: null,
         dismissInAppNotification: () => {},
+        playAcceptanceChime: async (_sessionId: string) => {},
+        clearChimeForSession: (_sessionId: string) => {},
       }}
     >
       {children}

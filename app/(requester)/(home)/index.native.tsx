@@ -1765,7 +1765,7 @@ export default function RequesterHomeScreen() {
   const insets = useSafeAreaInsets();
   const { setTabBarVisible } = useTabBarVisibility();
   const { user, profile } = useAuth();
-  const { requestPermission } = useNotifications();
+  const { requestPermission, playAcceptanceChime, clearChimeForSession } = useNotifications();
   const recentPlaceKey = user?.id ? `flashlocum_recent_place_${user.id}` : null;
   const accountStatus = profile?.verification_status ?? 'verified'; // default verified for requesters until explicitly set
   const isAccountBlocked = accountStatus === 'under_review' || accountStatus === 'suspended';
@@ -1886,6 +1886,7 @@ export default function RequesterHomeScreen() {
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         console.log('[Requester] requester-user channel SHIFT_CANCELLED received');
         PollingManager.stop('cancel');
+        if (activeSessionRef.current?.id) clearChimeForSession(activeSessionRef.current.id);
         setActiveSession(null);
         PollingManager.start('cancel-confirm', async () => {
           const sid = activeSessionRef.current?.id ?? '';
@@ -1913,6 +1914,10 @@ export default function RequesterHomeScreen() {
           if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
         }
         fetchActiveSessionRef.current();
+        if (AppState.currentState === 'active') {
+          const sid = (payload?.payload as { session_id?: string } | undefined)?.session_id;
+          if (sid) playAcceptanceChime(sid);
+        }
         transitionToRef.current('idle');
       })
       .subscribe((status) => {
@@ -1927,6 +1932,7 @@ export default function RequesterHomeScreen() {
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
         console.log('[Requester] requester channel SHIFT_CANCELLED received — doctor cancelled');
         PollingManager.stop('cancel');
+        if (activeSessionRef.current?.id) clearChimeForSession(activeSessionRef.current.id);
         setActiveSession(null);
         PollingManager.start('cancel-confirm', async () => {
           const sid = activeSessionRef.current?.id ?? '';

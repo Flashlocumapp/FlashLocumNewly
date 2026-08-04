@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotifications } from '@/contexts/NotificationContext';
 import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
 import { DoctorDispatchContext, CoverageSession, registerResetCallback } from '@/contexts/DoctorDispatchContext';
 import { getCached, setCached, invalidate, isStale, setPrefetchPromise, clearPrefetchPromise } from '@/utils/tabCache';
@@ -391,6 +392,7 @@ const TABS: DoctorTabItem[] = [
 export default function DoctorLayout() {
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
+  const { playAcceptanceChime, clearChimeForSession } = useNotifications();
   const router = useRouter();
   const _cachedOnline = getCached<boolean>(`doctor_is_online:${user?.id ?? ''}`);
   const [isOnline, setIsOnline] = useState<boolean>(_cachedOnline ?? false);
@@ -1127,6 +1129,7 @@ export default function DoctorLayout() {
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         PollingManager.stop('cancel');
+        if (activeSession?.id) clearChimeForSession(activeSession.id);
         setActiveSession(null);
         setActiveJobCount((prev) => Math.max(0, prev - 1));
         // Reconcile upcoming — removes any cancelled session from the list
@@ -1525,6 +1528,7 @@ export default function DoctorLayout() {
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
         console.log('[Doctor] user channel SHIFT_CANCELLED received', { sessionId });
+        if (activeSession?.id) clearChimeForSession(activeSession.id);
         setActiveSession(null);
         setActiveJobCount((prev) => Math.max(0, prev - 1));
         if (sessionId) {
@@ -1688,6 +1692,15 @@ export default function DoctorLayout() {
 
       // Fetch the newly created session
       await fetchActiveSession();
+
+      try {
+        const { data: newSess } = await supabase
+          .from('coverage_sessions')
+          .select('id')
+          .eq('request_id', req.id)
+          .maybeSingle();
+        if (newSess?.id) playAcceptanceChime(newSess.id);
+      } catch {}
 
       // Start accept poll to confirm session creation
       const acceptedReqId = req.id;
