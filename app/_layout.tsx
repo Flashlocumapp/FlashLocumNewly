@@ -1,6 +1,7 @@
 import 'react-native-url-polyfill/auto';
 import 'react-native-reanimated';
 import React, { useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -10,8 +11,9 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as SecureStore from 'expo-secure-store';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { NotificationProvider } from "@/contexts/NotificationContext";
+import { NotificationProvider, useNotifications } from "@/contexts/NotificationContext";
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import InAppNotificationBanner from '@/components/InAppNotificationBanner';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 
 // Prevent splash from auto-hiding before fonts + auth are ready
@@ -197,18 +199,26 @@ function NavigationGuard({ onNavigationReady }: { onNavigationReady: () => void 
 }
 
 function RootLayoutInner({ onNavigationReady }: { onNavigationReady: () => void }) {
+  const { inAppNotification, dismissInAppNotification } = useNotifications();
+
   return (
     <ThemeProvider value={DarkTheme}>
       <SafeAreaProvider>
         <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#111315' }}>
-          <NavigationGuard onNavigationReady={onNavigationReady} />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(onboarding)" />
-            <Stack.Screen name="(doctor)" />
-            <Stack.Screen name="(requester)" />
-          </Stack>
+          <View style={{ flex: 1 }}>
+            <NavigationGuard onNavigationReady={onNavigationReady} />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="(auth)" />
+              <Stack.Screen name="(onboarding)" />
+              <Stack.Screen name="(doctor)" />
+              <Stack.Screen name="(requester)" />
+            </Stack>
+            <InAppNotificationBanner
+              notification={inAppNotification}
+              onDismiss={dismissInAppNotification}
+            />
+          </View>
           <SystemBars style="auto" />
         </GestureHandlerRootView>
       </SafeAreaProvider>

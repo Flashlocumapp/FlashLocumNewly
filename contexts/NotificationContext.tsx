@@ -8,6 +8,11 @@
 
 import React, { createContext, useContext, ReactNode } from "react";
 
+export interface InAppNotification {
+  title: string;
+  message: string;
+}
+
 interface NotificationContextType {
   hasPermission: boolean;
   permissionDenied: boolean;
@@ -17,6 +22,8 @@ interface NotificationContextType {
   sendTag: (key: string, value: string) => void;
   deleteTag: (key: string) => void;
   lastNotification: Record<string, unknown> | null;
+  inAppNotification: InAppNotification | null;
+  dismissInAppNotification: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType>({
@@ -28,6 +35,8 @@ const NotificationContext = createContext<NotificationContextType>({
   sendTag: () => {},
   deleteTag: () => {},
   lastNotification: null,
+  inAppNotification: null,
+  dismissInAppNotification: () => {},
 });
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
@@ -42,6 +51,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         sendTag: () => {},
         deleteTag: () => {},
         lastNotification: null,
+        inAppNotification: null,
+        dismissInAppNotification: () => {},
       }}
     >
       {children}

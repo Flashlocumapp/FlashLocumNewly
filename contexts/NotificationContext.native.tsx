@@ -4,6 +4,12 @@ import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { IS_EXPO_GO } from '@/utils/expoGoGuard';
+// expo-av is available but no bundled sound asset exists — sound is skipped
+
+export interface InAppNotification {
+  title: string;
+  message: string;
+}
 
 export interface NotificationContextType {
   hasPermission: boolean;
@@ -14,11 +20,15 @@ export interface NotificationContextType {
   sendTag: (key: string, value: string) => void;
   deleteTag: (key: string) => void;
   lastNotification: Record<string, unknown> | null;
+  inAppNotification: InAppNotification | null;
+  dismissInAppNotification: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 const PERMISSION_PROMPTED_KEY = 'onesignal_permission_prompted';
+
+const IN_APP_NOTIFICATION_TYPES = ['SHIFT_REMINDER', 'PAYMENT_OVERDUE'] as const;
 
 interface NotificationProviderProps {
   children: ReactNode;
@@ -37,6 +47,8 @@ function ExpoGoNotificationProvider({ children }: NotificationProviderProps) {
         sendTag: () => {},
         deleteTag: () => {},
         lastNotification: null,
+        inAppNotification: null,
+        dismissInAppNotification: () => {},
       }}
     >
       {children}
@@ -54,6 +66,18 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
   const [hasPermission, setHasPermission] = useState(false);
   const [loading, setLoading] = useState(true);
   const [prompted, setPrompted] = useState(false);
+  const [inAppNotification, setInAppNotification] = useState<InAppNotification | null>(null);
+
+  const dismissInAppNotification = useCallback(() => {
+    console.log('[InAppBanner] Dismissed');
+    setInAppNotification(null);
+  }, []);
+
+  const playNotificationSound = useCallback(() => {
+    // No bundled notification sound asset — sound skipped.
+    // To enable: add a .mp3 to assets/sounds/ and use expo-av Audio.Sound.createAsync().
+    console.log('[InAppBanner] Sound playback skipped (no asset bundled)');
+  }, []);
 
   useEffect(() => {
     const appId: string = Constants.expoConfig?.extra?.oneSignalAppId ?? '';
@@ -91,9 +115,30 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
     };
     OneSignal.Notifications.addEventListener('permissionChange', permissionChangeHandler);
 
-    const foregroundHandler = (event: { preventDefault: () => void; notification: { title?: string } }) => {
+    const foregroundHandler = (event: {
+      preventDefault: () => void;
+      notification: {
+        title?: string;
+        body?: string;
+        additionalData?: Record<string, unknown>;
+      };
+    }) => {
+      // Always suppress the OS banner
       event.preventDefault();
-      console.log('[OneSignal] Foreground notification suppressed:', event.notification.title);
+
+      const notifType = event.notification.additionalData?.type as string | undefined;
+      const title = event.notification.title ?? '';
+      const message = event.notification.body ?? '';
+
+      console.log('[OneSignal] Foreground notification received type=', notifType, 'title=', title);
+
+      if (notifType && (IN_APP_NOTIFICATION_TYPES as readonly string[]).includes(notifType)) {
+        console.log('[InAppBanner] Showing in-app banner for type=', notifType);
+        setInAppNotification({ title, message });
+        playNotificationSound();
+      } else {
+        console.log('[OneSignal] Foreground notification suppressed (type not in allowlist):', title);
+      }
     };
     OneSignal.Notifications.addEventListener('foregroundWillDisplay', foregroundHandler as any);
 
@@ -130,7 +175,7 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
       OneSignal.Notifications.removeEventListener('click', clickHandler as any);
       OneSignal.User.pushSubscription.removeEventListener('change', subscriptionChangeHandler as any);
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const permissionDenied = prompted && !hasPermission;
 
@@ -168,6 +213,8 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
         sendTag,
         deleteTag,
         lastNotification: null,
+        inAppNotification,
+        dismissInAppNotification,
       }}
     >
       {children}
