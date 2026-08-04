@@ -322,7 +322,7 @@ export default function DoctorHomeScreen() {
   // null means profile not yet loaded — show nothing
   const isProfileLoading = verificationStatus === null;
 
-  const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcomingSessions, criticalDataReady } = useDoctorDispatch();
+  const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcomingSessions, criticalDataReady, resumeReady } = useDoctorDispatch();
 
   // ─── Notification permission modal ──────────────────────────────────────────
   const [showNotifModal, setShowNotifModal] = useState(false);
@@ -944,6 +944,17 @@ export default function DoctorHomeScreen() {
         onContinue={handleNotifContinue}
         onDismiss={handleNotifDismiss}
       />
+
+      {/* ── RESUME OVERLAY — covers home while data revalidates after long background ── */}
+      {!resumeReady && (
+        <View
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            backgroundColor: '#111315',
+            zIndex: 9999,
+          }}
+        />
+      )}
     </View>
   );
 }

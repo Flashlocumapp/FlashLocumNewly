@@ -395,6 +395,7 @@ export default function DoctorLayout() {
   const _cachedOnline = getCached<boolean>(`doctor_is_online:${user?.id ?? ''}`);
   const [isOnline, setIsOnline] = useState<boolean>(_cachedOnline ?? false);
   const [criticalDataReady, setCriticalDataReady] = useState(false);
+  const [resumeReady, setResumeReady] = useState(true); // true = home visible, false = showing resume overlay
   const [doctorScreenState, setDoctorScreenState] = useState<DoctorScreenState>('idle');
   const [requestQueue, setRequestQueue] = useState<DispatchRequest[]>([]);
   const [confirmedRequest, setConfirmedRequest] = useState<DispatchRequest | null>(null);
@@ -1574,53 +1575,58 @@ export default function DoctorLayout() {
 
         if (doctorBackgroundedAtRef.current > 0 && elapsed > FIVE_MINUTES) {
           console.log('[AppState] active after', Math.round(elapsed / 1000), 's — running doctor background recovery');
-          // Channels auto-reconnect via Supabase realtime. Recovery is handled by
-          // fetchActiveSession() (session channel SUBSCRIBED) and forceSync() (dispatch poll).
-
-          // 2. Session reconciliation + paid-state recovery
-          await fetchActiveSession();
-          // Check if session is already in a paid state — fetch directly so we have fresh data
+          setResumeReady(false); // show the resume overlay immediately
           try {
-            const snapRes = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=doctor`, {});
-            if (snapRes.ok) {
-              const snapData = await snapRes.json();
-              const snap = snapData?.session ?? null;
-              if (snap && (snap.status === 'requester_paid' || snap.status === 'settled')) {
-                console.log('[Doctor] AppState active — session in paid state:', snap.status, '— triggering rating overlay');
-                void maybeShowDoctorRating(snap.id, snap.hospital_name ?? '', snap.total_cost ?? 0);
-              }
-              // settled is fully terminal — clear activeSessionId to stop the subscription and payment poll
-              if (snap && snap.status === 'settled') {
-                setActiveSessionId(null);
-              }
-            }
-          } catch {
-            // non-fatal
-          }
+            // Channels auto-reconnect via Supabase realtime. Recovery is handled by
+            // fetchActiveSession() (session channel SUBSCRIBED) and forceSync() (dispatch poll).
 
-          // Rating recovery — re-fetch own scores in case RATING_UPDATED broadcast was missed
-          if (user?.id) {
+            // 2. Session reconciliation + paid-state recovery
+            await fetchActiveSession();
+            // Check if session is already in a paid state — fetch directly so we have fresh data
             try {
-              const { data: profileSnap } = await supabase
-                .from('doctor_profiles')
-                .select('rating, reliability')
-                .eq('id', user.id)
-                .single();
-              if (profileSnap) {
-                if (profileSnap.rating !== null && profileSnap.rating !== undefined) {
-                  setDoctorRatingScore(Number(profileSnap.rating));
+              const snapRes = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=doctor`, {});
+              if (snapRes.ok) {
+                const snapData = await snapRes.json();
+                const snap = snapData?.session ?? null;
+                if (snap && (snap.status === 'requester_paid' || snap.status === 'settled')) {
+                  console.log('[Doctor] AppState active — session in paid state:', snap.status, '— triggering rating overlay');
+                  void maybeShowDoctorRating(snap.id, snap.hospital_name ?? '', snap.total_cost ?? 0);
                 }
-                if (profileSnap.reliability !== null && profileSnap.reliability !== undefined) {
-                  setDoctorReliabilityScore(Number(profileSnap.reliability));
+                // settled is fully terminal — clear activeSessionId to stop the subscription and payment poll
+                if (snap && snap.status === 'settled') {
+                  setActiveSessionId(null);
                 }
               }
             } catch {
               // non-fatal
             }
-          }
 
-          // 4. Dispatch reconciliation
-          if (user) await forceSync();
+            // Rating recovery — re-fetch own scores in case RATING_UPDATED broadcast was missed
+            if (user?.id) {
+              try {
+                const { data: profileSnap } = await supabase
+                  .from('doctor_profiles')
+                  .select('rating, reliability')
+                  .eq('id', user.id)
+                  .single();
+                if (profileSnap) {
+                  if (profileSnap.rating !== null && profileSnap.rating !== undefined) {
+                    setDoctorRatingScore(Number(profileSnap.rating));
+                  }
+                  if (profileSnap.reliability !== null && profileSnap.reliability !== undefined) {
+                    setDoctorReliabilityScore(Number(profileSnap.reliability));
+                  }
+                }
+              } catch {
+                // non-fatal
+              }
+            }
+
+            // 4. Dispatch reconciliation
+            if (user) await forceSync();
+          } finally {
+            setResumeReady(true); // dismiss the overlay — home data is fresh
+          }
         } else {
           // Short foreground — existing behaviour
           console.log('[AppState] active — syncing session');
@@ -1832,7 +1838,8 @@ export default function DoctorLayout() {
     setUpcomingSessions,
     reconcileUpcomingSessions: reconcileUpcoming,
     criticalDataReady,
-  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcoming, criticalDataReady]);
+    resumeReady,
+  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcoming, criticalDataReady, resumeReady]);
 
   return (
     <DoctorDispatchContext.Provider value={contextValue}>

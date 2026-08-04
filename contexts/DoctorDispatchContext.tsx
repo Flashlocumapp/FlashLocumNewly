@@ -105,6 +105,7 @@ type DoctorDispatchCtx = {
   setUpcomingSessions: (s: CoverageSession[]) => void;
   reconcileUpcomingSessions: () => Promise<void>;
   criticalDataReady: boolean;
+  resumeReady: boolean;
 };
 
 export const DoctorDispatchContext = createContext<DoctorDispatchCtx>({
@@ -126,6 +127,7 @@ export const DoctorDispatchContext = createContext<DoctorDispatchCtx>({
   setUpcomingSessions: () => {},
   reconcileUpcomingSessions: async () => {},
   criticalDataReady: false,
+  resumeReady: true,
 });
 
 export const useDoctorDispatch = () => useContext(DoctorDispatchContext);
