@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Newly",
-    "slug": "Newly",
+    "name": "FlashLocum",
+    "slug": "flashlocum",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -35,12 +35,13 @@
       "expo-web-browser",
       "expo-secure-store"
     ],
-    "scheme": "natively",
+    "scheme": "flashlocum",
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "backendUrl": "https://bm7mn4rkap7zw8ax5ddfbmfaz9q8m3ru.app.specular.dev"
     }
   }
 }
