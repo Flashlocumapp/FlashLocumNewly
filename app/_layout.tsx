@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { ThemeProvider, DarkTheme } from '@react-navigation/native';
 import { SystemBars } from 'react-native-edge-to-edge';
 import * as SplashScreen from 'expo-splash-screen';
@@ -260,14 +261,16 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <SplashContext.Provider value={{ signalScreenReady: () => setScreenReady(true), splashDismissed }}>
-      <DevErrorBoundary>
-        <AuthProvider>
-          <NotificationProvider>
-            <RootLayoutInner onNavigationReady={() => setNavigationReady(true)} />
-          </NotificationProvider>
-        </AuthProvider>
-      </DevErrorBoundary>
-    </SplashContext.Provider>
+    <KeyboardProvider>
+      <SplashContext.Provider value={{ signalScreenReady: () => setScreenReady(true), splashDismissed }}>
+        <DevErrorBoundary>
+          <AuthProvider>
+            <NotificationProvider>
+              <RootLayoutInner onNavigationReady={() => setNavigationReady(true)} />
+            </NotificationProvider>
+          </AuthProvider>
+        </DevErrorBoundary>
+      </SplashContext.Provider>
+    </KeyboardProvider>
   );
 }

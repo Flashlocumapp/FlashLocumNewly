@@ -3,14 +3,13 @@ import {
   View,
   Text,
   TextInput,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   Modal,
   TouchableOpacity,
   StyleSheet,
+  unstable_batchedUpdates,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useSplash } from '@/app/_layout';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -57,14 +56,16 @@ export default function DoctorBasicProfile() {
           .eq('id', user.id)
           .single();
         if (!data) return;
-        if (data.phone) {
-          console.log('[DoctorBasicProfile] Pre-filling phone from profile');
-          setPhone(data.phone);
-        }
-        if (data.gender === 'male' || data.gender === 'female') {
-          console.log('[DoctorBasicProfile] Pre-filling gender from profile:', data.gender);
-          setGender(data.gender);
-        }
+        unstable_batchedUpdates(() => {
+          if (data.phone) {
+            console.log('[DoctorBasicProfile] Pre-filling phone from profile');
+            setPhone(data.phone);
+          }
+          if (data.gender === 'male' || data.gender === 'female') {
+            console.log('[DoctorBasicProfile] Pre-filling gender from profile:', data.gender);
+            setGender(data.gender);
+          }
+        });
       } catch {
         // silently ignore
       }
@@ -160,10 +161,7 @@ export default function DoctorBasicProfile() {
     : 'Select...';
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior="padding"
-    >
+    <View style={styles.container}>
       {/* Header */}
       <View style={[styles.headerBar, { paddingTop: insets.top + 12 }]}>
         <AnimatedPressable
@@ -179,7 +177,7 @@ export default function DoctorBasicProfile() {
         <Text style={styles.headerLabel}>COVER & EARN · STEP 1 OF 3</Text>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         style={styles.flex}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         keyboardShouldPersistTaps="handled"
@@ -240,7 +238,7 @@ export default function DoctorBasicProfile() {
             <Text style={styles.submitLabel}>Continue</Text>
           )}
         </AnimatedPressable>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* Gender Modal */}
       <Modal
@@ -276,7 +274,7 @@ export default function DoctorBasicProfile() {
           </View>
         </TouchableOpacity>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

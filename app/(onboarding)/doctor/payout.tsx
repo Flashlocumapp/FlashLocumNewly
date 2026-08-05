@@ -4,13 +4,13 @@ import {
   Text,
   TextInput,
   ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   Modal,
   TouchableOpacity,
   StyleSheet,
+  unstable_batchedUpdates,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
@@ -140,25 +140,27 @@ export default function DoctorPayout() {
           return;
         }
 
-        if (data.account_number) {
-          console.log('[Payout] Pre-filling account number from saved profile');
-          setAccountNumber(String(data.account_number));
-        }
+        unstable_batchedUpdates(() => {
+          if (data.account_number) {
+            console.log('[Payout] Pre-filling account number from saved profile');
+            setAccountNumber(String(data.account_number));
+          }
 
-        if (data.bank_code && data.bank_name) {
-          const match = FALLBACK_BANKS.find(b => b.code === data.bank_code);
-          const bankToSet: Bank = match ?? { name: String(data.bank_name), code: String(data.bank_code) };
-          console.log(`[Payout] Pre-filling bank from saved profile: ${bankToSet.name}`);
-          setSelectedBank(bankToSet);
-        }
+          if (data.bank_code && data.bank_name) {
+            const match = FALLBACK_BANKS.find(b => b.code === data.bank_code);
+            const bankToSet: Bank = match ?? { name: String(data.bank_name), code: String(data.bank_code) };
+            console.log(`[Payout] Pre-filling bank from saved profile: ${bankToSet.name}`);
+            setSelectedBank(bankToSet);
+          }
 
-        // Set account name directly — skip re-lookup since it was already verified.
-        // The useEffect on [selectedBank, accountNumber] will fire and trigger a
-        // fresh lookup anyway (correct behaviour per spec).
-        if (data.account_name) {
-          console.log('[Payout] Pre-filling account name from saved profile');
-          setAccountName(String(data.account_name));
-        }
+          // Set account name directly — skip re-lookup since it was already verified.
+          // The useEffect on [selectedBank, accountNumber] will fire and trigger a
+          // fresh lookup anyway (correct behaviour per spec).
+          if (data.account_name) {
+            console.log('[Payout] Pre-filling account name from saved profile');
+            setAccountName(String(data.account_name));
+          }
+        });
       } catch (err) {
         console.log('[Payout] Error loading saved bank details:', err);
       } finally {
@@ -200,7 +202,9 @@ export default function DoctorPayout() {
                 MONNIFY_SPLIT_PAYMENT_WHITELIST.has(b.code)
             );
           if (normalised.length > 0) {
-            setBanks(normalised);
+            unstable_batchedUpdates(() => {
+              setBanks(normalised);
+            });
             console.log(`[Payout] Banks loaded: ${normalised.length} banks`);
           } else {
             console.log('[Payout] Bank list load failed (no whitelisted banks), using fallback');
@@ -323,9 +327,7 @@ export default function DoctorPayout() {
   );
 
   useEffect(() => {
-    if (selectedBank && accountNumber.length === 10) {
-      lookupAccountName(selectedBank, accountNumber);
-    } else {
+    if (!selectedBank || accountNumber.length !== 10) {
       // Cancel any in-flight lookup when inputs are cleared
       if (lookupAbortRef.current) {
         lookupAbortRef.current.abort();
@@ -333,7 +335,12 @@ export default function DoctorPayout() {
       }
       setAccountName('');
       setAccountNameError('');
+      return;
     }
+    const timer = setTimeout(() => {
+      lookupAccountName(selectedBank, accountNumber);
+    }, 300);
+    return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBank, accountNumber]);
 
@@ -416,10 +423,7 @@ export default function DoctorPayout() {
   const accountNamePlaceholder = 'Pick a bank and enter your 10-digit account';
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior="padding"
-    >
+    <View style={styles.container}>
       {/* Header */}
       <View style={[styles.headerBar, { paddingTop: insets.top + 12 }]}>
         <AnimatedPressable
@@ -435,7 +439,7 @@ export default function DoctorPayout() {
         <Text style={styles.headerLabel}>COVER & EARN · STEP 3 OF 3</Text>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         style={styles.flex}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         keyboardShouldPersistTaps="handled"
@@ -532,7 +536,7 @@ export default function DoctorPayout() {
             <Text style={styles.submitLabel}>Submit</Text>
           )}
         </AnimatedPressable>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* Bank selection modal */}
       <Modal
@@ -576,7 +580,7 @@ export default function DoctorPayout() {
           </View>
         </TouchableOpacity>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

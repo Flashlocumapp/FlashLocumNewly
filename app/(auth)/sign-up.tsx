@@ -3,12 +3,10 @@ import {
   View,
   Text,
   TextInput,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import Svg, { Path } from 'react-native-svg';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -261,10 +259,7 @@ export default function SignUpScreen() {
   const { fullName, email, password, showPassword, error } = form;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior="padding"
-    >
+    <View style={styles.flex}>
       {/* Custom header bar */}
       <View style={[styles.headerBar, { paddingTop: insets.top + 16 }]}>
         <AnimatedPressable
@@ -278,7 +273,7 @@ export default function SignUpScreen() {
         <Text style={styles.headerLabel}>{roleLabel}</Text>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         style={styles.flex}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         keyboardShouldPersistTaps="handled"
@@ -429,8 +424,8 @@ export default function SignUpScreen() {
             </Text>
           </View>
         ) : null}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 

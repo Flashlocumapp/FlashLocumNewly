@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
   StyleSheet,
+  InteractionManager,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
@@ -25,7 +25,17 @@ export default function ForgotPasswordScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const emailRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      emailRef.current?.focus();
+    });
+    return () => task.cancel();
+  }, []);
+
   const handleBack = () => {
+    console.log('[forgot-password] Back pressed');
     router.back();
   };
 
@@ -36,6 +46,7 @@ export default function ForgotPasswordScreen() {
       return;
     }
 
+    console.log('[forgot-password] Send reset code pressed', { email: email.trim() });
     setLoading(true);
     setError('');
 
@@ -55,10 +66,7 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { paddingTop: insets.top }]}
-      behavior="padding"
-    >
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.headerBar}>
         <AnimatedPressable
@@ -74,8 +82,12 @@ export default function ForgotPasswordScreen() {
         <Text style={styles.headerLabel}>{roleLabel}</Text>
       </View>
 
-      {/* Content */}
-      <View style={[styles.content, { paddingBottom: insets.bottom + 40 }]}>
+      <KeyboardAwareScrollView
+        style={styles.flex}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.heading}>Reset your password</Text>
         <Text style={styles.subtitle}>
           Enter the email address linked to your account. We'll send you a 6-digit reset code.
@@ -85,6 +97,7 @@ export default function ForgotPasswordScreen() {
         <Text style={styles.fieldLabel}>Email</Text>
         <View style={styles.inputContainer}>
           <TextInput
+            ref={emailRef}
             style={styles.input}
             placeholder="name@mail.com"
             placeholderTextColor="#ADADAD"
@@ -98,7 +111,6 @@ export default function ForgotPasswordScreen() {
             autoCorrect={false}
             returnKeyType="done"
             onSubmitEditing={handleSend}
-            autoFocus
           />
         </View>
 
@@ -120,8 +132,8 @@ export default function ForgotPasswordScreen() {
         {error ? (
           <Text style={styles.errorText}>{error}</Text>
         ) : null}
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 
@@ -129,6 +141,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F7F7F5',
+  },
+  flex: {
+    flex: 1,
   },
   headerBar: {
     flexDirection: 'row',
@@ -162,7 +177,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   content: {
-    flex: 1,
     paddingHorizontal: 28,
     paddingTop: 16,
   },

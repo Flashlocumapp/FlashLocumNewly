@@ -3,13 +3,13 @@ import {
   View,
   Text,
   TextInput,
-  ScrollView,
   ActivityIndicator,
   Image,
   StyleSheet,
-  Platform,
   ImageSourcePropType,
+  unstable_batchedUpdates,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -117,22 +117,24 @@ export default function DoctorCredentials() {
           .eq('id', user.id)
           .single();
         if (!data) return;
-        if (data.mdcn_number) {
-          console.log('[Credentials] Pre-filling MDCN number from profile');
-          setMdcnNumber(data.mdcn_number);
-        }
-        if (data.nysc_cert_url) {
-          console.log('[Credentials] NYSC cert previously uploaded');
-          setNyscAlreadyUploaded(true);
-        }
-        if (data.medical_licence_url) {
-          console.log('[Credentials] Medical licence previously uploaded');
-          setLicenceAlreadyUploaded(true);
-        }
-        if (data.selfie_url) {
-          console.log('[Credentials] Selfie previously uploaded');
-          setSelfieAlreadyUploaded(true);
-        }
+        unstable_batchedUpdates(() => {
+          if (data.mdcn_number) {
+            console.log('[Credentials] Pre-filling MDCN number from profile');
+            setMdcnNumber(data.mdcn_number);
+          }
+          if (data.nysc_cert_url) {
+            console.log('[Credentials] NYSC cert previously uploaded');
+            setNyscAlreadyUploaded(true);
+          }
+          if (data.medical_licence_url) {
+            console.log('[Credentials] Medical licence previously uploaded');
+            setLicenceAlreadyUploaded(true);
+          }
+          if (data.selfie_url) {
+            console.log('[Credentials] Selfie previously uploaded');
+            setSelfieAlreadyUploaded(true);
+          }
+        });
       } catch {
         // silently ignore
       }
@@ -342,7 +344,7 @@ export default function DoctorCredentials() {
         <Text style={styles.headerLabel}>COVER & EARN · STEP 2 OF 3</Text>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         style={styles.flex}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         keyboardShouldPersistTaps="handled"
@@ -487,7 +489,7 @@ export default function DoctorCredentials() {
             <Text style={styles.submitLabel}>Continue</Text>
           )}
         </AnimatedPressable>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }
