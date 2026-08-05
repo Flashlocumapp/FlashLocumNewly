@@ -13,7 +13,7 @@ const BG_TRANSITION_DURATION = 400;
 export default function IntroScreen() {
   const router = useRouter();
   const { dest } = useLocalSearchParams<{ dest?: string }>();
-  const { signalScreenReady } = useSplash();
+  const { signalScreenReady, splashDismissed } = useSplash();
   const splashSignalledRef = useRef(false);
 
   useFocusEffect(
@@ -43,6 +43,8 @@ export default function IntroScreen() {
   };
 
   useEffect(() => {
+    if (!splashDismissed) return; // wait — splash still visible
+
     unmountedRef.current = false;
 
     const ALLOWED_DESTINATIONS = [
@@ -127,11 +129,11 @@ export default function IntroScreen() {
       timeoutsRef.current.forEach(clearTimeout);
       timeoutsRef.current = [];
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [splashDismissed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const backgroundColor = bgColor.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#0D0D0D', '#FFFFFF'],
+    outputRange: ['#111315', '#FFFFFF'],
   });
 
   return (

@@ -22,8 +22,12 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const LAST_PATHWAY_KEY = 'flashlocum_last_pathway';
 
-export const SplashContext = React.createContext<{ signalScreenReady: () => void }>({
+export const SplashContext = React.createContext<{
+  signalScreenReady: () => void;
+  splashDismissed: boolean;
+}>({
   signalScreenReady: () => {},
+  splashDismissed: false,
 });
 export function useSplash() { return React.useContext(SplashContext); }
 
@@ -198,11 +202,20 @@ function NavigationGuard({ onNavigationReady }: { onNavigationReady: () => void 
   return null;
 }
 
+const FlashLocumTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: '#111315',
+    card: '#111315',
+  },
+};
+
 function RootLayoutInner({ onNavigationReady }: { onNavigationReady: () => void }) {
   const { inAppNotification, dismissInAppNotification } = useNotifications();
 
   return (
-    <ThemeProvider value={DarkTheme}>
+    <ThemeProvider value={FlashLocumTheme}>
       <SafeAreaProvider>
         <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#111315' }}>
           <View style={{ flex: 1 }}>
@@ -235,25 +248,29 @@ export default function RootLayout() {
   });
   const [navigationReady, setNavigationReady] = useState(false);
   const [screenReady, setScreenReady] = useState(false);
+  const [splashDismissed, setSplashDismissed] = useState(false);
 
   // Hide splash only when ALL THREE conditions are met: fonts loaded, navigation ready, screen ready.
   useEffect(() => {
     if (!fontsLoaded || !navigationReady || !screenReady) return;
     const elapsed = Date.now() - LAUNCH_TIME;
+    const hide = async () => {
+      await SplashScreen.hideAsync().catch(() => {});
+      setSplashDismissed(true);
+    };
     if (elapsed >= 2000) {
-      SplashScreen.hideAsync().catch(() => {});
-    } else {
-      const timer = setTimeout(() => {
-        SplashScreen.hideAsync().catch(() => {});
-      }, 2000 - elapsed);
-      return () => clearTimeout(timer);
+      hide();
+      return;
     }
+    const timer = setTimeout(hide, 2000 - elapsed);
+    return () => clearTimeout(timer);
   }, [fontsLoaded, navigationReady, screenReady]);
 
   // Safety-net: hide after 8s in case NavigationGuard never fires (e.g. error path).
   useEffect(() => {
-    const timer = setTimeout(() => {
-      SplashScreen.hideAsync().catch(() => {});
+    const timer = setTimeout(async () => {
+      await SplashScreen.hideAsync().catch(() => {});
+      setSplashDismissed(true);
     }, 8000);
     return () => clearTimeout(timer);
   }, []);
@@ -261,7 +278,7 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <SplashContext.Provider value={{ signalScreenReady: () => setScreenReady(true) }}>
+    <SplashContext.Provider value={{ signalScreenReady: () => setScreenReady(true), splashDismissed }}>
       <DevErrorBoundary>
         <AuthProvider>
           <NotificationProvider>
