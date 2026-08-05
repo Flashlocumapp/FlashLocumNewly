@@ -22,7 +22,8 @@
         ],
         "NSCameraUsageDescription": "FlashLocum needs camera access to let you upload your credentials and profile photo.",
         "NSPhotoLibraryUsageDescription": "FlashLocum needs photo library access to let you select your credentials and profile photo.",
-        "NSPhotoLibraryAddUsageDescription": "FlashLocum needs permission to save photos to your library."
+        "NSPhotoLibraryAddUsageDescription": "FlashLocum needs permission to save photos to your library.",
+        "NSLocationWhenInUseUsageDescription": "FlashLocum needs your location to show you nearby doctors and allow doctors to find you."
       },
       "config": {
         "googleMapsApiKey": "AIzaSyBF\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
@@ -33,7 +34,10 @@
       "minSdkVersion": 24,
       "permissions": [
         "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "READ_MEDIA_IMAGES",
         "android.permission.ACCESS_FINE_LOCATION",
+        "ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.ACCESS_WIFI_STATE"
