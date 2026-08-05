@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/flashlocum-logo.png",
+      "image": "./assets/images/splash-text.png",
       "resizeMode": "contain",
       "backgroundColor": "#111315"
     },

@@ -21,6 +21,7 @@ export default function IntroScreen() {
       if (!splashSignalledRef.current) {
         splashSignalledRef.current = true;
         signalScreenReady();
+        console.log('[IntroScreen] signalScreenReady called');
       }
     }, [signalScreenReady])
   );
@@ -28,10 +29,12 @@ export default function IntroScreen() {
   const unmountedRef = useRef(false);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // Use state instead of setNativeProps — reliable on all platforms and architectures
-  const [displayedText, setDisplayedText] = useState('');
-
-  const contentOpacity = useRef(new Animated.Value(0)).current;
+  // Initial state: show "FlashLocum" fully so the first frame after splash dismissal
+  // matches the native splash image exactly — seamless handoff.
+  const [displayedText, setDisplayedText] = useState('FlashLocum');
+  // Track whether we are in the typewriter phase (ball should be visible)
+  const [typewriterActive, setTypewriterActive] = useState(false);
+  const contentOpacity = useRef(new Animated.Value(1)).current;
   const bgColor = useRef(new Animated.Value(0)).current;
 
   const addTimeout = (fn: () => void, ms: number) => {
@@ -43,8 +46,9 @@ export default function IntroScreen() {
   };
 
   useEffect(() => {
-    if (!splashDismissed) return; // wait — splash still visible
+    if (!splashDismissed) return; // hold until native splash has fully dismissed
 
+    console.log('[IntroScreen] splashDismissed=true, starting intro animation');
     unmountedRef.current = false;
 
     const ALLOWED_DESTINATIONS = [
@@ -64,16 +68,14 @@ export default function IntroScreen() {
       const phrase = PHRASES[index];
       const isLast = index === PHRASES.length - 1;
 
-      // Step 1: Reset text and ensure opacity is 0 before starting
       setDisplayedText('');
       contentOpacity.setValue(0);
+      setTypewriterActive(true);
 
-      // Step 2: Pre-load the first character so text is ready before fade-in
+      // Pre-load the first character so text is ready before fade-in
       setDisplayedText(phrase.slice(0, 1));
 
-      // Small delay to let React commit the first character before fading in
       addTimeout(() => {
-        // Step 3: Fade in
         Animated.timing(contentOpacity, {
           toValue: 1,
           duration: 150,
@@ -81,7 +83,6 @@ export default function IntroScreen() {
         }).start(() => {
           if (unmountedRef.current) return;
 
-          // Step 4: Type remaining characters
           let charIndex = 1;
           const typeNext = () => {
             if (unmountedRef.current) return;
@@ -91,7 +92,6 @@ export default function IntroScreen() {
             if (charIndex < phrase.length) {
               addTimeout(typeNext, CHAR_DELAY);
             } else {
-              // Step 5: Hold then fade out
               addTimeout(() => {
                 Animated.timing(contentOpacity, {
                   toValue: 0,
@@ -106,6 +106,7 @@ export default function IntroScreen() {
                       useNativeDriver: false,
                     }).start(() => {
                       if (!unmountedRef.current) {
+                        console.log('[IntroScreen] Animation complete, navigating to', destination);
                         router.replace(destination as any);
                       }
                     });
@@ -119,10 +120,20 @@ export default function IntroScreen() {
 
           addTimeout(typeNext, CHAR_DELAY);
         });
-      }, 16); // one frame delay so React commits the first character
+      }, 16);
     };
 
-    runPhrase(0);
+    // Fade out the static "FlashLocum" first, then begin the typewriter
+    Animated.timing(contentOpacity, {
+      toValue: 0,
+      duration: FADE_OUT_DURATION,
+      useNativeDriver: true,
+    }).start(() => {
+      if (!unmountedRef.current) {
+        console.log('[IntroScreen] FlashLocum fade-out complete, starting typewriter');
+        runPhrase(0);
+      }
+    });
 
     return () => {
       unmountedRef.current = true;
@@ -140,7 +151,7 @@ export default function IntroScreen() {
     <Animated.View style={[styles.container, { backgroundColor }]}>
       <Animated.View style={[styles.textRow, { opacity: contentOpacity }]}>
         <Text style={styles.text}>{displayedText}</Text>
-        <View style={styles.ball} />
+        {typewriterActive && <View style={styles.ball} />}
       </Animated.View>
     </Animated.View>
   );

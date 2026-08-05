@@ -17,7 +17,6 @@ import InAppNotificationBanner from '@/components/InAppNotificationBanner';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 
 // Prevent splash from auto-hiding before fonts + auth are ready
-const LAUNCH_TIME = Date.now();
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const LAST_PATHWAY_KEY = 'flashlocum_last_pathway';
@@ -250,30 +249,13 @@ export default function RootLayout() {
   const [screenReady, setScreenReady] = useState(false);
   const [splashDismissed, setSplashDismissed] = useState(false);
 
-  // Hide splash only when ALL THREE conditions are met: fonts loaded, navigation ready, screen ready.
+  // Hide splash immediately when ALL THREE conditions are met: fonts loaded, navigation ready, screen ready.
   useEffect(() => {
     if (!fontsLoaded || !navigationReady || !screenReady) return;
-    const elapsed = Date.now() - LAUNCH_TIME;
-    const hide = async () => {
-      await SplashScreen.hideAsync().catch(() => {});
-      setSplashDismissed(true);
-    };
-    if (elapsed >= 2000) {
-      hide();
-      return;
-    }
-    const timer = setTimeout(hide, 2000 - elapsed);
-    return () => clearTimeout(timer);
+    SplashScreen.hideAsync()
+      .catch(() => {})
+      .finally(() => setSplashDismissed(true));
   }, [fontsLoaded, navigationReady, screenReady]);
-
-  // Safety-net: hide after 8s in case NavigationGuard never fires (e.g. error path).
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      await SplashScreen.hideAsync().catch(() => {});
-      setSplashDismissed(true);
-    }, 8000);
-    return () => clearTimeout(timer);
-  }, []);
 
   if (!fontsLoaded) return null;
 
