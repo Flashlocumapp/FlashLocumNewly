@@ -336,6 +336,7 @@ export default function DoctorHomeScreen() {
       (async () => {
         const flagSet = await SecureStore.getItemAsync(flagKey);
         if (flagSet === 'true') return;
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const granted = IS_EXPO_GO
           ? false
           : await (require('react-native-onesignal').OneSignal as typeof import('react-native-onesignal').OneSignal).Notifications.hasPermission();
@@ -437,7 +438,7 @@ export default function DoctorHomeScreen() {
       .then(({ error }) => {
         if (error) console.log('[DoctorHome] Failed to patch lat/lng:', error.message);
       });
-  }, [userLocation, isOnline]);
+  }, [userLocation, isOnline, user?.id]);
 
   // Reset sentInitialLocationRef when doctor goes offline so the next go-online
   // cycle can send the location again if GPS resolves after the toggle.

@@ -41,7 +41,7 @@ export default function DeleteAccountModal({
       warningOpacity.setValue(1);
       confirmOpacity.setValue(0);
     }
-  }, [visible]);
+  }, [visible, confirmOpacity, warningOpacity]);
 
   const animateToConfirm = () => {
     Animated.parallel([

@@ -110,6 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Wire OneSignal identity on session restore
         if (!IS_EXPO_GO && _oneSignalExternalId !== session.user.id) {
           _oneSignalExternalId = session.user.id;
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
           const { OneSignal } = require('react-native-onesignal');
           OneSignal.login(session.user.id);
           console.log('[AuthContext] OneSignal.login (session restore) userId=', session.user.id);
@@ -138,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Wire OneSignal identity on sign-in / user update
           if (!IS_EXPO_GO && _oneSignalExternalId !== session.user.id) {
             _oneSignalExternalId = session.user.id;
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { OneSignal } = require('react-native-onesignal');
             OneSignal.login(session.user.id);
             console.log('[AuthContext] OneSignal.login userId=', session.user.id);
@@ -157,6 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Unlink OneSignal identity on sign-out
         if (!IS_EXPO_GO && _oneSignalExternalId !== null) {
           _oneSignalExternalId = null;
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
           const { OneSignal } = require('react-native-onesignal');
           OneSignal.logout();
           console.log('[AuthContext] OneSignal.logout');
@@ -285,6 +288,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Unlink OneSignal identity before signing out
     if (!IS_EXPO_GO && _oneSignalExternalId !== null) {
       _oneSignalExternalId = null;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { OneSignal } = require('react-native-onesignal');
       OneSignal.logout();
       console.log('[AuthContext] OneSignal.logout (signOut)');

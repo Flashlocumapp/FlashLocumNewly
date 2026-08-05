@@ -1784,6 +1784,7 @@ export default function RequesterHomeScreen() {
       (async () => {
         const flagSet = await SecureStore.getItemAsync(flagKey);
         if (flagSet === 'true') return;
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const granted = IS_EXPO_GO
           ? false
           : await (require('react-native-onesignal').OneSignal as typeof import('react-native-onesignal').OneSignal).Notifications.hasPermission();
@@ -2278,7 +2279,7 @@ export default function RequesterHomeScreen() {
         }
       }
     });
-  }, [recentPlaceKey]);
+  }, [recentPlaceKey, user?.id]);
 
   // ─── Fetch active session helper ──────────────────────────────────────────────
   const fetchActiveSession = useCallback(async () => {
@@ -2350,7 +2351,7 @@ export default function RequesterHomeScreen() {
       setSessionFetched(true); // mark that at least one fetch has completed
       setSessionLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   // Note: activeSessionId is set directly in fetchActiveSession() alongside setActiveSession()
   // to ensure both state values update in the same render cycle. The separate sync useEffect
@@ -2427,7 +2428,7 @@ export default function RequesterHomeScreen() {
     return () => {
       sub.remove();
     };
-  }, [fetchActiveSession, fetchOnlineDoctors]);
+  }, [fetchActiveSession, fetchOnlineDoctors, user?.id]);
 
   // ─── Polling fallback — upcoming/paused session poll ─────────────────────────
   // Runs when activeSession is in upcoming or paused state (no activeSessionId-based poll covers this).
@@ -2740,7 +2741,7 @@ export default function RequesterHomeScreen() {
   const transitionTo = useCallback((state: SheetState) => {
     setSheetState(state);
     animateSheet(state);
-  }, [sheetState, animateSheet]);
+  }, [animateSheet]);
 
   // ─── Keep stable refs in sync with latest callbacks ──────────────────────────
   useEffect(() => { fetchActiveSessionRef.current = fetchActiveSession; }, [fetchActiveSession]);
@@ -2844,7 +2845,7 @@ export default function RequesterHomeScreen() {
     } finally {
       setSearchLoading(false);
     }
-  }, [recentPlaceKey, transitionTo]);
+  }, [recentPlaceKey, transitionTo, user?.id]);
 
   // ─── Recent place tap ─────────────────────────────────────────────────────────
   const handleRecentPlaceTap = useCallback(() => {
@@ -3107,7 +3108,7 @@ export default function RequesterHomeScreen() {
     return () => {
       if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
     };
-  }, [startTime, endTime, coverageType, environment, coverageLength, shiftDate]);
+  }, [startTime, endTime, coverageType, environment, coverageLength, shiftDate, fetchPreviewPrice]);
 
   // ─── Drag handle PanResponder ─────────────────────────────────────────────────
   const handleResetRef = useRef<() => void>(() => {});
@@ -3333,7 +3334,7 @@ export default function RequesterHomeScreen() {
   const [settledAmount, setSettledAmount] = useState<number | null>(null);
 
 
-  const handleCancelRequest = async () => {
+  const handleCancelRequest = useCallback(async () => {
     console.log('[Requester] handleCancelRequest pressed', { activeRequestId });
     setShowCancelModal(true);
     // Immediately withdraw in background
@@ -3368,7 +3369,7 @@ export default function RequesterHomeScreen() {
       } catch (e) {
       }
     }
-  };
+  }, [activeRequestId, fetchActiveSession]);
 
   const handleWaitForDoctor = async () => {
     setShowCancelModal(false);

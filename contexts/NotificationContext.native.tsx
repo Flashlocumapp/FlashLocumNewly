@@ -2,6 +2,9 @@ import React, { createContext, useContext, useCallback, useEffect, useState, Rea
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
+import { Platform } from 'react-native';
+// eslint-disable-next-line import/no-unresolved
+import * as Notifications from 'expo-notifications';
 import { supabase } from '@/lib/supabase';
 import { IS_EXPO_GO } from '@/utils/expoGoGuard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -69,7 +72,7 @@ function ExpoGoNotificationProvider({ children }: NotificationProviderProps) {
 // ─── Full OneSignal provider used in native builds ────────────────────────────
 function NativeNotificationProvider({ children }: NotificationProviderProps) {
   // Dynamic import so react-native-onesignal is never evaluated in Expo Go
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
   const { OneSignal, LogLevel } = require('react-native-onesignal');
 
   const router = useRouter();
@@ -96,18 +99,23 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
     OneSignal.initialize(appId);
     console.log('[OneSignal] Initialized appId=', appId);
 
-    // Android notification channels
-    // onesignal-expo-plugin v2 does NOT support androidNotificationChannels or
-    // androidDefaultNotificationChannel config options — confirmed by inspecting
-    // node_modules/onesignal-expo-plugin/dist/index.js (v2.7.0).
-    // react-native-onesignal v5 also does NOT expose a createChannel() runtime API.
-    //
-    // Android channels must be registered natively. The two required channels are:
-    //   • new_coverage_request — vibration ON, default sound, high importance
-    //   • default_flashlocum   — vibration OFF, default sound, high importance
-    //
-    // To register these channels, add expo-notifications and call
-    // Notifications.setNotificationChannelAsync() here, or write a custom config plugin.
+    // Register Android notification channels
+    if (Platform.OS === 'android') {
+      Notifications.setNotificationChannelAsync('new_coverage_request', {
+        name: 'New Coverage Requests',
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: 'default',
+        vibrationPattern: [0, 250, 250, 250],
+        enableVibrate: true,
+      }).catch(() => {});
+
+      Notifications.setNotificationChannelAsync('default_flashlocum', {
+        name: 'FlashLocum Notifications',
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: 'default',
+        enableVibrate: false,
+      }).catch(() => {});
+    }
 
     const initPermission = async () => {
       const granted = await OneSignal.Notifications.hasPermission();
@@ -190,6 +198,7 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
   const permissionDenied = prompted && !hasPermission;
 
   const requestPermission = useCallback(async (): Promise<boolean> => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { OneSignal: OS } = require('react-native-onesignal');
     console.log('[OneSignal] Permission requested');
     const result = await OS.Notifications.requestPermission(true);
@@ -201,12 +210,14 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
   }, []);
 
   const sendTag = useCallback((key: string, value: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { OneSignal: OS } = require('react-native-onesignal');
     console.log('[OneSignal] sendTag key=', key, 'value=', value);
     OS.User.addTag(key, value);
   }, []);
 
   const deleteTag = useCallback((key: string) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { OneSignal: OS } = require('react-native-onesignal');
     console.log('[OneSignal] deleteTag key=', key);
     OS.User.removeTag(key);

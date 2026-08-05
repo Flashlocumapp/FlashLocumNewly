@@ -1728,7 +1728,7 @@ export default function DoctorLayout() {
     } finally {
       setAccepting(false);
     }
-  }, [requestQueue, user, forceSync, fetchActiveSession, activeJobCount, callEdge]);
+  }, [requestQueue, user, forceSync, fetchActiveSession, activeJobCount, callEdge, playAcceptanceChime]);
 
   // ── Decline ──
   const handleDecline = useCallback(async () => {
@@ -1770,7 +1770,7 @@ export default function DoctorLayout() {
     setUpcomingSessions([]);
     // Stop the 30s session poll — session is permanently settled
     setActiveSessionId(null);
-  }, [doctorRatingSessionId]);
+  }, [doctorRatingSessionId, user?.id]);
 
   // ── Doctor Rating — submit review ──
   const handleSubmitDoctorRating = useCallback(async () => {
