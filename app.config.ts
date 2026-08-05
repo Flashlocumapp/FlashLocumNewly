@@ -15,6 +15,27 @@ const isExpoGo = false; // Production — onesignal-expo-plugin is active
 
 const config: ExpoConfig = {
   ...(appJson.expo as unknown as ExpoConfig),
+  ios: {
+    ...(appJson.expo.ios as Record<string, unknown>),
+    bundleIdentifier: 'com.flashlocum.app',
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+      NSPhotoLibraryUsageDescription:
+        'FlashLocum needs access to your photo library to let you upload profile photos and documents.',
+      NSPhotoLibraryAddUsageDescription:
+        'FlashLocum needs permission to save photos to your library.',
+      NSCameraUsageDescription:
+        'FlashLocum needs camera access to let you take profile photos and capture documents.',
+      NSLocationWhenInUseUsageDescription:
+        'FlashLocum uses your location to match you with nearby locum shifts.',
+      NSMicrophoneUsageDescription:
+        'FlashLocum needs microphone access for video calls.',
+    },
+  },
+  android: {
+    ...(appJson.expo.android as Record<string, unknown>),
+    package: 'com.flashlocum.app',
+  },
   extra: {
     ...(appJson.expo.extra as Record<string, unknown> ?? {}),
     eas: {
