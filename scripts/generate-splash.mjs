@@ -13,10 +13,24 @@ const fontPath = resolve(ROOT, 'assets/fonts/Inter_600SemiBold.ttf');
 GlobalFonts.registerFromPath(fontPath, 'Inter');
 
 // ── 2. Generate splash-text.png ───────────────────────────────────────────────
-const CANVAS_W = 1300;
-const CANVAS_H = 302;
-const FONT_SIZE = 345;
+const FONT_SIZE = 120;
+const H_PADDING = 80;  // horizontal padding on each side
+const V_PADDING = 40;  // vertical padding top and bottom
 const TEXT = 'FlashLocum';
+
+// ── Measure text first on a scratch canvas, then size the real canvas to fit ──
+const scratch = createCanvas(2000, 400);
+const sctx = scratch.getContext('2d');
+sctx.font = `600 ${FONT_SIZE}px Inter`;
+const metrics = sctx.measureText(TEXT);
+const textW = metrics.width;
+const ascent = metrics.actualBoundingBoxAscent ?? FONT_SIZE * 0.73;
+const descent = metrics.actualBoundingBoxDescent ?? FONT_SIZE * 0.1;
+const textH = ascent + descent;
+
+// Canvas sized exactly to the text plus padding — text can never be clipped
+const CANVAS_W = Math.ceil(textW + H_PADDING * 2);
+const CANVAS_H = Math.ceil(textH + V_PADDING * 2);
 
 const canvas = createCanvas(CANVAS_W, CANVAS_H);
 const ctx = canvas.getContext('2d');
@@ -25,16 +39,8 @@ ctx.font = `600 ${FONT_SIZE}px Inter`;
 ctx.fillStyle = '#FFFFFF';
 ctx.textBaseline = 'alphabetic';
 
-const metrics = ctx.measureText(TEXT);
-const textW = metrics.width;
-
-// Vertical centering: use ascent/descent if available, else estimate
-const ascent = metrics.actualBoundingBoxAscent ?? FONT_SIZE * 0.73;
-const descent = metrics.actualBoundingBoxDescent ?? FONT_SIZE * 0.1;
-const textH = ascent + descent;
-
-const x = (CANVAS_W - textW) / 2;
-const y = (CANVAS_H - textH) / 2 + ascent;
+const x = H_PADDING;
+const y = V_PADDING + ascent;
 
 ctx.fillText(TEXT, x, y);
 
@@ -113,10 +119,10 @@ console.log(`Canvas:       ${bounds.width} × ${bounds.height} px`);
 console.log(`Visible bbox: x=${bounds.minX}–${bounds.maxX}, y=${bounds.minY}–${bounds.maxY}`);
 console.log(`Visible size: ${visW} × ${visH} px`);
 
-if (visH >= 220 && visH <= 280) {
-  console.log(`✓ Visible height ${visH}px is within target range 220–280 px`);
+if (visH >= 60 && visH <= 160) {
+  console.log(`✓ Visible height ${visH}px is within target range 60–160 px`);
 } else {
-  console.warn(`⚠ Visible height ${visH}px is OUTSIDE target range 220–280 px — adjust FONT_SIZE`);
+  console.warn(`⚠ Visible height ${visH}px is OUTSIDE target range 60–160 px — adjust FONT_SIZE`);
 }
 
 // ── 4. Generate Android density PNGs ─────────────────────────────────────────
