@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMe
 import useSupercluster from 'use-supercluster';
 import { useFocusEffect } from '@react-navigation/native';
 import { IS_EXPO_GO } from '@/utils/expoGoGuard';
-import PermissionsOverlay from '@/components/PermissionsOverlay';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useSplash } from '@/app/_layout';
 import {
@@ -1763,16 +1762,12 @@ export default function RequesterHomeScreen() {
   const insets = useSafeAreaInsets();
   const { setTabBarVisible } = useTabBarVisibility();
   const { user, profile } = useAuth();
-  const { requestPermission, playAcceptanceChime, clearChimeForSession } = useNotifications();
+  const { playAcceptanceChime, clearChimeForSession } = useNotifications();
   const recentPlaceKey = user?.id ? `flashlocum_recent_place_${user.id}` : null;
   const accountStatus = profile?.verification_status ?? 'verified'; // default verified for requesters until explicitly set
   const isAccountBlocked = accountStatus === 'under_review' || accountStatus === 'suspended';
   const isUnderReview = accountStatus === 'under_review';
   const isSuspended = accountStatus === 'suspended';
-
-  // ─── Permissions overlay ─────────────────────────────────────────────────────
-  const [showPermissionsOverlay, setShowPermissionsOverlay] = useState(false);
-  const pendingSearchRef = useRef(false);
 
   // Live requester scores — seeded from cache to avoid flicker
   const _cachedRScores = getCached<{ rating: number; reliability: number }>('requester_scores');
@@ -2639,6 +2634,36 @@ export default function RequesterHomeScreen() {
     }, [signalScreenReady])
   );
 
+  // ── One-time notification permission request ──────────────────────────────
+  // Fires once after the Home tab is fully loaded. Uses a SecureStore flag to
+  // ensure it never fires more than once per user account.
+  useEffect(() => {
+    if (!splashDismissed || !user?.id) return;
+    const NOTIF_KEY = `notif_prompted:${user.id}`;
+    (async () => {
+      try {
+        const alreadyPrompted = await SecureStore.getItemAsync(NOTIF_KEY);
+        if (alreadyPrompted) return;
+        if (IS_EXPO_GO) {
+          await SecureStore.setItemAsync(NOTIF_KEY, 'true');
+          return;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const OneSignal = require('react-native-onesignal').OneSignal;
+        const granted = await OneSignal.Notifications.hasPermission();
+        if (granted) {
+          await SecureStore.setItemAsync(NOTIF_KEY, 'true');
+          return;
+        }
+        // Mark as prompted BEFORE requesting to prevent duplicate prompts on rerender
+        await SecureStore.setItemAsync(NOTIF_KEY, 'true');
+        await OneSignal.Notifications.requestPermission(true);
+      } catch (e) {
+        console.log('[RequesterHome] Notification permission request error:', e);
+      }
+    })();
+  }, [splashDismissed, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Re-fetch online doctors on tab focus (after first mount) ────────────────
   const onlineDoctorsFocusRef = useRef(false);
   useFocusEffect(
@@ -3079,45 +3104,6 @@ export default function RequesterHomeScreen() {
     })
   ).current;
 
-  // ─── Permissions overlay handlers ────────────────────────────────────────────
-  const handlePermissionsAllGranted = useCallback(async () => {
-    console.log('[RequesterHome] PermissionsOverlay — all granted, starting location and transitioning to searching');
-    setShowPermissionsOverlay(false);
-    pendingSearchRef.current = false;
-    try {
-      const immediatePos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
-      const coords = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude };
-      _cachedRequesterCoords = coords;
-      setUserCoords(coords);
-      if (!_hasInitialFix && mapRef.current) {
-        _hasInitialFix = true;
-        mapRef.current.animateToRegion({
-          latitude: coords.latitude + MAP_LAT_OFFSET,
-          longitude: coords.longitude + MAP_LNG_OFFSET,
-          latitudeDelta: 0.12,
-          longitudeDelta: 0.12,
-        }, 800);
-      }
-      locationSub.current = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.Highest, timeInterval: 2000, distanceInterval: 1, mayShowUserSettingsDialog: true },
-        (loc) => {
-          const c = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-          _cachedRequesterCoords = c;
-          setUserCoords(c);
-        }
-      );
-    } catch (e: any) {
-      console.log('[RequesterHome] Location fetch after permissions granted failed:', e?.message);
-    }
-    transitionTo('searching');
-  }, [transitionTo]);
-
-  const handlePermissionsDismiss = useCallback(() => {
-    console.log('[RequesterHome] PermissionsOverlay dismissed — not proceeding to search');
-    setShowPermissionsOverlay(false);
-    pendingSearchRef.current = false;
-  }, []);
-
   // ─── Idle card drag responder — swipe up to open search ─────────────────────
   const idleDragResponder = useRef(
     PanResponder.create({
@@ -3138,17 +3124,44 @@ export default function RequesterHomeScreen() {
 
   const handleSearchTap = useCallback(async () => {
     console.log('[Requester Home] Search tap — accountStatus:', accountStatus);
-    if (isAccountBlocked) return; // status gate
-    const locPerm = await Location.getForegroundPermissionsAsync();
-    const notifGranted = IS_EXPO_GO
-      ? false
-      : await (require('react-native-onesignal').OneSignal as typeof import('react-native-onesignal').OneSignal).Notifications.hasPermission(); // eslint-disable-line @typescript-eslint/no-require-imports
-    console.log('[RequesterHome] Permission check — location:', locPerm.status, 'notif:', notifGranted);
-    if (locPerm.status !== 'granted' || !notifGranted) {
-      console.log('[RequesterHome] Permissions not fully granted — showing PermissionsOverlay');
-      pendingSearchRef.current = true;
-      setShowPermissionsOverlay(true);
-      return;
+    if (isAccountBlocked) return;
+
+    // ── Location permission gate ──────────────────────────────────────────────
+    const { status, canAskAgain } = await Location.getForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      if (!canAskAgain) {
+        Alert.alert(
+          'Location Required',
+          'FlashLocum needs your location to find nearby doctors. Please enable it in Settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
+      const result = await Location.requestForegroundPermissionsAsync();
+      if (result.status !== 'granted') {
+        Alert.alert(
+          'Location Required',
+          'Location access is needed to request coverage. You can enable it in Settings.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+    }
+
+    // Location granted — start location watch and transition to searching
+    try {
+      const sub = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Balanced, distanceInterval: 20 },
+        (loc) => {
+          setUserCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+        }
+      );
+      locationSub.current = sub;
+    } catch (e) {
+      console.log('[RequesterHome] watchPositionAsync failed:', e);
     }
     transitionTo('searching');
   }, [isAccountBlocked, accountStatus, transitionTo]);
@@ -5275,13 +5288,6 @@ export default function RequesterHomeScreen() {
         </Pressable>
       </Modal>
 
-      {/* ── PERMISSIONS OVERLAY ── */}
-      <PermissionsOverlay
-        visible={showPermissionsOverlay}
-        role="requester"
-        onAllGranted={handlePermissionsAllGranted}
-        onDismiss={handlePermissionsDismiss}
-      />
     </View>
   );
 }

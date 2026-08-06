@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { IS_EXPO_GO } from '@/utils/expoGoGuard';
-import PermissionsOverlay from '@/components/PermissionsOverlay';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useSplash } from '@/app/_layout';
+import * as SecureStore from 'expo-secure-store';
 import {
   View,
   Text,
@@ -311,7 +311,7 @@ export default function DoctorHomeScreen() {
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
   const { user, profile } = useAuth();
-  const { requestPermission } = useNotifications();
+  useNotifications();
   const verificationStatus = profile?.verification_status ?? null;
   const isVerified = verificationStatus === 'verified';
   const isPending = verificationStatus === 'pending';
@@ -323,10 +323,6 @@ export default function DoctorHomeScreen() {
   const isProfileLoading = verificationStatus === null;
 
   const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcomingSessions, criticalDataReady, resumeReady, doctorRatingScore, doctorReliabilityScore } = useDoctorDispatch();
-
-  // ─── Permissions overlay ─────────────────────────────────────────────────────
-  const [showPermissionsOverlay, setShowPermissionsOverlay] = useState(false);
-  const pendingGoOnlineRef = useRef(false);
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCancelReasons, setShowCancelReasons] = useState(false);
@@ -428,6 +424,36 @@ export default function DoctorHomeScreen() {
     signalScreenReady();
   }, [criticalDataReady, profile, signalScreenReady]);
 
+  // ── One-time notification permission request ──────────────────────────────
+  // Fires once after the Home tab is fully loaded. Uses a SecureStore flag to
+  // ensure it never fires more than once per user account.
+  useEffect(() => {
+    if (!criticalDataReady || !splashDismissed || !user?.id) return;
+    const NOTIF_KEY = `notif_prompted:${user.id}`;
+    (async () => {
+      try {
+        const alreadyPrompted = await SecureStore.getItemAsync(NOTIF_KEY);
+        if (alreadyPrompted) return;
+        if (IS_EXPO_GO) {
+          await SecureStore.setItemAsync(NOTIF_KEY, 'true');
+          return;
+        }
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const OneSignal = require('react-native-onesignal').OneSignal;
+        const granted = await OneSignal.Notifications.hasPermission();
+        if (granted) {
+          await SecureStore.setItemAsync(NOTIF_KEY, 'true');
+          return;
+        }
+        // Mark as prompted BEFORE requesting to prevent duplicate prompts on rerender
+        await SecureStore.setItemAsync(NOTIF_KEY, 'true');
+        await OneSignal.Notifications.requestPermission(true);
+      } catch (e) {
+        console.log('[DoctorHome] Notification permission request error:', e);
+      }
+    })();
+  }, [criticalDataReady, splashDismissed, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Toggle online/offline ───────────────────────────────────────────────────
   const handleToggleStatus = async () => {
     console.log('[DoctorHome] handleToggleStatus pressed — verificationStatus:', verificationStatus, 'isOnline:', isOnline);
@@ -435,58 +461,54 @@ export default function DoctorHomeScreen() {
     if (isJobCapReached) return;
     const next = !isOnline;
     if (next) {
-      // Check permissions before going online
-      const locPerm = await Location.getForegroundPermissionsAsync();
-      const notifGranted = IS_EXPO_GO
-        ? false
-        : await (require('react-native-onesignal').OneSignal as typeof import('react-native-onesignal').OneSignal).Notifications.hasPermission(); // eslint-disable-line @typescript-eslint/no-require-imports
-      console.log('[DoctorHome] Permission check — location:', locPerm.status, 'notif:', notifGranted);
-      if (locPerm.status !== 'granted' || !notifGranted) {
-        console.log('[DoctorHome] Permissions not fully granted — showing PermissionsOverlay');
-        pendingGoOnlineRef.current = true;
-        setShowPermissionsOverlay(true);
-        return;
+      // ── Location permission gate ──────────────────────────────────────────────
+      const { status, canAskAgain } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        if (!canAskAgain) {
+          // Permanently denied — send to Settings
+          Alert.alert(
+            'Location Required',
+            'FlashLocum needs your location to show you to nearby requesters. Please enable it in Settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            ]
+          );
+          return;
+        }
+        // Ask natively
+        const result = await Location.requestForegroundPermissionsAsync();
+        if (result.status !== 'granted') {
+          Alert.alert(
+            'Location Required',
+            'Location access is needed to go Online. You can enable it in Settings.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
       }
-      // Both granted — proceed immediately
-      const coords = userLocation
-        ? { lat: userLocation.latitude, lng: userLocation.longitude }
-        : undefined;
-      goOnline(coords);
+      // Location granted — fetch coords and go online
+      try {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        _cachedDoctorCoords = coords;
+        setUserLocation(coords);
+        if (mapRef.current) {
+          mapRef.current.animateToRegion({
+            latitude: coords.latitude + MAP_LAT_OFFSET,
+            longitude: coords.longitude + MAP_LNG_OFFSET,
+            latitudeDelta: 0.12,
+            longitudeDelta: 0.12,
+          }, 800);
+        }
+        goOnline({ lat: coords.latitude, lng: coords.longitude });
+      } catch {
+        goOnline(undefined);
+      }
     } else {
       setIsOnline(false);
     }
   };
-
-  const handlePermissionsAllGranted = useCallback(async () => {
-    console.log('[DoctorHome] PermissionsOverlay — all granted, fetching location and going online');
-    setShowPermissionsOverlay(false);
-    pendingGoOnlineRef.current = false;
-    try {
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-      _cachedDoctorCoords = coords;
-      setUserLocation(coords);
-      if (mapRef.current) {
-        mapRef.current.animateToRegion({
-          latitude: coords.latitude + MAP_LAT_OFFSET,
-          longitude: coords.longitude + MAP_LNG_OFFSET,
-          latitudeDelta: 0.12,
-          longitudeDelta: 0.12,
-        }, 800);
-      }
-      console.log('[DoctorHome] Location obtained after permissions granted:', coords);
-      goOnline({ lat: coords.latitude, lng: coords.longitude });
-    } catch (e: any) {
-      console.log('[DoctorHome] getCurrentPositionAsync failed after permissions granted:', e?.message);
-      goOnline(undefined);
-    }
-  }, [goOnline]);
-
-  const handlePermissionsDismiss = useCallback(() => {
-    console.log('[DoctorHome] PermissionsOverlay dismissed — not going online');
-    setShowPermissionsOverlay(false);
-    pendingGoOnlineRef.current = false;
-  }, []);
 
   // ─── Cancel shift ────────────────────────────────────────────────────────────
   const [pendingCancelSession, setPendingCancelSession] = useState<CoverageSession | null>(null);
@@ -894,14 +916,6 @@ export default function DoctorHomeScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-
-      {/* ── PERMISSIONS OVERLAY ── */}
-      <PermissionsOverlay
-        visible={showPermissionsOverlay}
-        role="doctor"
-        onAllGranted={handlePermissionsAllGranted}
-        onDismiss={handlePermissionsDismiss}
-      />
 
       {/* ── RESUME OVERLAY — covers home while data revalidates after long background ── */}
       {!resumeReady && (
