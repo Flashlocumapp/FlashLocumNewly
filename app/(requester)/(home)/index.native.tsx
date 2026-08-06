@@ -54,9 +54,6 @@ import { SUPABASE_URL } from '@/constants/api';
 
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
-// POLL_INTERVAL: 8s in dev (Expo Go WebSocket unreliable), 10s in production.
-const POLL_INTERVAL = __DEV__ ? 8000 : 10000;
-
 // ─── Module-level retry flag for handleRequestCoverage ───────────────────────
 let _submitRetried = false;
 // ─── Module-level idempotency key for submit-request (server-side dedup) ─────
@@ -1869,7 +1866,7 @@ export default function RequesterHomeScreen() {
             return true;
           }
           return false;
-        });
+        }, undefined, 6);
       })
       .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
         // A session was created — if we're in matching state, confirm the match
@@ -1915,7 +1912,7 @@ export default function RequesterHomeScreen() {
             return true;
           }
           return false;
-        });
+        }, undefined, 6);
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -2399,21 +2396,6 @@ export default function RequesterHomeScreen() {
     };
   }, [fetchActiveSession, fetchOnlineDoctors, user?.id]);
 
-  // ─── Polling fallback — upcoming/paused session poll ─────────────────────────
-  // Runs when activeSession is in upcoming or paused state (no activeSessionId-based poll covers this).
-  // Catches missed broadcasts for cancel, start, pause, resume.
-  useEffect(() => {
-    if (!activeSession || !['upcoming', 'paused'].includes(activeSession.status)) return;
-    console.log('[Requester] upcoming/paused poll — starting interval, status:', activeSession.status);
-    const id = setInterval(() => {
-      if (!endShiftInProgressRef.current) {
-        console.log('[Requester] upcoming/paused poll — tick, fetching active session');
-        fetchActiveSession();
-      }
-    }, POLL_INTERVAL);
-    return () => clearInterval(id);
-  }, [activeSession?.status, activeSession?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ─── Proactive payment poll — starts whenever session enters payment_pending state ───
   // Ensures overlay fires even if PAYMENT_CONFIRMED broadcast was missed
   useEffect(() => {
@@ -2524,7 +2506,7 @@ export default function RequesterHomeScreen() {
             return true;
           }
           return false;
-        });
+        }, undefined, 6);
       })
       .subscribe((status) => {
         console.log('[Requester] session channel subscribe status:', status, 'for session:', activeSessionId);
@@ -3266,7 +3248,7 @@ export default function RequesterHomeScreen() {
             return true; // confirmed
           }
           return false;
-        });
+        }, undefined, 6);
       }
     } catch (e: any) {
       const isNetworkErr = e instanceof TypeError &&
@@ -3533,7 +3515,7 @@ export default function RequesterHomeScreen() {
         // non-fatal
       }
       return false;
-    });
+    }, undefined, 60);
   }, [handlePaymentConfirmedWithFallback]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep refs in sync so effects declared before these callbacks can call them without stale closures
@@ -3631,7 +3613,7 @@ export default function RequesterHomeScreen() {
           return true;
         }
         return false;
-      });
+      }, undefined, 6);
     } catch (e: any) {
       Alert.alert('Something went wrong', e.message || 'Please try again.');
     }
@@ -3655,7 +3637,7 @@ export default function RequesterHomeScreen() {
           return true;
         }
         return false;
-      });
+      }, undefined, 6);
     } catch (e: any) {
       Alert.alert('Something went wrong', 'Please try again.');
     }
@@ -3687,7 +3669,7 @@ export default function RequesterHomeScreen() {
           return true;
         }
         return false;
-      });
+      }, undefined, 6);
     } catch (e: any) {
       Alert.alert('Pause Shift Failed', e.message || 'Something went wrong. Please try again.');
     }
@@ -3741,7 +3723,7 @@ export default function RequesterHomeScreen() {
           return true;
         }
         return false;
-      });
+      }, undefined, 6);
     } catch (e: any) {
       console.error('[Requester] end-shift failed:', e.message);
       Alert.alert('End Shift Failed', e.message || 'Something went wrong. Please try again.');
@@ -3793,7 +3775,7 @@ export default function RequesterHomeScreen() {
           return true;
         }
         return false;
-      });
+      }, undefined, 6);
     } catch (e: any) {
       const isNetworkErr = e instanceof TypeError &&
         (e.message?.includes('Network request failed') || e.message?.includes('network'));
@@ -3813,7 +3795,7 @@ export default function RequesterHomeScreen() {
               return true;
             }
             return false;
-          });
+          }, undefined, 6);
           return;
         } catch (retryErr: any) {
           Alert.alert('Something went wrong', retryErr.message || 'Please try again.');
