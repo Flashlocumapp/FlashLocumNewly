@@ -653,13 +653,7 @@ export default function DoctorHomeScreen() {
             tracksViewChanges={markerTracksViews}
           >
             <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: '#34C759', borderWidth: 2.5, borderColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
-                <IconSymbol
-                  ios_icon_name="stethoscope"
-                  android_material_icon_name="medical-services"
-                  android_material_community_icon_name="stethoscope"
-                  size={13}
-                  color="#FFFFFF"
-                />
+                <MaterialCommunityIcons name="stethoscope" size={13} color="#FFFFFF" />
               </View>
           </Marker>
         )}
