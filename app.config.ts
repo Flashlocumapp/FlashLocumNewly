@@ -18,6 +18,10 @@ const config: ExpoConfig = {
   ios: {
     ...(appJson.expo.ios as Record<string, unknown>),
     bundleIdentifier: 'com.flashlocum.app',
+    newArchEnabled: false,
+    config: {
+      googleMapsApiKey: 'AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk',
+    },
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
       NSPhotoLibraryUsageDescription:
@@ -35,7 +39,14 @@ const config: ExpoConfig = {
   android: {
     ...(appJson.expo.android as Record<string, unknown>),
     package: 'com.flashlocum.app',
-  },
+    newArchEnabled: true,
+    minSdkVersion: 24,
+    config: {
+      googleMaps: {
+        apiKey: 'AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU',
+      },
+    },
+  } as ExpoConfig['android'],
   extra: {
     ...(appJson.expo.extra as Record<string, unknown> ?? {}),
     eas: {
