@@ -240,6 +240,7 @@ function RootLayoutInner({ onNavigationReady }: { onNavigationReady: () => void 
 }
 
 export default function RootLayout() {
+  console.log('[AppEntry] RootLayout mounted');
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,

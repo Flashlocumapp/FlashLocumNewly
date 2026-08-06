@@ -2630,9 +2630,20 @@ export default function RequesterHomeScreen() {
 
   // ─── Location on mount — animate map to user position + stream ───────────────
   useEffect(() => {
+    console.log('[LocationPermission][Requester] GPS useEffect mounted');
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      console.log('[LocationPermission][Requester] fetchLocation() called');
+
+      // Check current status BEFORE requesting
+      const existing = await Location.getForegroundPermissionsAsync();
+      console.log('[LocationPermission][Requester] current status before request:', existing.status, '| canAskAgain:', existing.canAskAgain, '| granted:', existing.granted);
+
+      console.log('[LocationPermission][Requester] calling requestForegroundPermissionsAsync()...');
+      const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
+      console.log('[LocationPermission][Requester] requestForegroundPermissionsAsync() result — status:', status, '| canAskAgain:', canAskAgain);
+
       if (status === 'granted') {
+        console.log('[LocationPermission][Requester] permission granted — fetching position');
         // One-time immediate fix
         const immediatePos = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Highest,
@@ -2657,6 +2668,7 @@ export default function RequesterHomeScreen() {
           }
         );
       } else {
+        console.log('[LocationPermission][Requester] permission NOT granted — falling back to Lagos region');
         setUserCoords({ latitude: LAGOS_REGION.latitude, longitude: LAGOS_REGION.longitude });
       }
     })();

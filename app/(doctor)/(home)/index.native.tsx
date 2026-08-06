@@ -378,17 +378,32 @@ export default function DoctorHomeScreen() {
 
   // ─── GPS setup ──────────────────────────────────────────────────────────────
   useEffect(() => {
+    console.log('[LocationPermission][Doctor] GPS useEffect mounted');
     let active = true;
 
     async function fetchLocation() {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
+      console.log('[LocationPermission][Doctor] fetchLocation() called — effect mounted');
+
+      // Check current status BEFORE requesting
+      const existing = await Location.getForegroundPermissionsAsync();
+      console.log('[LocationPermission][Doctor] current status before request:', existing.status, '| canAskAgain:', existing.canAskAgain, '| granted:', existing.granted);
+
+      console.log('[LocationPermission][Doctor] calling requestForegroundPermissionsAsync()...');
+      const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
+      console.log('[LocationPermission][Doctor] requestForegroundPermissionsAsync() result — status:', status, '| canAskAgain:', canAskAgain);
+
+      if (status !== 'granted') {
+        console.log('[LocationPermission][Doctor] permission NOT granted — GPS setup aborted');
+        return;
+      }
+      console.log('[LocationPermission][Doctor] permission granted — fetching position');
 
       try {
         const pos = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
         if (!active) return;
+        console.log('[LocationPermission][Doctor] position obtained:', pos.coords.latitude, pos.coords.longitude);
         const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
         _cachedDoctorCoords = coords;
         setUserLocation(coords);
@@ -408,7 +423,8 @@ export default function DoctorHomeScreen() {
             longitudeDelta: 0.12,
           }, 800);
         }
-      } catch {
+      } catch (e: any) {
+        console.log('[LocationPermission][Doctor] getCurrentPositionAsync failed:', e?.message);
         // non-fatal — map still works without location
       }
     }
