@@ -394,8 +394,7 @@ export default function DoctorLayout() {
   const { user, profile } = useAuth();
   const { playAcceptanceChime, clearChimeForSession } = useNotifications();
   const router = useRouter();
-  const _cachedOnline = getCached<boolean>(`doctor_is_online:${user?.id ?? ''}`);
-  const [isOnline, setIsOnline] = useState<boolean>(_cachedOnline ?? false);
+  const [isOnline, setIsOnline] = useState<boolean>(false);
   const [criticalDataReady, setCriticalDataReady] = useState(false);
   const [resumeReady, setResumeReady] = useState(true); // true = home visible, false = showing resume overlay
   const [doctorScreenState, setDoctorScreenState] = useState<DoctorScreenState>('idle');
@@ -1605,6 +1604,22 @@ export default function DoctorLayout() {
               // non-fatal
             }
 
+            // Re-sync online status from backend on resume
+            if (user?.id) {
+              try {
+                console.log('[AppState] long-resume — re-reading is_online from DB');
+                const { data: onlineSnap } = await supabase
+                  .from('doctor_profiles')
+                  .select('is_online')
+                  .eq('id', user.id)
+                  .single();
+                if (_toggleIntent === null && onlineSnap && typeof onlineSnap.is_online === 'boolean') {
+                  setIsOnline(onlineSnap.is_online);
+                  setCached(`doctor_is_online:${user.id}`, onlineSnap.is_online);
+                }
+              } catch { /* non-fatal */ }
+            }
+
             // Rating recovery — re-fetch own scores in case RATING_UPDATED broadcast was missed
             if (user?.id) {
               try {
@@ -1636,6 +1651,21 @@ export default function DoctorLayout() {
           console.log('[AppState] active — syncing session');
           if (isOnlineRef.current && user) await forceSync();
           fetchActiveSession();
+          // Re-sync online status from backend on short resume
+          if (user?.id) {
+            try {
+              console.log('[AppState] short-resume — re-reading is_online from DB');
+              const { data: onlineSnap } = await supabase
+                .from('doctor_profiles')
+                .select('is_online')
+                .eq('id', user.id)
+                .single();
+              if (_toggleIntent === null && onlineSnap && typeof onlineSnap.is_online === 'boolean') {
+                setIsOnline(onlineSnap.is_online);
+                setCached(`doctor_is_online:${user.id}`, onlineSnap.is_online);
+              }
+            } catch { /* non-fatal */ }
+          }
           // Short foreground rating recovery
           if (user?.id) {
             try {
