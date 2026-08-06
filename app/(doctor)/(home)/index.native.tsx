@@ -3,7 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { IS_EXPO_GO } from '@/utils/expoGoGuard';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useSplash } from '@/app/_layout';
-import * as SecureStore from 'expo-secure-store';
+import * as Notifications from 'expo-notifications';
 import {
   View,
   Text,
@@ -425,32 +425,28 @@ export default function DoctorHomeScreen() {
   }, [criticalDataReady, profile, signalScreenReady]);
 
   // ── One-time notification permission request ──────────────────────────────
-  // Fires once after the Home tab is fully loaded. Uses a SecureStore flag to
-  // ensure it never fires more than once per user account.
+  // The OS permission status is always authoritative. The SecureStore flag is
+  // only used to suppress the auto-prompt when permission is permanently denied
+  // (canAskAgain=false) so we do not repeatedly open Settings on every launch.
+  // For every other state the OS is re-checked on each eligible entry.
   useEffect(() => {
     if (!criticalDataReady || !splashDismissed || !user?.id) return;
-    const NOTIF_KEY = `notif_prompted:${user.id}`;
+    if (IS_EXPO_GO) return;
     (async () => {
       try {
-        const alreadyPrompted = await SecureStore.getItemAsync(NOTIF_KEY);
-        if (alreadyPrompted) return;
-        if (IS_EXPO_GO) return; // no OneSignal in Expo Go — do not write flag, allow retry on real build
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const OneSignal = require('react-native-onesignal').OneSignal;
-        const granted: boolean = await OneSignal.Notifications.hasPermission();
-        if (granted) {
-          // Already granted — record that we have handled this and skip
-          await SecureStore.setItemAsync(NOTIF_KEY, 'true');
+        // Read authoritative OS permission state
+        const { status, canAskAgain } = await Notifications.getPermissionsAsync();
+        if (status === 'granted') return; // already granted — nothing to do
+        if (!canAskAgain) {
+          // Permanently denied. Only open Settings if the user explicitly taps
+          // a notification-related UI element — do not auto-redirect on launch.
           return;
         }
-        // Permission is undetermined or denied-but-can-ask-again.
-        // Request the native prompt and wait for the result.
+        // Undetermined or denied-but-can-ask-again: show the native prompt
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const OneSignal = require('react-native-onesignal').OneSignal;
         await OneSignal.Notifications.requestPermission(true);
-        // Save the flag AFTER the request resolves so a crash or interruption
-        // does not permanently suppress future prompts.
-        await SecureStore.setItemAsync(NOTIF_KEY, 'true');
       } catch (e) {
-        // Do NOT write the flag on error — allow retry on next launch
         console.log('[DoctorHome] Notification permission request error:', e);
       }
     })();

@@ -39,6 +39,7 @@ import * as Location from 'expo-location';
 import * as Font from 'expo-font';
 import * as Clipboard from 'expo-clipboard';
 import * as SecureStore from 'expo-secure-store';
+import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
@@ -2635,28 +2636,18 @@ export default function RequesterHomeScreen() {
   );
 
   // ── One-time notification permission request ──────────────────────────────
-  // Fires once after the Home tab is fully loaded. Uses a SecureStore flag to
-  // ensure it never fires more than once per user account.
   useEffect(() => {
     if (!splashDismissed || !user?.id) return;
-    const NOTIF_KEY = `notif_prompted:${user.id}`;
+    if (IS_EXPO_GO) return;
     (async () => {
       try {
-        const alreadyPrompted = await SecureStore.getItemAsync(NOTIF_KEY);
-        if (alreadyPrompted) return;
-        if (IS_EXPO_GO) return; // no OneSignal in Expo Go — do not write flag, allow retry on real build
+        const { status, canAskAgain } = await Notifications.getPermissionsAsync();
+        if (status === 'granted') return;
+        if (!canAskAgain) return;
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const OneSignal = require('react-native-onesignal').OneSignal;
-        const granted: boolean = await OneSignal.Notifications.hasPermission();
-        if (granted) {
-          await SecureStore.setItemAsync(NOTIF_KEY, 'true');
-          return;
-        }
         await OneSignal.Notifications.requestPermission(true);
-        // Save the flag AFTER the request resolves
-        await SecureStore.setItemAsync(NOTIF_KEY, 'true');
       } catch (e) {
-        // Do NOT write the flag on error — allow retry on next launch
         console.log('[RequesterHome] Notification permission request error:', e);
       }
     })();
