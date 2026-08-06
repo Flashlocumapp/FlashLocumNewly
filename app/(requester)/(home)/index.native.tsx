@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMe
 import useSupercluster from 'use-supercluster';
 import { useFocusEffect } from '@react-navigation/native';
 import { IS_EXPO_GO } from '@/utils/expoGoGuard';
-import NotificationPermissionModal from '@/components/NotificationPermissionModal';
+import PermissionsOverlay from '@/components/PermissionsOverlay';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { useSplash } from '@/app/_layout';
 import {
@@ -53,9 +53,6 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { SUPABASE_URL } from '@/constants/api';
 
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
-
-// POLL_INTERVAL: 8s in dev (Expo Go WebSocket unreliable), 10s in production.
-const POLL_INTERVAL = __DEV__ ? 8000 : 10000;
 
 // ─── Module-level retry flag for handleRequestCoverage ───────────────────────
 let _submitRetried = false;
@@ -1773,42 +1770,9 @@ export default function RequesterHomeScreen() {
   const isUnderReview = accountStatus === 'under_review';
   const isSuspended = accountStatus === 'suspended';
 
-  // ─── Notification permission modal ──────────────────────────────────────────
-  const [showNotifModal, setShowNotifModal] = useState(false);
-
-  useEffect(() => {
-    if (!user || !profile?.requester_onboarding_complete || !splashDismissed) return;
-    console.log('[Requester] Checking notification permission for user:', user.id);
-    const userId = user.id;
-    const flagKey = `notification_permission_prompted_${userId}`;
-    (async () => {
-      const flagSet = await SecureStore.getItemAsync(flagKey);
-      if (flagSet === 'true') return;
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const granted = IS_EXPO_GO
-        ? false
-        : await (require('react-native-onesignal').OneSignal as typeof import('react-native-onesignal').OneSignal).Notifications.hasPermission();
-      if (!granted) {
-        console.log('[Requester] Showing notification permission modal');
-        setShowNotifModal(true);
-      }
-    })();
-  }, [user, profile?.requester_onboarding_complete, splashDismissed]);
-
-  const handleNotifContinue = useCallback(async () => {
-    if (!user) return;
-    const flagKey = `notification_permission_prompted_${user.id}`;
-    await SecureStore.setItemAsync(flagKey, 'true');
-    setShowNotifModal(false);
-    await requestPermission();
-  }, [user, requestPermission]);
-
-  const handleNotifDismiss = useCallback(async () => {
-    if (!user) return;
-    const flagKey = `notification_permission_prompted_${user.id}`;
-    await SecureStore.setItemAsync(flagKey, 'true');
-    setShowNotifModal(false);
-  }, [user]);
+  // ─── Permissions overlay ─────────────────────────────────────────────────────
+  const [showPermissionsOverlay, setShowPermissionsOverlay] = useState(false);
+  const pendingSearchRef = useRef(false);
 
   // Live requester scores — seeded from cache to avoid flicker
   const _cachedRScores = getCached<{ rating: number; reliability: number }>('requester_scores');
@@ -1902,7 +1866,7 @@ export default function RequesterHomeScreen() {
             return true;
           }
           return false;
-        });
+        }, undefined, 6);
       })
       .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
         // A session was created — if we're in matching state, confirm the match
@@ -1948,7 +1912,7 @@ export default function RequesterHomeScreen() {
             return true;
           }
           return false;
-        });
+        }, undefined, 6);
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -2259,6 +2223,8 @@ export default function RequesterHomeScreen() {
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const transitionToRef = useRef<(state: SheetState) => void>(() => {});
   // eslint-disable-next-line @typescript-eslint/no-empty-function
+  const playAcceptanceChimeRef = useRef<(sessionId: string) => Promise<void>>(async (_sessionId: string) => {});
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
   const handlePaymentConfirmedWithFallbackRef = useRef<(sessionId?: string) => void>(() => {});
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const startRequesterPaymentPollingRef = useRef<() => void>(() => {});
@@ -2430,21 +2396,6 @@ export default function RequesterHomeScreen() {
     };
   }, [fetchActiveSession, fetchOnlineDoctors, user?.id]);
 
-  // ─── Polling fallback — upcoming/paused session poll ─────────────────────────
-  // Runs when activeSession is in upcoming or paused state (no activeSessionId-based poll covers this).
-  // Catches missed broadcasts for cancel, start, pause, resume.
-  useEffect(() => {
-    if (!activeSession || !['upcoming', 'paused'].includes(activeSession.status)) return;
-    console.log('[Requester] upcoming/paused poll — starting interval, status:', activeSession.status);
-    const id = setInterval(() => {
-      if (!endShiftInProgressRef.current) {
-        console.log('[Requester] upcoming/paused poll — tick, fetching active session');
-        fetchActiveSession();
-      }
-    }, POLL_INTERVAL);
-    return () => clearInterval(id);
-  }, [activeSession?.status, activeSession?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ─── Proactive payment poll — starts whenever session enters payment_pending state ───
   // Ensures overlay fires even if PAYMENT_CONFIRMED broadcast was missed
   useEffect(() => {
@@ -2555,7 +2506,7 @@ export default function RequesterHomeScreen() {
             return true;
           }
           return false;
-        });
+        }, undefined, 6);
       })
       .subscribe((status) => {
         console.log('[Requester] session channel subscribe status:', status, 'for session:', activeSessionId);
@@ -2628,50 +2579,10 @@ export default function RequesterHomeScreen() {
 
   // Channels 6 and 7 merged into requester-user channel above
 
-  // ─── Location on mount — animate map to user position + stream ───────────────
+  // ─── Location setup — started after PermissionsOverlay grants access ─────────
+  // (silent on-mount request removed; location is obtained in handlePermissionsAllGranted)
+  // Cleanup subscription on unmount
   useEffect(() => {
-    console.log('[LocationPermission][Requester] GPS useEffect mounted');
-    (async () => {
-      console.log('[LocationPermission][Requester] fetchLocation() called');
-
-      // Check current status BEFORE requesting
-      const existing = await Location.getForegroundPermissionsAsync();
-      console.log('[LocationPermission][Requester] current status before request:', existing.status, '| canAskAgain:', existing.canAskAgain, '| granted:', existing.granted);
-
-      console.log('[LocationPermission][Requester] calling requestForegroundPermissionsAsync()...');
-      const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
-      console.log('[LocationPermission][Requester] requestForegroundPermissionsAsync() result — status:', status, '| canAskAgain:', canAskAgain);
-
-      if (status === 'granted') {
-        console.log('[LocationPermission][Requester] permission granted — fetching position');
-        // One-time immediate fix
-        const immediatePos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Highest,
-        });
-        if (!_hasInitialFix) {
-          _hasInitialFix = true;
-          _cachedRequesterCoords = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude };
-          setUserCoords({ latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude });
-          _cachedRequesterRegion = { latitude: immediatePos.coords.latitude + MAP_LAT_OFFSET, longitude: immediatePos.coords.longitude + MAP_LNG_OFFSET, latitudeDelta: 0.12, longitudeDelta: 0.12 };
-          mapRef.current?.animateToRegion(_cachedRequesterRegion, 800);
-        }
-        locationSub.current = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.Highest, timeInterval: 2000, distanceInterval: 1, mayShowUserSettingsDialog: true },
-          (loc) => {
-            if (!_hasInitialFix) {
-              _hasInitialFix = true;
-              _cachedRequesterRegion = { latitude: loc.coords.latitude + MAP_LAT_OFFSET, longitude: loc.coords.longitude + MAP_LNG_OFFSET, latitudeDelta: 0.12, longitudeDelta: 0.12 };
-              mapRef.current?.animateToRegion(_cachedRequesterRegion, 800);
-            }
-            _cachedRequesterCoords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-            setUserCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-          }
-        );
-      } else {
-        console.log('[LocationPermission][Requester] permission NOT granted — falling back to Lagos region');
-        setUserCoords({ latitude: LAGOS_REGION.latitude, longitude: LAGOS_REGION.longitude });
-      }
-    })();
     return () => { locationSub.current?.remove(); };
   }, []);
 
@@ -2759,6 +2670,7 @@ export default function RequesterHomeScreen() {
   useEffect(() => { fetchActiveSessionRef.current = fetchActiveSession; }, [fetchActiveSession]);
   useEffect(() => { transitionToRef.current = transitionTo; }, [transitionTo]);
   useEffect(() => { activeRequestIdRef.current = activeRequestId; }, [activeRequestId]);
+  useEffect(() => { playAcceptanceChimeRef.current = playAcceptanceChime; }, [playAcceptanceChime]);
 
   // ─── Clean up search state when leaving searching ─────────────────────────────
   useEffect(() => {
@@ -2921,6 +2833,7 @@ export default function RequesterHomeScreen() {
       const channelName = `requester:${activeRequestId}`;
       realtimeChannelRef.current = supabase.channel(channelName)
         .on('broadcast', { event: 'MATCH_CONFIRMED' }, (payload) => {
+          console.log('[Requester] MATCH_CONFIRMED broadcast received', payload?.payload);
           PollingManager.stop('match');
           shouldPollRef.current = false;
           if (pollIntervalRef.current) {
@@ -2928,6 +2841,11 @@ export default function RequesterHomeScreen() {
             pollIntervalRef.current = null;
           }
           if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+          const matchedSid = (payload?.payload as { session_id?: string } | undefined)?.session_id;
+          if (matchedSid && AppState.currentState === 'active') {
+            console.log('[Requester] MATCH_CONFIRMED — playing acceptance chime for session:', matchedSid);
+            playAcceptanceChimeRef.current(matchedSid);
+          }
           fetchActiveSessionRef.current();
           transitionToRef.current('idle');
         })
@@ -2968,8 +2886,19 @@ export default function RequesterHomeScreen() {
             .eq('id', activeRequestId)
             .single();
           if (data?.status === 'matched' && data?.matched_doctor_id) {
+            console.log('[Requester] Mount check — match already confirmed for request:', activeRequestId);
             shouldPollRef.current = false;
             if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+            // Fetch session id to play chime
+            const { data: sess } = await supabase
+              .from('coverage_sessions')
+              .select('id')
+              .eq('request_id', activeRequestId)
+              .maybeSingle();
+            if (sess?.id && AppState.currentState === 'active') {
+              console.log('[Requester] Mount check — playing acceptance chime for session:', sess.id);
+              playAcceptanceChimeRef.current(sess.id);
+            }
             fetchActiveSessionRef.current();
             transitionToRef.current('idle');
           }
@@ -2993,16 +2922,21 @@ export default function RequesterHomeScreen() {
 
           if (error) {
           } else if (data?.status === 'matched' && data?.matched_doctor_id) {
+            console.log('[Requester] Poll — match confirmed for request:', activeRequestId);
             shouldPollRef.current = false;
             if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
 
             const { data: session } = await supabase
               .from('coverage_sessions')
-              .select('doctor_name, doctor_mdcn, doctor_rating, doctor_reliability')
+              .select('id, doctor_name, doctor_mdcn, doctor_rating, doctor_reliability')
               .eq('request_id', activeRequestId)
               .single();
 
             if (session) {
+              if (session.id && AppState.currentState === 'active') {
+                console.log('[Requester] Poll match confirmed — playing acceptance chime for session:', session.id);
+                playAcceptanceChimeRef.current(session.id);
+              }
               fetchActiveSessionRef.current();
               transitionToRef.current('idle');
             }
@@ -3145,6 +3079,45 @@ export default function RequesterHomeScreen() {
     })
   ).current;
 
+  // ─── Permissions overlay handlers ────────────────────────────────────────────
+  const handlePermissionsAllGranted = useCallback(async () => {
+    console.log('[RequesterHome] PermissionsOverlay — all granted, starting location and transitioning to searching');
+    setShowPermissionsOverlay(false);
+    pendingSearchRef.current = false;
+    try {
+      const immediatePos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
+      const coords = { latitude: immediatePos.coords.latitude, longitude: immediatePos.coords.longitude };
+      _cachedRequesterCoords = coords;
+      setUserCoords(coords);
+      if (!_hasInitialFix && mapRef.current) {
+        _hasInitialFix = true;
+        mapRef.current.animateToRegion({
+          latitude: coords.latitude + MAP_LAT_OFFSET,
+          longitude: coords.longitude + MAP_LNG_OFFSET,
+          latitudeDelta: 0.12,
+          longitudeDelta: 0.12,
+        }, 800);
+      }
+      locationSub.current = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Highest, timeInterval: 2000, distanceInterval: 1, mayShowUserSettingsDialog: true },
+        (loc) => {
+          const c = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+          _cachedRequesterCoords = c;
+          setUserCoords(c);
+        }
+      );
+    } catch (e: any) {
+      console.log('[RequesterHome] Location fetch after permissions granted failed:', e?.message);
+    }
+    transitionTo('searching');
+  }, [transitionTo]);
+
+  const handlePermissionsDismiss = useCallback(() => {
+    console.log('[RequesterHome] PermissionsOverlay dismissed — not proceeding to search');
+    setShowPermissionsOverlay(false);
+    pendingSearchRef.current = false;
+  }, []);
+
   // ─── Idle card drag responder — swipe up to open search ─────────────────────
   const idleDragResponder = useRef(
     PanResponder.create({
@@ -3152,18 +3125,38 @@ export default function RequesterHomeScreen() {
       onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 5,
       onPanResponderRelease: (_, gs) => {
         if (gs.dy < -20) {
-          transitionTo('searching');
+          // Delegate to handleSearchTap to enforce permission check
+          handleSearchTapRef.current();
         }
       },
     })
   ).current;
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
-  const handleSearchTap = () => {
+  // Ref so the PanResponder closure always calls the latest version
+  const handleSearchTapRef = useRef<() => void>(() => {});
+
+  const handleSearchTap = useCallback(async () => {
     console.log('[Requester Home] Search tap — accountStatus:', accountStatus);
     if (isAccountBlocked) return; // status gate
+    const locPerm = await Location.getForegroundPermissionsAsync();
+    const notifGranted = IS_EXPO_GO
+      ? false
+      : await (require('react-native-onesignal').OneSignal as typeof import('react-native-onesignal').OneSignal).Notifications.hasPermission(); // eslint-disable-line @typescript-eslint/no-require-imports
+    console.log('[RequesterHome] Permission check — location:', locPerm.status, 'notif:', notifGranted);
+    if (locPerm.status !== 'granted' || !notifGranted) {
+      console.log('[RequesterHome] Permissions not fully granted — showing PermissionsOverlay');
+      pendingSearchRef.current = true;
+      setShowPermissionsOverlay(true);
+      return;
+    }
     transitionTo('searching');
-  };
+  }, [isAccountBlocked, accountStatus, transitionTo]);
+
+  // Keep ref in sync
+  useEffect(() => {
+    handleSearchTapRef.current = handleSearchTap;
+  }, [handleSearchTap]);
 
   const handleGoToSummary = async () => {
     console.log('[Requester Home] handleGoToSummary pressed — fetching fresh price before showing summary');
@@ -3255,7 +3248,7 @@ export default function RequesterHomeScreen() {
             return true; // confirmed
           }
           return false;
-        });
+        }, undefined, 6);
       }
     } catch (e: any) {
       const isNetworkErr = e instanceof TypeError &&
@@ -3522,7 +3515,7 @@ export default function RequesterHomeScreen() {
         // non-fatal
       }
       return false;
-    });
+    }, undefined, 60);
   }, [handlePaymentConfirmedWithFallback]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep refs in sync so effects declared before these callbacks can call them without stale closures
@@ -3620,7 +3613,7 @@ export default function RequesterHomeScreen() {
           return true;
         }
         return false;
-      });
+      }, undefined, 6);
     } catch (e: any) {
       Alert.alert('Something went wrong', e.message || 'Please try again.');
     }
@@ -3644,7 +3637,7 @@ export default function RequesterHomeScreen() {
           return true;
         }
         return false;
-      });
+      }, undefined, 6);
     } catch (e: any) {
       Alert.alert('Something went wrong', 'Please try again.');
     }
@@ -3676,7 +3669,7 @@ export default function RequesterHomeScreen() {
           return true;
         }
         return false;
-      });
+      }, undefined, 6);
     } catch (e: any) {
       Alert.alert('Pause Shift Failed', e.message || 'Something went wrong. Please try again.');
     }
@@ -3730,7 +3723,7 @@ export default function RequesterHomeScreen() {
           return true;
         }
         return false;
-      });
+      }, undefined, 6);
     } catch (e: any) {
       console.error('[Requester] end-shift failed:', e.message);
       Alert.alert('End Shift Failed', e.message || 'Something went wrong. Please try again.');
@@ -3782,7 +3775,7 @@ export default function RequesterHomeScreen() {
           return true;
         }
         return false;
-      });
+      }, undefined, 6);
     } catch (e: any) {
       const isNetworkErr = e instanceof TypeError &&
         (e.message?.includes('Network request failed') || e.message?.includes('network'));
@@ -3802,7 +3795,7 @@ export default function RequesterHomeScreen() {
               return true;
             }
             return false;
-          });
+          }, undefined, 6);
           return;
         } catch (retryErr: any) {
           Alert.alert('Something went wrong', retryErr.message || 'Please try again.');
@@ -5282,12 +5275,12 @@ export default function RequesterHomeScreen() {
         </Pressable>
       </Modal>
 
-      {/* ── NOTIFICATION PERMISSION MODAL ── */}
-      <NotificationPermissionModal
-        visible={showNotifModal}
+      {/* ── PERMISSIONS OVERLAY ── */}
+      <PermissionsOverlay
+        visible={showPermissionsOverlay}
         role="requester"
-        onContinue={handleNotifContinue}
-        onDismiss={handleNotifDismiss}
+        onAllGranted={handlePermissionsAllGranted}
+        onDismiss={handlePermissionsDismiss}
       />
     </View>
   );
