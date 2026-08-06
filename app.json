@@ -23,8 +23,7 @@
         "NSCameraUsageDescription": "FlashLocum needs camera access to let you take profile photos and capture documents.",
         "NSPhotoLibraryUsageDescription": "FlashLocum needs access to your photo library to let you upload profile photos and documents.",
         "NSPhotoLibraryAddUsageDescription": "FlashLocum needs permission to save photos to your library.",
-        "NSLocationWhenInUseUsageDescription": "FlashLocum uses your location to match you with nearby locum shifts.",
-        "NSMicrophoneUsageDescription": "FlashLocum needs microphone access for video calls."
+        "NSLocationWhenInUseUsageDescription": "FlashLocum uses your location to match you with nearby locum shifts."
       },
       "config": {
         "googleMapsApiKey": "AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk"
@@ -40,7 +39,9 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_NETWORK_STATE",
-        "android.permission.ACCESS_WIFI_STATE"
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
