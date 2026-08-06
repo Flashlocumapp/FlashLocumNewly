@@ -434,21 +434,23 @@ export default function DoctorHomeScreen() {
       try {
         const alreadyPrompted = await SecureStore.getItemAsync(NOTIF_KEY);
         if (alreadyPrompted) return;
-        if (IS_EXPO_GO) {
-          await SecureStore.setItemAsync(NOTIF_KEY, 'true');
-          return;
-        }
+        if (IS_EXPO_GO) return; // no OneSignal in Expo Go — do not write flag, allow retry on real build
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const OneSignal = require('react-native-onesignal').OneSignal;
-        const granted = await OneSignal.Notifications.hasPermission();
+        const granted: boolean = await OneSignal.Notifications.hasPermission();
         if (granted) {
+          // Already granted — record that we have handled this and skip
           await SecureStore.setItemAsync(NOTIF_KEY, 'true');
           return;
         }
-        // Mark as prompted BEFORE requesting to prevent duplicate prompts on rerender
-        await SecureStore.setItemAsync(NOTIF_KEY, 'true');
+        // Permission is undetermined or denied-but-can-ask-again.
+        // Request the native prompt and wait for the result.
         await OneSignal.Notifications.requestPermission(true);
+        // Save the flag AFTER the request resolves so a crash or interruption
+        // does not permanently suppress future prompts.
+        await SecureStore.setItemAsync(NOTIF_KEY, 'true');
       } catch (e) {
+        // Do NOT write the flag on error — allow retry on next launch
         console.log('[DoctorHome] Notification permission request error:', e);
       }
     })();
