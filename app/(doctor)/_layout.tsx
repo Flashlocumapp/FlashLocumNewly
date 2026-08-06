@@ -1555,13 +1555,16 @@ export default function DoctorLayout() {
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Queue → state sync ──
+  // isOnline is read as state (not isOnlineRef) so this effect re-runs when online status
+  // commits in React Native concurrent mode. The ref lags by one render batch in release
+  // builds — using state here eliminates the 1–2 second card delay on native.
   useEffect(() => {
-    if (requestQueue.length > 0 && doctorScreenState === 'idle' && isOnlineRef.current) {
+    if (requestQueue.length > 0 && doctorScreenState === 'idle' && isOnline) {
       setDoctorScreenState('incoming');
     } else if (requestQueue.length === 0 && doctorScreenState === 'incoming') {
       setDoctorScreenState('idle');
     }
-  }, [requestQueue, doctorScreenState]); // isOnline removed — use ref for live value
+  }, [requestQueue, doctorScreenState, isOnline]);
 
   // ── AppState handler (merged) ──
   useEffect(() => {
