@@ -472,6 +472,8 @@ export default function DoctorLayout() {
   const callEdgeRef = useRef<(fn: string, body?: object) => Promise<Response | null>>(async () => null);
   const forceSyncRef = useRef<() => Promise<void>>(async () => {});
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const lastDispatchEventAt = useRef<number>(0);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   // Stable map of upcoming-session channels — never torn down wholesale, only diffed
   const upcomingChannelsRef = useRef<Map<string, ReturnType<typeof supabase.channel>>>(new Map());
@@ -958,6 +960,7 @@ export default function DoctorLayout() {
     if (!user) return;
     const channel = supabase.channel('dispatch:lagos')
       .on('broadcast', { event: 'NEW_REQUEST' }, (payload) => {
+        lastDispatchEventAt.current = Date.now();
         const req = payload.payload as DispatchRequest;
         const now = new Date();
         if (req.expiry_at && new Date(req.expiry_at) <= now) {
@@ -971,6 +974,7 @@ export default function DoctorLayout() {
         // The Queue → state sync effect will transition to 'incoming' when isOnline is true.
       })
       .on('broadcast', { event: 'EVICT_REQUEST' }, (payload) => {
+        lastDispatchEventAt.current = Date.now();
         // Layer 2 — another doctor accepted this request; remove it instantly
         const { request_id } = payload.payload as { request_id: string };
         if (!request_id) return;
@@ -978,6 +982,7 @@ export default function DoctorLayout() {
         setRequestQueue((prev) => prev.filter((r) => r.id !== request_id));
       })
       .on('broadcast', { event: 'WITHDRAW_REQUEST' }, (payload) => {
+        lastDispatchEventAt.current = Date.now();
         // Layer 2 — requester withdrew/edited this request; remove it instantly
         const { request_id } = payload.payload as { request_id: string };
         if (!request_id) return;
@@ -988,10 +993,35 @@ export default function DoctorLayout() {
         console.log('[Doctor] dispatch channel subscribe status:', status);
         if (status === 'SUBSCRIBED' && isOnlineRef.current && user) {
           forceSyncRef.current();
+
+          // 90-second silent-channel detection.
+          // If no dispatch event arrives within 90s and the doctor is still online,
+          // call forceSync() once as a recovery reconciliation.
+          // This catches silent WebSocket failures (connection open but events not delivering)
+          // without reintroducing a permanent polling loop.
+          const scheduleCheck = () => {
+            const timer = setTimeout(() => {
+              if (!isOnlineRef.current) return; // doctor went offline — no action needed
+              const elapsed = Date.now() - lastDispatchEventAt.current;
+              if (elapsed >= 89000) {
+                // Channel has been silent for ~90s while doctor is online — reconcile once
+                console.warn('[Dispatch] 90s silence detected — running forceSync recovery');
+                forceSyncRef.current();
+              }
+              // Reschedule regardless — keeps checking every 90s while subscribed
+              silenceTimerRef.current = scheduleCheck();
+            }, 90000);
+            return timer;
+          };
+          silenceTimerRef.current = scheduleCheck();
         }
       });
     channelRef.current = channel;
     return () => {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
@@ -1034,7 +1064,7 @@ export default function DoctorLayout() {
             return true;
           }
           return false;
-        });
+        }, undefined, 6);
       })
       .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
         const updated = payload?.payload?.session as CoverageSession | undefined;
@@ -1054,7 +1084,7 @@ export default function DoctorLayout() {
             return true;
           }
           return false;
-        });
+        }, undefined, 6);
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
         const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
@@ -1758,7 +1788,7 @@ export default function DoctorLayout() {
           return true;
         }
         return false;
-      });
+      }, undefined, 6);
 
       // Auto-go-offline after accepting the 3rd shift
       if (activeJobCount + 1 >= 3) {
