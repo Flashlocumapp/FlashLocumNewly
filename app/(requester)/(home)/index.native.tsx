@@ -816,6 +816,7 @@ function RequesterPaymentCard({
   const paymentIntentRef = useRef<import('@/types').PaymentIntent | null>(null);
   const [loadingIntent, setLoadingIntent] = useState(true);
   const autoRefreshAttemptedRef = useRef(false);
+  const refreshingRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
   // Manual payment claim state
@@ -948,7 +949,8 @@ function RequesterPaymentCard({
 
   // ─── Refresh payment via edge function ───────────────────────────────────
   const handleRefreshPayment = useCallback(async () => {
-    if (refreshing) return;
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
     setRefreshing(true);
     try {
       const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/refresh-payment`, {
@@ -1000,9 +1002,10 @@ function RequesterPaymentCard({
       }
     } catch (e: any) {
     } finally {
+      refreshingRef.current = false;
       setRefreshing(false);
     }
-  }, [session.id, refreshing, startCountdown, onPartialPaymentCleared]);
+  }, [session.id, startCountdown, onPartialPaymentCleared]);
 
   // Keep paymentIntentRef in sync so updaters can read the latest value without stale closures.
   useEffect(() => { paymentIntentRef.current = paymentIntent; }, [paymentIntent]);
@@ -1097,7 +1100,7 @@ function RequesterPaymentCard({
   // payment_confirmed / PAYMENT_CONFIRMED are handled by the parent's
   // requester-user channel and session channel; parent calls onPaymentConfirmed.
   useEffect(() => {
-    const channelName = `session-payment:${session.id}`;
+    const channelName = `session:${session.id}`;
 
     const ch = supabase.channel(channelName)
       .on('broadcast', { event: 'payment_refreshed' }, (payload) => {
