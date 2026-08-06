@@ -239,7 +239,7 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
       const { Audio } = await import('expo-av');
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
       const { sound } = await Audio.Sound.createAsync(
-        require('../assets/sounds/acceptance_chime.mp3'),
+        require('../assets/sounds/acceptance_chime.wav'),
         { shouldPlay: true, volume: 1.0 }
       );
       console.log('[NotificationContext] playAcceptanceChime — sound playing for sessionId:', sessionId);
