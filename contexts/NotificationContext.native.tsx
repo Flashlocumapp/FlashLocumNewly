@@ -224,21 +224,30 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
   }, []);
 
   const playAcceptanceChime = useCallback(async (sessionId: string) => {
+    console.log('[NotificationContext] playAcceptanceChime called — sessionId:', sessionId);
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id ?? 'anon';
     const key = `${userId}:${sessionId}`;
-    if (_playedChimes.has(key)) return;
+    if (_playedChimes.has(key)) {
+      console.log('[NotificationContext] playAcceptanceChime skipped — already played for key:', key);
+      return;
+    }
     _playedChimes.add(key);
     try { await AsyncStorage.setItem(CHIME_STORAGE_KEY, JSON.stringify(Array.from(_playedChimes))); } catch {}
     try {
+      console.log('[NotificationContext] playAcceptanceChime — loading audio asset');
       const { Audio } = await import('expo-av');
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
       const { sound } = await Audio.Sound.createAsync(
         require('../assets/sounds/acceptance_chime.mp3'),
         { shouldPlay: true, volume: 1.0 }
       );
+      console.log('[NotificationContext] playAcceptanceChime — sound playing for sessionId:', sessionId);
       sound.setOnPlaybackStatusUpdate(status => {
-        if (status.isLoaded && status.didJustFinish) { sound.unloadAsync().catch(() => {}); }
+        if (status.isLoaded && status.didJustFinish) {
+          console.log('[NotificationContext] playAcceptanceChime — playback finished, unloading');
+          sound.unloadAsync().catch(() => {});
+        }
       });
     } catch (err) { console.warn('[NotificationContext] playAcceptanceChime error:', err); }
   }, []);

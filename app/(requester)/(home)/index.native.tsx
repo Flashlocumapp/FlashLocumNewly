@@ -2226,6 +2226,8 @@ export default function RequesterHomeScreen() {
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const transitionToRef = useRef<(state: SheetState) => void>(() => {});
   // eslint-disable-next-line @typescript-eslint/no-empty-function
+  const playAcceptanceChimeRef = useRef<(sessionId: string) => Promise<void>>(async (_sessionId: string) => {});
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
   const handlePaymentConfirmedWithFallbackRef = useRef<(sessionId?: string) => void>(() => {});
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const startRequesterPaymentPollingRef = useRef<() => void>(() => {});
@@ -2686,6 +2688,7 @@ export default function RequesterHomeScreen() {
   useEffect(() => { fetchActiveSessionRef.current = fetchActiveSession; }, [fetchActiveSession]);
   useEffect(() => { transitionToRef.current = transitionTo; }, [transitionTo]);
   useEffect(() => { activeRequestIdRef.current = activeRequestId; }, [activeRequestId]);
+  useEffect(() => { playAcceptanceChimeRef.current = playAcceptanceChime; }, [playAcceptanceChime]);
 
   // ─── Clean up search state when leaving searching ─────────────────────────────
   useEffect(() => {
@@ -2848,6 +2851,7 @@ export default function RequesterHomeScreen() {
       const channelName = `requester:${activeRequestId}`;
       realtimeChannelRef.current = supabase.channel(channelName)
         .on('broadcast', { event: 'MATCH_CONFIRMED' }, (payload) => {
+          console.log('[Requester] MATCH_CONFIRMED broadcast received', payload?.payload);
           PollingManager.stop('match');
           shouldPollRef.current = false;
           if (pollIntervalRef.current) {
@@ -2855,6 +2859,11 @@ export default function RequesterHomeScreen() {
             pollIntervalRef.current = null;
           }
           if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+          const matchedSid = (payload?.payload as { session_id?: string } | undefined)?.session_id;
+          if (matchedSid && AppState.currentState === 'active') {
+            console.log('[Requester] MATCH_CONFIRMED — playing acceptance chime for session:', matchedSid);
+            playAcceptanceChimeRef.current(matchedSid);
+          }
           fetchActiveSessionRef.current();
           transitionToRef.current('idle');
         })
@@ -2895,8 +2904,19 @@ export default function RequesterHomeScreen() {
             .eq('id', activeRequestId)
             .single();
           if (data?.status === 'matched' && data?.matched_doctor_id) {
+            console.log('[Requester] Mount check — match already confirmed for request:', activeRequestId);
             shouldPollRef.current = false;
             if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+            // Fetch session id to play chime
+            const { data: sess } = await supabase
+              .from('coverage_sessions')
+              .select('id')
+              .eq('request_id', activeRequestId)
+              .maybeSingle();
+            if (sess?.id && AppState.currentState === 'active') {
+              console.log('[Requester] Mount check — playing acceptance chime for session:', sess.id);
+              playAcceptanceChimeRef.current(sess.id);
+            }
             fetchActiveSessionRef.current();
             transitionToRef.current('idle');
           }
@@ -2920,16 +2940,21 @@ export default function RequesterHomeScreen() {
 
           if (error) {
           } else if (data?.status === 'matched' && data?.matched_doctor_id) {
+            console.log('[Requester] Poll — match confirmed for request:', activeRequestId);
             shouldPollRef.current = false;
             if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
 
             const { data: session } = await supabase
               .from('coverage_sessions')
-              .select('doctor_name, doctor_mdcn, doctor_rating, doctor_reliability')
+              .select('id, doctor_name, doctor_mdcn, doctor_rating, doctor_reliability')
               .eq('request_id', activeRequestId)
               .single();
 
             if (session) {
+              if (session.id && AppState.currentState === 'active') {
+                console.log('[Requester] Poll match confirmed — playing acceptance chime for session:', session.id);
+                playAcceptanceChimeRef.current(session.id);
+              }
               fetchActiveSessionRef.current();
               transitionToRef.current('idle');
             }
