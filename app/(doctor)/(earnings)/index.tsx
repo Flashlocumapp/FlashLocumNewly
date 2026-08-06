@@ -124,9 +124,9 @@ function TransactionCard({
   const shiftDateStr = formatShiftDate(row.paid_at ?? row.start_time);
   const coverageLabel = row.coverage_type ?? 'Standard';
   const subtitleText = coverageLabel + ' · ' + shiftDateStr;
-  const netPayoutDisplay = formatNaira(row.net_payout_naira);
+  const netPayoutDisplay = row.net_payout_naira != null ? formatNaira(row.net_payout_naira) : '—';
   const totalChargedDisplay = formatNaira(row.total_amount_naira);
-  const platformFeeDisplay = formatNaira(row.platform_fee_naira);
+  const platformFeeDisplay = row.platform_fee_naira != null ? formatNaira(row.platform_fee_naira) : '—';
   const paymentStatusDisplay = statusLabel;
   const paymentDateDisplay = formatDateTime(row.payment_deadline_at);
   const settledDateDisplay = formatDateTime(row.settled_at);
@@ -259,12 +259,22 @@ export default function DoctorEarningsScreen() {
       const rows: DoctorEarning[] = (data ?? []).map((cs: any) => {
         const pi = Array.isArray(cs.payment_intents) ? cs.payment_intents[0] : cs.payment_intents;
         const totalCost = Number(cs.total_cost ?? 0);
-        const platformFee = pi?.platform_commission_naira != null
+        const isSettled = cs.status === 'settled';
+
+        // For settled sessions: use only the authoritative payment_intents values.
+        // null means the data is genuinely missing — do not estimate.
+        // For pre-settlement sessions: fallback estimation is acceptable.
+        const platformFee: number | null = pi?.platform_commission_naira != null
           ? Number(pi.platform_commission_naira)
-          : Math.round(totalCost * 0.15 / 10) * 10;
-        const netPayout = pi?.doctor_payout_naira != null
+          : isSettled
+            ? null
+            : Math.round(totalCost * 0.15 / 10) * 10;
+
+        const netPayout: number | null = pi?.doctor_payout_naira != null
           ? Number(pi.doctor_payout_naira)
-          : totalCost - platformFee;
+          : isSettled
+            ? null
+            : (platformFee != null ? totalCost - platformFee : totalCost);
         return {
           session_id: cs.id,
           doctor_id: cs.doctor_id,
@@ -326,11 +336,6 @@ export default function DoctorEarningsScreen() {
   // ── Initial load ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
-    // Pre-populate from user-scoped cache immediately
-    const cached = getCached<DoctorEarning[]>(`doctor_earnings:${user.id}`);
-    if (cached && cached.length > 0) {
-      setEarnings(cached);
-    }
     fetchEarnings();
   }, [user, fetchEarnings]);
 
@@ -413,7 +418,7 @@ export default function DoctorEarningsScreen() {
   // "Settled" = Monnify has confirmed settlement to the doctor
   const settledAmount = earnings
     .filter(r => r.session_status === 'settled' && isInPeriod(r.settled_at, period))
-    .reduce((sum, r) => sum + Number(r.net_payout_naira), 0);
+    .reduce((sum, r) => sum + (r.net_payout_naira != null ? r.net_payout_naira : 0), 0);
 
   // "Pending" = requester has paid but Monnify has not yet settled
   const pendingAmount = earnings
@@ -422,7 +427,7 @@ export default function DoctorEarningsScreen() {
       r.session_status !== 'settled' &&
       isInPeriod(r.paid_at ?? r.start_time, period)
     )
-    .reduce((sum, r) => sum + Number(r.net_payout_naira), 0);
+    .reduce((sum, r) => sum + (r.net_payout_naira != null ? r.net_payout_naira : 0), 0);
 
   const settledDisplay = formatNaira(settledAmount);
   const pendingDisplay = formatNaira(pendingAmount);

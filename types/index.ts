@@ -49,8 +49,8 @@ export type DoctorEarning = {
   start_time: string;        // coverage_sessions.shift_start
   end_time: string;          // coverage_sessions.shift_end
   total_amount_naira: number; // coverage_sessions.total_cost
-  platform_fee_naira: number; // calculated
-  net_payout_naira: number;   // calculated
+  platform_fee_naira: number | null; // calculated; null for settled rows with missing authoritative data
+  net_payout_naira: number | null;   // calculated; null for settled rows with missing authoritative data
   hospital_name: string | null;
   payment_status: string | null;              // payment_intents.status
   monnify_account_reference: string | null;   // payment_intents.monnify_account_reference
