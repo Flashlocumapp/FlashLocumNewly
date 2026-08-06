@@ -236,9 +236,6 @@ async function warmDoctorRatedCache() {
   } catch {}
 }
 
-// POLL_INTERVAL: 5s in dev (Expo Go WebSocket unreliable), 10s in production.
-// Cost at 10s: 6 req/min per online doctor. Realtime is the primary delivery path (zero cost).
-const POLL_INTERVAL = __DEV__ ? 5000 : 10000;
 
 type DoctorScreenState = 'idle' | 'incoming' | 'confirmed';
 
@@ -674,11 +671,12 @@ export default function DoctorLayout() {
         // non-fatal
       }
       return false;
-    });
+    }, 5000, 60);
   }, [maybeShowDoctorRating, fetchVerifiedAmount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startPaymentPollingRef = useRef(startPaymentPolling);
   useEffect(() => { startPaymentPollingRef.current = startPaymentPolling; }, [startPaymentPolling]);
+  const paymentPollingStartedRef = useRef<string | null>(null);
 
   // Reconcile upcoming sessions against server state — only updates if there's a mismatch
   const reconcileUpcoming = useCallback(async () => {
@@ -736,6 +734,8 @@ export default function DoctorLayout() {
   useEffect(() => { callEdgeRef.current = callEdge; }, [callEdge]);
   useEffect(() => { forceSyncRef.current = forceSync; }, [forceSync]);
   useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
+  const fetchActiveSessionRef = useRef(fetchActiveSession);
+  useEffect(() => { fetchActiveSessionRef.current = fetchActiveSession; }, [fetchActiveSession]);
 
   // Go online with optional GPS coords from the home screen
   const goOnline = useCallback((coords?: { lat: number; lng: number }) => {
@@ -856,6 +856,7 @@ export default function DoctorLayout() {
       _doctorDismissedSessions.clear();
       setActiveSession(null);
       setActiveSessionId(null); // clear stale ID so ghost subscriptions don't form on next login
+      paymentPollingStartedRef.current = null;
       setActiveJobCount(0);
       setUpcomingSessions([]);
       setIsOnline(false);
@@ -940,38 +941,6 @@ export default function DoctorLayout() {
     toggle();
   }, [isOnline, user]);
 
-  // ── Polling fallback — dispatch poll (online only) ──
-  useEffect(() => {
-    if (!isOnline || !user) return;
-    const id = setInterval(() => {
-      forceSyncRef.current();
-    }, POLL_INTERVAL);
-    return () => clearInterval(id);
-  }, [isOnline, user]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Polling fallback — session poll (runs whenever there is an active session) ──
-  useEffect(() => {
-    if (!activeSessionId || !user) return;
-    const id = setInterval(() => {
-      fetchActiveSession();
-    }, POLL_INTERVAL);
-    return () => clearInterval(id);
-  }, [activeSessionId, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Polling fallback — upcoming sessions poll (runs whenever there are upcoming sessions) ──
-  useEffect(() => {
-    if (!upcomingSessions.length || !user) return;
-    console.log('[Doctor] upcoming sessions poll — starting interval for', upcomingSessions.length, 'sessions');
-    const id = setInterval(() => {
-      if (startShiftInProgressRef.current) {
-        console.log('[Doctor] upcoming sessions poll — skipping tick, start-shift in progress');
-        return;
-      }
-      console.log('[Doctor] upcoming sessions poll — tick, reconciling');
-      reconcileUpcomingRef.current();
-    }, POLL_INTERVAL);
-    return () => clearInterval(id);
-  }, [upcomingSessions.length, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Proactive payment poll — starts whenever session enters payment_pending state ──
   // Ensures overlay fires even if SHIFT_ENDED broadcast was missed
@@ -1097,7 +1066,10 @@ export default function DoctorLayout() {
         const sid = (updated as any)?.id ?? activeSessionIdRef.current ?? '';
         const hospital = (updated as any)?.hospital_name ?? '';
         const amt = (updated as any)?.total_cost ?? (updated as any)?.price ?? 0;
-        startPaymentPollingRef.current(sid, hospital, amt);
+        if (sid && paymentPollingStartedRef.current !== sid) {
+          paymentPollingStartedRef.current = sid;
+          startPaymentPollingRef.current(sid, hospital, amt);
+        }
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? activeSessionId;
@@ -1106,7 +1078,11 @@ export default function DoctorLayout() {
         console.log('[Doctor] PAYMENT_CONFIRMED broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
-        startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
+        const sid = sessionId ?? '';
+        if (sid && paymentPollingStartedRef.current !== sid) {
+          paymentPollingStartedRef.current = sid;
+          startPaymentPollingRef.current(sid, hospitalName, amount);
+        }
         invalidate(`doctor-coverage-history-${user.id}`);
         invalidate(`doctor-coverage-upcoming-${user.id}`);
         invalidate(`doctor_earnings:${user.id}`);
@@ -1118,7 +1094,11 @@ export default function DoctorLayout() {
         console.log('[Doctor] payment_confirmed broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
-        startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
+        const sid = sessionId ?? '';
+        if (sid && paymentPollingStartedRef.current !== sid) {
+          paymentPollingStartedRef.current = sid;
+          startPaymentPollingRef.current(sid, hospitalName, amount);
+        }
         invalidate(`doctor-coverage-history-${user.id}`);
         invalidate(`doctor-coverage-upcoming-${user.id}`);
         invalidate(`doctor_earnings:${user.id}`);
@@ -1130,21 +1110,25 @@ export default function DoctorLayout() {
         PollingManager.stop('cancel');
         if (activeSession?.id) clearChimeForSession(activeSession.id);
         setActiveSession(null);
+        paymentPollingStartedRef.current = null;
         setActiveJobCount((prev) => Math.max(0, prev - 1));
         // Reconcile upcoming — removes any cancelled session from the list
         reconcileUpcomingRef.current();
-        PollingManager.start('cancel-confirm', async () => {
-          const { data: s } = await supabase
-            .from('coverage_sessions')
-            .select('status')
-            .eq('id', activeSessionIdRef.current ?? '')
-            .maybeSingle();
-          if (!s || s.status === 'cancelled') {
-            reconcileUpcomingRef.current();
-            return true;
-          }
-          return false;
-        });
+        const cancelledSessionId = activeSessionIdRef.current ?? '';
+        if (cancelledSessionId) {
+          PollingManager.start(`cancel-confirm-${cancelledSessionId}`, async () => {
+            const { data: s } = await supabase
+              .from('coverage_sessions')
+              .select('status')
+              .eq('id', cancelledSessionId)
+              .maybeSingle();
+            if (!s || s.status === 'cancelled') {
+              reconcileUpcomingRef.current();
+              return true;
+            }
+            return false;
+          }, 5000, 6);
+        }
       })
       .subscribe((status) => {
         console.log('[Doctor] session channel subscribe status:', status, 'for session:', activeSessionId);
@@ -1193,16 +1177,18 @@ export default function DoctorLayout() {
           map.delete(session.id);
           setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
           setActiveJobCount((prev) => Math.max(0, prev - 1));
-          PollingManager.stop(`cancel-upcoming-${session.id}`);
           PollingManager.start(`cancel-confirm-${session.id}`, async () => {
             const { data: s } = await supabase
               .from('coverage_sessions')
               .select('status')
               .eq('id', session.id)
               .maybeSingle();
-            if (!s || s.status === 'cancelled') return true;
+            if (!s || s.status === 'cancelled') {
+              reconcileUpcomingRef.current();
+              return true;
+            }
             return false;
-          });
+          }, 5000, 6);
         })
         .subscribe();
       map.set(session.id, ch);
@@ -1218,7 +1204,7 @@ export default function DoctorLayout() {
             coverageMap.delete(session.id);
             setUpcomingSessions((prev) => prev.filter((s) => s.id !== session.id));
             setActiveJobCount((prev) => Math.max(0, prev - 1));
-            PollingManager.start(`cancel-confirm-cov-${session.id}`, async () => {
+            PollingManager.start(`cancel-confirm-${session.id}`, async () => {
               const { data: s } = await supabase
                 .from('coverage_sessions')
                 .select('status')
@@ -1229,7 +1215,7 @@ export default function DoctorLayout() {
                 return true;
               }
               return false;
-            });
+            }, 5000, 6);
           } else if (status === 'active') {
             startShiftInProgressRef.current = true;
             supabase.removeChannel(covCh);
@@ -1244,17 +1230,18 @@ export default function DoctorLayout() {
             fetchActiveSession().finally(() => {
               startShiftInProgressRef.current = false;
             });
-            PollingManager.start(`start-confirm-cov-${session.id}`, async () => {
+            PollingManager.start(`start-confirm-${session.id}`, async () => {
               const { data: s } = await supabase
                 .from('coverage_sessions')
-                .select('id, status')
+                .select('status')
                 .eq('id', session.id)
                 .maybeSingle();
               if (s?.status === 'active') {
+                fetchActiveSessionRef.current();
                 return true;
               }
               return false;
-            });
+            }, 5000, 6);
           } else if (status === 'paused') {
             fetchActiveSession();
             reconcileUpcomingRef.current();
@@ -1481,7 +1468,11 @@ export default function DoctorLayout() {
         console.log('[Doctor] user channel PAYMENT_CONFIRMED received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
-        startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
+        const sid = sessionId ?? '';
+        if (sid && paymentPollingStartedRef.current !== sid) {
+          paymentPollingStartedRef.current = sid;
+          startPaymentPollingRef.current(sid, hospitalName, amount);
+        }
         invalidate(`doctor-coverage-history-${user.id}`);
         invalidate(`doctor-coverage-upcoming-${user.id}`);
         invalidate(`doctor_earnings:${user.id}`);
@@ -1493,7 +1484,11 @@ export default function DoctorLayout() {
         console.log('[Doctor] user channel payment_confirmed received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
-        startPaymentPollingRef.current(sessionId ?? '', hospitalName, amount);
+        const sid = sessionId ?? '';
+        if (sid && paymentPollingStartedRef.current !== sid) {
+          paymentPollingStartedRef.current = sid;
+          startPaymentPollingRef.current(sid, hospitalName, amount);
+        }
         invalidate(`doctor-coverage-history-${user.id}`);
         invalidate(`doctor-coverage-upcoming-${user.id}`);
         invalidate(`doctor_earnings:${user.id}`);
@@ -1503,15 +1498,21 @@ export default function DoctorLayout() {
         startShiftInProgressRef.current = true;
         setActiveSession((prev) => prev ? { ...prev, status: 'active' } : prev);
         fetchActiveSession().finally(() => { startShiftInProgressRef.current = false; });
-        PollingManager.start('start-confirm-user', async () => {
-          const { data: s } = await supabase
-            .from('coverage_sessions')
-            .select('id, status')
-            .eq('id', activeSessionIdRef.current ?? '')
-            .maybeSingle();
-          if (s?.status === 'active') return true;
-          return false;
-        });
+        const startSessionId = activeSessionIdRef.current ?? '';
+        if (startSessionId) {
+          PollingManager.start(`start-confirm-${startSessionId}`, async () => {
+            const { data: s } = await supabase
+              .from('coverage_sessions')
+              .select('status')
+              .eq('id', startSessionId)
+              .maybeSingle();
+            if (s?.status === 'active') {
+              fetchActiveSessionRef.current();
+              return true;
+            }
+            return false;
+          }, 5000, 6);
+        }
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
         const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
@@ -1522,31 +1523,36 @@ export default function DoctorLayout() {
         const sid = (updated as any)?.id ?? activeSessionIdRef.current ?? '';
         const hospital = (updated as any)?.hospital_name ?? '';
         const amt = (updated as any)?.total_cost ?? (updated as any)?.price ?? 0;
-        startPaymentPollingRef.current(sid, hospital, amt);
+        if (sid && paymentPollingStartedRef.current !== sid) {
+          paymentPollingStartedRef.current = sid;
+          startPaymentPollingRef.current(sid, hospital, amt);
+        }
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
         console.log('[Doctor] user channel SHIFT_CANCELLED received', { sessionId });
         if (activeSession?.id) clearChimeForSession(activeSession.id);
         setActiveSession(null);
+        paymentPollingStartedRef.current = null;
         setActiveJobCount((prev) => Math.max(0, prev - 1));
         if (sessionId) {
           setUpcomingSessions((prev) => prev.filter((s) => s.id !== sessionId));
         }
         reconcileUpcomingRef.current();
-        PollingManager.start('cancel-confirm-user', async () => {
-          if (!sessionId) return true;
-          const { data: s } = await supabase
-            .from('coverage_sessions')
-            .select('status')
-            .eq('id', sessionId)
-            .maybeSingle();
-          if (!s || s.status === 'cancelled') {
-            reconcileUpcomingRef.current();
-            return true;
-          }
-          return false;
-        });
+        if (sessionId) {
+          PollingManager.start(`cancel-confirm-${sessionId}`, async () => {
+            const { data: s } = await supabase
+              .from('coverage_sessions')
+              .select('status')
+              .eq('id', sessionId)
+              .maybeSingle();
+            if (!s || s.status === 'cancelled') {
+              reconcileUpcomingRef.current();
+              return true;
+            }
+            return false;
+          }, 5000, 6);
+        }
       })
       .subscribe((status) => {
         // subscription status — no logging needed
@@ -1646,6 +1652,8 @@ export default function DoctorLayout() {
 
             // 4. Dispatch reconciliation
             if (user) await forceSync();
+            // 5. Upcoming sessions reconciliation
+            reconcileUpcomingRef.current();
           } finally {
             setResumeReady(true); // dismiss the overlay — home data is fresh
           }
@@ -1654,6 +1662,7 @@ export default function DoctorLayout() {
           console.log('[AppState] active — syncing session');
           if (isOnlineRef.current && user) await forceSync();
           fetchActiveSession();
+          reconcileUpcomingRef.current();
           // Re-sync online status from backend on short resume
           if (user?.id) {
             try {
@@ -1801,8 +1810,9 @@ export default function DoctorLayout() {
     // Clear activeSession so home screen shows "No coverage yet" after payment flow
     setActiveSession(null);
     setUpcomingSessions([]);
-    // Stop the 30s session poll — session is permanently settled
+    // Stop the session poll — session is permanently settled
     setActiveSessionId(null);
+    paymentPollingStartedRef.current = null;
   }, [doctorRatingSessionId, user?.id]);
 
   // ── Doctor Rating — submit review ──

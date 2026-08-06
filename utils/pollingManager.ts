@@ -23,13 +23,21 @@ interface Session {
 
 const sessions = new Map<string, Session>();
 
-function _schedule(key: string, fn: PollFn, intervalMs: number): void {
+function _schedule(key: string, fn: PollFn, intervalMs: number, maxAttempts?: number, attempt = 0): void {
   const session = sessions.get(key);
   if (!session || !session.active) return;
 
   session.timer = setTimeout(async () => {
     const s = sessions.get(key);
     if (!s || !s.active) return;
+
+    const currentAttempt = attempt + 1;
+
+    if (maxAttempts !== undefined && currentAttempt > maxAttempts) {
+      console.warn(`[PollingManager] '${key}' timed out after ${maxAttempts} attempts — stopping`);
+      stop(key);
+      return;
+    }
 
     let confirmed = false;
     try {
@@ -41,12 +49,12 @@ function _schedule(key: string, fn: PollFn, intervalMs: number): void {
     if (confirmed) {
       stop(key);
     } else {
-      _schedule(key, fn, intervalMs);
+      _schedule(key, fn, intervalMs, maxAttempts, currentAttempt);
     }
   }, intervalMs);
 }
 
-export function start(key: string, fn: PollFn, intervalMs = 5000): void {
+export function start(key: string, fn: PollFn, intervalMs = 5000, maxAttempts?: number): void {
   console.log('[PollingManager] start:', key);
   // Stop any existing session for this key first
   stop(key);
@@ -66,7 +74,7 @@ export function start(key: string, fn: PollFn, intervalMs = 5000): void {
       console.log('[PollingManager] confirmed on first tick:', key);
       stop(key);
     } else {
-      _schedule(key, fn, intervalMs);
+      _schedule(key, fn, intervalMs, maxAttempts, 1);
     }
   })();
 }
