@@ -468,7 +468,7 @@ export default function DoctorLayout() {
     })();
   }, [user]);
 
-  const prevIsOnlineRef = useRef<boolean | undefined>(undefined);
+  const prevIsOnlineRef = useRef<boolean>(false);
   const callEdgeRef = useRef<(fn: string, body?: object) => Promise<Response | null>>(async () => null);
   const forceSyncRef = useRef<() => Promise<void>>(async () => {});
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -772,6 +772,10 @@ export default function DoctorLayout() {
         // Only apply if no user-initiated toggle has occurred yet
         if (_toggleIntent !== null) return;
         if (data && typeof data.is_online === 'boolean') {
+          // Synchronise prevIsOnlineRef BEFORE calling setIsOnline so the toggle
+          // effect sees no transition and does not call go-online or go-offline.
+          // Hydration from the DB is not a user-initiated toggle.
+          prevIsOnlineRef.current = data.is_online;
           setIsOnline(data.is_online);
           setCached(`doctor_is_online:${user.id}`, data.is_online);
         }
@@ -815,6 +819,16 @@ export default function DoctorLayout() {
         }).catch(() => {});
       }
       setCriticalDataReady(true);
+      // If the doctor was online when the app launched (restored from DB),
+      // run one forceSync() now that critical data is ready and channels are
+      // subscribing. This is the equivalent of the forceSync() that runs after
+      // a manual go-online — but without calling the go-online Edge Function.
+      // We check isOnlineRef.current (not isOnline state) because state may not
+      // have committed yet at this point in the warm promise chain.
+      if (isOnlineRef.current) {
+        console.log('[DoctorLayout] hydration forceSync — restored is_online=true, running one-time reconciliation');
+        forceSyncRef.current().catch(() => {});
+      }
     });
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1026,6 +1040,39 @@ export default function DoctorLayout() {
       channelRef.current = null;
     };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Start silence detection when online status is restored after channel is already SUBSCRIBED ──
+  // The dispatch channel SUBSCRIBED callback only starts scheduleCheck() if isOnlineRef.current
+  // is true at SUBSCRIBED time. On cold launch with is_online=true restored from DB, the DB read
+  // completes after SUBSCRIBED fires, so scheduleCheck() is missed. This effect catches that case.
+  useEffect(() => {
+    if (!isOnline) return;
+    if (silenceTimerRef.current) return; // already running — don't start a second chain
+    if (!channelRef.current) return; // channel not yet created
+    // Only start if the channel is already SUBSCRIBED (state is 'joined' in Supabase internals)
+    // We can't read channel state directly, so we use a short delay to let SUBSCRIBED fire first,
+    // then check if scheduleCheck was started. If silenceTimerRef is still null after the delay,
+    // the SUBSCRIBED callback missed it and we start it here.
+    const startupTimer = setTimeout(() => {
+      if (isOnlineRef.current && !silenceTimerRef.current && channelRef.current) {
+        console.log('[Dispatch] starting silence detection after hydration (SUBSCRIBED already fired)');
+        const scheduleCheck = (): ReturnType<typeof setTimeout> => {
+          const timer = setTimeout(() => {
+            if (!isOnlineRef.current) return;
+            const elapsed = Date.now() - lastDispatchEventAt.current;
+            if (elapsed >= 89000) {
+              console.warn('[Dispatch] 90s silence detected (hydration path) — running forceSync recovery');
+              forceSyncRef.current();
+            }
+            silenceTimerRef.current = scheduleCheck();
+          }, 90000);
+          return timer;
+        };
+        silenceTimerRef.current = scheduleCheck();
+      }
+    }, 1000); // 1s delay — enough for SUBSCRIBED to have fired and set silenceTimerRef
+    return () => clearTimeout(startupTimer);
+  }, [isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Realtime subscription — session channel (when activeSession changes) ──
   useEffect(() => {
