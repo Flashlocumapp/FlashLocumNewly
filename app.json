@@ -2,7 +2,7 @@
   "expo": {
     "name": "FlashLocum",
     "slug": "flashlocum",
-    "version": "1.0.1",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
@@ -33,7 +33,7 @@
       "package": "com.flashlocum.app",
       "newArchEnabled": true,
       "minSdkVersion": 24,
-      "versionCode": 10,
+      "versionCode": 11,
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
