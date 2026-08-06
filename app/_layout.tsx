@@ -20,6 +20,9 @@ import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_7
 // Prevent splash from auto-hiding before fonts + auth are ready
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+// Capture true app launch time for minimum splash hold calculation
+const APP_START = Date.now();
+
 const LAST_PATHWAY_KEY = 'flashlocum_last_pathway';
 
 export const SplashContext = React.createContext<{
@@ -251,12 +254,17 @@ export default function RootLayout() {
   const [screenReady, setScreenReady] = useState(false);
   const [splashDismissed, setSplashDismissed] = useState(false);
 
-  // Hide splash immediately when ALL THREE conditions are met: fonts loaded, navigation ready, screen ready.
+  // Hide splash when ALL THREE conditions are met, but hold for at least 3 seconds from app launch.
   useEffect(() => {
     if (!fontsLoaded || !navigationReady || !screenReady) return;
-    SplashScreen.hideAsync()
-      .catch(() => {})
-      .finally(() => setSplashDismissed(true));
+    const elapsed = Date.now() - APP_START;
+    const remaining = Math.max(0, 3000 - elapsed);
+    const timer = setTimeout(() => {
+      SplashScreen.hideAsync()
+        .catch(() => {})
+        .finally(() => setSplashDismissed(true));
+    }, remaining);
+    return () => clearTimeout(timer);
   }, [fontsLoaded, navigationReady, screenReady]);
 
   if (!fontsLoaded) return null;
