@@ -328,24 +328,24 @@ export default function DoctorHomeScreen() {
   // ─── Notification permission modal ──────────────────────────────────────────
   const [showNotifModal, setShowNotifModal] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!user || !profile?.doctor_onboarding_complete) return;
-      const userId = user.id;
-      const flagKey = `notification_permission_prompted_${userId}`;
-      (async () => {
-        const flagSet = await SecureStore.getItemAsync(flagKey);
-        if (flagSet === 'true') return;
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const granted = IS_EXPO_GO
-          ? false
-          : await (require('react-native-onesignal').OneSignal as typeof import('react-native-onesignal').OneSignal).Notifications.hasPermission();
-        if (!granted) {
-          setShowNotifModal(true);
-        }
-      })();
-    }, [user, profile?.doctor_onboarding_complete])
-  );
+  useEffect(() => {
+    if (!user || !profile?.doctor_onboarding_complete || !criticalDataReady || !splashDismissed) return;
+    console.log('[Doctor] Checking notification permission for user:', user.id);
+    const userId = user.id;
+    const flagKey = `notification_permission_prompted_${userId}`;
+    (async () => {
+      const flagSet = await SecureStore.getItemAsync(flagKey);
+      if (flagSet === 'true') return;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const granted = IS_EXPO_GO
+        ? false
+        : await (require('react-native-onesignal').OneSignal as typeof import('react-native-onesignal').OneSignal).Notifications.hasPermission();
+      if (!granted) {
+        console.log('[Doctor] Showing notification permission modal');
+        setShowNotifModal(true);
+      }
+    })();
+  }, [user, profile?.doctor_onboarding_complete, criticalDataReady, splashDismissed]);
 
   const handleNotifContinue = useCallback(async () => {
     if (!user) return;
@@ -507,7 +507,7 @@ export default function DoctorHomeScreen() {
   );
 
   // ─── Signal splash screen ready — wait for criticalDataReady + profile ──────
-  const { signalScreenReady } = useSplash();
+  const { signalScreenReady, splashDismissed } = useSplash();
   const splashSignalledRef = useRef(false);
   useEffect(() => {
     if (splashSignalledRef.current) return;

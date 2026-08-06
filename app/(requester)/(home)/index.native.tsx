@@ -1776,24 +1776,24 @@ export default function RequesterHomeScreen() {
   // ─── Notification permission modal ──────────────────────────────────────────
   const [showNotifModal, setShowNotifModal] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!user || !profile?.requester_onboarding_complete) return;
-      const userId = user.id;
-      const flagKey = `notification_permission_prompted_${userId}`;
-      (async () => {
-        const flagSet = await SecureStore.getItemAsync(flagKey);
-        if (flagSet === 'true') return;
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const granted = IS_EXPO_GO
-          ? false
-          : await (require('react-native-onesignal').OneSignal as typeof import('react-native-onesignal').OneSignal).Notifications.hasPermission();
-        if (!granted) {
-          setShowNotifModal(true);
-        }
-      })();
-    }, [user, profile?.requester_onboarding_complete])
-  );
+  useEffect(() => {
+    if (!user || !profile?.requester_onboarding_complete || !splashDismissed) return;
+    console.log('[Requester] Checking notification permission for user:', user.id);
+    const userId = user.id;
+    const flagKey = `notification_permission_prompted_${userId}`;
+    (async () => {
+      const flagSet = await SecureStore.getItemAsync(flagKey);
+      if (flagSet === 'true') return;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const granted = IS_EXPO_GO
+        ? false
+        : await (require('react-native-onesignal').OneSignal as typeof import('react-native-onesignal').OneSignal).Notifications.hasPermission();
+      if (!granted) {
+        console.log('[Requester] Showing notification permission modal');
+        setShowNotifModal(true);
+      }
+    })();
+  }, [user, profile?.requester_onboarding_complete, splashDismissed]);
 
   const handleNotifContinue = useCallback(async () => {
     if (!user) return;
@@ -2717,7 +2717,7 @@ export default function RequesterHomeScreen() {
   );
 
   // ─── Signal splash screen ready on first focus ───────────────────────────────
-  const { signalScreenReady } = useSplash();
+  const { signalScreenReady, splashDismissed } = useSplash();
   const splashSignalledRef = useRef(false);
   useFocusEffect(
     useCallback(() => {
