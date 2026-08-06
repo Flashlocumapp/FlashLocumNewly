@@ -151,7 +151,7 @@ export default function SignUpScreen() {
           data: {
             full_name: form.fullName.trim(),
             first_name: form.fullName.trim().split(' ')[0] ?? '',
-            last_name: form.fullName.trim().split(' ').slice(1).join(' ') || form.fullName.trim().split(' ')[0] ?? '',
+            last_name: form.fullName.trim().split(' ').slice(1).join(' ') || (form.fullName.trim().split(' ')[0] ?? ''),
             role,
           },
         },
