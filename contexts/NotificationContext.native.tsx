@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useCallback, useEffect, useState, useRef, ReactNode } from 'react';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
@@ -33,6 +33,7 @@ export interface NotificationContextType {
   dismissInAppNotification: () => void;
   playAcceptanceChime: (sessionId: string) => Promise<void>;
   clearChimeForSession: (sessionId: string) => void;
+  onNewRequestPush: ((callback: () => void) => () => void) | null;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -62,6 +63,7 @@ function ExpoGoNotificationProvider({ children }: NotificationProviderProps) {
         dismissInAppNotification: () => {},
         playAcceptanceChime: async (_sessionId: string) => {},
         clearChimeForSession: (_sessionId: string) => {},
+        onNewRequestPush: null,
       }}
     >
       {children}
@@ -80,6 +82,15 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
   const [loading, setLoading] = useState(true);
   const [prompted, setPrompted] = useState(false);
   const [inAppNotification, setInAppNotification] = useState<InAppNotification | null>(null);
+
+  const newRequestPushCallbackRef = useRef<(() => void) | null>(null);
+
+  const onNewRequestPush = useCallback((callback: () => void) => {
+    newRequestPushCallbackRef.current = callback;
+    return () => {
+      newRequestPushCallbackRef.current = null;
+    };
+  }, []);
 
   const dismissInAppNotification = useCallback(() => {
     console.log('[InAppBanner] Dismissed');
@@ -149,6 +160,13 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
       const message = event.notification.body ?? '';
 
       console.log('[OneSignal] Foreground notification received type=', notifType, 'title=', title);
+
+      if (notifType === 'NEW_REQUEST') {
+        console.log('[OneSignal] NEW_REQUEST push received foregrounded — triggering forceSync via callback');
+        newRequestPushCallbackRef.current?.();
+        // Do not show banner — silent trigger only
+        return;
+      }
 
       if (notifType && (IN_APP_NOTIFICATION_TYPES as readonly string[]).includes(notifType)) {
         console.log('[InAppBanner] Showing in-app banner for type=', notifType);
@@ -276,6 +294,7 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
         dismissInAppNotification,
         playAcceptanceChime,
         clearChimeForSession,
+        onNewRequestPush,
       }}
     >
       {children}

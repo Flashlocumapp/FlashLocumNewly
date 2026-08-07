@@ -389,7 +389,7 @@ const TABS: DoctorTabItem[] = [
 export default function DoctorLayout() {
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
-  const { playAcceptanceChime, clearChimeForSession } = useNotifications();
+  const { playAcceptanceChime, clearChimeForSession, onNewRequestPush } = useNotifications();
   const router = useRouter();
   const [isOnline, setIsOnline] = useState<boolean>(false);
   const [criticalDataReady, setCriticalDataReady] = useState(false);
@@ -472,8 +472,9 @@ export default function DoctorLayout() {
   const callEdgeRef = useRef<(fn: string, body?: object) => Promise<Response | null>>(async () => null);
   const forceSyncRef = useRef<() => Promise<void>>(async () => {});
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const lastDispatchEventAt = useRef<number>(0);
-  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestQueueRef = useRef<DispatchRequest[]>([]);
+  const dispatchActiveStartedRef = useRef(false);
+  const startDispatchActiveRef = useRef<() => void>(() => {});
   const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   // Stable map of upcoming-session channels — never torn down wholesale, only diffed
   const upcomingChannelsRef = useRef<Map<string, ReturnType<typeof supabase.channel>>>(new Map());
@@ -523,6 +524,51 @@ export default function DoctorLayout() {
       // non-fatal
     }
   }, [user, callEdge]);
+
+  // ── Layer 4: temporary dispatch-active reconciliation session ──
+  // Starts a 5-second forceSync loop when a request enters the queue.
+  // Stops automatically when forceSync() returns an empty queue for 2 consecutive ticks,
+  // or when the doctor goes offline.
+  const startDispatchActive = useCallback(() => {
+    if (dispatchActiveStartedRef.current) return; // already running
+    if (!isOnlineRef.current) return; // don't start if offline
+    dispatchActiveStartedRef.current = true;
+    console.log('[Dispatch] Layer 4 — starting dispatch-active reconciliation session');
+    let emptyTicks = 0;
+    PollingManager.start('dispatch-active', async () => {
+      if (!isOnlineRef.current) {
+        dispatchActiveStartedRef.current = false;
+        return true; // stop — doctor went offline
+      }
+      await forceSyncRef.current();
+      // Read queue length from the ref kept in sync with requestQueue state
+      const queueEmpty = requestQueueRef.current.length === 0;
+      if (queueEmpty) {
+        emptyTicks++;
+        if (emptyTicks >= 2) {
+          console.log('[Dispatch] Layer 4 — queue empty for 2 ticks, stopping dispatch-active');
+          dispatchActiveStartedRef.current = false;
+          return true; // stop
+        }
+      } else {
+        emptyTicks = 0; // reset if queue becomes non-empty again
+      }
+      return false; // continue
+    }, 5000);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { startDispatchActiveRef.current = startDispatchActive; }, [startDispatchActive]);
+
+  useEffect(() => {
+    if (!onNewRequestPush) return;
+    const unregister = onNewRequestPush(() => {
+      console.log('[Doctor] NEW_REQUEST push received — running forceSync + starting Layer 4');
+      forceSyncRef.current().then(() => {
+        startDispatchActiveRef.current();
+      });
+    });
+    return unregister;
+  }, [onNewRequestPush]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Central guard: show rating overlay only if session not already rated/dismissed ──
   const maybeShowDoctorRating = useCallback(async (sessionId: string, hospitalName: string, amount?: number) => {
@@ -736,6 +782,7 @@ export default function DoctorLayout() {
   useEffect(() => { callEdgeRef.current = callEdge; }, [callEdge]);
   useEffect(() => { forceSyncRef.current = forceSync; }, [forceSync]);
   useEffect(() => { isOnlineRef.current = isOnline; }, [isOnline]);
+  useEffect(() => { requestQueueRef.current = requestQueue; }, [requestQueue]);
   const fetchActiveSessionRef = useRef(fetchActiveSession);
   useEffect(() => { fetchActiveSessionRef.current = fetchActiveSession; }, [fetchActiveSession]);
 
@@ -945,6 +992,8 @@ export default function DoctorLayout() {
           if (user?.id) setCached(`doctor_is_online:${user.id}`, false);
           setRequestQueue([]);
           setDoctorScreenState('idle');
+          PollingManager.stop('dispatch-active');
+          dispatchActiveStartedRef.current = false;
         }
       } catch (e: any) {
         // non-fatal — revert silently
@@ -974,7 +1023,6 @@ export default function DoctorLayout() {
     if (!user) return;
     const channel = supabase.channel('dispatch:lagos')
       .on('broadcast', { event: 'NEW_REQUEST' }, (payload) => {
-        lastDispatchEventAt.current = Date.now();
         const req = payload.payload as DispatchRequest;
         const now = new Date();
         if (req.expiry_at && new Date(req.expiry_at) <= now) {
@@ -984,95 +1032,50 @@ export default function DoctorLayout() {
           if (prev.some((r) => r.id === req.id)) return prev;
           return [...prev, req];
         });
+        startDispatchActiveRef.current();
         // Do NOT check isOnlineRef here — it can be stale.
         // The Queue → state sync effect will transition to 'incoming' when isOnline is true.
       })
       .on('broadcast', { event: 'EVICT_REQUEST' }, (payload) => {
-        lastDispatchEventAt.current = Date.now();
         // Layer 2 — another doctor accepted this request; remove it instantly
         const { request_id } = payload.payload as { request_id: string };
         if (!request_id) return;
         console.log('[Doctor] EVICT_REQUEST received — removing from queue:', request_id);
-        setRequestQueue((prev) => prev.filter((r) => r.id !== request_id));
+        setRequestQueue((prev) => {
+          const next = prev.filter((r) => r.id !== request_id);
+          if (next.length === 0) {
+            PollingManager.stop('dispatch-active');
+            dispatchActiveStartedRef.current = false;
+          }
+          return next;
+        });
       })
       .on('broadcast', { event: 'WITHDRAW_REQUEST' }, (payload) => {
-        lastDispatchEventAt.current = Date.now();
         // Layer 2 — requester withdrew/edited this request; remove it instantly
         const { request_id } = payload.payload as { request_id: string };
         if (!request_id) return;
         console.log('[Doctor] WITHDRAW_REQUEST received — removing from queue:', request_id);
-        setRequestQueue((prev) => prev.filter((r) => r.id !== request_id));
+        setRequestQueue((prev) => {
+          const next = prev.filter((r) => r.id !== request_id);
+          if (next.length === 0) {
+            PollingManager.stop('dispatch-active');
+            dispatchActiveStartedRef.current = false;
+          }
+          return next;
+        });
       })
       .subscribe((status) => {
         console.log('[Doctor] dispatch channel subscribe status:', status);
         if (status === 'SUBSCRIBED' && isOnlineRef.current && user) {
           forceSyncRef.current();
-
-          // 90-second silent-channel detection.
-          // If no dispatch event arrives within 90s and the doctor is still online,
-          // call forceSync() once as a recovery reconciliation.
-          // This catches silent WebSocket failures (connection open but events not delivering)
-          // without reintroducing a permanent polling loop.
-          const scheduleCheck = () => {
-            const timer = setTimeout(() => {
-              if (!isOnlineRef.current) return; // doctor went offline — no action needed
-              const elapsed = Date.now() - lastDispatchEventAt.current;
-              if (elapsed >= 89000) {
-                // Channel has been silent for ~90s while doctor is online — reconcile once
-                console.warn('[Dispatch] 90s silence detected — running forceSync recovery');
-                forceSyncRef.current();
-              }
-              // Reschedule regardless — keeps checking every 90s while subscribed
-              silenceTimerRef.current = scheduleCheck();
-            }, 90000);
-            return timer;
-          };
-          silenceTimerRef.current = scheduleCheck();
         }
       });
     channelRef.current = channel;
     return () => {
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-      }
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Start silence detection when online status is restored after channel is already SUBSCRIBED ──
-  // The dispatch channel SUBSCRIBED callback only starts scheduleCheck() if isOnlineRef.current
-  // is true at SUBSCRIBED time. On cold launch with is_online=true restored from DB, the DB read
-  // completes after SUBSCRIBED fires, so scheduleCheck() is missed. This effect catches that case.
-  useEffect(() => {
-    if (!isOnline) return;
-    if (silenceTimerRef.current) return; // already running — don't start a second chain
-    if (!channelRef.current) return; // channel not yet created
-    // Only start if the channel is already SUBSCRIBED (state is 'joined' in Supabase internals)
-    // We can't read channel state directly, so we use a short delay to let SUBSCRIBED fire first,
-    // then check if scheduleCheck was started. If silenceTimerRef is still null after the delay,
-    // the SUBSCRIBED callback missed it and we start it here.
-    const startupTimer = setTimeout(() => {
-      if (isOnlineRef.current && !silenceTimerRef.current && channelRef.current) {
-        console.log('[Dispatch] starting silence detection after hydration (SUBSCRIBED already fired)');
-        const scheduleCheck = (): ReturnType<typeof setTimeout> => {
-          const timer = setTimeout(() => {
-            if (!isOnlineRef.current) return;
-            const elapsed = Date.now() - lastDispatchEventAt.current;
-            if (elapsed >= 89000) {
-              console.warn('[Dispatch] 90s silence detected (hydration path) — running forceSync recovery');
-              forceSyncRef.current();
-            }
-            silenceTimerRef.current = scheduleCheck();
-          }, 90000);
-          return timer;
-        };
-        silenceTimerRef.current = scheduleCheck();
-      }
-    }, 1000); // 1s delay — enough for SUBSCRIBED to have fired and set silenceTimerRef
-    return () => clearTimeout(startupTimer);
-  }, [isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Realtime subscription — session channel (when activeSession changes) ──
   useEffect(() => {
@@ -1431,6 +1434,7 @@ export default function DoctorLayout() {
             if (prev.some((r) => r.id === req.id)) return prev;
             return [...prev, req];
           });
+          startDispatchActiveRef.current();
         }
       )
       .on(
@@ -1439,14 +1443,20 @@ export default function DoctorLayout() {
           event: 'UPDATE',
           schema: 'public',
           table: 'coverage_requests',
-          filter: `doctor_id=eq.${user.id}`,
         },
         (payload) => {
           const row = payload.new as any;
           const evictStatuses = ['matched', 'expired', 'cancelled', 'withdrawn'];
           if (evictStatuses.includes(row?.status)) {
             console.log('[Doctor] coverage_requests UPDATE via postgres_changes — evicting from queue:', row.id, 'status:', row.status);
-            setRequestQueue((prev) => prev.filter((r) => r.id !== row.id));
+            setRequestQueue((prev) => {
+              const next = prev.filter((r) => r.id !== row.id);
+              if (next.length === 0) {
+                PollingManager.stop('dispatch-active');
+                dispatchActiveStartedRef.current = false;
+              }
+              return next;
+            });
           }
         }
       )
@@ -1642,12 +1652,12 @@ export default function DoctorLayout() {
   // commits in React Native concurrent mode. The ref lags by one render batch in release
   // builds — using state here eliminates the 1–2 second card delay on native.
   useEffect(() => {
-    if (requestQueue.length > 0 && doctorScreenState === 'idle' && isOnline) {
+    if (requestQueue.length > 0 && doctorScreenState === 'idle') {
       setDoctorScreenState('incoming');
     } else if (requestQueue.length === 0 && doctorScreenState === 'incoming') {
       setDoctorScreenState('idle');
     }
-  }, [requestQueue, doctorScreenState, isOnline]);
+  }, [requestQueue, doctorScreenState]);
 
   // ── AppState handler (merged) ──
   useEffect(() => {
@@ -1659,19 +1669,12 @@ export default function DoctorLayout() {
         console.log('[AppState] background — recording state, staying online');
       }
       if (state === 'active') {
-        const elapsed = Date.now() - doctorBackgroundedAtRef.current;
-        const FIVE_MINUTES = 5 * 60 * 1000;
-
-        if (doctorBackgroundedAtRef.current > 0 && elapsed > FIVE_MINUTES) {
-          console.log('[AppState] active after', Math.round(elapsed / 1000), 's — running doctor background recovery');
-          setResumeReady(false); // show the resume overlay immediately
+        if (doctorBackgroundedAtRef.current > 0) {
+          console.log('[AppState] active — running foreground recovery');
+          setResumeReady(false);
           try {
-            // Channels auto-reconnect via Supabase realtime. Recovery is handled by
-            // fetchActiveSession() (session channel SUBSCRIBED) and forceSync() (dispatch poll).
-
-            // 2. Session reconciliation + paid-state recovery
+            // Session reconciliation + paid-state recovery
             await fetchActiveSession();
-            // Check if session is already in a paid state — fetch directly so we have fresh data
             try {
               const snapRes = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=doctor`, {});
               if (snapRes.ok) {
@@ -1681,19 +1684,16 @@ export default function DoctorLayout() {
                   console.log('[Doctor] AppState active — session in paid state:', snap.status, '— triggering rating overlay');
                   void maybeShowDoctorRating(snap.id, snap.hospital_name ?? '', snap.total_cost ?? 0);
                 }
-                // settled is fully terminal — clear activeSessionId to stop the subscription and payment poll
                 if (snap && snap.status === 'settled') {
                   setActiveSessionId(null);
                 }
               }
-            } catch {
-              // non-fatal
-            }
+            } catch { /* non-fatal */ }
 
             // Re-sync online status from backend on resume
             if (user?.id) {
               try {
-                console.log('[AppState] long-resume — re-reading is_online from DB');
+                console.log('[AppState] resume — re-reading is_online from DB');
                 const { data: onlineSnap } = await supabase
                   .from('doctor_profiles')
                   .select('is_online')
@@ -1706,7 +1706,7 @@ export default function DoctorLayout() {
               } catch { /* non-fatal */ }
             }
 
-            // Rating recovery — re-fetch own scores in case RATING_UPDATED broadcast was missed
+            // Rating recovery
             if (user?.id) {
               try {
                 const { data: profileSnap } = await supabase
@@ -1722,52 +1722,15 @@ export default function DoctorLayout() {
                     setDoctorReliabilityScore(Number(profileSnap.reliability));
                   }
                 }
-              } catch {
-                // non-fatal
-              }
+              } catch { /* non-fatal */ }
             }
 
-            // 4. Dispatch reconciliation
-            if (user) await forceSync();
-            // 5. Upcoming sessions reconciliation
+            // Dispatch reconciliation — one forceSync on every foreground return
+            if (isOnlineRef.current && user) await forceSync();
+            // Upcoming sessions reconciliation
             reconcileUpcomingRef.current();
           } finally {
-            setResumeReady(true); // dismiss the overlay — home data is fresh
-          }
-        } else {
-          // Short foreground — existing behaviour
-          console.log('[AppState] active — syncing session');
-          if (isOnlineRef.current && user) await forceSync();
-          fetchActiveSession();
-          reconcileUpcomingRef.current();
-          // Re-sync online status from backend on short resume
-          if (user?.id) {
-            try {
-              console.log('[AppState] short-resume — re-reading is_online from DB');
-              const { data: onlineSnap } = await supabase
-                .from('doctor_profiles')
-                .select('is_online')
-                .eq('id', user.id)
-                .single();
-              if (_toggleIntent === null && onlineSnap && typeof onlineSnap.is_online === 'boolean') {
-                setIsOnline(onlineSnap.is_online);
-                setCached(`doctor_is_online:${user.id}`, onlineSnap.is_online);
-              }
-            } catch { /* non-fatal */ }
-          }
-          // Short foreground rating recovery
-          if (user?.id) {
-            try {
-              const { data: profileSnap } = await supabase
-                .from('doctor_profiles')
-                .select('rating, reliability')
-                .eq('id', user.id)
-                .single();
-              if (profileSnap) {
-                if (profileSnap.rating !== null && profileSnap.rating !== undefined) setDoctorRatingScore(Number(profileSnap.rating));
-                if (profileSnap.reliability !== null && profileSnap.reliability !== undefined) setDoctorReliabilityScore(Number(profileSnap.reliability));
-              }
-            } catch { /* non-fatal */ }
+            setResumeReady(true);
           }
         }
       }
