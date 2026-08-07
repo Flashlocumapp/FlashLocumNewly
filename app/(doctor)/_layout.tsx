@@ -1495,15 +1495,24 @@ export default function DoctorLayout() {
         },
         (payload) => {
           const newRow = payload.new as any;
-          if (newRow?.status === 'requester_paid') {
-            console.log('[Doctor] postgres_changes — session status requester_paid, showing rating overlay');
+          const newStatus: string = newRow?.status;
+          if (newStatus === 'requester_paid' || newStatus === 'settled') {
+            console.log('[Doctor] postgres_changes — session status', newStatus, ', updating local state');
             const sid = newRow.id ?? activeSessionId;
             const hospital = newRow.hospital_name ?? '';
+            // Immediately update local session status — clears payment-pending card via Layer 2 alone
+            setActiveSession((prev) => prev ? { ...prev, status: newStatus as any } : prev);
+            // Fetch verified amount then show rating overlay
             void (async () => {
               const verifiedAmount = await fetchVerifiedAmount(sid);
               const amt = verifiedAmount || (newRow.total_cost ?? newRow.price ?? 0);
               void maybeShowDoctorRating(sid, hospital, amt);
             })();
+            // Start payment polling if not already running for this session — poll will return true immediately
+            if (sid && paymentPollingStartedRef.current !== sid) {
+              paymentPollingStartedRef.current = sid;
+              startPaymentPollingRef.current(sid, hospital, newRow.total_cost ?? newRow.price ?? 0);
+            }
           }
         }
       )
