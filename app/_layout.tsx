@@ -256,7 +256,7 @@ export default function RootLayout() {
 
   // Hide splash when ALL THREE conditions are met, but hold for at least 3 seconds from app launch.
   useEffect(() => {
-    if (!fontsLoaded || !navigationReady || !screenReady) return;
+    if (!fontsLoaded || !navigationReady) return;
     const elapsed = Date.now() - APP_START;
     const remaining = Math.max(0, 3000 - elapsed);
     const timer = setTimeout(() => {

@@ -29,12 +29,10 @@ export default function IntroScreen() {
   const unmountedRef = useRef(false);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // Initial state: show "FlashLocum" fully so the first frame after splash dismissal
-  // matches the native splash image exactly — seamless handoff.
-  const [displayedText, setDisplayedText] = useState('FlashLocum');
-  // Track whether we are in the typewriter phase (ball should be visible)
+  // No initial text — screen is invisible #111315, matching native splash exactly.
+  const [displayedText, setDisplayedText] = useState('');
   const [typewriterActive, setTypewriterActive] = useState(false);
-  const contentOpacity = useRef(new Animated.Value(1)).current;
+  const contentOpacity = useRef(new Animated.Value(0)).current;
   const bgColor = useRef(new Animated.Value(0)).current;
 
   const addTimeout = (fn: () => void, ms: number) => {
@@ -46,9 +44,9 @@ export default function IntroScreen() {
   };
 
   useEffect(() => {
-    if (!splashDismissed) return; // hold until native splash has fully dismissed
+    if (!splashDismissed) return;
 
-    console.log('[IntroScreen] splashDismissed=true, starting intro animation');
+    console.log('[IntroScreen] splashDismissed=true, starting typewriter immediately');
     unmountedRef.current = false;
 
     const ALLOWED_DESTINATIONS = [
@@ -123,17 +121,8 @@ export default function IntroScreen() {
       }, 16);
     };
 
-    // Fade out the static "FlashLocum" first, then begin the typewriter
-    Animated.timing(contentOpacity, {
-      toValue: 0,
-      duration: FADE_OUT_DURATION,
-      useNativeDriver: true,
-    }).start(() => {
-      if (!unmountedRef.current) {
-        console.log('[IntroScreen] FlashLocum fade-out complete, starting typewriter');
-        runPhrase(0);
-      }
-    });
+    // Start the typewriter immediately — no handoff word to fade out first
+    runPhrase(0);
 
     return () => {
       unmountedRef.current = true;
