@@ -389,7 +389,7 @@ const TABS: DoctorTabItem[] = [
 export default function DoctorLayout() {
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
-  const { playAcceptanceChime, clearChimeForSession, onNewRequestPush } = useNotifications();
+  const { playAcceptanceChime, clearChimeForSession, onNewRequestPush, sendTag, deleteTag } = useNotifications();
   const router = useRouter();
   const [isOnline, setIsOnline] = useState<boolean>(false);
   const [criticalDataReady, setCriticalDataReady] = useState(false);
@@ -978,6 +978,8 @@ export default function DoctorLayout() {
             }
           } else {
             if (user?.id) setCached(`doctor_is_online:${user.id}`, true);
+            sendTag('is_online', 'true');
+            console.log('[DoctorLayout] OneSignal sendTag is_online=true');
             await forceSyncRef.current();
             // Explicitly trigger the card if the sync found requests.
             // Don't rely on the async React re-render cycle — read the ref directly.
@@ -990,6 +992,8 @@ export default function DoctorLayout() {
           }
         } else {
           if (user?.id) setCached(`doctor_is_online:${user.id}`, false);
+          deleteTag('is_online');
+          console.log('[DoctorLayout] OneSignal deleteTag is_online');
           setRequestQueue([]);
           setDoctorScreenState('idle');
           PollingManager.stop('dispatch-active');
@@ -1004,7 +1008,7 @@ export default function DoctorLayout() {
       }
     };
     toggle();
-  }, [isOnline, user]);
+  }, [isOnline, user, sendTag, deleteTag]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   // ── Proactive payment poll — starts whenever session enters payment_pending state ──

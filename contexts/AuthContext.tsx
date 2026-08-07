@@ -46,6 +46,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(data as Profile);
         setProfileError(null);
         setProfileLoading(false);
+        // Tag the user's role in OneSignal now that we have the profile
+        if (!IS_EXPO_GO && _oneSignalExternalId === userId && (data as Profile).role) {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { OneSignal } = require('react-native-onesignal');
+          OneSignal.User.addTag('role', (data as Profile).role);
+          console.log('[AuthContext] OneSignal addTag role=', (data as Profile).role);
+        }
         return;
       }
       lastError = error;
@@ -161,8 +168,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           _oneSignalExternalId = null;
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           const { OneSignal } = require('react-native-onesignal');
+          OneSignal.User.removeTag('role');
           OneSignal.logout();
-          console.log('[AuthContext] OneSignal.logout');
+          console.log('[AuthContext] OneSignal.logout + removeTag role');
         }
         setSession(null);
         setUser(null);
@@ -285,14 +293,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearRefreshPromise(); // prevent stale promise from blocking post-login fetches
     clearAll();
     triggerDispatchReset();
-    // Unlink OneSignal identity before signing out
-    if (!IS_EXPO_GO && _oneSignalExternalId !== null) {
-      _oneSignalExternalId = null;
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { OneSignal } = require('react-native-onesignal');
-      OneSignal.logout();
-      console.log('[AuthContext] OneSignal.logout (signOut)');
-    }
+    // OneSignal.logout() is handled by the SIGNED_OUT auth event handler — do not call it here
     await supabase.auth.signOut();
     setProfile(null);
   }, []);
