@@ -386,6 +386,21 @@ export default function DoctorHomeScreen() {
     return undefined;
   }, [showMarker]);
 
+  // ─── iOS: reset tracksViewChanges on AppState resume so marker re-renders ────
+  useEffect(() => {
+    let resumeTimeout: ReturnType<typeof setTimeout> | null = null;
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (Platform.OS === 'ios' && nextState === 'active') {
+        setMarkerTracksViews(true);
+        resumeTimeout = setTimeout(() => setMarkerTracksViews(false), 1500);
+      }
+    });
+    return () => {
+      sub.remove();
+      if (resumeTimeout !== null) clearTimeout(resumeTimeout);
+    };
+  }, []);
+
   // ─── Re-focus map on tab return ──────────────────────────────────────────────
   useFocusEffect(
     React.useCallback(() => {
@@ -406,9 +421,11 @@ export default function DoctorHomeScreen() {
       };
       const t1 = setTimeout(doAnimate, 300);
       const t2 = setTimeout(doAnimate, 800);
+      const t3 = setTimeout(doAnimate, 1500);
       return () => {
         clearTimeout(t1);
         clearTimeout(t2);
+        clearTimeout(t3);
       };
     }, [])
   );

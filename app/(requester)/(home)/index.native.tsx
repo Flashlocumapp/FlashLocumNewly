@@ -2585,7 +2585,27 @@ export default function RequesterHomeScreen() {
     return () => { locationSub.current?.remove(); };
   }, []);
 
-
+  // ─── Silent location watch on mount if permission already granted ─────────────
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        if (locationSub.current) return; // already watching
+        const sub = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.Balanced, distanceInterval: 20 },
+          (loc) => {
+            const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+            _cachedRequesterCoords = coords;
+            setUserCoords(coords);
+          }
+        );
+        locationSub.current = sub;
+      } catch (e) {
+        console.log('[RequesterHome] Silent location watch failed:', e);
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── GPS diagnostic watcher ───────────────────────────────────────────────────
   useEffect(() => {
@@ -2594,9 +2614,24 @@ export default function RequesterHomeScreen() {
   useEffect(() => {
     if (!userCoords) return;
     setUserMarkerTracksViews(true);
-    const t = setTimeout(() => setUserMarkerTracksViews(false), 500);
+    const t = setTimeout(() => setUserMarkerTracksViews(false), 1500);
     return () => clearTimeout(t);
   }, [userCoords]);
+
+  // ─── iOS: reset tracksViewChanges on AppState resume so marker re-renders ────
+  useEffect(() => {
+    let resumeTimeout: ReturnType<typeof setTimeout> | null = null;
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (Platform.OS === 'ios' && nextState === 'active') {
+        setUserMarkerTracksViews(true);
+        resumeTimeout = setTimeout(() => setUserMarkerTracksViews(false), 1500);
+      }
+    });
+    return () => {
+      sub.remove();
+      if (resumeTimeout !== null) clearTimeout(resumeTimeout);
+    };
+  }, []);
 
   // ─── Re-focus map on tab return ──────────────────────────────────────────────
   useFocusEffect(
@@ -2619,9 +2654,11 @@ export default function RequesterHomeScreen() {
       };
       const t1 = setTimeout(doAnimate, 300);
       const t2 = setTimeout(doAnimate, 800);
+      const t3 = setTimeout(doAnimate, 1500);
       return () => {
         clearTimeout(t1);
         clearTimeout(t2);
+        clearTimeout(t3);
       };
     }, [])
   );
@@ -3145,13 +3182,17 @@ export default function RequesterHomeScreen() {
 
     // Location granted — start location watch and transition to searching
     try {
-      const sub = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.Balanced, distanceInterval: 20 },
-        (loc) => {
-          setUserCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-        }
-      );
-      locationSub.current = sub;
+      if (!locationSub.current) {
+        const sub = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.Balanced, distanceInterval: 20 },
+          (loc) => {
+            const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+            _cachedRequesterCoords = coords;
+            setUserCoords(coords);
+          }
+        );
+        locationSub.current = sub;
+      }
     } catch (e) {
       console.log('[RequesterHome] watchPositionAsync failed:', e);
     }
