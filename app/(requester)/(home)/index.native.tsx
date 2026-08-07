@@ -2611,27 +2611,14 @@ export default function RequesterHomeScreen() {
   useEffect(() => {
   }, [userCoords]);
 
+  // ─── tracksViewChanges: keep true permanently on both platforms ──────────────
+  // Mirrors doctor home — no freeze, no AppState reset needed.
   useEffect(() => {
     if (!userCoords) return;
     setUserMarkerTracksViews(true);
-    const t = setTimeout(() => setUserMarkerTracksViews(false), 1500);
-    return () => clearTimeout(t);
+    // No timeout — keep live-rendering permanently.
+    return undefined;
   }, [userCoords]);
-
-  // ─── iOS: reset tracksViewChanges on AppState resume so marker re-renders ────
-  useEffect(() => {
-    let resumeTimeout: ReturnType<typeof setTimeout> | null = null;
-    const sub = AppState.addEventListener('change', (nextState) => {
-      if (Platform.OS === 'ios' && nextState === 'active') {
-        setUserMarkerTracksViews(true);
-        resumeTimeout = setTimeout(() => setUserMarkerTracksViews(false), 1500);
-      }
-    });
-    return () => {
-      sub.remove();
-      if (resumeTimeout !== null) clearTimeout(resumeTimeout);
-    };
-  }, []);
 
   // ─── Re-focus map on tab return ──────────────────────────────────────────────
   useFocusEffect(

@@ -371,35 +371,16 @@ export default function DoctorHomeScreen() {
     }
   }, [isOnline]);
 
-  // ─── tracksViewChanges: reset to true briefly when marker appears ───────────
+  // ─── tracksViewChanges: keep true permanently on both platforms ──────────────
+  // iOS snapshot-invalidation bugs (resume, tab-switch, first render) are
+  // eliminated by never freezing tracksViewChanges. Single marker — negligible cost.
   const showMarker = isOnline && userLocation !== null;
   useEffect(() => {
     if (!showMarker) return;
     setMarkerTracksViews(true);
-    // On Android keep tracksViewChanges=true permanently (single marker, negligible cost,
-    // eliminates the native snapshot race). On iOS freeze after 1500ms.
-    if (Platform.OS === 'ios') {
-      const t = setTimeout(() => setMarkerTracksViews(false), 1500);
-      return () => clearTimeout(t);
-    }
-    // Android: leave markerTracksViews=true, no timeout needed
+    // No timeout on either platform — keep live-rendering permanently.
     return undefined;
   }, [showMarker]);
-
-  // ─── iOS: reset tracksViewChanges on AppState resume so marker re-renders ────
-  useEffect(() => {
-    let resumeTimeout: ReturnType<typeof setTimeout> | null = null;
-    const sub = AppState.addEventListener('change', (nextState) => {
-      if (Platform.OS === 'ios' && nextState === 'active') {
-        setMarkerTracksViews(true);
-        resumeTimeout = setTimeout(() => setMarkerTracksViews(false), 1500);
-      }
-    });
-    return () => {
-      sub.remove();
-      if (resumeTimeout !== null) clearTimeout(resumeTimeout);
-    };
-  }, []);
 
   // ─── Re-focus map on tab return ──────────────────────────────────────────────
   useFocusEffect(
