@@ -1023,6 +1023,7 @@ export default function DoctorLayout() {
     if (!user) return;
     const channel = supabase.channel('dispatch:lagos')
       .on('broadcast', { event: 'NEW_REQUEST' }, (payload) => {
+        if (!isOnlineRef.current) return;
         const req = payload.payload as DispatchRequest;
         const now = new Date();
         if (req.expiry_at && new Date(req.expiry_at) <= now) {
@@ -1411,30 +1412,9 @@ export default function DoctorLayout() {
           const row = payload.new as any;
           if (row?.status !== 'pending') return;
           if (row?.expiry_at && new Date(row.expiry_at) <= new Date()) return;
-          const req: DispatchRequest = {
-            id: row.id,
-            requester_id: row.requester_id,
-            hospital_name: row.hospital_name,
-            hospital_address: row.hospital_address,
-            shift_type: row.shift_type,
-            shift_date: row.shift_date,
-            start_time: row.start_time,
-            end_time: row.end_time,
-            duration_hours: row.duration_hours ?? 0,
-            coverage_length: row.coverage_length,
-            environment: row.environment,
-            note: row.note,
-            price: row.price ?? 0,
-            expiry_at: row.expiry_at,
-            requester_rating: row.requester_rating,
-            requester_reliability: row.requester_reliability,
-          };
-          console.log('[Doctor] coverage_requests INSERT via postgres_changes — adding to queue:', req.id);
-          setRequestQueue((prev) => {
-            if (prev.some((r) => r.id === req.id)) return prev;
-            return [...prev, req];
-          });
-          startDispatchActiveRef.current();
+          if (!isOnlineRef.current) return;
+          console.log('[Doctor] coverage_requests INSERT via postgres_changes — triggering forceSync for eligibility check:', row.id);
+          forceSyncRef.current().then(() => startDispatchActiveRef.current());
         }
       )
       .on(
@@ -1652,12 +1632,12 @@ export default function DoctorLayout() {
   // commits in React Native concurrent mode. The ref lags by one render batch in release
   // builds — using state here eliminates the 1–2 second card delay on native.
   useEffect(() => {
-    if (requestQueue.length > 0 && doctorScreenState === 'idle') {
+    if (requestQueue.length > 0 && doctorScreenState === 'idle' && isOnline) {
       setDoctorScreenState('incoming');
     } else if (requestQueue.length === 0 && doctorScreenState === 'incoming') {
       setDoctorScreenState('idle');
     }
-  }, [requestQueue, doctorScreenState]);
+  }, [requestQueue, doctorScreenState, isOnline]);
 
   // ── AppState handler (merged) ──
   useEffect(() => {
