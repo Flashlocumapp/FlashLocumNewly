@@ -1242,7 +1242,7 @@ function RequesterPaymentCard({
       const token = authSession?.access_token;
       console.log('[RequesterPaymentCard] handleClaimPayment: calling claim-manual-payment edge function');
       const res = await fetch(
-        `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/claim-manual-payment`,
+        `${EDGE_BASE}/claim-manual-payment`,
         {
           method: 'POST',
           headers: {
