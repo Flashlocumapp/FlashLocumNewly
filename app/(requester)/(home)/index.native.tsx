@@ -1051,9 +1051,12 @@ function RequesterPaymentCard({
     // Always register AppState listener for background recovery
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active') {
-        // Only re-fetch if we don't already have account details
-        if (!paymentIntentRef.current?.monnify_account_number) {
+        const pi = paymentIntentRef.current;
+        if (!pi?.monnify_account_number) {
           fetchPaymentIntent();
+        } else if (pi.expiry_at && new Date(pi.expiry_at) < new Date()) {
+          // Account details exist but window has expired — auto-refresh once
+          handleRefreshPaymentRef.current();
         }
       }
     };

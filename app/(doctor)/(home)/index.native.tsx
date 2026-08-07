@@ -561,7 +561,7 @@ export default function DoctorHomeScreen() {
           return true;
         }
         return false;
-      });
+      }, undefined, 6);
     };
 
     try {

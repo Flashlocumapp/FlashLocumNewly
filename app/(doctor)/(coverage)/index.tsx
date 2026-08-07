@@ -531,7 +531,7 @@ export default function DoctorCoverageScreen() {
             return true; // confirmed — stop polling
           }
           return false;
-        });
+        }, undefined, 6);
       } else {
         console.error('[DoctorCoverage] Failed to cancel session:', sessionId);
       }
