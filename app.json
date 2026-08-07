@@ -20,10 +20,10 @@
         "UIBackgroundModes": [
           "remote-notification"
         ],
-        "NSCameraUsageDescription": "FlashLocum needs camera access to let you take profile photos and capture documents.",
+        "NSCameraUsageDescription": "FlashLocum uses your camera during profile setup to take your profile photo and when uploading verification documents such as your medical licence and NYSC certificate.",
         "NSPhotoLibraryUsageDescription": "FlashLocum needs access to your photo library to let you upload profile photos and documents.",
         "NSPhotoLibraryAddUsageDescription": "FlashLocum needs permission to save photos to your library.",
-        "NSLocationWhenInUseUsageDescription": "FlashLocum uses your location to match you with nearby locum shifts."
+        "NSLocationWhenInUseUsageDescription": "Your location is used to show nearby coverage requests on the map and help requesters find available doctors in your area."
       },
       "config": {
         "googleMapsApiKey": "AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk"
@@ -84,8 +84,8 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "FlashLocum needs your location to show you nearby doctors and allow doctors to find you.",
-          "locationWhenInUsePermission": "FlashLocum needs your location to show you nearby doctors and allow doctors to find you."
+          "locationAlwaysAndWhenInUsePermission": "Your location is used to show nearby coverage requests on the map and help requesters find available doctors in your area.",
+          "locationWhenInUsePermission": "Your location is used to show nearby coverage requests on the map and help requesters find available doctors in your area."
         }
       ],
       "@react-native-community/datetimepicker",
