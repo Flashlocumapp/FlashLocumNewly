@@ -485,7 +485,12 @@ export default function DoctorHomeScreen() {
       }
       // Location granted — fetch coords and go online
       try {
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        let pos = await Location.getLastKnownPositionAsync({ maxAge: 30000, requiredAccuracy: 500 });
+        console.log('[handleToggleStatus] getLastKnownPositionAsync result:', pos ? `lat=${pos.coords.latitude}, lon=${pos.coords.longitude}` : 'null — falling back to getCurrentPositionAsync');
+        if (!pos) {
+          console.log('[handleToggleStatus] Requesting fresh location via getCurrentPositionAsync');
+          pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        }
         const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
         _cachedDoctorCoords = coords;
         setUserLocation(coords);
