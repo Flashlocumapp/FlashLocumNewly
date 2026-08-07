@@ -630,7 +630,7 @@ export default function DoctorLayout() {
         .select('status')
         .eq('id', resolvedSessionId)
         .maybeSingle();
-      const paidStatuses = ['requester_paid'];
+      const paidStatuses = ['requester_paid', 'settled'];
       if (!sessionSnap || !paidStatuses.includes(sessionSnap.status)) {
         console.log('[Doctor] maybeShowDoctorRating — session not yet paid, suppressing overlay', sessionSnap?.status);
         return;
@@ -684,7 +684,7 @@ export default function DoctorLayout() {
         if (res.ok) {
           const data = await res.json();
           const snap = data?.session ?? null;
-          const paidStatuses = ['requester_paid'];
+          const paidStatuses = ['requester_paid', 'settled'];
           if (snap && paidStatuses.includes(snap.status)) {
             console.log('[Doctor] paymentPoll (primary) — paid status confirmed:', snap.status);
             const resolvedHospital = hospitalName || (snap.hospital_name ?? '');
@@ -704,7 +704,7 @@ export default function DoctorLayout() {
             .select('id, status, total_cost, hospital_name')
             .eq('id', sessionId)
             .maybeSingle();
-          const paidStatuses = ['requester_paid'];
+          const paidStatuses = ['requester_paid', 'settled'];
           if (snap2 && paidStatuses.includes(snap2.status)) {
             console.log('[Doctor] paymentPoll (fallback) — paid status confirmed:', snap2.status);
             const resolvedHospital = hospitalName || (snap2.hospital_name ?? '');
@@ -1537,7 +1537,7 @@ export default function DoctorLayout() {
         const hospitalName = payload?.payload?.hospital_name ?? '';
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] user channel PAYMENT_CONFIRMED received', { sessionId, hospitalName, amount });
-        setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
+        setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
         const sid = sessionId ?? '';
         if (sid && paymentPollingStartedRef.current !== sid) {
@@ -1553,7 +1553,7 @@ export default function DoctorLayout() {
         const hospitalName = payload?.payload?.hospital_name ?? '';
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] user channel payment_confirmed received', { sessionId, hospitalName, amount });
-        setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
+        setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
         void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
         const sid = sessionId ?? '';
         if (sid && paymentPollingStartedRef.current !== sid) {
