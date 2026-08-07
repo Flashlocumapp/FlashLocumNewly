@@ -63,13 +63,13 @@
           "ios": {
             "backgroundColor": "#111315",
             "image": "./assets/images/splash-icon.png",
-            "imageWidth": 200,
+            "imageWidth": 240,
             "resizeMode": "contain"
           },
           "android": {
             "backgroundColor": "#111315",
             "image": "./assets/images/splash-icon.png",
-            "imageWidth": 200,
+            "imageWidth": 240,
             "resizeMode": "contain"
           }
         }
