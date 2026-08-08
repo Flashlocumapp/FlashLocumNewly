@@ -255,29 +255,21 @@ export default function RootLayout() {
   const [screenReady, setScreenReady] = useState(false);
   const [splashDismissed, setSplashDismissed] = useState(false);
 
-  // Stage 1 → Stage 2 transition.
-  // Conditions that must ALL be true before the native splash may hide:
-  //   1. fontsLoaded       — Inter fonts are available (prevents FOUT on intro screen)
-  //   2. navigationReady   — NavigationGuard has resolved auth+profile and called router.replace('/(auth)/intro')
-  //   3. screenReady       — IntroScreen has mounted and focused (useFocusEffect fired)
-  //   4. 3000ms minimum    — measured from splashReadyTime (set when fontsLoaded+navigationReady first become true together)
-  //
-  // splashReadyTimeRef anchors the 3-second minimum to "app is ready to show intro",
-  // not to JS bundle evaluation time. This is the correct anchor because:
-  // - JS start time is not the same as native splash appearance time
-  // - On Android first install, JS starts 1-3s after the splash appears
-  // - On warm launches, JS starts very fast — APP_START gives almost no buffer
-  // - Anchoring to splashReadyTimeRef means: once the app is ready, hold for 3 more seconds minimum
-  const splashReadyTimeRef = useRef<number>(0);
+  // APP_START is stamped at module evaluation time — the earliest JS anchor available.
+  // This gives MAX(3s from launch, readiness) semantics:
+  //   - If everything ready in 1s: elapsed=1000, remaining=2000 → hides at 3s ✅
+  //   - If everything ready in 4s: elapsed=4000, remaining=0   → hides immediately ✅
+  // Loading happens DURING the 3-second splash, not before an additional 3-second hold.
+  const APP_START = useRef(Date.now()).current;
+
   useEffect(() => {
-    if (!fontsLoaded || !navigationReady) return;
-    // Record when the app first became ready (fonts + navigation).
-    // This is the anchor for the 3-second minimum hold.
-    if (!splashReadyTimeRef.current) {
-      splashReadyTimeRef.current = Date.now();
-    }
-    if (!screenReady) return; // wait for IntroScreen to mount and focus
-    const elapsed = Date.now() - splashReadyTimeRef.current;
+    // All four conditions must be true before the splash may hide:
+    // 1. fontsLoaded    — Inter fonts available (no FOUT on intro screen)
+    // 2. navigationReady — NavigationGuard resolved auth+profile, router.replace('/(auth)/intro') called
+    // 3. screenReady    — IntroScreen useFocusEffect fired (screen mounted and focused)
+    // 4. 3000ms minimum — from APP_START (JS launch time)
+    if (!fontsLoaded || !navigationReady || !screenReady) return;
+    const elapsed = Date.now() - APP_START;
     const remaining = Math.max(0, 3000 - elapsed);
     const timer = setTimeout(() => {
       SplashScreen.hideAsync()
@@ -285,7 +277,7 @@ export default function RootLayout() {
         .finally(() => setSplashDismissed(true));
     }, remaining);
     return () => clearTimeout(timer);
-  }, [fontsLoaded, navigationReady, screenReady]);
+  }, [fontsLoaded, navigationReady, screenReady, APP_START]);
 
   if (!fontsLoaded) return null;
 
