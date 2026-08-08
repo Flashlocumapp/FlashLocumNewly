@@ -17,11 +17,8 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import InAppNotificationBanner from '@/components/InAppNotificationBanner';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 
-// Prevent splash from auto-hiding before fonts + auth are ready
-SplashScreen.preventAutoHideAsync().catch(() => {});
-
-// Capture true app launch time for minimum splash hold calculation
-const APP_START = Date.now();
+// preventAutoHideAsync is called in index.ts as the very first import.
+// Calling it here a second time is harmless but redundant — removed.
 
 const LAST_PATHWAY_KEY = 'flashlocum_last_pathway';
 
@@ -180,7 +177,9 @@ function NavigationGuard({ onNavigationReady }: { onNavigationReady: () => void 
   useEffect(() => {
     if (!session && !profile && hasRouted.current) {
       routedWithNoSession.current = false; // clear stale flag on sign-out
-      if (segments[0] === '(auth)') return; // already in auth flow — don't redirect
+      if (segments[0] === '(auth)') return;   // already in auth flow — don't redirect
+      if (segments[0] === '') return;          // router not committed yet — don't interrupt cold launch
+      if (segments[0] === 'index') return;     // still on index screen — don't interrupt cold launch
       hasRouted.current = false;
       skipIntroRef.current = true;
       router.replace('/(auth)/role-select' as any);
@@ -190,6 +189,8 @@ function NavigationGuard({ onNavigationReady }: { onNavigationReady: () => void 
   // Cross-portal redirect guard — fires on segment changes after initial routing
   useEffect(() => {
     if (!isReady || !hasRouted.current || !profile) return;
+    const onIntro = segments[0] === '(auth)' && segments[1] === 'intro';
+    if (onIntro) return; // never interrupt intro animation
     const doctorComplete = profile.doctor_onboarding_complete === true;
     const requesterComplete = profile.requester_onboarding_complete === true;
     const inDoctor = segments[0] === '(doctor)';
@@ -254,10 +255,29 @@ export default function RootLayout() {
   const [screenReady, setScreenReady] = useState(false);
   const [splashDismissed, setSplashDismissed] = useState(false);
 
-  // Hide splash when ALL THREE conditions are met, but hold for at least 3 seconds from app launch.
+  // Stage 1 → Stage 2 transition.
+  // Conditions that must ALL be true before the native splash may hide:
+  //   1. fontsLoaded       — Inter fonts are available (prevents FOUT on intro screen)
+  //   2. navigationReady   — NavigationGuard has resolved auth+profile and called router.replace('/(auth)/intro')
+  //   3. screenReady       — IntroScreen has mounted and focused (useFocusEffect fired)
+  //   4. 3000ms minimum    — measured from splashReadyTime (set when fontsLoaded+navigationReady first become true together)
+  //
+  // splashReadyTimeRef anchors the 3-second minimum to "app is ready to show intro",
+  // not to JS bundle evaluation time. This is the correct anchor because:
+  // - JS start time is not the same as native splash appearance time
+  // - On Android first install, JS starts 1-3s after the splash appears
+  // - On warm launches, JS starts very fast — APP_START gives almost no buffer
+  // - Anchoring to splashReadyTimeRef means: once the app is ready, hold for 3 more seconds minimum
+  const splashReadyTimeRef = useRef<number>(0);
   useEffect(() => {
     if (!fontsLoaded || !navigationReady) return;
-    const elapsed = Date.now() - APP_START;
+    // Record when the app first became ready (fonts + navigation).
+    // This is the anchor for the 3-second minimum hold.
+    if (!splashReadyTimeRef.current) {
+      splashReadyTimeRef.current = Date.now();
+    }
+    if (!screenReady) return; // wait for IntroScreen to mount and focus
+    const elapsed = Date.now() - splashReadyTimeRef.current;
     const remaining = Math.max(0, 3000 - elapsed);
     const timer = setTimeout(() => {
       SplashScreen.hideAsync()
