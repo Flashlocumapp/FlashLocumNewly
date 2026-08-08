@@ -2107,17 +2107,6 @@ export default function RequesterHomeScreen() {
     };
   }, [user, fetchOnlineDoctors]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Periodic background poll — keeps online doctors list fresh ──
-  // Catches any go-online/go-offline broadcast missed due to network gaps or
-  // WebSocket reconnect windows. Runs every 15s in dev, 30s in prod.
-  useEffect(() => {
-    if (!user) return;
-    const interval = setInterval(() => {
-      fetchOnlineDoctors();
-    }, __DEV__ ? 15000 : 30000);
-    return () => clearInterval(interval);
-  }, [user, fetchOnlineDoctors]);
-
   // Sheet state
   const [sheetState, setSheetState] = useState<SheetState>('idle');
   const sheetAnim = useRef(new Animated.Value(SHEET_HEIGHTS.idle)).current;
