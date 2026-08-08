@@ -322,7 +322,7 @@ export default function DoctorHomeScreen() {
   // null means profile not yet loaded — show nothing
   const isProfileLoading = verificationStatus === null;
 
-  const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcomingSessions, criticalDataReady, resumeReady, doctorRatingScore, doctorReliabilityScore } = useDoctorDispatch();
+  const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcomingSessions, criticalDataReady, doctorRatingScore, doctorReliabilityScore } = useDoctorDispatch();
 
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCancelReasons, setShowCancelReasons] = useState(false);
@@ -912,16 +912,6 @@ export default function DoctorHomeScreen() {
         </Pressable>
       </Modal>
 
-      {/* ── RESUME OVERLAY — covers home while data revalidates after long background ── */}
-      {!resumeReady && (
-        <View
-          style={{
-            ...StyleSheet.absoluteFillObject,
-            backgroundColor: '#111315',
-            zIndex: 9999,
-          }}
-        />
-      )}
     </View>
   );
 }

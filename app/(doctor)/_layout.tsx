@@ -393,7 +393,6 @@ export default function DoctorLayout() {
   const router = useRouter();
   const [isOnline, setIsOnline] = useState<boolean>(false);
   const [criticalDataReady, setCriticalDataReady] = useState(false);
-  const [resumeReady, setResumeReady] = useState(true); // true = home visible, false = showing resume overlay
   const [doctorScreenState, setDoctorScreenState] = useState<DoctorScreenState>('idle');
   const [requestQueue, setRequestQueue] = useState<DispatchRequest[]>([]);
   const [confirmedRequest, setConfirmedRequest] = useState<DispatchRequest | null>(null);
@@ -1664,7 +1663,6 @@ export default function DoctorLayout() {
       if (state === 'active') {
         if (doctorBackgroundedAtRef.current > 0) {
           console.log('[AppState] active — running foreground recovery');
-          setResumeReady(false);
           try {
             // Session reconciliation + paid-state recovery
             await fetchActiveSession();
@@ -1723,7 +1721,6 @@ export default function DoctorLayout() {
             // Upcoming sessions reconciliation
             reconcileUpcomingRef.current();
           } finally {
-            setResumeReady(true);
           }
         }
       }
@@ -1927,10 +1924,9 @@ export default function DoctorLayout() {
     setUpcomingSessions,
     reconcileUpcomingSessions: reconcileUpcoming,
     criticalDataReady,
-    resumeReady,
     doctorRatingScore,
     doctorReliabilityScore,
-  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcoming, criticalDataReady, resumeReady, doctorRatingScore, doctorReliabilityScore]);
+  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcoming, criticalDataReady, doctorRatingScore, doctorReliabilityScore]);
 
   return (
     <DoctorDispatchContext.Provider value={contextValue}>
