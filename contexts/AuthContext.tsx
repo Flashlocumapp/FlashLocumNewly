@@ -1,16 +1,12 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
-import * as Location from 'expo-location';
 import { IS_EXPO_GO } from '@/utils/expoGoGuard';
 import { supabase, getValidToken, setForegroundRefreshPromise, clearRefreshPromise, registerAuthFailureCallback } from '@/lib/supabase';
 import { AuthContextType, Profile } from '@/types';
 import { clearAll } from '@/utils/tabCache';
 import { triggerDispatchReset } from '@/contexts/DoctorDispatchContext';
 import { SUPABASE_URL } from '@/constants/api';
-
-// Module-level flag — resets on app restart, not on re-render
-let _requesterSnapshotFiredThisSession = false;
 
 // Module-level ref to track the currently logged-in OneSignal External ID
 let _oneSignalExternalId: string | null = null;
@@ -250,33 +246,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
   }, [fetchProfile]);
-
-  // Fire-and-forget area snapshot for requesters (analytics only)
-  useEffect(() => {
-    if (!user || profile?.role !== 'requester' || _requesterSnapshotFiredThisSession) return;
-    _requesterSnapshotFiredThisSession = true;
-    console.log('[area-snapshot] Firing requester area snapshot for user:', user.id);
-
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          console.log('[area-snapshot] Location permission denied — skipping snapshot');
-          return;
-        }
-        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        const { latitude, longitude } = pos.coords;
-        console.log('[area-snapshot] Got location, posting snapshot', { lat: latitude, lng: longitude });
-        fetch(`${SUPABASE_URL}/functions/v1/area-snapshot`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: user.id, role: 'requester', lat: latitude, lng: longitude }),
-        }).catch((err) => console.warn('[area-snapshot] requester fire-and-forget failed:', err));
-      } catch (err) {
-        console.warn('[area-snapshot] requester location fetch failed (silent):', err);
-      }
-    })();
-  }, [user, profile?.role]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
