@@ -386,6 +386,15 @@ export default function DoctorHomeScreen() {
         if (_cachedDoctorCoords) {
           console.log('[DoctorHome] Coordinate recovery: restored from module cache');
           setUserLocation(_cachedDoctorCoords);
+          // Move camera to match — same logic as handleToggleStatus
+          if (mapRef.current) {
+            mapRef.current.animateToRegion({
+              latitude: _cachedDoctorCoords.latitude + MAP_LAT_OFFSET,
+              longitude: _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
+              latitudeDelta: 0.12,
+              longitudeDelta: 0.12,
+            }, 800);
+          }
           return;
         }
         // Step 2: DB — doctor_profiles.lat/lng (last online position, survives process kill)
@@ -401,6 +410,15 @@ export default function DoctorHomeScreen() {
               _cachedDoctorCoords = coords;
               console.log('[DoctorHome] Coordinate recovery: restored from DB', coords);
               setUserLocation(coords);
+              // Move camera to match — same logic as handleToggleStatus
+              if (mapRef.current) {
+                mapRef.current.animateToRegion({
+                  latitude: coords.latitude + MAP_LAT_OFFSET,
+                  longitude: coords.longitude + MAP_LNG_OFFSET,
+                  latitudeDelta: 0.12,
+                  longitudeDelta: 0.12,
+                }, 800);
+              }
               return;
             }
           } catch { /* non-fatal */ }
@@ -415,6 +433,15 @@ export default function DoctorHomeScreen() {
             _cachedDoctorCoords = coords;
             console.log('[DoctorHome] Coordinate recovery: restored from last-known position', coords);
             setUserLocation(coords);
+            // Move camera to match — same logic as handleToggleStatus
+            if (mapRef.current) {
+              mapRef.current.animateToRegion({
+                latitude: coords.latitude + MAP_LAT_OFFSET,
+                longitude: coords.longitude + MAP_LNG_OFFSET,
+                latitudeDelta: 0.12,
+                longitudeDelta: 0.12,
+              }, 800);
+            }
             return;
           }
         } catch { /* non-fatal */ }
@@ -425,6 +452,15 @@ export default function DoctorHomeScreen() {
           _cachedDoctorCoords = coords;
           console.log('[DoctorHome] Coordinate recovery: restored from live GPS', coords);
           setUserLocation(coords);
+          // Move camera to match — same logic as handleToggleStatus
+          if (mapRef.current) {
+            mapRef.current.animateToRegion({
+              latitude: coords.latitude + MAP_LAT_OFFSET,
+              longitude: coords.longitude + MAP_LNG_OFFSET,
+              latitudeDelta: 0.12,
+              longitudeDelta: 0.12,
+            }, 800);
+          }
         } catch { /* non-fatal */ }
       } finally {
         coordRecoveryInFlightRef.current = false;
