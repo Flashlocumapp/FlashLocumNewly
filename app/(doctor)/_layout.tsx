@@ -719,7 +719,7 @@ export default function DoctorLayout() {
         // non-fatal
       }
       return false;
-    }, 5000, 60);
+    }, 5000, 180);
   }, [maybeShowDoctorRating, fetchVerifiedAmount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startPaymentPollingRef = useRef(startPaymentPolling);

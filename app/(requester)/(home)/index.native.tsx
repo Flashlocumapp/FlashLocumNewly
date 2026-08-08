@@ -3551,7 +3551,7 @@ export default function RequesterHomeScreen() {
         // non-fatal
       }
       return false;
-    }, undefined, 60);
+    }, undefined, 180);
   }, [handlePaymentConfirmedWithFallback]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep refs in sync so effects declared before these callbacks can call them without stale closures
