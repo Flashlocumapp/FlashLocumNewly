@@ -371,6 +371,67 @@ export default function DoctorHomeScreen() {
     }
   }, [isOnline]);
 
+  // ─── Coordinate recovery — fires when isOnline=true but userLocation=null ────
+  // Triggered by JS process restart (app kill+relaunch or OS memory eviction)
+  // while the doctor was online. Recovers in priority order without any permission prompt.
+  const coordRecoveryInFlightRef = useRef(false);
+  useEffect(() => {
+    if (!isOnline || userLocation !== null) return;
+    if (coordRecoveryInFlightRef.current) return; // guard: no overlapping requests
+    coordRecoveryInFlightRef.current = true;
+    console.log('[DoctorHome] Coordinate recovery triggered: isOnline=true, userLocation=null');
+    (async () => {
+      try {
+        // Step 1: module-level cache (same JS session — tab switch or brief remount)
+        if (_cachedDoctorCoords) {
+          console.log('[DoctorHome] Coordinate recovery: restored from module cache');
+          setUserLocation(_cachedDoctorCoords);
+          return;
+        }
+        // Step 2: DB — doctor_profiles.lat/lng (last online position, survives process kill)
+        if (user?.id) {
+          try {
+            const { data } = await supabase
+              .from('doctor_profiles')
+              .select('lat, lng')
+              .eq('id', user.id)
+              .single();
+            if (data?.lat && data?.lng) {
+              const coords = { latitude: data.lat, longitude: data.lng };
+              _cachedDoctorCoords = coords;
+              console.log('[DoctorHome] Coordinate recovery: restored from DB', coords);
+              setUserLocation(coords);
+              return;
+            }
+          } catch { /* non-fatal */ }
+        }
+        // Step 3: OS last-known position — no age restriction, no permission prompt
+        try {
+          const { status } = await Location.getForegroundPermissionsAsync();
+          if (status !== 'granted') return; // no prompt — silent exit
+          const pos = await Location.getLastKnownPositionAsync();
+          if (pos) {
+            const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+            _cachedDoctorCoords = coords;
+            console.log('[DoctorHome] Coordinate recovery: restored from last-known position', coords);
+            setUserLocation(coords);
+            return;
+          }
+        } catch { /* non-fatal */ }
+        // Step 4: live GPS — only if permission already granted (confirmed above)
+        try {
+          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+          _cachedDoctorCoords = coords;
+          console.log('[DoctorHome] Coordinate recovery: restored from live GPS', coords);
+          setUserLocation(coords);
+        } catch { /* non-fatal */ }
+      } finally {
+        coordRecoveryInFlightRef.current = false;
+      }
+    })();
+  }, [isOnline, userLocation, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── tracksViewChanges: keep true permanently on both platforms ──────────────
   // iOS snapshot-invalidation bugs (resume, tab-switch, first render) are
   // eliminated by never freezing tracksViewChanges. Single marker — negligible cost.
