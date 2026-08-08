@@ -81,7 +81,6 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Your location is used to show nearby coverage requests on the map and help requesters find available doctors in your area.",
           "locationWhenInUsePermission": "Your location is used to show nearby coverage requests on the map and help requesters find available doctors in your area."
         }
       ],
