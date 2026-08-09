@@ -786,10 +786,6 @@ function RequesterPaymentCard({
   bottomPadding,
   onPaymentConfirmed,
   initialPayment,
-  amountPaid,
-  outstandingBalance,
-  onPartialPaymentRestored,
-  onPartialPaymentCleared,
 }: {
   session: CoverageSession;
   bottomPadding: number;
@@ -803,10 +799,6 @@ function RequesterPaymentCard({
     amount_naira: number;
     payment_route?: string | null;
   } | null;
-  amountPaid?: number;
-  outstandingBalance?: number;
-  onPartialPaymentRestored?: (amountPaid: number, outstandingBalance: number) => void;
-  onPartialPaymentCleared?: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -908,16 +900,12 @@ function RequesterPaymentCard({
           if (data.monnify_account_number) {
             // Happy path — account details present
             setPaymentIntent(data as import('@/types').PaymentIntent);
-            startCountdown(data.expiry_at);
-            setLoadingIntent(false);
-            // Fix 3: restore partial payment state if the DB row already has amount_paid
-            if (data.amount_paid != null && data.amount_paid > 0) {
-              const outstanding = data.outstanding_balance ?? data.amount_naira;
-              console.log('[RequesterPaymentCard] fetchPaymentIntent: restoring partial payment state — amount_paid:', data.amount_paid, 'outstanding:', outstanding);
-              onPartialPaymentRestored?.(data.amount_paid, outstanding);
+            if (data.payment_route !== 'flashlocum_manual') {
+              startCountdown(data.expiry_at);
             }
+            setLoadingIntent(false);
             return;
-          } else if (!autoRefreshAttemptedRef.current) {
+          } else if (!autoRefreshAttemptedRef.current && data.payment_route !== 'flashlocum_manual') {
             // Row exists but Monnify failed — auto-trigger refresh once
             autoRefreshAttemptedRef.current = true;
             setLoadingIntent(false);
@@ -945,7 +933,7 @@ function RequesterPaymentCard({
     }
     // Exhausted all retries — stop loading, leave paymentIntent null
     setLoadingIntent(false);
-  }, [session.id, startCountdown, onPartialPaymentRestored]);
+  }, [session.id, startCountdown]);
 
   // ─── Refresh payment via edge function ───────────────────────────────────
   const handleRefreshPayment = useCallback(async () => {
@@ -976,7 +964,7 @@ function RequesterPaymentCard({
           monnify_account_reference: null,
           monnify_transaction_reference: null,
           status: 'pending' as const,
-          expiry_at: payment.expiry_at ?? new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+          expiry_at: payment.expiry_at ?? new Date(Date.now() + 20 * 60 * 1000).toISOString(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -991,21 +979,18 @@ function RequesterPaymentCard({
           expiry_at: payment.expiry_at ?? base.expiry_at,
           payment_route: payment.payment_route ?? base.payment_route ?? null,
         });
-        if (payment.expiry_at) {
+        if (payment.expiry_at && payment.payment_route !== 'flashlocum_manual') {
           startCountdown(payment.expiry_at);
         }
         setLoadingIntent(false);
         autoRefreshAttemptedRef.current = false;
-        // Fix 4: clear partial payment display — new intent covers the full new amount
-        console.log('[RequesterPaymentCard] handleRefreshPayment: clearing partial payment state after refresh');
-        onPartialPaymentCleared?.();
       }
     } catch (e: any) {
     } finally {
       refreshingRef.current = false;
       setRefreshing(false);
     }
-  }, [session.id, startCountdown, onPartialPaymentCleared]);
+  }, [session.id, startCountdown]);
 
   // Keep paymentIntentRef in sync so updaters can read the latest value without stale closures.
   useEffect(() => { paymentIntentRef.current = paymentIntent; }, [paymentIntent]);
@@ -1054,7 +1039,7 @@ function RequesterPaymentCard({
         const pi = paymentIntentRef.current;
         if (!pi?.monnify_account_number) {
           fetchPaymentIntent();
-        } else if (pi.expiry_at && new Date(pi.expiry_at) < new Date()) {
+        } else if (pi.expiry_at && new Date(pi.expiry_at) < new Date() && pi.payment_route !== 'flashlocum_manual') {
           // Account details exist but window has expired — auto-refresh once
           handleRefreshPaymentRef.current();
         }
@@ -1120,7 +1105,7 @@ function RequesterPaymentCard({
             monnify_account_reference: null,
             monnify_transaction_reference: null,
             status: 'pending' as const,
-            expiry_at: payment.expiry_at ?? new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+            expiry_at: payment.expiry_at ?? new Date(Date.now() + 20 * 60 * 1000).toISOString(),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           };
@@ -1134,7 +1119,7 @@ function RequesterPaymentCard({
             monnify_account_reference: payment.account_reference ?? base.monnify_account_reference,
             expiry_at: payment.expiry_at ?? base.expiry_at,
           });
-          if (payment.expiry_at) {
+          if (payment.expiry_at && payment.payment_route !== 'flashlocum_manual') {
             startCountdown(payment.expiry_at);
           }
           setLoadingIntent(false);
@@ -1167,7 +1152,9 @@ function RequesterPaymentCard({
           console.log('[RequesterPaymentCard] payment_intents INSERT via postgres_changes — account_number:', row.monnify_account_number);
           if (row.monnify_account_number) {
             setPaymentIntent(row);
-            startCountdown(row.expiry_at);
+            if (row.payment_route !== 'flashlocum_manual') {
+              startCountdown(row.expiry_at);
+            }
             setLoadingIntent(false);
           } else if (!autoRefreshAttemptedRef.current) {
             // Row inserted but Monnify failed — auto-refresh once
@@ -1192,11 +1179,6 @@ function RequesterPaymentCard({
           console.log('[RequesterPaymentCard] payment_intents UPDATE via postgres_changes — amount_naira:', row.amount_naira, 'amount_paid:', row.amount_paid, 'outstanding_balance:', row.outstanding_balance);
           // Merge updated fields — do NOT restart the countdown timer
           setPaymentIntent(prev => prev ? { ...prev, ...row } : row);
-          // If DB row confirms a partial payment, sync parent state immediately
-          // (covers the case where the broadcast arrived late or was missed)
-          if ((row.amount_paid ?? 0) > 0 && (row.outstanding_balance ?? 0) > 0) {
-            onPartialPaymentRestored?.(row.amount_paid!, row.outstanding_balance!);
-          }
         }
       )
       .subscribe();
@@ -1205,17 +1187,7 @@ function RequesterPaymentCard({
   }, [session.id, startCountdown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Derived display values ───────────────────────────────────────────────
-  // Fix 1: when a partial payment has been received, show the outstanding balance
-  // as the "Transfer Exactly" amount instead of the original full amount.
-  // A partial payment exists if either the parent props say so OR the local DB row says so
-  const dbOutstanding = (paymentIntent?.outstanding_balance ?? 0) > 0 ? paymentIntent!.outstanding_balance! : null;
-  const dbAmountPaid = (paymentIntent?.amount_paid ?? 0) > 0 ? paymentIntent!.amount_paid! : null;
-  const hasPartialPayment =
-    ((amountPaid ?? 0) > 0 && (outstandingBalance ?? 0) > 0) ||
-    (dbAmountPaid != null && dbOutstanding != null);
-  const amountNaira = hasPartialPayment
-    ? (outstandingBalance ?? dbOutstanding ?? paymentIntent?.amount_naira ?? (session as any).booked_price ?? session.price)
-    : (paymentIntent?.amount_naira ?? (session as any).booked_price ?? session.price);
+  const amountNaira = paymentIntent?.amount_naira ?? (session as any).booked_price ?? session.price;
   const amountDisplay = `₦${Number(amountNaira).toLocaleString()}`;
   const hasAccountDetails = !!(paymentIntent?.monnify_account_number);
   const accountNumber = paymentIntent?.monnify_account_number ?? '';
@@ -1330,57 +1302,7 @@ function RequesterPaymentCard({
             </View>
           )}
 
-          {/* Partial Payment Banner */}
-          {amountPaid != null && amountPaid > 0 && outstandingBalance != null && outstandingBalance > 0 && (
-            <View style={{
-              backgroundColor: '#FFFBEB',
-              borderRadius: 16,
-              padding: 16,
-              marginBottom: 16,
-              borderWidth: 1,
-              borderColor: '#F59E0B',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.06,
-              shadowRadius: 8,
-              elevation: 2,
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 6 }}>
-                <View style={{ backgroundColor: '#F59E0B', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 3 }}>
-                  <Text style={{ fontSize: 10, letterSpacing: 1.2, color: '#FFFFFF', fontFamily: 'Inter_700Bold' }}>
-                    PARTIAL PAYMENT RECEIVED
-                  </Text>
-                </View>
-              </View>
-              <View style={{ gap: 8 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 14, color: '#78716C', fontFamily: 'Inter_400Regular' }}>
-                    Total Due
-                  </Text>
-                  <Text style={{ fontSize: 14, color: '#1C1917', fontFamily: 'Inter_600SemiBold' }}>
-                    {`₦${Number(amountNaira).toLocaleString()}`}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 14, color: '#78716C', fontFamily: 'Inter_400Regular' }}>
-                    Amount Paid
-                  </Text>
-                  <Text style={{ fontSize: 14, color: '#16A34A', fontFamily: 'Inter_600SemiBold' }}>
-                    {`₦${Number(amountPaid).toLocaleString()}`}
-                  </Text>
-                </View>
-                <View style={{ height: 1, backgroundColor: '#FDE68A', marginVertical: 2 }} />
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 14, color: '#78716C', fontFamily: 'Inter_600SemiBold' }}>
-                    Outstanding Balance
-                  </Text>
-                  <Text style={{ fontSize: 16, color: '#D97706', fontFamily: 'Inter_700Bold' }}>
-                    {`₦${Number(outstandingBalance).toLocaleString()}`}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          )}
+
 
           {/* Account Card */}
           <View style={{
@@ -1844,12 +1766,6 @@ export default function RequesterHomeScreen() {
         handlePaymentConfirmedWithFallbackRef.current(sessionId);
         startRequesterPaymentPollingRef.current();
       })
-      .on('broadcast', { event: 'PAYMENT_PARTIAL' }, (payload) => {
-        console.log('[Requester] user channel PAYMENT_PARTIAL received', payload?.payload);
-        const { amount_paid, outstanding_balance } = payload?.payload ?? {};
-        setPartialAmountPaid(amount_paid ?? 0);
-        setPartialOutstandingBalance(outstanding_balance ?? 0);
-      })
       // From channel 7 (shift cancelled on requester channel)
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
         console.log('[Requester] requester-user channel SHIFT_CANCELLED received');
@@ -2189,19 +2105,7 @@ export default function RequesterHomeScreen() {
   const [ratingError, setRatingError] = useState('');
   const sessionChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  // Partial payment state — updated by PAYMENT_PARTIAL broadcast, reset on session clear
-  const [partialAmountPaid, setPartialAmountPaid] = useState<number>(0);
-  const [partialOutstandingBalance, setPartialOutstandingBalance] = useState<number>(0);
 
-  // Reset partial payment state whenever the active session is cleared —
-  // prevents stale values from bleeding into the next booking
-  useEffect(() => {
-    if (activeSession === null) {
-      console.log('[RequesterHome] activeSession cleared — resetting partial payment state');
-      setPartialAmountPaid(0);
-      setPartialOutstandingBalance(0);
-    }
-  }, [activeSession]);
 
   // Realtime refs for matching
   const matchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2248,10 +2152,6 @@ export default function RequesterHomeScreen() {
       }
       const data = await res.json();
       const session: CoverageSession | null = data?.session ?? null;
-      // Always start a new session with clean partial payment state
-      console.log('[RequesterHome] fetchActiveSession — resetting partial payment state before applying session', session?.id ?? 'null');
-      setPartialAmountPaid(0);
-      setPartialOutstandingBalance(0);
       setActiveSession(session);
       if (session) {
         setActiveSessionId(session.id);
@@ -2472,12 +2372,6 @@ export default function RequesterHomeScreen() {
         const sessionId = payload?.payload?.session_id;
         handlePaymentConfirmedWithFallbackRef.current(sessionId);
         startRequesterPaymentPollingRef.current();
-      })
-      .on('broadcast', { event: 'PAYMENT_PARTIAL' }, (payload) => {
-        console.log('[Requester] session channel PAYMENT_PARTIAL received', payload?.payload);
-        const { amount_paid, outstanding_balance } = payload?.payload ?? {};
-        setPartialAmountPaid(amount_paid ?? 0);
-        setPartialOutstandingBalance(outstanding_balance ?? 0);
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
@@ -3427,8 +3321,6 @@ export default function RequesterHomeScreen() {
       setConfirmedSession(snap);
       setShowPaymentSuccess(true);
     }
-    setPartialAmountPaid(0);
-    setPartialOutstandingBalance(0);
     setActiveSession(null);
   }, []); // no deps — reads from ref so never goes stale
 
@@ -4665,18 +4557,6 @@ export default function RequesterHomeScreen() {
               bottomPadding={whiteCardPaddingBottom}
               onPaymentConfirmed={handlePaymentConfirmed}
               initialPayment={(activeSession as any)._initialPayment ?? null}
-              amountPaid={partialAmountPaid}
-              outstandingBalance={partialOutstandingBalance}
-              onPartialPaymentRestored={(paid, outstanding) => {
-                console.log('[RequesterHome] onPartialPaymentRestored — paid:', paid, 'outstanding:', outstanding);
-                setPartialAmountPaid(paid);
-                setPartialOutstandingBalance(outstanding);
-              }}
-              onPartialPaymentCleared={() => {
-                console.log('[RequesterHome] onPartialPaymentCleared — resetting partial payment state');
-                setPartialAmountPaid(0);
-                setPartialOutstandingBalance(0);
-              }}
             />
           )}
 
