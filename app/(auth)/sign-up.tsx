@@ -223,7 +223,7 @@ export default function SignUpScreen() {
           try {
             const [profileStepResult, doctorProfileResult] = await Promise.all([
               supabase.from('profiles').select('doctor_basic_profile_complete').eq('id', data.user.id).single(),
-              supabase.from('doctor_profiles').select('mdcn_number, subaccount_code').eq('id', data.user.id).single(),
+              supabase.from('doctor_profiles').select('mdcn_number, account_number').eq('id', data.user.id).single(),
             ]);
             const profileStep = profileStepResult.data;
             const doctorStep = doctorProfileResult.data;
@@ -234,7 +234,7 @@ export default function SignUpScreen() {
             } else if (!doctorStep?.mdcn_number) {
               console.log('[sign-up] Routing to doctor credentials (step 2)');
               router.replace('/(onboarding)/doctor/credentials' as any);
-            } else if (!doctorStep?.subaccount_code) {
+            } else if (!doctorStep?.account_number) {
               console.log('[sign-up] Routing to doctor payout (step 3)');
               router.replace('/(onboarding)/doctor/payout' as any);
             } else {
