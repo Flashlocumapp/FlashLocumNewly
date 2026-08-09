@@ -395,6 +395,7 @@ export default function DoctorLayout() {
   const [criticalDataReady, setCriticalDataReady] = useState(false);
   const [doctorScreenState, setDoctorScreenState] = useState<DoctorScreenState>('idle');
   const [requestQueue, setRequestQueue] = useState<DispatchRequest[]>([]);
+  const [displayedRequestId, setDisplayedRequestId] = useState<string | null>(null);
   const [confirmedRequest, setConfirmedRequest] = useState<DispatchRequest | null>(null);
   const [accepting, setAccepting] = useState(false);
 
@@ -515,8 +516,13 @@ export default function DoctorLayout() {
       if (freshRequests.length > 0) {
         setRequestQueue(freshRequests);
         setDoctorScreenState('incoming');
+        // Reconcile: if displayed request is no longer in fresh results, advance to first
+        setDisplayedRequestId((prev) =>
+          prev && freshRequests.some((r: DispatchRequest) => r.id === prev) ? prev : freshRequests[0].id
+        );
       } else {
         setRequestQueue([]);
+        setDisplayedRequestId(null);
         setDoctorScreenState((prev) => prev === 'incoming' ? 'idle' : prev);
       }
     } catch (e: any) {
@@ -1730,7 +1736,7 @@ export default function DoctorLayout() {
 
   // ── Accept ──
   const handleAccept = useCallback(async () => {
-    const req = requestQueue[0];
+    const req = requestQueue.find(r => r.id === displayedRequestId) ?? requestQueue[0] ?? null;
     if (!req || !user) return;
     setAccepting(true);
     try {
@@ -1750,7 +1756,8 @@ export default function DoctorLayout() {
         } else {
           Alert.alert('Request Taken', 'Request no longer available.');
         }
-        setRequestQueue((prev) => prev.slice(1));
+        setRequestQueue((prev) => prev.filter(r => r.id !== req.id));
+        setDisplayedRequestId((prev) => prev === req.id ? null : prev);
         await forceSync();
         return;
       }
@@ -1760,7 +1767,8 @@ export default function DoctorLayout() {
       }
       setConfirmedRequest(req);
       setDoctorScreenState('idle');
-      setRequestQueue([]);
+      setRequestQueue((prev) => prev.filter(r => r.id !== req.id));
+      setDisplayedRequestId((prev) => prev === req.id ? null : prev);
 
       // Fetch the newly created session
       await fetchActiveSession();
@@ -1800,17 +1808,18 @@ export default function DoctorLayout() {
     } finally {
       setAccepting(false);
     }
-  }, [requestQueue, user, forceSync, fetchActiveSession, activeJobCount, callEdge, playAcceptanceChime]);
+  }, [requestQueue, displayedRequestId, user, forceSync, fetchActiveSession, activeJobCount, callEdge, playAcceptanceChime]);
 
   // ── Decline ──
   const handleDecline = useCallback(async () => {
-    const req = requestQueue[0];
+    const req = requestQueue.find(r => r.id === displayedRequestId) ?? requestQueue[0] ?? null;
     if (!req || !user) return;
     try {
       await callEdge('decline-request', { request_id: req.id });
     } catch {}
-    setRequestQueue((prev) => prev.slice(1));
-  }, [requestQueue, user, callEdge]);
+    setRequestQueue((prev) => prev.filter(r => r.id !== req.id));
+    setDisplayedRequestId((prev) => prev === req.id ? null : prev);
+  }, [requestQueue, displayedRequestId, user, callEdge]);
 
   // ── Doctor Rating — dismiss ──
   const handleDoctorRatingDone = useCallback(async () => {
@@ -1883,8 +1892,21 @@ export default function DoctorLayout() {
     }
   }, [doctorRatingSessionId, doctorRatingStars, doctorRatingComment, handleDoctorRatingDone]);
 
-  const currentRequest = requestQueue[0] ?? null;
+  const currentRequest = requestQueue.find(r => r.id === displayedRequestId) ?? requestQueue[0] ?? null;
   const showCard = doctorScreenState === 'incoming' && currentRequest !== null;
+
+  useEffect(() => {
+    if (requestQueue.length === 0) {
+      setDisplayedRequestId(null);
+      return;
+    }
+    setDisplayedRequestId((prev) => {
+      // If the currently displayed request is still in the queue, keep it
+      if (prev && requestQueue.some(r => r.id === prev)) return prev;
+      // Otherwise advance to the first item
+      return requestQueue[0].id;
+    });
+  }, [requestQueue]);
 
   // Fee breakdown
   const feeAmount = currentRequest?.price ?? 0;
@@ -1926,7 +1948,7 @@ export default function DoctorLayout() {
     criticalDataReady,
     doctorRatingScore,
     doctorReliabilityScore,
-  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcoming, criticalDataReady, doctorRatingScore, doctorReliabilityScore]);
+  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcoming, criticalDataReady, doctorRatingScore, doctorReliabilityScore, displayedRequestId]);
 
   return (
     <DoctorDispatchContext.Provider value={contextValue}>
