@@ -405,6 +405,36 @@ export default function DoctorPayout() {
         .upsert({ id: userId, onboarding_complete: true, doctor_onboarding_complete: true });
       if (profileError) throw profileError;
 
+      // Step 3: Provision Monnify subaccount (best-effort — never blocks onboarding)
+      console.log('[Payout] Step 3: provisioning Monnify subaccount (best-effort)');
+      try {
+        const provisionRes = await fetchWithAuth(
+          `${SUPABASE_URL}/functions/v1/create-subaccount`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              doctor_id: userId,
+              bank_code: selectedBank!.code,
+              account_number: accountNumber,
+              account_name: accountName,
+              bank_name: selectedBank!.name,
+            }),
+          }
+        );
+        const provisionText = await provisionRes.text();
+        let provisionResult: any;
+        try { provisionResult = JSON.parse(provisionText); } catch { provisionResult = null; }
+        if (provisionResult?.success) {
+          console.log('[Payout] Subaccount provisioned:', provisionResult.subaccount_code);
+        } else {
+          console.log('[Payout] Subaccount provisioning deferred:', provisionResult?.status, provisionResult?.error);
+        }
+      } catch (provisionErr) {
+        // Intentionally swallowed — provisioning failure must never block onboarding
+        console.log('[Payout] Subaccount provisioning call failed (non-blocking):', provisionErr instanceof Error ? provisionErr.message : String(provisionErr));
+      }
+
       console.log('[Payout] Submit success');
       refreshProfile();
       router.replace('/(doctor)/(home)' as any);
