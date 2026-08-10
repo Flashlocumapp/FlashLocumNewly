@@ -84,6 +84,7 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
   const [inAppNotification, setInAppNotification] = useState<InAppNotification | null>(null);
 
   const newRequestPushCallbackRef = useRef<(() => void) | null>(null);
+  const soundRef = useRef<import('expo-av').Audio.Sound | null>(null);
 
   const onNewRequestPush = useCallback((callback: () => void) => {
     newRequestPushCallbackRef.current = callback;
@@ -256,18 +257,32 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
       console.log('[NotificationContext] playAcceptanceChime — loading audio asset');
       const { Audio } = await import('expo-av');
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+      // Unload any previous sound instance before creating a new one
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current = null;
+      }
       const { sound } = await Audio.Sound.createAsync(
         require('../assets/sounds/acceptance_chime.wav'),
         { shouldPlay: true, volume: 1.0 }
       );
+      soundRef.current = sound;
       console.log('[NotificationContext] playAcceptanceChime — sound playing for sessionId:', sessionId);
       sound.setOnPlaybackStatusUpdate(status => {
         if (status.isLoaded && status.didJustFinish) {
           console.log('[NotificationContext] playAcceptanceChime — playback finished, unloading');
           sound.unloadAsync().catch(() => {});
+          soundRef.current = null;
         }
       });
     } catch (err) { console.warn('[NotificationContext] playAcceptanceChime error:', err); }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      soundRef.current?.unloadAsync().catch(() => {});
+      soundRef.current = null;
+    };
   }, []);
 
   const clearChimeForSession = useCallback((sessionId: string) => {

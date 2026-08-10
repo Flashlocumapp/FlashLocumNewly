@@ -468,6 +468,7 @@ export default function DoctorLayout() {
     })();
   }, [user]);
 
+  const isMountedRef = useRef(true);
   const prevIsOnlineRef = useRef<boolean>(false);
   const callEdgeRef = useRef<(fn: string, body?: object) => Promise<Response | null>>(async () => null);
   const forceSyncRef = useRef<() => Promise<void>>(async () => {});
@@ -506,7 +507,9 @@ export default function DoctorLayout() {
     try {
       const res = await callEdge('force-sync');
       if (!res || !res.ok) return;
+      if (!isMountedRef.current) return;
       const data = await res.json();
+      if (!isMountedRef.current) return;
       const now = new Date();
       const freshRequests = (data.requests ?? []).filter((req: any) => {
         if (req.status && req.status !== 'pending') return false;
@@ -768,10 +771,12 @@ export default function DoctorLayout() {
   const fetchActiveSession = useCallback(async () => {
     try {
       const res = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=doctor`, {});
+      if (!isMountedRef.current) return;
       if (!res.ok) {
         return;
       }
       const data = await res.json();
+      if (!isMountedRef.current) return;
       const session: CoverageSession | null = data?.session ?? null;
       const jobCount: number = data?.active_job_count ?? 0;
       const upcoming: CoverageSession[] = data?.upcoming_sessions ?? [];
@@ -833,6 +838,7 @@ export default function DoctorLayout() {
         }
       });
     _doctorWarmPromise = Promise.all([warmDoctorRatedCache(), warmDoctorDismissedCache()]).then(async () => {
+      if (!isMountedRef.current) return;
       warmCompleteRef.current = true;
       setWarmComplete(true);
       // Fire prefetch immediately — does not depend on active session result
@@ -848,6 +854,7 @@ export default function DoctorLayout() {
               .select('rating, reliability')
               .eq('id', user.id)
               .single();
+            if (!isMountedRef.current) return;
             if (data) {
               setDoctorRatingScore(data.rating ?? null);
               setDoctorReliabilityScore(data.reliability ?? null);
@@ -858,6 +865,7 @@ export default function DoctorLayout() {
           }
         })(),
       ]);
+      if (!isMountedRef.current) return;
       // Guard 2 — Boot-time: force offline if doctor is not verified
       const bootStatus = profile?.verification_status;
       if (bootStatus && bootStatus !== 'verified') {
@@ -898,6 +906,7 @@ export default function DoctorLayout() {
           filter: `id=eq.${user.id}`,
         },
         (payload) => {
+          if (!isMountedRef.current) return;
           const newRow = payload.new as { is_online?: boolean };
           if (typeof newRow.is_online !== 'boolean') return;
           // If a toggle is in flight, only apply if the incoming value matches the intent
@@ -936,8 +945,12 @@ export default function DoctorLayout() {
 
   // ─── Cleanup PollingManager on unmount ──────────────────────────────────────
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;  // gate first — blocks all post-unmount state setters
       PollingManager.stopAll();
+      _doctorWarmPromise = null;
+      _toggleIntent = null;
     };
   }, []);
 
@@ -1107,6 +1120,7 @@ export default function DoctorLayout() {
 
     const ch = supabase.channel(channelName)
       .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
+        if (!isMountedRef.current) return;
         const updated = payload?.payload?.session as CoverageSession | undefined;
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
@@ -1127,6 +1141,7 @@ export default function DoctorLayout() {
         }, undefined, 6);
       })
       .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
+        if (!isMountedRef.current) return;
         const updated = payload?.payload?.session as CoverageSession | undefined;
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated, status: 'active' } as CoverageSession));
@@ -1147,6 +1162,7 @@ export default function DoctorLayout() {
         }, undefined, 6);
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
+        if (!isMountedRef.current) return;
         const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
         if (updated) {
           setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
@@ -1162,6 +1178,7 @@ export default function DoctorLayout() {
         }
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+        if (!isMountedRef.current) return;
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
@@ -1178,6 +1195,7 @@ export default function DoctorLayout() {
         invalidate(`doctor_earnings:${user.id}`);
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+        if (!isMountedRef.current) return;
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current ?? activeSessionId;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
@@ -1194,9 +1212,11 @@ export default function DoctorLayout() {
         invalidate(`doctor_earnings:${user.id}`);
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
+        if (!isMountedRef.current) return;
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+        if (!isMountedRef.current) return;
         PollingManager.stop('cancel');
         if (activeSession?.id) clearChimeForSession(activeSession.id);
         setActiveSession(null);
@@ -1223,6 +1243,7 @@ export default function DoctorLayout() {
       .subscribe((status) => {
         console.log('[Doctor] session channel subscribe status:', status, 'for session:', activeSessionId);
         if (status === 'SUBSCRIBED') {
+          if (!isMountedRef.current) return;
           fetchActiveSession();
         }
       });
@@ -1375,6 +1396,7 @@ export default function DoctorLayout() {
           filter: `doctor_id=eq.${user.id}`,
         },
         (payload) => {
+          if (!isMountedRef.current) return;
           const newRow = payload.new as any;
           const oldRow = payload.old as any;
           // Only act when status actually changed
@@ -1533,6 +1555,7 @@ export default function DoctorLayout() {
     if (!user) return;
     const ch = supabase.channel(`doctor:${user.id}`)
       .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
+        if (!isMountedRef.current) return;
         if (payload?.payload?.reviewer_role === 'requester') {
           const newRating = payload?.payload?.new_rating;
           if (newRating !== undefined) {
@@ -1541,12 +1564,14 @@ export default function DoctorLayout() {
         }
       })
       .on('broadcast', { event: 'RELIABILITY_UPDATED' }, (payload) => {
+        if (!isMountedRef.current) return;
         const newReliability = payload?.payload?.new_reliability;
         if (newReliability !== undefined) {
           setDoctorReliabilityScore(Number(newReliability));
         }
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+        if (!isMountedRef.current) return;
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
@@ -1563,6 +1588,7 @@ export default function DoctorLayout() {
         invalidate(`doctor_earnings:${user.id}`);
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+        if (!isMountedRef.current) return;
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
         const hospitalName = payload?.payload?.hospital_name ?? '';
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
@@ -1600,6 +1626,7 @@ export default function DoctorLayout() {
         }
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
+        if (!isMountedRef.current) return;
         const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
         console.log('[Doctor] user channel SHIFT_ENDED received', { sessionId: (updated as any)?.id ?? activeSessionIdRef.current });
         if (updated) {
@@ -1614,6 +1641,7 @@ export default function DoctorLayout() {
         }
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+        if (!isMountedRef.current) return;
         const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
         console.log('[Doctor] user channel SHIFT_CANCELLED received', { sessionId });
         if (activeSession?.id) clearChimeForSession(activeSession.id);

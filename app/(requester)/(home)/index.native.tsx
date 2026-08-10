@@ -1715,6 +1715,7 @@ export default function RequesterHomeScreen() {
           .select('rating, reliability')
           .eq('id', user.id)
           .single();
+        if (!isMountedRef.current) return;
         if (error) {
           return;
         }
@@ -1735,6 +1736,7 @@ export default function RequesterHomeScreen() {
     const ch = supabase.channel(`requester-user:${user.id}`)
       // From channel 3 (scores)
       .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
+        if (!isMountedRef.current) return;
         if (payload?.payload?.reviewer_role === 'doctor') {
           const newRating = payload?.payload?.new_rating;
           if (newRating !== undefined) {
@@ -1745,6 +1747,7 @@ export default function RequesterHomeScreen() {
         }
       })
       .on('broadcast', { event: 'RELIABILITY_UPDATED' }, (payload) => {
+        if (!isMountedRef.current) return;
         const newReliability = payload?.payload?.new_reliability;
         if (newReliability !== undefined) {
           setRequesterReliability(newReliability);
@@ -1754,6 +1757,7 @@ export default function RequesterHomeScreen() {
       })
       // From channel 6 (payment confirmed on user channel)
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+        if (!isMountedRef.current) return;
         console.log('[Requester] user channel payment_confirmed received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
         invalidate(`requester-coverage-${user?.id ?? 'anon'}`);
@@ -1761,6 +1765,7 @@ export default function RequesterHomeScreen() {
         startRequesterPaymentPollingRef.current();
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+        if (!isMountedRef.current) return;
         console.log('[Requester] user channel PAYMENT_CONFIRMED received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
         invalidate(`requester-coverage-${user?.id ?? 'anon'}`);
@@ -1769,6 +1774,7 @@ export default function RequesterHomeScreen() {
       })
       // From channel 7 (shift cancelled on requester channel)
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+        if (!isMountedRef.current) return;
         console.log('[Requester] requester-user channel SHIFT_CANCELLED received');
         PollingManager.stop('cancel');
         if (activeSessionRef.current?.id) clearChimeForSession(activeSessionRef.current.id);
@@ -1788,6 +1794,7 @@ export default function RequesterHomeScreen() {
         }, undefined, 6);
       })
       .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
+        if (!isMountedRef.current) return;
         // A session was created — if we're in matching state, confirm the match
         PollingManager.stop('match');
         if (shouldPollRef.current) {
@@ -1815,6 +1822,7 @@ export default function RequesterHomeScreen() {
     if (!user) return;
     const ch = supabase.channel(`requester:${user.id}`)
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
+        if (!isMountedRef.current) return;
         console.log('[Requester] requester channel SHIFT_CANCELLED received — doctor cancelled');
         PollingManager.stop('cancel');
         if (activeSessionRef.current?.id) clearChimeForSession(activeSessionRef.current.id);
@@ -1851,6 +1859,7 @@ export default function RequesterHomeScreen() {
           filter: `id=eq.${user.id}`,
         },
         (payload) => {
+          if (!isMountedRef.current) return;
           const row = payload.new as any;
           console.log('[Requester] requester_profiles UPDATE via postgres_changes — rating:', row.rating, 'reliability:', row.reliability);
           if (row.rating !== undefined && row.rating !== null) {
@@ -1936,6 +1945,7 @@ export default function RequesterHomeScreen() {
       .eq('is_online', true)
       .not('lat', 'is', null)
       .not('lng', 'is', null);
+    if (!isMountedRef.current) return;
     if (error) {
       return;
     }
@@ -1970,6 +1980,7 @@ export default function RequesterHomeScreen() {
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
+          if (!isMountedRef.current) return;
           // Always re-fetch on every SUBSCRIBED confirmation — closes the race window
           // between the initial DB fetch and the moment the WebSocket is actually live.
           // Any doctor who went online in that gap will be picked up here.
@@ -2013,6 +2024,7 @@ export default function RequesterHomeScreen() {
       .subscribe((status) => {
         console.log('[OnlineDoctors] Postgres Changes channel status:', status);
         if (status === 'SUBSCRIBED') {
+          if (!isMountedRef.current) return;
           console.log('[OnlineDoctors] Postgres Changes channel SUBSCRIBED, re-fetching online doctors');
           fetchOnlineDoctors();
         }
@@ -2125,6 +2137,7 @@ export default function RequesterHomeScreen() {
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const startRequesterPaymentPollingRef = useRef<() => void>(() => {});
   const endShiftInProgressRef = useRef(false);
+  const isMountedRef = useRef(true);
 
 
 
@@ -2147,11 +2160,13 @@ export default function RequesterHomeScreen() {
   const fetchActiveSession = useCallback(async () => {
     try {
       const res = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=requester`, {});
+      if (!isMountedRef.current) return;
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
         return;
       }
       const data = await res.json();
+      if (!isMountedRef.current) return;
       const session: CoverageSession | null = data?.session ?? null;
       setActiveSession(session);
       if (session) {
@@ -2167,6 +2182,7 @@ export default function RequesterHomeScreen() {
           _requesterRatingInFlight.add(session.id);
           // Check AsyncStorage first
           const alreadyHandled = await isRequesterSessionPaid(session.id);
+          if (!isMountedRef.current) return;
           if (alreadyHandled) {
             _requesterRatingInFlight.delete(session.id);
           } else {
@@ -2176,6 +2192,7 @@ export default function RequesterHomeScreen() {
                 supabase.from('shift_reviews').select('id').eq('session_id', session.id).eq('reviewer_role', 'requester').maybeSingle(),
                 supabase.from('rating_dismissals').select('id').eq('session_id', session.id).eq('user_id', user?.id ?? '').eq('reviewer_role', 'requester').maybeSingle(),
               ]);
+              if (!isMountedRef.current) return;
               if (existingReview.data || existingDismissal.data) {
                 markRequesterSessionPaid(session.id);
                 _requesterRatingInFlight.delete(session.id);
@@ -2205,9 +2222,11 @@ export default function RequesterHomeScreen() {
       }
     } catch (e: any) {
     } finally {
-      isFirstLoadRef.current = false;
-      setSessionFetched(true); // mark that at least one fetch has completed
-      setSessionLoading(false);
+      if (isMountedRef.current) {
+        isFirstLoadRef.current = false;
+        setSessionFetched(true); // mark that at least one fetch has completed
+        setSessionLoading(false);
+      }
     }
   }, [user?.id]);
 
@@ -2227,7 +2246,12 @@ export default function RequesterHomeScreen() {
 
   // ─── Cleanup PollingManager on unmount ───────────────────────────────────────
   useEffect(() => {
-    return () => { PollingManager.stopAll(); };
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;  // gate first
+      PollingManager.stopAll();
+      _requesterRatingInFlight.clear();
+    };
   }, []);
 
   // ─── Re-fetch on SIGNED_IN (handles login after logout) ──────────────────────
@@ -2363,21 +2387,25 @@ export default function RequesterHomeScreen() {
         }
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+        if (!isMountedRef.current) return;
         console.log('[Requester] session channel PAYMENT_CONFIRMED received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
         handlePaymentConfirmedWithFallbackRef.current(sessionId);
         startRequesterPaymentPollingRef.current();
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+        if (!isMountedRef.current) return;
         console.log('[Requester] session channel payment_confirmed received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
         handlePaymentConfirmedWithFallbackRef.current(sessionId);
         startRequesterPaymentPollingRef.current();
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
+        if (!isMountedRef.current) return;
         setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
       })
       .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+        if (!isMountedRef.current) return;
         PollingManager.stop('cancel');
         setActiveSession(null);
         PollingManager.start('cancel-confirm', async () => {
@@ -2397,6 +2425,7 @@ export default function RequesterHomeScreen() {
       .subscribe((status) => {
         console.log('[Requester] session channel subscribe status:', status, 'for session:', activeSessionId);
         if (status === 'SUBSCRIBED') {
+          if (!isMountedRef.current) return;
           fetchActiveSessionRef.current();
         }
       });
@@ -2482,6 +2511,7 @@ export default function RequesterHomeScreen() {
         const sub = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.Balanced, distanceInterval: 20 },
           (loc) => {
+            if (!isMountedRef.current) return;
             const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
             _cachedRequesterCoords = coords;
             setUserCoords(coords);
@@ -2751,6 +2781,7 @@ export default function RequesterHomeScreen() {
             console.warn('[Requester] matchTimer withdraw-request failed:', e);
           }
         }
+        if (!isMountedRef.current) return;
         transitionToRef.current('expired');
       }, 180000);
 
@@ -2843,6 +2874,7 @@ export default function RequesterHomeScreen() {
             .eq('id', activeRequestId)
             .single();
 
+          if (!isMountedRef.current) return;
           if (error) {
           } else if (data?.status === 'matched' && data?.matched_doctor_id) {
             console.log('[Requester] Poll — match confirmed for request:', activeRequestId);
@@ -2855,6 +2887,7 @@ export default function RequesterHomeScreen() {
               .eq('request_id', activeRequestId)
               .single();
 
+            if (!isMountedRef.current) return;
             if (session) {
               if (session.id && AppState.currentState === 'active') {
                 console.log('[Requester] Poll match confirmed — playing acceptance chime for session:', session.id);
@@ -3055,6 +3088,7 @@ export default function RequesterHomeScreen() {
         const sub = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.Balanced, distanceInterval: 20 },
           (loc) => {
+            if (!isMountedRef.current) return;
             const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
             _cachedRequesterCoords = coords;
             setUserCoords(coords);
@@ -3354,6 +3388,7 @@ export default function RequesterHomeScreen() {
         _requesterRatingInFlight.add(sid);
         // Background dedup check — if already handled, hide overlay
         isRequesterSessionPaid(sid).then((alreadyHandled) => {
+          if (!isMountedRef.current) return;
           _requesterRatingInFlight.delete(sid);
           if (alreadyHandled) {
             setShowPaymentSuccess(false);
@@ -3369,8 +3404,10 @@ export default function RequesterHomeScreen() {
       setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
       try {
         const res = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=requester`, {});
+        if (!isMountedRef.current) return;
         if (!res.ok) return;
         const data = await res.json();
+        if (!isMountedRef.current) return;
         const session = data?.session ?? null;
         if (!session) return;
         setActiveSession(session);
@@ -3392,6 +3429,7 @@ export default function RequesterHomeScreen() {
           _requesterRatingInFlight.add(fetchedSid);
           // Background dedup check — if already handled, hide overlay
           isRequesterSessionPaid(fetchedSid).then((alreadyHandled) => {
+            if (!isMountedRef.current) return;
             _requesterRatingInFlight.delete(fetchedSid);
             if (alreadyHandled) {
               setShowPaymentSuccess(false);
