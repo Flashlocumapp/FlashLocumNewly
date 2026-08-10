@@ -30,7 +30,7 @@ import {
   BackHandler,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { Search, MapPin, ArrowRight, X, History, ArrowLeft } from 'lucide-react-native';
+import { Search, MapPin, ArrowRight, X, History, ArrowLeft, Clock } from 'lucide-react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Feather from '@expo/vector-icons/Feather';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -163,9 +163,10 @@ const SHEET_HEIGHTS = {
   config: SCREEN_HEIGHT * 0.75,
   summary: 240 + 80,
   matching: 300 + 80,
+  expired: 320 + 80,
 };
 
-type SheetState = 'idle' | 'searching' | 'config' | 'summary' | 'matching';
+type SheetState = 'idle' | 'searching' | 'config' | 'summary' | 'matching' | 'expired';
 
 type SelectedPlace = {
   name: string;
@@ -2797,8 +2798,8 @@ export default function RequesterHomeScreen() {
               console.warn('[Requester] REQUEST_EXPIRED withdraw-request failed:', e);
             }
           }
-          Alert.alert('Request Expired', 'Your request expired. Please try again.');
-          transitionToRef.current('summary');
+          console.log('[Requester] REQUEST_EXPIRED: transitioning to expired state');
+          transitionToRef.current('expired');
         })
         .subscribe((status) => {
           console.log('[Requester] matching channel subscribe status:', status);
@@ -4498,6 +4499,64 @@ export default function RequesterHomeScreen() {
                   <Text style={[TYPOGRAPHY.bodyMedium, { color: '#1C1C1E' }]}>Cancel Request</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          )}
+
+          {/* EXPIRED — No Doctor Accepted */}
+          {sheetState === 'expired' && (
+            <View style={{ padding: 28, paddingBottom: insets.bottom + 24 }}>
+              <DragHandle />
+              <View style={{ alignItems: 'center', marginBottom: 20, marginTop: 8 }}>
+                <View style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 26,
+                  backgroundColor: '#2C2C2E',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginBottom: 16,
+                }}>
+                  <Clock size={26} color="#8E8E93" strokeWidth={2} />
+                </View>
+                <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
+                  No Doctor Accepted
+                </Text>
+                <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20 }}>
+                  Your request timed out before a doctor could accept. You can modify and resubmit, or return home.
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[Requester] expired card: Modify Request pressed');
+                  handleEditRequest();
+                }}
+                activeOpacity={0.85}
+                style={{
+                  backgroundColor: '#F9F9F6',
+                  borderRadius: 999,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                  marginBottom: 12,
+                }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Modify Request</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[Requester] expired card: Back to Home pressed');
+                  setActiveRequestId(null);
+                  transitionTo('idle');
+                }}
+                activeOpacity={0.85}
+                style={{
+                  backgroundColor: '#2C2C2E',
+                  borderRadius: 999,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FFFFFF' }}>Back to Home</Text>
+              </TouchableOpacity>
             </View>
           )}
 
