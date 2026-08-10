@@ -6,7 +6,7 @@ import { useSplash } from '@/app/_layout';
 const PHRASES = ["Let's request", "Let's accept", "Let's cover"];
 
 const CHAR_DELAY = 55;
-const HOLD_FULL = 2000;
+const HOLD_FULL = 1000;
 const FADE_OUT_DURATION = 250;
 const BG_TRANSITION_DURATION = 400;
 
