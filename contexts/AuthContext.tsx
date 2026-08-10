@@ -32,7 +32,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const MAX_ATTEMPTS = 3;
     let lastError: unknown = null;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      if (attempt > 1) await new Promise(r => setTimeout(r, 1000 * attempt));
+      if (attempt > 1) {
+        await new Promise(r => setTimeout(r, 1000 * attempt));
+        // Abort if the session was cleared while we were waiting (e.g. user signed out)
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (!currentSession || currentSession.user.id !== userId) {
+          console.log('[AuthContext] fetchProfile aborted — session cleared during retry wait');
+          setProfileLoading(false);
+          return;
+        }
+      }
       const { data, error } = await supabase
         .from('profiles')
         .select('*')

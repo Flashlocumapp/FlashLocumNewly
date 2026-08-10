@@ -128,7 +128,8 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   handleReset = () => {
-    if (typeof window !== 'undefined') {
+    console.log('[ErrorBoundary] handleReset pressed, Platform.OS:', Platform.OS);
+    if (Platform.OS === 'web') {
       window.location.reload();
     } else {
       this.setState({ hasError: false, error: null, errorInfo: null, showTrace: false });

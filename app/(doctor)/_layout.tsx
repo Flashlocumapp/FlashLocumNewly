@@ -585,6 +585,7 @@ export default function DoctorLayout() {
       if (_doctorWarmPromise) await _doctorWarmPromise;
       else return;
     }
+    if (!isMountedRef.current) return;
 
     // If overlay is already open, do not reset in-progress input
     if (showDoctorRatingRef.current) return;
@@ -603,6 +604,7 @@ export default function DoctorLayout() {
         AsyncStorage.getItem(DOCTOR_RATED_SESSIONS_KEY),
         AsyncStorage.getItem(DOCTOR_DISMISSED_SESSIONS_KEY),
       ]);
+      if (!isMountedRef.current) return;
       const ratedArr: string[] = ratedRaw ? JSON.parse(ratedRaw) : [];
       const dismissedArr: string[] = dismissedRaw ? JSON.parse(dismissedRaw) : [];
       if (ratedArr.includes(resolvedSessionId)) {
@@ -621,6 +623,7 @@ export default function DoctorLayout() {
         supabase.from('shift_reviews').select('id').eq('session_id', resolvedSessionId).eq('reviewer_role', 'doctor').maybeSingle(),
         supabase.from('rating_dismissals').select('id').eq('session_id', resolvedSessionId).eq('user_id', user?.id ?? '').eq('reviewer_role', 'doctor').maybeSingle(),
       ]);
+      if (!isMountedRef.current) return;
       if (existingReview.data || existingDismissal.data) {
         markDoctorSessionRated(resolvedSessionId);
         markDoctorSessionDismissed(resolvedSessionId);
@@ -638,6 +641,7 @@ export default function DoctorLayout() {
         .select('status')
         .eq('id', resolvedSessionId)
         .maybeSingle();
+      if (!isMountedRef.current) return;
       const paidStatuses = ['requester_paid', 'settled'];
       if (!sessionSnap || !paidStatuses.includes(sessionSnap.status)) {
         console.log('[Doctor] maybeShowDoctorRating — session not yet paid, suppressing overlay', sessionSnap?.status);
@@ -700,7 +704,7 @@ export default function DoctorLayout() {
             const verifiedAmount = await fetchVerifiedAmount(resolvedSessionId);
             const resolvedAmount = verifiedAmount || amount || (snap.total_cost ?? snap.price ?? 0);
             console.log('[Doctor] paymentPoll (primary) — verifiedAmount:', verifiedAmount, 'resolvedAmount:', resolvedAmount);
-            void maybeShowDoctorRating(resolvedSessionId, resolvedHospital, resolvedAmount);
+            maybeShowDoctorRating(resolvedSessionId, resolvedHospital, resolvedAmount).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
             return true;
           }
         }
@@ -719,7 +723,7 @@ export default function DoctorLayout() {
             const verifiedAmount = await fetchVerifiedAmount(sessionId);
             const resolvedAmount = verifiedAmount || amount || (snap2.total_cost ?? 0);
             console.log('[Doctor] paymentPoll (fallback) — verifiedAmount:', verifiedAmount, 'resolvedAmount:', resolvedAmount);
-            void maybeShowDoctorRating(sessionId, resolvedHospital, resolvedAmount);
+            maybeShowDoctorRating(sessionId, resolvedHospital, resolvedAmount).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
             return true;
           }
         }
@@ -743,8 +747,10 @@ export default function DoctorLayout() {
         `${EDGE_BASE}/get-coverage-sessions?role=doctor&status=upcoming,paused,payment_pending`,
         { headers: { 'Content-Type': 'application/json' } },
       );
+      if (!isMountedRef.current) return;
       if (!res.ok) return;
       const data = await res.json();
+      if (!isMountedRef.current) return;
       const serverSessions: CoverageSession[] = data?.sessions ?? [];
       setUpcomingSessions(prev => {
         const prevIds = [...prev].map(s => s.id).sort().join(',');
@@ -1184,7 +1190,7 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] PAYMENT_CONFIRMED broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
         const sid = sessionId ?? '';
         if (sid && paymentPollingStartedRef.current !== sid) {
           paymentPollingStartedRef.current = sid;
@@ -1201,7 +1207,7 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] payment_confirmed broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
         const sid = sessionId ?? '';
         if (sid && paymentPollingStartedRef.current !== sid) {
           paymentPollingStartedRef.current = sid;
@@ -1283,6 +1289,7 @@ export default function DoctorLayout() {
       if (map.has(session.id)) continue; // already subscribed — do NOT recreate
       const ch = supabase.channel(`upcoming:${session.id}`)
         .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
+          if (!isMountedRef.current) return;
           console.log('[Doctor] upcoming session cancelled (session channel):', session.id);
           supabase.removeChannel(ch);
           map.delete(session.id);
@@ -1308,6 +1315,7 @@ export default function DoctorLayout() {
       if (coverageMap.has(session.id)) continue;
       const covCh = supabase.channel(`coverage:${session.id}`)
         .on('broadcast', { event: 'STATUS_CHANGED' }, (payload) => {
+          if (!isMountedRef.current) return;
           const status = payload?.payload?.status as string | undefined;
           console.log('[Doctor] coverage channel STATUS_CHANGED:', session.id, status);
           if (status === 'cancelled') {
@@ -1533,7 +1541,7 @@ export default function DoctorLayout() {
             void (async () => {
               const verifiedAmount = await fetchVerifiedAmount(sid);
               const amt = verifiedAmount || (newRow.total_cost ?? newRow.price ?? 0);
-              void maybeShowDoctorRating(sid, hospital, amt);
+              maybeShowDoctorRating(sid, hospital, amt).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
             })();
             // Start payment polling if not already running for this session — poll will return true immediately
             if (sid && paymentPollingStartedRef.current !== sid) {
@@ -1577,7 +1585,7 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] user channel PAYMENT_CONFIRMED received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
         const sid = sessionId ?? '';
         if (sid && paymentPollingStartedRef.current !== sid) {
           paymentPollingStartedRef.current = sid;
@@ -1594,7 +1602,7 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] user channel payment_confirmed received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        void maybeShowDoctorRating(sessionId ?? '', hospitalName, amount);
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
         const sid = sessionId ?? '';
         if (sid && paymentPollingStartedRef.current !== sid) {
           paymentPollingStartedRef.current = sid;
@@ -1707,7 +1715,7 @@ export default function DoctorLayout() {
                 const snap = snapData?.session ?? null;
                 if (snap && (snap.status === 'requester_paid' || snap.status === 'settled')) {
                   console.log('[Doctor] AppState active — session in paid state:', snap.status, '— triggering rating overlay');
-                  void maybeShowDoctorRating(snap.id, snap.hospital_name ?? '', snap.total_cost ?? 0);
+                  maybeShowDoctorRating(snap.id, snap.hospital_name ?? '', snap.total_cost ?? 0).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
                 }
                 if (snap && snap.status === 'settled') {
                   setActiveSessionId(null);

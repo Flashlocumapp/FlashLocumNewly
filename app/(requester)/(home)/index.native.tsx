@@ -2533,8 +2533,8 @@ export default function RequesterHomeScreen() {
   useEffect(() => {
     if (!userCoords) return;
     setUserMarkerTracksViews(true);
-    // No timeout — keep live-rendering permanently.
-    return undefined;
+    const t = setTimeout(() => setUserMarkerTracksViews(false), 500);
+    return () => clearTimeout(t);
   }, [userCoords]);
 
   // ─── Re-focus map on tab return ──────────────────────────────────────────────
@@ -2985,11 +2985,13 @@ export default function RequesterHomeScreen() {
           shift_date: shiftDateStr,
         }),
       });
+      if (!isMountedRef.current) return;
       if (!res.ok) {
         console.log('[fetchPreviewPrice] Non-OK response:', res.status);
         return;
       }
       const data = await res.json();
+      if (!isMountedRef.current) return;
       console.log('[fetchPreviewPrice] Price received:', data.price, 'hours:', data.duration_hours);
       setPreviewPrice(data.price ?? 0);
       setPreviewHours(data.duration_hours ?? 0);
@@ -2997,7 +2999,9 @@ export default function RequesterHomeScreen() {
     } catch (e: any) {
       console.log('[fetchPreviewPrice] Error:', e?.message);
     } finally {
-      setPreviewLoading(false);
+      if (isMountedRef.current) {
+        setPreviewLoading(false);
+      }
     }
   }, [startTime, endTime, coverageType, environment, coverageLength, shiftDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
