@@ -28,6 +28,7 @@ import { DoctorDispatchContext, CoverageSession, registerResetCallback } from '@
 import { getCached, setCached, invalidate, isStale, setPrefetchPromise, clearPrefetchPromise } from '@/utils/tabCache';
 import PollingManager from '../../utils/pollingManager';
 import { SUPABASE_URL } from '@/constants/api';
+import { logIncident, logLifecycleStarted, logLifecycleCompleted, logLifecycleFailed } from '@/utils/errorLogger';
 
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
@@ -704,7 +705,13 @@ export default function DoctorLayout() {
             const verifiedAmount = await fetchVerifiedAmount(resolvedSessionId);
             const resolvedAmount = verifiedAmount || amount || (snap.total_cost ?? snap.price ?? 0);
             console.log('[Doctor] paymentPoll (primary) — verifiedAmount:', verifiedAmount, 'resolvedAmount:', resolvedAmount);
-            maybeShowDoctorRating(resolvedSessionId, resolvedHospital, resolvedAmount).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
+            maybeShowDoctorRating(resolvedSessionId, resolvedHospital, resolvedAmount).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
+          severity: 'warning',
+          active_role: 'doctor',
+          screen: 'DoctorHome',
+          message: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+        }));
             return true;
           }
         }
@@ -723,7 +730,13 @@ export default function DoctorLayout() {
             const verifiedAmount = await fetchVerifiedAmount(sessionId);
             const resolvedAmount = verifiedAmount || amount || (snap2.total_cost ?? 0);
             console.log('[Doctor] paymentPoll (fallback) — verifiedAmount:', verifiedAmount, 'resolvedAmount:', resolvedAmount);
-            maybeShowDoctorRating(sessionId, resolvedHospital, resolvedAmount).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
+            maybeShowDoctorRating(sessionId, resolvedHospital, resolvedAmount).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
+          severity: 'warning',
+          active_role: 'doctor',
+          screen: 'DoctorHome',
+          message: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+        }));
             return true;
           }
         }
@@ -999,6 +1012,16 @@ export default function DoctorLayout() {
               // Network/server error — revert silently
               setIsOnline(false);
               if (user?.id) setCached(`doctor_is_online:${user.id}`, false);
+              logIncident({
+                severity: 'error',
+                event_type: 'GO_ONLINE',
+                active_role: 'doctor',
+                screen: 'DoctorHome',
+                edge_function: 'go-online',
+                provider_status: String(res?.status ?? 'network_error'),
+                message: `go-online failed with status ${res?.status ?? 'network_error'}`,
+                user_action_completed: false,
+              });
             }
           } else {
             if (user?.id) setCached(`doctor_is_online:${user.id}`, true);
@@ -1015,6 +1038,18 @@ export default function DoctorLayout() {
             });
           }
         } else {
+          if (!res || !res.ok) {
+            logIncident({
+              severity: 'warning',
+              event_type: 'GO_OFFLINE',
+              active_role: 'doctor',
+              screen: 'DoctorHome',
+              edge_function: 'go-offline',
+              provider_status: String(res?.status ?? 'network_error'),
+              message: `go-offline failed with status ${res?.status ?? 'network_error'}`,
+              user_action_completed: false,
+            });
+          }
           if (user?.id) setCached(`doctor_is_online:${user.id}`, false);
           deleteTag('is_online');
           console.log('[DoctorLayout] OneSignal deleteTag is_online');
@@ -1190,7 +1225,13 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] PAYMENT_CONFIRMED broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
+          severity: 'warning',
+          active_role: 'doctor',
+          screen: 'DoctorHome',
+          message: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+        }));
         const sid = sessionId ?? '';
         if (sid && paymentPollingStartedRef.current !== sid) {
           paymentPollingStartedRef.current = sid;
@@ -1207,7 +1248,13 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] payment_confirmed broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
+          severity: 'warning',
+          active_role: 'doctor',
+          screen: 'DoctorHome',
+          message: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+        }));
         const sid = sessionId ?? '';
         if (sid && paymentPollingStartedRef.current !== sid) {
           paymentPollingStartedRef.current = sid;
@@ -1541,7 +1588,13 @@ export default function DoctorLayout() {
             void (async () => {
               const verifiedAmount = await fetchVerifiedAmount(sid);
               const amt = verifiedAmount || (newRow.total_cost ?? newRow.price ?? 0);
-              maybeShowDoctorRating(sid, hospital, amt).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
+              maybeShowDoctorRating(sid, hospital, amt).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
+          severity: 'warning',
+          active_role: 'doctor',
+          screen: 'DoctorHome',
+          message: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+        }));
             })();
             // Start payment polling if not already running for this session — poll will return true immediately
             if (sid && paymentPollingStartedRef.current !== sid) {
@@ -1585,7 +1638,13 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] user channel PAYMENT_CONFIRMED received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
+          severity: 'warning',
+          active_role: 'doctor',
+          screen: 'DoctorHome',
+          message: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+        }));
         const sid = sessionId ?? '';
         if (sid && paymentPollingStartedRef.current !== sid) {
           paymentPollingStartedRef.current = sid;
@@ -1602,7 +1661,13 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] user channel payment_confirmed received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
+          severity: 'warning',
+          active_role: 'doctor',
+          screen: 'DoctorHome',
+          message: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+        }));
         const sid = sessionId ?? '';
         if (sid && paymentPollingStartedRef.current !== sid) {
           paymentPollingStartedRef.current = sid;
@@ -1715,7 +1780,13 @@ export default function DoctorLayout() {
                 const snap = snapData?.session ?? null;
                 if (snap && (snap.status === 'requester_paid' || snap.status === 'settled')) {
                   console.log('[Doctor] AppState active — session in paid state:', snap.status, '— triggering rating overlay');
-                  maybeShowDoctorRating(snap.id, snap.hospital_name ?? '', snap.total_cost ?? 0).catch((e) => console.warn('[Doctor] maybeShowDoctorRating error:', e));
+                  maybeShowDoctorRating(snap.id, snap.hospital_name ?? '', snap.total_cost ?? 0).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
+          severity: 'warning',
+          active_role: 'doctor',
+          screen: 'DoctorHome',
+          message: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+        }));
                 }
                 if (snap && snap.status === 'settled') {
                   setActiveSessionId(null);
@@ -1775,6 +1846,12 @@ export default function DoctorLayout() {
     const req = requestQueue.find(r => r.id === displayedRequestId) ?? requestQueue[0] ?? null;
     if (!req || !user) return;
     setAccepting(true);
+    const acceptActionId = logLifecycleStarted('ACCEPT_REQUEST', {
+      active_role: 'doctor',
+      screen: 'DoctorHome',
+      request_id: req.id,
+      edge_function: 'accept-request',
+    });
     try {
       const res = await fetchWithAuth(`${EDGE_BASE}/accept-request`, {
         method: 'POST',
@@ -1799,7 +1876,18 @@ export default function DoctorLayout() {
       }
       if (!res.ok) {
         const body = await res.text().catch(() => '');
-        throw new Error(body || 'Accept failed');
+        const errorMessage = body || 'Accept failed';
+        logLifecycleFailed('ACCEPT_REQUEST', acceptActionId, {
+          severity: 'critical',
+          active_role: 'doctor',
+          screen: 'DoctorHome',
+          request_id: req.id,
+          edge_function: 'accept-request',
+          provider_status: String(res.status),
+          message: errorMessage,
+          failure_stage: 'edge_function',
+        });
+        throw new Error(errorMessage);
       }
       setConfirmedRequest(req);
       setDoctorScreenState('idle');
@@ -1809,14 +1897,26 @@ export default function DoctorLayout() {
       // Fetch the newly created session
       await fetchActiveSession();
 
+      let newSessionId: string | undefined;
       try {
         const { data: newSess } = await supabase
           .from('coverage_sessions')
           .select('id')
           .eq('request_id', req.id)
           .maybeSingle();
-        if (newSess?.id) playAcceptanceChime(newSess.id);
+        if (newSess?.id) {
+          newSessionId = newSess.id;
+          playAcceptanceChime(newSess.id);
+        }
       } catch {}
+
+      logLifecycleCompleted('ACCEPT_REQUEST', acceptActionId, {
+        active_role: 'doctor',
+        screen: 'DoctorHome',
+        request_id: req.id,
+        session_id: newSessionId,
+        edge_function: 'accept-request',
+      });
 
       // Start accept poll to confirm session creation
       const acceptedReqId = req.id;
@@ -1851,7 +1951,20 @@ export default function DoctorLayout() {
     const req = requestQueue.find(r => r.id === displayedRequestId) ?? requestQueue[0] ?? null;
     if (!req || !user) return;
     try {
-      await callEdge('decline-request', { request_id: req.id });
+      const declineRes = await callEdge('decline-request', { request_id: req.id });
+      if (!declineRes || !declineRes.ok) {
+        logIncident({
+          severity: 'warning',
+          event_type: 'DECLINE_REQUEST',
+          active_role: 'doctor',
+          screen: 'DoctorHome',
+          request_id: req.id,
+          edge_function: 'decline-request',
+          provider_status: String(declineRes?.status ?? 'network_error'),
+          message: `decline-request failed with status ${declineRes?.status ?? 'network_error'}`,
+          user_action_completed: false,
+        });
+      }
     } catch {}
     setRequestQueue((prev) => prev.filter(r => r.id !== req.id));
     setDisplayedRequestId((prev) => prev === req.id ? null : prev);
@@ -1868,11 +1981,11 @@ export default function DoctorLayout() {
       ]);
       // Persist dismissal server-side so it survives app reinstalls / new devices
       if (user?.id) {
-        supabase.from('rating_dismissals').insert({
+        void supabase.from('rating_dismissals').insert({
           session_id: sid,
           user_id: user.id,
           reviewer_role: 'doctor',
-        }).then(() => {}).catch(() => {});
+        });
       }
     }
     console.log('[Doctor] Rating card dismissed', { sessionId: sid });
@@ -1923,6 +2036,16 @@ export default function DoctorLayout() {
     } catch (e: any) {
       console.log('[Doctor] Rating submission failed', { error: e.message });
       setDoctorRatingError(e.message);
+      logIncident({
+        severity: 'warning',
+        event_type: 'SUBMIT_RATING',
+        active_role: 'doctor',
+        screen: 'DoctorHome',
+        session_id: doctorRatingSessionId ?? undefined,
+        edge_function: 'submit-review',
+        message: e.message,
+        user_action_completed: false,
+      });
     } finally {
       setSubmittingDoctorRating(false);
     }

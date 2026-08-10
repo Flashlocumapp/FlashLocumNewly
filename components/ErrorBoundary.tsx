@@ -7,6 +7,7 @@
 
 import React, { Component, ReactNode } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, Platform, SafeAreaView } from "react-native";
+import { logIncident } from '@/utils/errorLogger';
 
 interface Props {
   children: ReactNode;
@@ -106,6 +107,16 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error("Error caught by boundary:", error, errorInfo);
     this.setState({ error, errorInfo });
     this.props.onError?.(error, errorInfo);
+    logIncident({
+      severity: 'critical',
+      event_type: 'JS_FATAL',
+      failure_stage: 'render',
+      message: error.message,
+      stack: error.stack,
+      metadata: {
+        componentStack: errorInfo.componentStack?.slice(0, 2000),
+      },
+    });
 
     // Notify parent window that ErrorBoundary is now visible (web iframe mode)
     if (Platform.OS === "web" && typeof window !== "undefined" && window.parent && window.parent !== window) {
@@ -128,8 +139,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   handleReset = () => {
-    console.log('[ErrorBoundary] handleReset pressed, Platform.OS:', Platform.OS);
-    if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined') {
       window.location.reload();
     } else {
       this.setState({ hasError: false, error: null, errorInfo: null, showTrace: false });

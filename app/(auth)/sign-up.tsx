@@ -1,4 +1,5 @@
 import React, { useState, useRef, useReducer } from 'react';
+import { logIncident } from '@/utils/errorLogger';
 import {
   View,
   Text,
@@ -159,6 +160,20 @@ export default function SignUpScreen() {
       setLoading(false);
       if (signUpError) {
         dispatch({ type: 'SET_ERROR', value: signUpError.message || 'Sign up failed. Please try again.' });
+        const signUpMsg = signUpError.message ?? '';
+        const isExpectedSignUpError = (msg: string) => {
+          const m = msg.toLowerCase();
+          return m.includes('already registered') || m.includes('already exists') || m.includes('email taken');
+        };
+        if (!isExpectedSignUpError(signUpMsg)) {
+          logIncident({
+            severity: 'error',
+            event_type: 'SIGN_UP',
+            failure_stage: 'auth',
+            message: signUpError.message,
+            user_action_completed: false,
+          });
+        }
       } else {
         router.push(`/(auth)/verify?email=${encodeURIComponent(form.email.trim())}&role=${role}`);
       }
@@ -171,6 +186,25 @@ export default function SignUpScreen() {
       setLoading(false);
       if (signInError) {
         dispatch({ type: 'SET_ERROR', value: signInError.message || 'Sign in failed. Please try again.' });
+        const signInMsg = signInError.message ?? '';
+        const isExpectedSignInError = (msg: string) => {
+          const m = msg.toLowerCase();
+          return (
+            m.includes('invalid login') ||
+            m.includes('invalid credentials') ||
+            m.includes('wrong password') ||
+            m.includes('email not confirmed')
+          );
+        };
+        if (!isExpectedSignInError(signInMsg)) {
+          logIncident({
+            severity: 'error',
+            event_type: 'SIGN_IN',
+            failure_stage: 'auth',
+            message: signInError.message,
+            user_action_completed: false,
+          });
+        }
       } else {
         // Fetch profile to determine correct destination
         const { data: profileData } = await supabase

@@ -17,6 +17,7 @@ import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { SUPABASE_URL } from '@/constants/api';
+import { logLifecycleStarted, logLifecycleCompleted, logLifecycleFailed } from '@/utils/errorLogger';
 
 const MONNIFY_BANKS_URL =
   `${SUPABASE_URL}/functions/v1/monnify-verify-account/banks`;
@@ -380,6 +381,11 @@ export default function DoctorPayout() {
     setLoading(true);
     setLoadingLabel('Saving details...');
 
+    const doctorOnboardActionId = logLifecycleStarted('DOCTOR_ONBOARDING_COMPLETE', {
+      active_role: 'doctor',
+      screen: 'DoctorOnboarding',
+    });
+
     try {
       const userId = user!.id;
 
@@ -407,6 +413,12 @@ export default function DoctorPayout() {
 
       // Step 3: Provision Monnify subaccount (best-effort — never blocks onboarding)
       console.log('[Payout] Step 3: provisioning Monnify subaccount (best-effort)');
+      const subaccountActionId = logLifecycleStarted('CREATE_SUBACCOUNT', {
+        active_role: 'doctor',
+        screen: 'DoctorPayout',
+        edge_function: 'create-subaccount',
+        provider: 'monnify',
+      });
       try {
         const provisionRes = await fetchWithAuth(
           `${SUPABASE_URL}/functions/v1/create-subaccount`,
@@ -427,14 +439,41 @@ export default function DoctorPayout() {
         try { provisionResult = JSON.parse(provisionText); } catch { provisionResult = null; }
         if (provisionResult?.success) {
           console.log('[Payout] Subaccount provisioned:', provisionResult.subaccount_code);
+          logLifecycleCompleted('CREATE_SUBACCOUNT', subaccountActionId, {
+            active_role: 'doctor',
+            screen: 'DoctorPayout',
+            edge_function: 'create-subaccount',
+            provider: 'monnify',
+          });
         } else {
           console.log('[Payout] Subaccount provisioning deferred:', provisionResult?.status, provisionResult?.error);
+          logLifecycleFailed('CREATE_SUBACCOUNT', subaccountActionId, {
+            severity: 'critical',
+            active_role: 'doctor',
+            screen: 'DoctorPayout',
+            edge_function: 'create-subaccount',
+            provider: 'monnify',
+            provider_status: String(provisionResult?.status ?? 'deferred'),
+            message: provisionResult?.error ?? 'Subaccount provisioning deferred',
+          });
         }
       } catch (provisionErr) {
         // Intentionally swallowed — provisioning failure must never block onboarding
         console.log('[Payout] Subaccount provisioning call failed (non-blocking):', provisionErr instanceof Error ? provisionErr.message : String(provisionErr));
+        logLifecycleFailed('CREATE_SUBACCOUNT', subaccountActionId, {
+          severity: 'critical',
+          active_role: 'doctor',
+          screen: 'DoctorPayout',
+          edge_function: 'create-subaccount',
+          provider: 'monnify',
+          message: provisionErr instanceof Error ? provisionErr.message : String(provisionErr),
+        });
       }
 
+      logLifecycleCompleted('DOCTOR_ONBOARDING_COMPLETE', doctorOnboardActionId, {
+        active_role: 'doctor',
+        screen: 'DoctorOnboarding',
+      });
       console.log('[Payout] Submit success');
       refreshProfile();
       router.replace('/(doctor)/(home)' as any);
@@ -443,6 +482,12 @@ export default function DoctorPayout() {
         err instanceof Error ? err.message : 'Something went wrong. Please try again.';
       console.log(`[Payout] Submit failed: ${message}`);
       setSubmitError(message);
+      logLifecycleFailed('DOCTOR_ONBOARDING_COMPLETE', doctorOnboardActionId, {
+        severity: 'error',
+        active_role: 'doctor',
+        screen: 'DoctorOnboarding',
+        message,
+      });
     } finally {
       setLoading(false);
       setLoadingLabel('Saving...');

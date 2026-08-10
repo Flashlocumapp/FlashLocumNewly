@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { SUPABASE_URL } from '@/constants/api';
 import DeleteAccountModal from '@/components/DeleteAccountModal';
+import { logLifecycleStarted, logLifecycleCompleted, logLifecycleFailed } from '@/utils/errorLogger';
 
 function CardDivider() {
   return <View style={styles.cardDivider} />;
@@ -49,6 +50,9 @@ export default function DoctorAccountSettingsScreen() {
   const handleConfirmDelete = async () => {
     console.log('[Doctor Account Settings] Delete Account confirmed, proceeding with deletion');
     setDeleting(true);
+    const deleteActionId = logLifecycleStarted('DELETE_ACCOUNT', {
+      screen: 'AccountSettings',
+    });
     try {
       // Force a fresh token before deletion — prevents 401 from expired sessions
       await supabase.auth.refreshSession();
@@ -64,6 +68,9 @@ export default function DoctorAccountSettingsScreen() {
       if (!res.ok) {
         throw new Error('Account deletion failed on server. Please try again.');
       }
+      logLifecycleCompleted('DELETE_ACCOUNT', deleteActionId, {
+        screen: 'AccountSettings',
+      });
       console.log('[Doctor Account Settings] Signing out after delete');
       await supabase.auth.signOut();
       router.replace('/');
@@ -71,6 +78,12 @@ export default function DoctorAccountSettingsScreen() {
       console.error('[Doctor Account Settings] Delete account error:', err);
       setDeleting(false);
       Alert.alert('Error', 'Could not delete account. Please contact support.');
+      logLifecycleFailed('DELETE_ACCOUNT', deleteActionId, {
+        severity: 'critical',
+        screen: 'AccountSettings',
+        failure_stage: 'edge_function',
+        message: err instanceof Error ? err.message : String(err),
+      });
     }
   };
 

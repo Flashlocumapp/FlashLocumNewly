@@ -19,6 +19,7 @@ type PollFn = () => Promise<boolean>; // return true = confirmed, stop polling
 interface Session {
   timer: ReturnType<typeof setTimeout> | null;
   active: boolean;
+  onExhausted?: () => void;
 }
 
 const sessions = new Map<string, Session>();
@@ -35,7 +36,9 @@ function _schedule(key: string, fn: PollFn, intervalMs: number, maxAttempts?: nu
 
     if (maxAttempts !== undefined && currentAttempt > maxAttempts) {
       console.warn(`[PollingManager] '${key}' timed out after ${maxAttempts} attempts — stopping`);
+      const exhaustedCb = s.onExhausted;
       stop(key);
+      exhaustedCb?.();
       return;
     }
 
@@ -54,12 +57,12 @@ function _schedule(key: string, fn: PollFn, intervalMs: number, maxAttempts?: nu
   }, intervalMs);
 }
 
-export function start(key: string, fn: PollFn, intervalMs = 5000, maxAttempts?: number): void {
+export function start(key: string, fn: PollFn, intervalMs = 5000, maxAttempts?: number, onExhausted?: () => void): void {
   console.log('[PollingManager] start:', key);
   // Stop any existing session for this key first
   stop(key);
 
-  const session: Session = { timer: null, active: true };
+  const session: Session = { timer: null, active: true, onExhausted };
   sessions.set(key, session);
 
   // Run first tick immediately, then schedule subsequent ticks

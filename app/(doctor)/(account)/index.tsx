@@ -25,6 +25,7 @@ import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { getCached, setCached, invalidate } from '@/utils/tabCache';
 import { SUPABASE_URL } from '@/constants/api';
 import SignOutModal from '@/components/SignOutModal';
+import { logIncident } from '@/utils/errorLogger';
 
 const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const SELFIE_URL_TTL_MS = 50 * 60 * 1000;   // 50 minutes (signed URLs expire at 60)
@@ -326,8 +327,19 @@ export default function DoctorAccountScreen() {
   const handleConfirmSignOut = async () => {
     console.log('[Doctor Account] Sign Out confirmed');
     setShowSignOutModal(false);
-    await supabase.auth.signOut();
-    router.replace('/(auth)/role-select' as any);
+    try {
+      await supabase.auth.signOut();
+      router.replace('/(auth)/role-select' as any);
+    } catch (err: unknown) {
+      console.error('[Doctor Account] Sign out error:', err);
+      logIncident({
+        severity: 'warning',
+        event_type: 'SIGN_OUT',
+        failure_stage: 'auth',
+        message: err instanceof Error ? err.message : String(err),
+        user_action_completed: false,
+      });
+    }
   };
 
   const handleRetrySubaccount = async () => {
