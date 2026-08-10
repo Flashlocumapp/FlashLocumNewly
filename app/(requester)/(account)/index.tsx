@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 import { ChevronRight } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
@@ -282,7 +283,12 @@ export default function RequesterAccountScreen() {
 
         <SectionHeader title="ACCOUNT MANAGEMENT" />
         <Card>
-          <ActionRow label="Switch to Cover & Earn" onPress={() => {
+          <ActionRow label="Switch to Cover & Earn" onPress={async () => {
+            try {
+              await SecureStore.setItemAsync('flashlocum_last_pathway', 'doctor');
+            } catch (e) {
+              console.warn('[Requester Account] Failed to persist last pathway before role switch:', e);
+            }
             if (authProfile?.doctor_onboarding_complete) {
               router.replace('/(doctor)/(home)' as any);
             } else {
