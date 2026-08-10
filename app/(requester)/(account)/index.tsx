@@ -21,7 +21,6 @@ import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { SUPABASE_URL } from '@/constants/api';
 import { TAB_BAR_HEIGHT } from '@/contexts/TabBarVisibilityContext';
 import { getCached, setCached, invalidate } from '@/utils/tabCache';
-import DeleteAccountModal from '@/components/DeleteAccountModal';
 import SignOutModal from '@/components/SignOutModal';
 
 const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -102,8 +101,6 @@ export default function RequesterAccountScreen() {
   const [genderModalVisible, setGenderModalVisible] = useState(false);
   const [savingGender, setSavingGender] = useState(false);
 
-  const [deleting, setDeleting] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
 
   useFocusEffect(
@@ -229,53 +226,11 @@ export default function RequesterAccountScreen() {
     router.replace('/(auth)/role-select' as any);
   };
 
-  const handleDeleteAccount = () => {
-    console.log('[Requester Account] Delete Account pressed — opening confirmation modal');
-    setShowDeleteModal(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    console.log('[Requester Account] Delete Account confirmed, proceeding with deletion');
-    setDeleting(true);
-    try {
-      // Force a fresh token before deletion — prevents 401 from expired sessions
-      await supabase.auth.refreshSession();
-      console.log('[Requester Account] Calling delete-account edge function');
-      const res = await fetchWithAuth(
-        `${SUPABASE_URL}/functions/v1/delete-account`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        },
-      );
-      console.log('[Requester Account] delete-account response status:', res.status);
-      if (!res.ok) {
-        throw new Error('Account deletion failed on server. Please try again.');
-      }
-      console.log('[Requester Account] Signing out after delete');
-      await supabase.auth.signOut();
-      router.replace('/');
-    } catch (err: unknown) {
-      console.error('[Requester Account] Delete account error:', err);
-      setDeleting(false);
-      Alert.alert('Error', 'Could not delete account. Please contact support.');
-    }
-  };
-
   // Only show full-screen spinner if we have no data at all (no authProfile seed)
   if (loading && profile === null) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#1C1C1E" />
-      </View>
-    );
-  }
-
-  if (deleting) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1C1C1E" />
-        <Text style={{ marginTop: 16, fontSize: 14, color: '#8E8E93' }}>Deleting account...</Text>
       </View>
     );
   }
@@ -335,12 +290,9 @@ export default function RequesterAccountScreen() {
             }
           }} />
           <CardDivider />
+          <ActionRow label="Account Settings" onPress={() => { console.log('[Requester Account] Account Settings pressed'); router.push('/(requester)/(account)/account-settings' as any); }} />
+          <CardDivider />
           <ActionRow label="Sign Out" onPress={handleSignOut} />
-        </Card>
-
-        <SectionHeader title="DANGER ZONE" />
-        <Card>
-          <ActionRow label="Delete Account" onPress={handleDeleteAccount} labelRed chevronRed />
         </Card>
       </ScrollView>
 
@@ -390,13 +342,6 @@ export default function RequesterAccountScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
-
-      <DeleteAccountModal
-        visible={showDeleteModal}
-        onCancel={() => setShowDeleteModal(false)}
-        onConfirm={handleConfirmDelete}
-        isDeleting={deleting}
-      />
 
       <SignOutModal
         visible={showSignOutModal}
