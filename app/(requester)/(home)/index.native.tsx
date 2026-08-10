@@ -1422,10 +1422,10 @@ function RequesterPaymentCard({
             }}>
               <View style={{ flex: 1, marginRight: 16 }}>
                 <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold', marginBottom: 6 }}>
-                  PRICE HELD FOR
+                  ACCOUNT DETAILS HELD FOR
                 </Text>
                 <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', lineHeight: 18 }}>
-                  Amount may increase if payment isn't made in time.
+                  Account details may change if payment isn't made in time.
                 </Text>
               </View>
               <Text style={{ fontSize: 28, fontFamily: 'Inter_700Bold', color: countdownColor, letterSpacing: 0.5 }}>
