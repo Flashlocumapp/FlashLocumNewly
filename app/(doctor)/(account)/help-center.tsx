@@ -94,9 +94,6 @@ export default function DoctorHelpCenterScreen() {
             <Text style={styles.bodyText}>{'• '}</Text>
             <Text style={styles.bodyText}>Payment is sent to the doctor by 10:15PM on the same day the shift ends</Text>
           </View>
-          <Text style={[styles.bodyText, { marginTop: 8 }]}>
-            If payment is not completed within 15 minutes of clicking End Shift, the shift remains open and billing continues in additional 15-minute blocks until payment is successfully completed.
-          </Text>
 
           <Text style={[styles.subHeading, { marginTop: 14 }]}>Multi-day shifts</Text>
           <View style={styles.bulletRow}>
@@ -134,9 +131,6 @@ export default function DoctorHelpCenterScreen() {
             <Text style={styles.bodyText}>{'• '}</Text>
             <Text style={styles.bodyText}>Payment is sent by 10:15PM on the same day the shift ends</Text>
           </View>
-          <Text style={[styles.bodyText, { marginTop: 8 }]}>
-            If payment is not completed within 15 minutes of clicking End Shift, the shift remains open and billing continues in additional 15-minute blocks until payment is successfully completed.
-          </Text>
         </View>
       ),
     },
