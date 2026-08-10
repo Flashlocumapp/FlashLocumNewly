@@ -161,12 +161,11 @@ const SHEET_HEIGHTS = {
   idle: 140 + 80,
   searching: SCREEN_HEIGHT * 0.75,
   config: SCREEN_HEIGHT * 0.75,
-  summary: 240 + 80,
+  summary: 340 + 80,
   matching: 300 + 80,
-  expired: 320 + 80,
 };
 
-type SheetState = 'idle' | 'searching' | 'config' | 'summary' | 'matching' | 'expired';
+type SheetState = 'idle' | 'searching' | 'config' | 'summary' | 'matching';
 
 type SelectedPlace = {
   name: string;
@@ -2751,11 +2750,7 @@ export default function RequesterHomeScreen() {
             console.warn('[Requester] matchTimer withdraw-request failed:', e);
           }
         }
-        Alert.alert(
-          'No Match Found',
-          'No doctor accepted your request at this time. Please try again or adjust your request parameters.',
-          [{ text: 'OK', onPress: () => transitionToRef.current('summary') }]
-        );
+        transitionToRef.current('summary');
       }, 180000);
 
       const channelName = `requester:${activeRequestId}`;
@@ -2798,8 +2793,7 @@ export default function RequesterHomeScreen() {
               console.warn('[Requester] REQUEST_EXPIRED withdraw-request failed:', e);
             }
           }
-          console.log('[Requester] REQUEST_EXPIRED: transitioning to expired state');
-          transitionToRef.current('expired');
+          transitionToRef.current('summary');
         })
         .subscribe((status) => {
           console.log('[Requester] matching channel subscribe status:', status);
@@ -4394,63 +4388,64 @@ export default function RequesterHomeScreen() {
           {sheetState === 'summary' && (
             <View style={{ paddingHorizontal: 24, paddingBottom: insets.bottom + 24, paddingTop: 8 }}>
               <DragHandle panHandlers={dragPanResponder.panHandlers} />
-              <Text style={{
-                fontSize: 11,
-                fontWeight: '600',
-                letterSpacing: 1.4,
-                color: COLORS.textSecondary,
-                marginBottom: 10,
-                marginTop: 8,
-              }}>
-                COVERAGE
-              </Text>
-              {previewLoading ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6, height: 60 }}>
-                  <ActivityIndicator size="small" color="#8E8E93" style={{ marginRight: 10 }} />
-                  <Text style={{ fontSize: 28, fontWeight: '800', color: '#8E8E93', letterSpacing: -1 }}>
-                    Calculating...
-                  </Text>
-                </View>
-              ) : (
-                <Text style={{
-                  fontSize: 52,
-                  fontWeight: '800',
-                  color: '#FFFFFF',
-                  lineHeight: 60,
-                  letterSpacing: -1,
-                  marginBottom: 6,
+              <View style={{ alignItems: 'center', marginBottom: 24, marginTop: 16 }}>
+                <View style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 26,
+                  backgroundColor: '#2C2C2E',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginBottom: 16,
                 }}>
-                  {coveragePriceDisplay}
+                  <Clock size={26} color="#8E8E93" strokeWidth={2} />
+                </View>
+                <Text style={{
+                  fontSize: 20,
+                  fontWeight: '700',
+                  color: '#FFFFFF',
+                  marginBottom: 8,
+                  textAlign: 'center',
+                }}>
+                  No Doctor Accepted
                 </Text>
-              )}
-              <Text style={{
-                fontSize: 15,
-                fontWeight: '400',
-                color: previewLoading ? '#555' : '#8E8E93',
-                marginBottom: 32,
-              }}>
-                {previewLoading ? '—' : coverageSubtitle}
-              </Text>
+                <Text style={{
+                  fontSize: 14,
+                  color: '#8E8E93',
+                  textAlign: 'center',
+                  lineHeight: 20,
+                }}>
+                  Your request timed out. Modify and resubmit, or return home.
+                </Text>
+              </View>
               <TouchableOpacity
-                onPress={handleRequestCoverage}
-                disabled={submitting}
+                onPress={handleEditRequest}
                 activeOpacity={0.85}
                 style={{
-                  backgroundColor: submitting ? '#555' : '#FFFFFF',
-                  borderRadius: 28,
-                  paddingVertical: 18,
+                  backgroundColor: '#F9F9F6',
+                  borderRadius: 999,
+                  paddingVertical: 16,
                   alignItems: 'center',
-                  width: '100%',
+                  marginBottom: 12,
                 }}
               >
-                <Text style={{
-                  fontSize: 16,
-                  fontWeight: '700',
-                  color: '#1C1C1E',
-                  letterSpacing: 0.2,
-                }}>
-                  {submitting ? 'Submitting...' : 'Request Coverage'}
-                </Text>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Modify Request</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  console.log('[Requester] summary card: Back to Home pressed');
+                  setActiveRequestId(null);
+                  transitionTo('idle');
+                }}
+                activeOpacity={0.85}
+                style={{
+                  backgroundColor: '#2C2C2E',
+                  borderRadius: 999,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FFFFFF' }}>Back to Home</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -4502,63 +4497,7 @@ export default function RequesterHomeScreen() {
             </View>
           )}
 
-          {/* EXPIRED — No Doctor Accepted */}
-          {sheetState === 'expired' && (
-            <View style={{ padding: 28, paddingBottom: insets.bottom + 24 }}>
-              <DragHandle />
-              <View style={{ alignItems: 'center', marginBottom: 20, marginTop: 8 }}>
-                <View style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 26,
-                  backgroundColor: '#2C2C2E',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  marginBottom: 16,
-                }}>
-                  <Clock size={26} color="#8E8E93" strokeWidth={2} />
-                </View>
-                <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
-                  No Doctor Accepted
-                </Text>
-                <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20 }}>
-                  Your request timed out before a doctor could accept. You can modify and resubmit, or return home.
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('[Requester] expired card: Modify Request pressed');
-                  handleEditRequest();
-                }}
-                activeOpacity={0.85}
-                style={{
-                  backgroundColor: '#F9F9F6',
-                  borderRadius: 999,
-                  paddingVertical: 16,
-                  alignItems: 'center',
-                  marginBottom: 12,
-                }}
-              >
-                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Modify Request</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('[Requester] expired card: Back to Home pressed');
-                  setActiveRequestId(null);
-                  transitionTo('idle');
-                }}
-                activeOpacity={0.85}
-                style={{
-                  backgroundColor: '#2C2C2E',
-                  borderRadius: 999,
-                  paddingVertical: 16,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FFFFFF' }}>Back to Home</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+
 
         </Animated.View>
       )}
