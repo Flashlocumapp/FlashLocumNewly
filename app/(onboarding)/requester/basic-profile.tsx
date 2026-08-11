@@ -131,37 +131,48 @@ export default function RequesterBasicProfile() {
       const firstName = spaceIdx > -1 ? strippedFull.slice(0, spaceIdx).trim() : strippedFull.trim();
       const lastName = spaceIdx > -1 ? strippedFull.slice(spaceIdx + 1).trim() : '';
 
+      const isTransientNetworkError = (e: unknown): boolean =>
+        e instanceof Error && /failed to fetch|network request failed|load failed|fetch failed/i.test(e.message);
+
+      const upsertWithRetry = async <T,>(fn: () => Promise<{ error: T | null }>): Promise<{ error: T | null }> => {
+        const first = await fn();
+        if (!first.error) return first;
+        if (!isTransientNetworkError(first.error)) return first;
+        await new Promise(r => setTimeout(r, 1000));
+        return fn();
+      };
+
       // Write 1: profile data only — no completion flags yet
       console.log('[RequesterOnboarding] Write 1 — upserting profile data');
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
+      const { error: profileError } = await upsertWithRetry(async () =>
+        supabase.from('profiles').upsert({
           id: user!.id,
           first_name: firstName,
           last_name: lastName,
           phone: cleanedPhone,
           gender,
-        });
+        })
+      );
 
       if (profileError) throw profileError;
 
       // Write 2: create requester_profiles row
       console.log('[RequesterOnboarding] Write 2 — upserting requester_profiles');
-      const { error: requesterError } = await supabase
-        .from('requester_profiles')
-        .upsert({ id: user!.id }, { onConflict: 'id' });
+      const { error: requesterError } = await upsertWithRetry(async () =>
+        supabase.from('requester_profiles').upsert({ id: user!.id }, { onConflict: 'id' })
+      );
 
       if (requesterError) throw requesterError;
 
       // Write 3: mark onboarding complete — only reached if both writes above succeeded
       console.log('[RequesterOnboarding] Write 3 — marking onboarding complete');
-      const { error: completionError } = await supabase
-        .from('profiles')
-        .upsert({
+      const { error: completionError } = await upsertWithRetry(async () =>
+        supabase.from('profiles').upsert({
           id: user!.id,
           onboarding_complete: true,
           requester_onboarding_complete: true,
-        });
+        })
+      );
 
       if (completionError) throw completionError;
 

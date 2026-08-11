@@ -418,25 +418,36 @@ export default function DoctorPayout() {
     try {
       const userId = user!.id;
 
+      const isTransientNetworkError = (e: unknown): boolean =>
+        e instanceof Error && /failed to fetch|network request failed|load failed|fetch failed/i.test(e.message);
+
+      const upsertWithRetry = async <T,>(fn: () => Promise<{ error: T | null }>): Promise<{ error: T | null }> => {
+        const first = await fn();
+        if (!first.error) return first;
+        if (!isTransientNetworkError(first.error)) return first;
+        await new Promise(r => setTimeout(r, 1000));
+        return fn();
+      };
+
       // Step 1: Save bank details
       console.log('[Payout] Step 1: saving bank details');
-      const { error: doctorProfileError } = await supabase
-        .from('doctor_profiles')
-        .upsert({
+      const { error: doctorProfileError } = await upsertWithRetry(async () =>
+        supabase.from('doctor_profiles').upsert({
           id: userId,
           bank_name: selectedBank!.name,
           bank_code: selectedBank!.code,
           account_number: accountNumber,
           account_name: accountName,
-        });
+        })
+      );
       if (doctorProfileError) throw doctorProfileError;
 
       // Step 2: Mark onboarding complete
       console.log('[Payout] Step 2: marking onboarding complete');
       setLoadingLabel('Almost done...');
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({ id: userId, onboarding_complete: true, doctor_onboarding_complete: true });
+      const { error: profileError } = await upsertWithRetry(async () =>
+        supabase.from('profiles').upsert({ id: userId, onboarding_complete: true, doctor_onboarding_complete: true })
+      );
       if (profileError) throw profileError;
 
       logLifecycleCompleted('DOCTOR_ONBOARDING_COMPLETE', doctorOnboardActionId, {

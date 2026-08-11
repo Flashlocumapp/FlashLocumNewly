@@ -127,10 +127,20 @@ export default function DoctorBasicProfile() {
       const spaceIdx = strippedFull.indexOf(' ');
       const firstName = spaceIdx > -1 ? strippedFull.slice(0, spaceIdx).trim() : strippedFull.trim();
       const lastName = spaceIdx > -1 ? strippedFull.slice(spaceIdx + 1).trim() : '';
+      const isTransientNetworkError = (e: unknown): boolean =>
+        e instanceof Error && /failed to fetch|network request failed|load failed|fetch failed/i.test(e.message);
+
+      const upsertWithRetry = async <T,>(fn: () => Promise<{ error: T | null }>): Promise<{ error: T | null }> => {
+        const first = await fn();
+        if (!first.error) return first;
+        if (!isTransientNetworkError(first.error)) return first;
+        await new Promise(r => setTimeout(r, 1000));
+        return fn();
+      };
+
       console.log('[basic-profile] handleContinue: upserting profile for user', user!.id);
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
+      const { error: profileError } = await upsertWithRetry(async () =>
+        supabase.from('profiles').upsert({
           id: user!.id,
           first_name: firstName,
           last_name: lastName,
@@ -138,13 +148,14 @@ export default function DoctorBasicProfile() {
           gender,
           role: 'doctor',
           doctor_basic_profile_complete: true,
-        });
+        })
+      );
 
       if (profileError) throw profileError;
 
-      const { error: doctorProfileError } = await supabase
-        .from('doctor_profiles')
-        .upsert({ id: user!.id }, { onConflict: 'id' });
+      const { error: doctorProfileError } = await upsertWithRetry(async () =>
+        supabase.from('doctor_profiles').upsert({ id: user!.id }, { onConflict: 'id' })
+      );
 
       if (doctorProfileError) throw doctorProfileError;
 
