@@ -1946,8 +1946,44 @@ export default function DoctorLayout() {
         callEdge('go-offline');
         setIsOnline(false);
       }
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
+    } catch (e: unknown) {
+      const isNetworkError = e instanceof TypeError && (
+        e.message.includes('Network request failed') ||
+        e.message.includes('network request failed')
+      );
+
+      if (isNetworkError) {
+        // Both fetchWithAuth attempts failed. Check whether the backend actually accepted.
+        try {
+          const { data: existingSession } = await supabase
+            .from('coverage_sessions')
+            .select('id, status, request_id')
+            .eq('request_id', req.id)
+            .maybeSingle();
+
+          if (existingSession && existingSession.status === 'upcoming') {
+            // The accept succeeded on the backend — treat as success.
+            console.log('[Doctor] handleAccept: network error but session found in DB — treating as success');
+            setConfirmedRequest(req);
+            await fetchActiveSession();
+            return;
+          }
+        } catch {
+          // Reconciliation query also failed — fall through to show error
+        }
+      }
+
+      logIncident({
+        severity: 'critical',
+        event_type: 'ACCEPT_REQUEST',
+        active_role: 'doctor',
+        screen: 'DoctorHome',
+        request_id: req.id,
+        edge_function: 'accept-request',
+        message: e instanceof Error ? e.message : String(e),
+        failure_stage: 'network',
+      });
+      Alert.alert('Error', e instanceof Error ? e.message : 'Something went wrong. Please try again.');
     } finally {
       setAccepting(false);
     }

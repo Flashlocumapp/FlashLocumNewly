@@ -313,6 +313,35 @@ export default function DoctorPayout() {
           // elapsed. Show the timeout message only if the component is still
           // showing this lookup (i.e. the controller is still current).
           if (lookupAbortRef.current === controller) {
+            console.log('[Payout] Account lookup timed out — attempting silent retry');
+            // One silent retry with a fresh controller
+            try {
+              const retryController = new AbortController();
+              const retryTimer = setTimeout(() => retryController.abort(), LOOKUP_TIMEOUT_MS);
+              try {
+                const retryRes = await fetchWithAuth(MONNIFY_VERIFY_URL, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ accountNumber: accNum, bankCode: bank.code }),
+                  signal: retryController.signal,
+                });
+                clearTimeout(retryTimer);
+                const retryText = await retryRes.text();
+                let retryData: any;
+                try { retryData = JSON.parse(retryText); } catch { retryData = {}; }
+                if (retryRes.ok && retryData.accountName) {
+                  console.log('[Payout] Account lookup retry succeeded');
+                  setAccountName(String(retryData.accountName));
+                  return; // success — do not show error
+                }
+                // Retry returned a non-OK response — fall through to show timeout error
+              } catch {
+                clearTimeout(retryTimer);
+                // Retry also failed — fall through to show timeout error
+              }
+            } catch {
+              // ignore
+            }
             console.log('[Payout] Account lookup failed: errorCode=PROVIDER_TIMEOUT (timeout)');
             setAccountNameError(mapErrorCode('PROVIDER_TIMEOUT'));
           }

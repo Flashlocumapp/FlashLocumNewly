@@ -537,6 +537,31 @@ export default function DoctorCoverageScreen() {
       }
     } catch (e) {
       console.error('[DoctorCoverage] Exception cancelling session:', e);
+      const isNetworkError = e instanceof TypeError && (
+        e.message.includes('Network request failed') ||
+        e.message.includes('network request failed')
+      );
+      if (isNetworkError) {
+        // Wait 1 second and retry once
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        try {
+          const retryOk = await updateSessionStatus(sessionId, 'cancelled', {
+            cancellation_reason: reason,
+            cancelled_by: 'doctor',
+          });
+          if (retryOk) {
+            console.log('[DoctorCoverage] Session cancel retry succeeded for session:', sessionId);
+            handleStatusChange(sessionId, 'cancelled');
+            reconcileUpcomingSessions();
+            return;
+          }
+        } catch {
+          // Retry also failed — fall through to alert
+        }
+        Alert.alert('Something went wrong', 'Could not cancel the shift. Please try again.');
+      } else {
+        Alert.alert('Something went wrong', 'Could not cancel the shift. Please try again.');
+      }
     }
   }, [pendingCancelSession, updateSessionStatus, handleStatusChange, reconcileUpcomingSessions]);
 
