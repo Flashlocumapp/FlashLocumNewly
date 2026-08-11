@@ -5,11 +5,13 @@ import { useRouter } from 'expo-router';
 import { Platform, AppState, AppStateStatus } from 'react-native';
 // eslint-disable-next-line import/no-unresolved
 import * as Notifications from 'expo-notifications';
+import * as Haptics from 'expo-haptics';
 import { supabase } from '@/lib/supabase';
 import { IS_EXPO_GO } from '@/utils/expoGoGuard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const _playedChimes = new Set<string>();
+const _playedRequestChimes = new Set<string>();
 const CHIME_STORAGE_KEY = '@flashlocum:played_chimes';
 AsyncStorage.getItem(CHIME_STORAGE_KEY).then(raw => {
   if (raw) { try { (JSON.parse(raw) as string[]).forEach(k => _playedChimes.add(k)); } catch {} }
@@ -99,10 +101,36 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
     setInAppNotification(null);
   }, []);
 
-  const playNotificationSound = useCallback(() => {
-    // No bundled notification sound asset — sound skipped.
-    // To enable: add a .mp3 to assets/sounds/ and use expo-av Audio.Sound.createAsync().
-    console.log('[InAppBanner] Sound playback skipped (no asset bundled)');
+  const playNewRequestChime = useCallback(async (requestId: string) => {
+    // Dedup: only play once per request_id per app session
+    if (_playedRequestChimes.has(requestId)) {
+      console.log('[NotificationContext] playNewRequestChime skipped — already played for requestId:', requestId);
+      return;
+    }
+    _playedRequestChimes.add(requestId);
+    try {
+      const { Audio } = await import('expo-av');
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current = null;
+      }
+      const { sound } = await Audio.Sound.createAsync(
+        require('../assets/sounds/new_request_chimes.wav'),
+        { shouldPlay: true, volume: 1.0 }
+      );
+      soundRef.current = sound;
+      console.log('[NotificationContext] playNewRequestChime — playing for requestId:', requestId);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      sound.setOnPlaybackStatusUpdate(status => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync().catch(() => {});
+          soundRef.current = null;
+        }
+      });
+    } catch (err) {
+      console.warn('[NotificationContext] playNewRequestChime error:', err);
+    }
   }, []);
 
   useEffect(() => {
@@ -127,6 +155,14 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
         importance: Notifications.AndroidImportance.HIGH,
         sound: 'default',
         enableVibrate: false,
+      }).catch(() => {});
+
+      Notifications.setNotificationChannelAsync('new_coverage_request_v2', {
+        name: 'New Coverage Requests',
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: 'new_request_chimes',   // filename without extension, must match res/raw/
+        vibrationPattern: [0, 250, 250, 250],
+        enableVibrate: true,
       }).catch(() => {});
     }
 
@@ -166,14 +202,15 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
       if (notifType === 'NEW_REQUEST') {
         console.log('[OneSignal] NEW_REQUEST push received foregrounded — triggering forceSync via callback');
         newRequestPushCallbackRef.current?.();
-        // Do not show banner — silent trigger only
+        // Play custom chime + haptic (deduped by request_id)
+        const requestId = (event.notification.additionalData?.request_id as string | undefined) ?? `new_request_${Date.now()}`;
+        playNewRequestChime(requestId);
         return;
       }
 
       if (notifType && (IN_APP_NOTIFICATION_TYPES as readonly string[]).includes(notifType)) {
         console.log('[InAppBanner] Showing in-app banner for type=', notifType);
         setInAppNotification({ title, message });
-        playNotificationSound();
       } else {
         console.log('[OneSignal] Foreground notification suppressed (type not in allowlist):', title);
       }

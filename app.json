@@ -57,7 +57,13 @@
       "favicon": "./assets/images/newly.png",
       "bundler": "metro"
     },
+    "assetBundlePatterns": [
+      "assets/sounds/*",
+      "assets/images/*",
+      "assets/fonts/*"
+    ],
     "plugins": [
+      "./plugins/withNotificationSounds",
       [
         "expo-splash-screen",
         {
