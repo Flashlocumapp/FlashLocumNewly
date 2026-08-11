@@ -164,7 +164,7 @@ const SHEET_HEIGHTS = {
   config: SCREEN_HEIGHT * 0.75,
   summary: 240 + 80,
   matching: 300 + 80,
-  expired: 320 + 80,
+  expired: 560,
 };
 
 type SheetState = 'idle' | 'searching' | 'config' | 'summary' | 'matching' | 'expired';
@@ -2310,6 +2310,67 @@ export default function RequesterHomeScreen() {
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ─── Notification tap: REQUEST_EXPIRED → restore expired request into config form ──
+  useEffect(() => {
+    (async () => {
+      let pendingId: string | null = null;
+      try {
+        pendingId = await AsyncStorage.getItem('@flashlocum:pending_modify_request_id');
+        if (!pendingId) return;
+
+        console.log('[RequesterHome] Restoring expired request from notification tap:', pendingId);
+
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
+        if (!userId) return; // not authenticated — leave key for next mount
+
+        const { data: req } = await supabase
+          .from('coverage_requests')
+          .select('hospital_name, hospital_address, latitude, longitude, shift_type, shift_date, start_time, end_time, coverage_length, environment, note, requester_id')
+          .eq('id', pendingId)
+          .eq('requester_id', userId)
+          .maybeSingle();
+
+        if (!req) {
+          // Not found or not owned by this user — discard
+          await AsyncStorage.removeItem('@flashlocum:pending_modify_request_id');
+          return;
+        }
+
+        if (!isMountedRef.current) return;
+
+        // Repopulate form — exact field mapping from handleRequestCoverage submit body
+        setSelectedPlace({
+          name: req.hospital_name,
+          address: req.hospital_address,
+          lat: req.latitude,
+          lng: req.longitude,
+        });
+        setCoverageType((req.shift_type as 'Standard' | 'Home Care') ?? 'Standard');
+        if (req.shift_date) setShiftDate(new Date(req.shift_date));
+        if (req.start_time) {
+          const [h, m] = (req.start_time as string).split(':').map(Number);
+          const d = new Date(); d.setHours(h, m, 0, 0); setStartTime(d);
+        }
+        if (req.end_time) {
+          const [h, m] = (req.end_time as string).split(':').map(Number);
+          const d = new Date(); d.setHours(h, m, 0, 0); setEndTime(d);
+        }
+        if (req.coverage_length != null) setCoverageLength(req.coverage_length);
+        if (req.environment) setEnvironment(req.environment as 'Normal' | 'Busy');
+        setNote(req.note ?? '');
+
+        // Remove key only after successful restore
+        await AsyncStorage.removeItem('@flashlocum:pending_modify_request_id');
+
+        transitionTo('config');
+      } catch (e) {
+        console.warn('[RequesterHome] Failed to restore expired request from notification tap:', e);
+        // Leave key in place — next mount will retry
+      }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Cleanup PollingManager on unmount ───────────────────────────────────────
   useEffect(() => {
     isMountedRef.current = true;
@@ -2825,30 +2886,9 @@ export default function RequesterHomeScreen() {
   useEffect(() => {
     if (activeRequestId) {
 
-      matchTimerRef.current = setTimeout(async () => {
-        console.log('[Requester] matchTimer fired — withdrawing request and notifying user');
-        // Stop polling
-        shouldPollRef.current = false;
-        if (pollIntervalRef.current) {
-          clearTimeout(pollIntervalRef.current);
-          pollIntervalRef.current = null;
-        }
-        // Terminate the request on the backend before notifying the user
-        const reqId = activeRequestIdRef.current;
-        if (reqId) {
-          try {
-            console.log('[Requester] matchTimer calling withdraw-request for:', reqId);
-            await fetchWithAuth(`${SUPABASE_URL}/functions/v1/withdraw-request`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ request_id: reqId }),
-            });
-          } catch (e) {
-            console.warn('[Requester] matchTimer withdraw-request failed:', e);
-          }
-        }
-        if (!isMountedRef.current) return;
-        transitionToRef.current('expired');
+      matchTimerRef.current = setTimeout(() => {
+        console.log('[Requester] matchTimer fired — backend is authoritative for expiry');
+        handleExpiredRef.current();
       }, 180000);
 
       const channelName = `requester:${activeRequestId}`;
@@ -2870,28 +2910,9 @@ export default function RequesterHomeScreen() {
           fetchActiveSessionRef.current();
           transitionToRef.current('idle');
         })
-        .on('broadcast', { event: 'REQUEST_EXPIRED' }, async () => {
-          console.log('[Requester] REQUEST_EXPIRED broadcast received — withdrawing request');
-          shouldPollRef.current = false;
-          if (pollIntervalRef.current) {
-            clearTimeout(pollIntervalRef.current);
-            pollIntervalRef.current = null;
-          }
-          if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
-          const reqId = activeRequestIdRef.current;
-          if (reqId) {
-            try {
-              console.log('[Requester] REQUEST_EXPIRED calling withdraw-request for:', reqId);
-              await fetchWithAuth(`${SUPABASE_URL}/functions/v1/withdraw-request`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ request_id: reqId }),
-              });
-            } catch (e) {
-              console.warn('[Requester] REQUEST_EXPIRED withdraw-request failed:', e);
-            }
-          }
-          transitionToRef.current('expired');
+        .on('broadcast', { event: 'REQUEST_EXPIRED' }, () => {
+          console.log('[Requester] REQUEST_EXPIRED broadcast received');
+          handleExpiredRef.current();
         })
         .subscribe((status) => {
           console.log('[Requester] matching channel subscribe status:', status);
@@ -2963,13 +2984,14 @@ export default function RequesterHomeScreen() {
               transitionToRef.current('idle');
             }
             return; // stop polling
-          } else if (
-            data?.status === 'cancelled' ||
-            data?.status === 'withdrawn' ||
-            data?.status === 'expired'
-          ) {
+          } else if (data?.status === 'expired') {
+            // Natural timeout — show No Doctor Accepted card
+            handleExpiredRef.current();
+            return;
+          } else if (data?.status === 'cancelled' || data?.status === 'withdrawn') {
+            // User-initiated cancel — cancel flow already handled UI
             shouldPollRef.current = false;
-            return; // stop polling
+            return;
           }
         } catch (e: any) {
         }
@@ -3334,9 +3356,28 @@ export default function RequesterHomeScreen() {
     handleResetRef.current = handleReset;
   }, [handleReset]);
 
+  // ─── Single convergence point for all expiry signals ─────────────────────────
+  // Called by: client timer, REQUEST_EXPIRED broadcast, polling, app-restore.
+  // Idempotent — functional setState ensures only the first call transitions.
+  const handleExpired = useCallback(() => {
+    shouldPollRef.current = false;
+    if (pollIntervalRef.current) { clearTimeout(pollIntervalRef.current); pollIntervalRef.current = null; }
+    if (matchTimerRef.current) { clearTimeout(matchTimerRef.current); matchTimerRef.current = null; }
+    if (!isMountedRef.current) return;
+    setSheetState(prev => {
+      if (prev !== 'matching') return prev; // already transitioned — no-op
+      animateSheet('expired');
+      return 'expired';
+    });
+  }, [animateSheet]);
+
+  const handleExpiredRef = useRef(handleExpired);
+  useEffect(() => { handleExpiredRef.current = handleExpired; }, [handleExpired]);
+
   const handleEditRequest = async () => {
-    console.log('[Requester] handleEditRequest pressed', { activeRequestId });
-    if (activeRequestId) {
+    console.log('[Requester] handleEditRequest pressed', { activeRequestId, sheetState });
+    // Only withdraw if the request is still live — from 'expired' state the backend already terminated it
+    if (activeRequestId && sheetState !== 'expired') {
       try {
         const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/withdraw-request`, {
           method: 'POST',
@@ -3346,20 +3387,16 @@ export default function RequesterHomeScreen() {
         if (res.status === 409) {
           const body = await res.json().catch(() => ({}));
           if (body.error === 'SHIFT_LOCKED') {
-            console.log('[Requester] handleEditRequest — SHIFT_LOCKED, verifying DB status');
             const { data: reqCheck } = await supabase
               .from('coverage_requests')
               .select('status, matched_doctor_id')
               .eq('id', activeRequestId)
               .maybeSingle();
             if (reqCheck?.status === 'matched' && reqCheck?.matched_doctor_id) {
-              console.log('[Requester] handleEditRequest — DB confirms matched, showing alert');
               await fetchActiveSession();
               Alert.alert('Request Already Accepted', 'A doctor just accepted your request. Check your Upcoming Coverage.');
               return;
             }
-            // DB says still pending — transient race condition, proceed with edit
-            console.log('[Requester] handleEditRequest — SHIFT_LOCKED but DB shows pending, proceeding with edit');
           }
         } else if (!res.ok) {
           const errText = await res.text().catch(() => '');
@@ -3377,7 +3414,6 @@ export default function RequesterHomeScreen() {
         }
       } catch {}
     }
-    // Clear match timer and realtime channel
     if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
     if (realtimeChannelRef.current) {
       supabase.removeChannel(realtimeChannelRef.current);
@@ -4735,7 +4771,7 @@ export default function RequesterHomeScreen() {
           )}
 
           {/* MATCHING */}
-          {sheetState === 'matching' && (
+          {(sheetState === 'matching' || sheetState === 'expired') && (
             <View style={{ padding: 24, paddingBottom: insets.bottom + 16 }}>
               <DragHandle />
               <Text style={[TYPOGRAPHY.label, { color: '#8E8E93', letterSpacing: 1.2, marginBottom: 6 }]}>
@@ -4781,38 +4817,52 @@ export default function RequesterHomeScreen() {
             </View>
           )}
 
-          {/* EXPIRED — No Doctor Accepted */}
+          {/* EXPIRED — No Doctor Accepted overlay */}
           {sheetState === 'expired' && (
-            <View style={{ padding: 28, paddingBottom: insets.bottom + 24 }}>
-              <DragHandle />
-              <View style={{ alignItems: 'center', marginBottom: 20, marginTop: 8 }}>
-                <View style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 26,
-                  backgroundColor: '#2C2C2E',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  marginBottom: 16,
-                }}>
-                  <Clock size={26} color="#8E8E93" strokeWidth={2} />
+            <View
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                backgroundColor: '#1C1C1E',
+                borderTopWidth: 1,
+                borderTopColor: '#2C2C2E',
+                paddingHorizontal: 24,
+                paddingTop: 20,
+                paddingBottom: insets.bottom + 16,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: '#2C2C2E',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 12,
+                  }}
+                >
+                  <Clock size={20} color="#8E8E93" strokeWidth={2} />
                 </View>
-                <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
+                <Text style={{ fontSize: 17, fontWeight: '700', color: '#FFFFFF' }}>
                   No Doctor Accepted
                 </Text>
-                <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20 }}>
-                  Your request timed out before a doctor could accept. You can modify and resubmit, or return home.
-                </Text>
               </View>
+              <Text style={{ fontSize: 14, color: '#8E8E93', lineHeight: 20, marginBottom: 20 }}>
+                No Medical Officer accepted your request this time. You can adjust your request or offer and try again.
+              </Text>
               <TouchableOpacity
                 onPress={handleEditRequest}
                 activeOpacity={0.85}
                 style={{
                   backgroundColor: '#F9F9F6',
                   borderRadius: 999,
-                  paddingVertical: 16,
+                  paddingVertical: 15,
                   alignItems: 'center',
-                  marginBottom: 12,
+                  marginBottom: 10,
                 }}
               >
                 <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Modify Request</Text>
@@ -4826,7 +4876,7 @@ export default function RequesterHomeScreen() {
                 style={{
                   backgroundColor: '#2C2C2E',
                   borderRadius: 999,
-                  paddingVertical: 16,
+                  paddingVertical: 15,
                   alignItems: 'center',
                 }}
               >

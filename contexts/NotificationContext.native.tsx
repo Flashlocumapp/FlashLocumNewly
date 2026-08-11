@@ -179,22 +179,52 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
     };
     OneSignal.Notifications.addEventListener('foregroundWillDisplay', foregroundHandler as any);
 
-    const clickHandler = async (event: { notification: { title?: string } }) => {
-      const title = event.notification.title ?? '';
+    const clickHandler = async (event: {
+      notification: { title?: string; additionalData?: Record<string, unknown> };
+    }) => {
+      const data = event.notification.additionalData ?? {};
+      const notifType = data.type as string | undefined;
+      const targetRole = data.target_role as 'doctor' | 'requester' | undefined;
+      const requestId = data.request_id as string | undefined;
+
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) {
-          console.log('[OneSignal] Notification tapped but no session — skipping navigation');
-          return;
-        }
+        if (!session?.user) return;
+
         const { data: profile } = await supabase
           .from('profiles')
-          .select('role, doctor_onboarding_complete, requester_onboarding_complete')
+          .select('doctor_onboarding_complete, requester_onboarding_complete')
           .eq('id', session.user.id)
           .single();
-        const dest = profile?.doctor_onboarding_complete ? '/(doctor)/(home)' : '/(requester)/(home)';
-        console.log('[OneSignal] Notification tapped title=', title, 'navigating to', dest);
-        router.replace(dest as any);
+
+        const doctorComplete = profile?.doctor_onboarding_complete === true;
+        const requesterComplete = profile?.requester_onboarding_complete === true;
+
+        // Resolve destination portal from target_role, falling back to whichever portal is complete
+        const resolvedRole: 'doctor' | 'requester' =
+          targetRole === 'requester' && requesterComplete ? 'requester'
+          : targetRole === 'doctor' && doctorComplete ? 'doctor'
+          : doctorComplete ? 'doctor'
+          : 'requester';
+
+        console.log('[OneSignal] tap type=', notifType, 'targetRole=', targetRole, 'resolvedRole=', resolvedRole);
+
+        if (notifType === 'REQUEST_EXPIRED' && requestId && resolvedRole === 'requester') {
+          // Write intent — requester home reads this on mount and opens config form
+          // Key is NOT removed here; removed only after successful restore in requester home
+          await AsyncStorage.setItem('@flashlocum:pending_modify_request_id', requestId);
+          // For dual-role users: persist requester pathway so navigation guard routes correctly
+          await SecureStore.setItemAsync('flashlocum_last_pathway', 'requester');
+          router.replace('/(requester)/(home)' as any);
+          return;
+        }
+
+        // All other notification types — route to correct portal
+        router.replace(
+          resolvedRole === 'doctor'
+            ? '/(doctor)/(home)' as any
+            : '/(requester)/(home)' as any
+        );
       } catch (err) {
         console.log('[OneSignal] Notification tap navigation error:', err);
       }
