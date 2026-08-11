@@ -3318,7 +3318,7 @@ export default function RequesterHomeScreen() {
         _submitRetried = true;
         console.log('[Requester] Network error on submit — retrying in 1.5s');
         await new Promise(r => setTimeout(r, 1500));
-        handleRequestCoverage();
+        await handleRequestCoverage();
         return;
       }
       Alert.alert('Error', e.message || 'Could not submit request. Please try again.');
