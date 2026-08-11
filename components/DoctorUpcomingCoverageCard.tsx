@@ -95,8 +95,8 @@ export function DoctorUpcomingCoverageCard({ session, onCall, onCancel, variant 
       </Text>
 
       {/* Shift pill */}
-      <View style={{ backgroundColor: pillBg, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start', marginTop: 8 }}>
-        <Text style={{ fontSize: 12, color: pillText, fontFamily: 'Inter_400Regular' }} numberOfLines={1}>
+      <View style={{ backgroundColor: pillBg, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'stretch', marginTop: 8 }}>
+        <Text style={{ fontSize: 12, color: pillText, fontFamily: 'Inter_400Regular' }}>
           {shiftPillText}
         </Text>
       </View>

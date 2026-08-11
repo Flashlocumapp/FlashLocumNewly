@@ -274,19 +274,18 @@ function formatShiftSummary(req: DispatchRequest): string {
   const coverageLength = Math.max(1, req.coverage_length ?? 1);
   const startDate = new Date(req.shift_date + 'T12:00:00');
 
-  // Parse per-day hours from start_time / end_time (HH:MM strings)
   const [sh, sm] = req.start_time.split(':').map(Number);
   const [eh, em] = req.end_time.split(':').map(Number);
   let perDayHours = (eh * 60 + em - (sh * 60 + sm)) / 60;
-  if (perDayHours <= 0) perDayHours += 24; // overnight shift: add 24 to get correct duration
+  if (perDayHours <= 0) perDayHours += 24;
   const totalHours = perDayHours * coverageLength;
-  const hoursLabel = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
+  const hoursLabel = totalHours % 1 === 0 ? `${totalHours} hrs` : `${totalHours.toFixed(1)} hrs`;
 
   const startFormatted = formatHHMM(req.start_time);
   const endFormatted = formatHHMM(req.end_time);
   const priceDisplay = `₦${Number(req.price).toLocaleString()}`;
+  const daysLabel = coverageLength === 1 ? '1 Day' : `${coverageLength} Days`;
 
-  // Straight Coverage: same start/end time means 24h per day
   const isStraight = req.start_time === req.end_time;
 
   if (coverageLength > 1) {
@@ -294,11 +293,11 @@ function formatShiftSummary(req: DispatchRequest): string {
     endDate.setDate(startDate.getDate() + (isStraight ? coverageLength : coverageLength - 1));
     const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
     const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
-    return `${req.shift_type}${sep}${startDay} - ${endDay}${sep}${startFormatted} - ${endFormatted}${sep}${hoursLabel}${sep}${priceDisplay}${sep}Day 1 of ${coverageLength}`;
+    return `${req.shift_type}${sep}${daysLabel}${sep}${startDay}–${endDay}${sep}${startFormatted}–${endFormatted}${sep}${hoursLabel}${sep}${priceDisplay}`;
   }
 
   const dayLabel = startDate.toLocaleDateString('en-US', { weekday: 'short' });
-  return `${req.shift_type}${sep}${dayLabel}${sep}${startFormatted} - ${endFormatted}${sep}${hoursLabel}${sep}${priceDisplay}`;
+  return `${req.shift_type}${sep}${daysLabel}${sep}${dayLabel}${sep}${startFormatted}–${endFormatted}${sep}${hoursLabel}${sep}${priceDisplay}`;
 }
 
 function ShiftDetails({ request, note }: { request: DispatchRequest | null; note: string | null }) {
@@ -308,47 +307,29 @@ function ShiftDetails({ request, note }: { request: DispatchRequest | null; note
   const [sh, sm] = request.start_time.split(':').map(Number);
   const [eh, em] = request.end_time.split(':').map(Number);
   let perDayHours = (eh * 60 + em - (sh * 60 + sm)) / 60;
-  if (perDayHours <= 0) perDayHours += 24; // overnight shift: add 24 to get correct duration
+  if (perDayHours <= 0) perDayHours += 24;
   const totalHours = perDayHours * coverageLength;
-  const hoursLabel = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
+  const hoursLabel = totalHours % 1 === 0 ? `${totalHours} hrs` : `${totalHours.toFixed(1)} hrs`;
 
   const startDate = new Date(request.shift_date + 'T12:00:00');
   const startDay = startDate.toLocaleDateString('en-US', { weekday: 'short' });
   const startFormatted = formatHHMM(request.start_time);
   const endFormatted = formatHHMM(request.end_time);
   const priceDisplay = `₦${Number(request.price).toLocaleString()}`;
+  const daysLabel = coverageLength === 1 ? '1 Day' : `${coverageLength} Days`;
 
-  // Straight Coverage: same start/end time means 24h per day
   const isStraight = request.start_time === request.end_time;
   const endDate = new Date(startDate);
   endDate.setDate(startDate.getDate() + (isStraight ? coverageLength : coverageLength - 1));
   const endDay = endDate.toLocaleDateString('en-US', { weekday: 'short' });
-  const dayRange = coverageLength > 1 ? `${startDay} – ${endDay}` : startDay;
+  const dayRange = coverageLength > 1 ? `${startDay}–${endDay}` : startDay;
 
   return (
     <View style={{ marginTop: 8 }}>
-      {/* Single row: shift type • day • time range • duration • price */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
-        <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
-          {request.shift_type}
-        </Text>
-        <Text style={{ color: '#8E8E93', fontSize: 13 }}> · </Text>
-        <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
-          {dayRange}
-        </Text>
-        <Text style={{ color: '#8E8E93', fontSize: 13 }}> · </Text>
-        <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
-          {startFormatted} – {endFormatted}
-        </Text>
-        <Text style={{ color: '#8E8E93', fontSize: 13 }}> · </Text>
-        <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
-          {hoursLabel}
-        </Text>
-        <Text style={{ color: '#8E8E93', fontSize: 13 }}> · </Text>
-        <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular' }}>
-          {priceDisplay}
-        </Text>
-      </View>
+      {/* Metadata row — wraps naturally, max 2 lines */}
+      <Text style={{ color: '#8E8E93', fontSize: 13, fontFamily: 'Inter_400Regular', flexWrap: 'wrap' }}>
+        {request.shift_type}{' · '}{daysLabel}{' · '}{dayRange}{' · '}{startFormatted}–{endFormatted}{' · '}{hoursLabel}{' · '}{priceDisplay}
+      </Text>
 
       {/* Note section — only if present */}
       {!!note && (
