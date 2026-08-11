@@ -75,7 +75,9 @@ export default function RequesterBasicProfile() {
   }, []);
 
   const handleBack = () => {
-    if (from === 'doctor-account') {
+    if (router.canGoBack()) {
+      router.back();
+    } else if (from === 'doctor-account') {
       router.replace('/(doctor)/(account)' as any);
     } else if (profile?.requester_onboarding_complete) {
       router.replace('/(requester)/(home)' as any);
