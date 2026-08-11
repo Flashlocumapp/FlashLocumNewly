@@ -111,6 +111,7 @@ export default function SignUpScreen() {
 
   const [form, dispatch] = useReducer(formReducer, initialFormState);
   const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
 
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
@@ -129,7 +130,7 @@ export default function SignUpScreen() {
   };
 
   const handleSubmit = async () => {
-    if (loading) return;
+    if (loadingRef.current) return;
 
     if (!form.email.trim() || !form.password.trim()) {
       dispatch({ type: 'SET_ERROR', value: 'Please fill in all fields.' });
@@ -140,6 +141,7 @@ export default function SignUpScreen() {
       return;
     }
 
+    loadingRef.current = true;
     setLoading(true);
     dispatch({ type: 'SET_ERROR', value: '' });
 
@@ -157,10 +159,21 @@ export default function SignUpScreen() {
           },
         },
       });
+      loadingRef.current = false;
       setLoading(false);
       if (signUpError) {
-        dispatch({ type: 'SET_ERROR', value: signUpError.message || 'Sign up failed. Please try again.' });
+        console.error('[sign-up] Sign up error:', signUpError.message);
         const signUpMsg = signUpError.message ?? '';
+        const signUpMsgLower = signUpMsg.toLowerCase();
+        let userFacingSignUpError: string;
+        if (signUpMsgLower.includes('already registered') || signUpMsgLower.includes('already exists') || signUpMsgLower.includes('email taken')) {
+          userFacingSignUpError = 'An account with this email already exists. Please sign in.';
+        } else if (signUpMsgLower.includes('password should be at least') || signUpMsgLower.includes('password must be at least')) {
+          userFacingSignUpError = 'Password must be at least 6 characters.';
+        } else {
+          userFacingSignUpError = 'Something went wrong. Please try again.';
+        }
+        dispatch({ type: 'SET_ERROR', value: userFacingSignUpError });
         const isExpectedSignUpError = (msg: string) => {
           const m = msg.toLowerCase();
           return m.includes('already registered') || m.includes('already exists') || m.includes('email taken');
@@ -183,10 +196,21 @@ export default function SignUpScreen() {
         email: form.email.trim(),
         password: form.password,
       });
+      loadingRef.current = false;
       setLoading(false);
       if (signInError) {
-        dispatch({ type: 'SET_ERROR', value: signInError.message || 'Sign in failed. Please try again.' });
+        console.error('[sign-up] Sign in error:', signInError.message);
         const signInMsg = signInError.message ?? '';
+        const signInMsgLower = signInMsg.toLowerCase();
+        let userFacingSignInError: string;
+        if (signInMsgLower.includes('invalid login') || signInMsgLower.includes('invalid credentials') || signInMsgLower.includes('wrong password')) {
+          userFacingSignInError = 'Incorrect email or password. Please try again.';
+        } else if (signInMsgLower.includes('email not confirmed')) {
+          userFacingSignInError = 'Please verify your email before signing in.';
+        } else {
+          userFacingSignInError = 'Something went wrong. Please try again.';
+        }
+        dispatch({ type: 'SET_ERROR', value: userFacingSignInError });
         const isExpectedSignInError = (msg: string) => {
           const m = msg.toLowerCase();
           return (
@@ -430,7 +454,7 @@ export default function SignUpScreen() {
           onPress={handleSubmit}
           disabled={loading}
           scaleValue={0.97}
-          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+          style={[styles.submitButton, { opacity: loading ? 0.65 : 1 }]}
         >
           {loading ? (
             <ActivityIndicator color="#FFFFFF" />

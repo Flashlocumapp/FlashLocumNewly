@@ -330,7 +330,7 @@ export default function RequesterAccountScreen() {
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setPhoneModalVisible(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSavePhone} disabled={savingPhone}>
+              <TouchableOpacity style={[styles.modalSaveBtn, { opacity: savingPhone ? 0.65 : 1 }]} onPress={handleSavePhone} disabled={savingPhone}>
                 {savingPhone ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.modalSaveText}>Save</Text>}
               </TouchableOpacity>
             </View>
@@ -344,11 +344,11 @@ export default function RequesterAccountScreen() {
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setGenderModalVisible(false)}>
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>Edit Gender</Text>
-            <TouchableOpacity style={styles.genderOption} onPress={() => handleSaveGender('male')} disabled={savingGender}>
+            <TouchableOpacity style={[styles.genderOption, { opacity: savingGender ? 0.65 : 1 }]} onPress={() => handleSaveGender('male')} disabled={savingGender}>
               <Text style={[styles.genderOptionText, profile?.gender === 'male' && styles.genderOptionSelected]}>Male</Text>
             </TouchableOpacity>
             <View style={styles.modalDivider} />
-            <TouchableOpacity style={styles.genderOption} onPress={() => handleSaveGender('female')} disabled={savingGender}>
+            <TouchableOpacity style={[styles.genderOption, { opacity: savingGender ? 0.65 : 1 }]} onPress={() => handleSaveGender('female')} disabled={savingGender}>
               <Text style={[styles.genderOptionText, profile?.gender === 'female' && styles.genderOptionSelected]}>Female</Text>
             </TouchableOpacity>
             {savingGender && <ActivityIndicator style={{ marginTop: 12 }} color="#1C1C1E" />}

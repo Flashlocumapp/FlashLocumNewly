@@ -418,8 +418,12 @@ export default function DoctorLayout() {
   const [doctorRatingStars, setDoctorRatingStars] = useState(0);
   const [doctorRatingComment, setDoctorRatingComment] = useState('');
   const [submittingDoctorRating, setSubmittingDoctorRating] = useState(false);
+  const submitDoctorRatingRef = useRef(false);
   const [doctorRatingError, setDoctorRatingError] = useState('');
   const [doctorRatingAmount, setDoctorRatingAmount] = useState<number>(0);
+
+  const cancelShiftDoctorRef = useRef(false);
+  const [cancelShiftDoctorProcessing, setCancelShiftDoctorProcessing] = useState(false);
 
   // Live doctor scores — seeded from cache to avoid flicker
   const _cachedScores = getCached<{ rating: number; reliability: number }>('doctor_scores');
@@ -2050,6 +2054,8 @@ export default function DoctorLayout() {
       setDoctorRatingError('Please select a star rating.');
       return;
     }
+    if (submitDoctorRatingRef.current) return; // synchronous guard
+    submitDoctorRatingRef.current = true;
     console.log('[Doctor] Submitting rating', { sessionId: doctorRatingSessionId, stars: doctorRatingStars });
     setSubmittingDoctorRating(true);
     setDoctorRatingError('');
@@ -2065,7 +2071,9 @@ export default function DoctorLayout() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Failed to submit review');
+      const errMsg: string = (data as any).error ?? '';
+      const isAlreadySubmitted = res.status === 409 || errMsg.includes('already submitted') || errMsg.includes('23505');
+      if (!res.ok && !isAlreadySubmitted) throw new Error(errMsg || 'Failed to submit review');
       console.log('[Doctor] Rating submitted successfully', { sessionId: doctorRatingSessionId });
       if (doctorRatingSessionId) {
         await Promise.all([
@@ -2076,7 +2084,9 @@ export default function DoctorLayout() {
       handleDoctorRatingDone();
     } catch (e: any) {
       console.log('[Doctor] Rating submission failed', { error: e.message });
-      setDoctorRatingError(e.message);
+      submitDoctorRatingRef.current = false;
+      setSubmittingDoctorRating(false);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
       logIncident({
         severity: 'warning',
         event_type: 'SUBMIT_RATING',
@@ -2087,8 +2097,13 @@ export default function DoctorLayout() {
         message: e.message,
         user_action_completed: false,
       });
+      return;
     } finally {
-      setSubmittingDoctorRating(false);
+      // Only reset if we didn't already reset in catch (success path: handleDoctorRatingDone closes overlay)
+      if (submitDoctorRatingRef.current) {
+        submitDoctorRatingRef.current = false;
+        setSubmittingDoctorRating(false);
+      }
     }
   }, [doctorRatingSessionId, doctorRatingStars, doctorRatingComment, handleDoctorRatingDone]);
 
@@ -2220,7 +2235,7 @@ export default function DoctorLayout() {
                 onPress={handleAccept}
                 disabled={accepting}
                 activeOpacity={0.85}
-                style={styles.acceptButton}
+                style={[styles.acceptButton, { opacity: accepting ? 0.65 : 1 }]}
               >
                 {accepting
                   ? <ActivityIndicator size="small" color="#1C1C1E" />
@@ -2336,10 +2351,10 @@ export default function DoctorLayout() {
                     <Pressable
                       onPress={handleSubmitDoctorRating}
                       disabled={submittingDoctorRating}
-                      style={{ flex: 2, backgroundColor: submittingDoctorRating ? '#636366' : '#FFFFFF', borderRadius: 999, paddingVertical: 13, alignItems: 'center' }}
+                      style={{ flex: 2, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 13, alignItems: 'center', opacity: submittingDoctorRating ? 0.65 : 1 }}
                     >
                       <Text style={{ fontSize: 14, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>
-                        {submittingDoctorRating ? 'Submitting...' : 'Submit Rating'}
+                        Submit Rating
                       </Text>
                     </Pressable>
                   </View>
