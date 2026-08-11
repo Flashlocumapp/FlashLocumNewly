@@ -2150,6 +2150,7 @@ export default function RequesterHomeScreen() {
   const [previewHours, setPreviewHours] = useState<number>(0);
   const [previewLabel, setPreviewLabel] = useState<string>('');
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
+  const [continueProcessing, setContinueProcessing] = useState(false);
   const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
@@ -3207,10 +3208,20 @@ export default function RequesterHomeScreen() {
   }, [handleSearchTap]);
 
   const handleGoToSummary = async () => {
+    if (continueProcessing) return;
+    setContinueProcessing(true);
     console.log('[Requester Home] handleGoToSummary pressed — fetching fresh price before showing summary');
     if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
-    await fetchPreviewPrice();
-    transitionTo('summary');
+    try {
+      await fetchPreviewPrice();
+      transitionTo('summary');
+    } catch {
+      setContinueProcessing(false);
+    } finally {
+      // Reset after transition so if user comes back the button is re-enabled
+      // Use a short delay to avoid flicker during navigation
+      setTimeout(() => setContinueProcessing(false), 800);
+    }
   };
 
   // Module-level action ID so it persists across the auto-retry
@@ -3450,6 +3461,7 @@ export default function RequesterHomeScreen() {
   const [showCancelActiveModal, setShowCancelActiveModal] = useState(false);
   const [showCancelActiveReasons, setShowCancelActiveReasons] = useState(false);
   const [showEndShiftModal, setShowEndShiftModal] = useState(false);
+  const [endShiftProcessing, setEndShiftProcessing] = useState(false);
   const [showPauseShiftModal, setShowPauseShiftModal] = useState(false);
   const [settledAmount, setSettledAmount] = useState<number | null>(null);
 
@@ -3901,6 +3913,7 @@ export default function RequesterHomeScreen() {
     if (!activeSession) return;
     const sid = activeSession.id;
     endShiftInProgressRef.current = true;
+    setEndShiftProcessing(true);
     // Clear from paid/dismissed sets so day 2+ of multi-day shifts can trigger the overlay again
     _requesterPaidSessions.delete(sid);
     _requesterDismissedSessions.delete(sid);
@@ -3961,6 +3974,7 @@ export default function RequesterHomeScreen() {
       });
     } finally {
       endShiftInProgressRef.current = false;
+      setEndShiftProcessing(false);
     }
   };
 
@@ -4713,6 +4727,7 @@ export default function RequesterHomeScreen() {
               <View style={{ alignItems: 'center', marginTop: 8, marginBottom: 16 }}>
                 <TouchableOpacity
                   onPress={handleGoToSummary}
+                  disabled={continueProcessing}
                   style={{
                     width: 160,
                     height: 52,
@@ -4722,6 +4737,7 @@ export default function RequesterHomeScreen() {
                     justifyContent: 'center',
                     alignItems: 'center',
                     gap: 8,
+                    opacity: continueProcessing ? 0.5 : 1,
                   }}
                 >
                   <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>Continue</Text>
@@ -5500,7 +5516,8 @@ export default function RequesterHomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleConfirmEndShift}
-                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center' }}
+                disabled={endShiftProcessing}
+                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center', opacity: endShiftProcessing ? 0.5 : 1 }}
               >
                 <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>End Shift</Text>
               </TouchableOpacity>
