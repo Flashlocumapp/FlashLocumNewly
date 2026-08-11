@@ -164,10 +164,9 @@ const SHEET_HEIGHTS = {
   config: SCREEN_HEIGHT * 0.75,
   summary: 240 + 80,
   matching: 300 + 80,
-  expired: 560,
 };
 
-type SheetState = 'idle' | 'searching' | 'config' | 'summary' | 'matching' | 'expired';
+type SheetState = 'idle' | 'searching' | 'config' | 'summary' | 'matching';
 
 type SelectedPlace = {
   name: string;
@@ -3385,18 +3384,19 @@ export default function RequesterHomeScreen() {
     if (!isMountedRef.current) return;
     setSheetState(prev => {
       if (prev !== 'matching') return prev; // already transitioned — no-op
-      animateSheet('expired');
-      return 'expired';
+      return prev; // sheetState stays 'matching' — Finding Medical Officer remains visible
     });
-  }, [animateSheet]);
+    setShowExpiredModal(true);
+  }, []);
 
   const handleExpiredRef = useRef(handleExpired);
   useEffect(() => { handleExpiredRef.current = handleExpired; }, [handleExpired]);
 
   const handleEditRequest = async () => {
     console.log('[Requester] handleEditRequest pressed', { activeRequestId, sheetState });
-    // Only withdraw if the request is still live — from 'expired' state the backend already terminated it
-    if (activeRequestId && sheetState !== 'expired') {
+    setShowExpiredModal(false);
+    // Only withdraw if the request is still live — from expired state the backend already terminated it
+    if (activeRequestId && !showExpiredModal) {
       try {
         const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/withdraw-request`, {
           method: 'POST',
@@ -3443,6 +3443,7 @@ export default function RequesterHomeScreen() {
   };
 
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showExpiredModal, setShowExpiredModal] = useState(false);
   const [showEarlyStartModal, setShowEarlyStartModal] = useState(false);
   const [showCancelReasons, setShowCancelReasons] = useState(false);
   const [cancelWithdrawn, setCancelWithdrawn] = useState(false);
@@ -4797,7 +4798,7 @@ export default function RequesterHomeScreen() {
           )}
 
           {/* MATCHING */}
-          {(sheetState === 'matching' || sheetState === 'expired') && (
+          {sheetState === 'matching' && (
             <View style={{ padding: 24, paddingBottom: insets.bottom + 16 }}>
               <DragHandle />
               <Text style={[TYPOGRAPHY.label, { color: '#8E8E93', letterSpacing: 1.2, marginBottom: 6 }]}>
@@ -4843,73 +4844,6 @@ export default function RequesterHomeScreen() {
             </View>
           )}
 
-          {/* EXPIRED — No Doctor Accepted overlay */}
-          {sheetState === 'expired' && (
-            <View
-              style={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                backgroundColor: '#1C1C1E',
-                borderTopWidth: 1,
-                borderTopColor: '#2C2C2E',
-                paddingHorizontal: 24,
-                paddingTop: 20,
-                paddingBottom: insets.bottom + 16,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
-                    backgroundColor: '#2C2C2E',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginRight: 12,
-                  }}
-                >
-                  <Clock size={20} color="#8E8E93" strokeWidth={2} />
-                </View>
-                <Text style={{ fontSize: 17, fontWeight: '700', color: '#FFFFFF' }}>
-                  No Doctor Accepted
-                </Text>
-              </View>
-              <Text style={{ fontSize: 14, color: '#8E8E93', lineHeight: 20, marginBottom: 20 }}>
-                No Medical Officer accepted your request this time. You can adjust your request or offer and try again.
-              </Text>
-              <TouchableOpacity
-                onPress={handleEditRequest}
-                activeOpacity={0.85}
-                style={{
-                  backgroundColor: '#F9F9F6',
-                  borderRadius: 999,
-                  paddingVertical: 15,
-                  alignItems: 'center',
-                  marginBottom: 10,
-                }}
-              >
-                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Modify Request</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => {
-                  setActiveRequestId(null);
-                  transitionTo('idle');
-                }}
-                activeOpacity={0.85}
-                style={{
-                  backgroundColor: '#2C2C2E',
-                  borderRadius: 999,
-                  paddingVertical: 15,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FFFFFF' }}>Back to Home</Text>
-              </TouchableOpacity>
-            </View>
-          )}
 
         </Animated.View>
       )}
@@ -5261,6 +5195,65 @@ export default function RequesterHomeScreen() {
           setShowEndTimePicker(false);
         }}
       />
+
+      {/* ── NO DOCTOR ACCEPTED MODAL ── */}
+      <Modal
+        visible={showExpiredModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {}}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}
+          onPress={() => {}}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{
+              backgroundColor: '#1C1C1E',
+              borderRadius: 24,
+              padding: 28,
+              width: '100%',
+            }}>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
+                No Doctor Accepted
+              </Text>
+              <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
+                No Medical Officer accepted your request this time. You can adjust your request or offer and try again.
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowExpiredModal(false);
+                  handleEditRequest();
+                }}
+                style={{
+                  backgroundColor: '#F9F9F6',
+                  borderRadius: 999,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                  marginBottom: 12,
+                }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Modify Request</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowExpiredModal(false);
+                  setActiveRequestId(null);
+                  transitionTo('idle');
+                }}
+                style={{
+                  backgroundColor: '#2C2C2E',
+                  borderRadius: 999,
+                  paddingVertical: 16,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FFFFFF' }}>Back to Home</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* ── CANCEL CONFIRMATION MODAL ── */}
       <Modal

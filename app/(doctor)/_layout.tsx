@@ -1135,6 +1135,20 @@ export default function DoctorLayout() {
           return next;
         });
       })
+      .on('broadcast', { event: 'EXPIRE_REQUEST' }, (payload) => {
+        // Layer 2 — request expired; remove it instantly from queue
+        const { request_id } = payload.payload as { request_id: string };
+        if (!request_id) return;
+        console.log('[Doctor] EXPIRE_REQUEST received — removing from queue:', request_id);
+        setRequestQueue((prev) => {
+          const next = prev.filter((r) => r.id !== request_id);
+          if (next.length === 0) {
+            PollingManager.stop('dispatch-active');
+            dispatchActiveStartedRef.current = false;
+          }
+          return next;
+        });
+      })
       .subscribe((status) => {
         console.log('[Doctor] dispatch channel subscribe status:', status);
         if (status === 'SUBSCRIBED' && isOnlineRef.current && user) {
