@@ -3229,15 +3229,19 @@ export default function RequesterHomeScreen() {
       return;
     }
     setSubmitting(true);
-    // Only log STARTED on the first attempt (not the auto-retry)
-    if (!_submitRetried) {
-      _submitActionId = logLifecycleStarted('SUBMIT_REQUEST', {
-        active_role: 'requester',
-        screen: 'RequesterHome',
-        edge_function: 'submit-request',
-      });
-    }
     try {
+      // Only log STARTED on the first attempt (not the auto-retry)
+      if (!_submitRetried) {
+        try {
+          _submitActionId = logLifecycleStarted('SUBMIT_REQUEST', {
+            active_role: 'requester',
+            screen: 'RequesterHome',
+            edge_function: 'submit-request',
+          });
+        } catch {
+          // Logging must never block the user action
+        }
+      }
       // Construct ISO datetime strings for start_date and end_date
       const d = shiftDate;
       const shiftDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; // YYYY-MM-DD (local date, not UTC)
