@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import * as SecureStore from 'expo-secure-store';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -138,6 +139,7 @@ export default function DoctorAccountScreen() {
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
 
   const lastFetchedAtRef = useRef<number>(0);
+  const switchingPortalRef = useRef(false);
 
   // Phone edit modal
   const [phoneModalVisible, setPhoneModalVisible] = useState(false);
@@ -544,10 +546,14 @@ export default function DoctorAccountScreen() {
         {/* Section 4 — ACCOUNT MANAGEMENT */}
         <SectionHeader title="ACCOUNT MANAGEMENT" />
         <Card>
-          <ActionRow label="Switch to Request Coverage" onPress={() => {
+          <ActionRow label="Switch to Request Coverage" onPress={async () => {
             console.log('[Doctor Account] Switch to Request Coverage pressed');
             if (authProfile?.requester_onboarding_complete) {
+              if (switchingPortalRef.current) return;
+              switchingPortalRef.current = true;
+              await SecureStore.setItemAsync('flashlocum_last_pathway', 'requester').catch(() => {});
               router.replace('/(requester)/(home)' as any);
+              // ref intentionally not reset — navigation away means this component unmounts
             } else {
               router.push({ pathname: '/(onboarding)/requester/basic-profile', params: { from: 'doctor-account' } } as any);
             }

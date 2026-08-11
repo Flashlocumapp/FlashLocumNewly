@@ -252,7 +252,7 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
           // Key is NOT removed here; removed only after successful restore in requester home
           await AsyncStorage.setItem('@flashlocum:pending_modify_request_id', requestId);
           // For dual-role users: persist requester pathway so navigation guard routes correctly
-          await SecureStore.setItemAsync('flashlocum_last_pathway', 'requester');
+          await SecureStore.setItemAsync('flashlocum_last_pathway', resolvedRole);
           router.replace('/(requester)/(home)' as any);
           return;
         }
