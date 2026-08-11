@@ -403,72 +403,12 @@ export default function DoctorPayout() {
       if (doctorProfileError) throw doctorProfileError;
 
       // Step 2: Mark onboarding complete
-      // Sub-account creation is a lazy operation that happens during the first End Shift.
       console.log('[Payout] Step 2: marking onboarding complete');
       setLoadingLabel('Almost done...');
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert({ id: userId, onboarding_complete: true, doctor_onboarding_complete: true });
       if (profileError) throw profileError;
-
-      // Step 3: Provision Monnify subaccount (best-effort — never blocks onboarding)
-      console.log('[Payout] Step 3: provisioning Monnify subaccount (best-effort)');
-      const subaccountActionId = logLifecycleStarted('CREATE_SUBACCOUNT', {
-        active_role: 'doctor',
-        screen: 'DoctorPayout',
-        edge_function: 'create-subaccount',
-        provider: 'monnify',
-      });
-      try {
-        const provisionRes = await fetchWithAuth(
-          `${SUPABASE_URL}/functions/v1/create-subaccount`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              doctor_id: userId,
-              bank_code: selectedBank!.code,
-              account_number: accountNumber,
-              account_name: accountName,
-              bank_name: selectedBank!.name,
-            }),
-          }
-        );
-        const provisionText = await provisionRes.text();
-        let provisionResult: any;
-        try { provisionResult = JSON.parse(provisionText); } catch { provisionResult = null; }
-        if (provisionResult?.success) {
-          console.log('[Payout] Subaccount provisioned:', provisionResult.subaccount_code);
-          logLifecycleCompleted('CREATE_SUBACCOUNT', subaccountActionId, {
-            active_role: 'doctor',
-            screen: 'DoctorPayout',
-            edge_function: 'create-subaccount',
-            provider: 'monnify',
-          });
-        } else {
-          console.log('[Payout] Subaccount provisioning deferred:', provisionResult?.status, provisionResult?.error);
-          logLifecycleFailed('CREATE_SUBACCOUNT', subaccountActionId, {
-            severity: 'critical',
-            active_role: 'doctor',
-            screen: 'DoctorPayout',
-            edge_function: 'create-subaccount',
-            provider: 'monnify',
-            provider_status: String(provisionResult?.status ?? 'deferred'),
-            message: provisionResult?.error ?? 'Subaccount provisioning deferred',
-          });
-        }
-      } catch (provisionErr) {
-        // Intentionally swallowed — provisioning failure must never block onboarding
-        console.log('[Payout] Subaccount provisioning call failed (non-blocking):', provisionErr instanceof Error ? provisionErr.message : String(provisionErr));
-        logLifecycleFailed('CREATE_SUBACCOUNT', subaccountActionId, {
-          severity: 'critical',
-          active_role: 'doctor',
-          screen: 'DoctorPayout',
-          edge_function: 'create-subaccount',
-          provider: 'monnify',
-          message: provisionErr instanceof Error ? provisionErr.message : String(provisionErr),
-        });
-      }
 
       logLifecycleCompleted('DOCTOR_ONBOARDING_COMPLETE', doctorOnboardActionId, {
         active_role: 'doctor',
