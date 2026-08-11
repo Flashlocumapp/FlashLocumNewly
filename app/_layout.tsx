@@ -25,9 +25,11 @@ const LAST_PATHWAY_KEY = 'flashlocum_last_pathway';
 export const SplashContext = React.createContext<{
   signalScreenReady: () => void;
   splashDismissed: boolean;
+  splashMinMs: number;
 }>({
   signalScreenReady: () => {},
   splashDismissed: false,
+  splashMinMs: 3000,
 });
 export function useSplash() { return React.useContext(SplashContext); }
 
@@ -35,7 +37,13 @@ const DevErrorBoundary = __DEV__
   ? ErrorBoundary
   : ({ children }: { children: React.ReactNode }) => <>{children}</>;
 
-function NavigationGuard({ onNavigationReady }: { onNavigationReady: () => void }) {
+function NavigationGuard({
+  onNavigationReady,
+  onReturningUser,
+}: {
+  onNavigationReady: () => void;
+  onReturningUser: (val: boolean) => void;
+}) {
   const { session, user, profile, isReady, profileLoading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
@@ -132,19 +140,29 @@ function NavigationGuard({ onNavigationReady }: { onNavigationReady: () => void 
       return;
     }
 
+    // Returning user: valid session + lastPathway already set → skip intro animation,
+    // route directly to portal. Splash minimum becomes 5s (set via onReturningUser).
+    // New/first-time users (lastPathway === null) still get the intro animation.
+    const isReturningUser = !!session && !!lastPathway;
+    onReturningUser(isReturningUser);
+
     // 4. Doctor only complete
     if (doctorComplete && !requesterComplete) {
-      const homeDest = '/(doctor)/(home)';
-      const encodedDest = encodeURIComponent(homeDest);
-      router.replace(`/(auth)/intro?dest=${encodedDest}` as any);
+      if (isReturningUser) {
+        router.replace('/(doctor)/(home)' as any);
+      } else {
+        router.replace(`/(auth)/intro?dest=${encodeURIComponent('/(doctor)/(home)')}` as any);
+      }
       return;
     }
 
     // 5. Requester only complete
     if (requesterComplete && !doctorComplete) {
-      const homeDest = '/(requester)/(home)';
-      const encodedDest = encodeURIComponent(homeDest);
-      router.replace(`/(auth)/intro?dest=${encodedDest}` as any);
+      if (isReturningUser) {
+        router.replace('/(requester)/(home)' as any);
+      } else {
+        router.replace(`/(auth)/intro?dest=${encodeURIComponent('/(requester)/(home)')}` as any);
+      }
       return;
     }
 
@@ -152,8 +170,11 @@ function NavigationGuard({ onNavigationReady }: { onNavigationReady: () => void 
     const dest = lastPathway === 'doctor' ? '/(doctor)/(home)' : '/(requester)/(home)';
     const pathway = lastPathway === 'doctor' ? 'doctor' : 'requester';
     SecureStore.setItemAsync(LAST_PATHWAY_KEY, pathway).catch(() => {});
-    const encodedDest = encodeURIComponent(dest);
-    router.replace(`/(auth)/intro?dest=${encodedDest}` as any);
+    if (isReturningUser) {
+      router.replace(dest as any);
+    } else {
+      router.replace(`/(auth)/intro?dest=${encodeURIComponent(dest)}` as any);
+    }
   }, [isReady, lastPathway, session, profile, profileLoading, segments, retryCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Session-arrival watcher — if we routed with no session and session later arrives, re-run routing
@@ -215,7 +236,13 @@ const FlashLocumTheme = {
   },
 };
 
-function RootLayoutInner({ onNavigationReady }: { onNavigationReady: () => void }) {
+function RootLayoutInner({
+  onNavigationReady,
+  onReturningUser,
+}: {
+  onNavigationReady: () => void;
+  onReturningUser: (val: boolean) => void;
+}) {
   const { inAppNotification, dismissInAppNotification } = useNotifications();
 
   return (
@@ -223,7 +250,7 @@ function RootLayoutInner({ onNavigationReady }: { onNavigationReady: () => void 
       <SafeAreaProvider>
         <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#111315' }}>
           <View style={{ flex: 1 }}>
-            <NavigationGuard onNavigationReady={onNavigationReady} />
+            <NavigationGuard onNavigationReady={onNavigationReady} onReturningUser={onReturningUser} />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" options={{ headerShown: false }} />
               <Stack.Screen name="(auth)" />
@@ -254,6 +281,7 @@ export default function RootLayout() {
   const [navigationReady, setNavigationReady] = useState(false);
   const [screenReady, setScreenReady] = useState(false);
   const [splashDismissed, setSplashDismissed] = useState(false);
+  const [isReturningUser, setIsReturningUser] = useState(false);
 
   // APP_START is stamped at module evaluation time — the earliest JS anchor available.
   // This gives MAX(3s from launch, readiness) semantics:
@@ -269,25 +297,29 @@ export default function RootLayout() {
     // 3. screenReady    — IntroScreen useFocusEffect fired (screen mounted and focused)
     // 4. 3000ms minimum — from APP_START (JS launch time)
     if (!fontsLoaded || !navigationReady || !screenReady) return;
+    const splashMinMs = isReturningUser ? 5000 : 3000;
     const elapsed = Date.now() - APP_START;
-    const remaining = Math.max(0, 3000 - elapsed);
+    const remaining = Math.max(0, splashMinMs - elapsed);
     const timer = setTimeout(() => {
       SplashScreen.hideAsync()
         .catch(() => {})
         .finally(() => setSplashDismissed(true));
     }, remaining);
     return () => clearTimeout(timer);
-  }, [fontsLoaded, navigationReady, screenReady, APP_START]);
+  }, [fontsLoaded, navigationReady, screenReady, APP_START, isReturningUser]);
 
   if (!fontsLoaded) return null;
 
   return (
     <KeyboardProvider>
-      <SplashContext.Provider value={{ signalScreenReady: () => setScreenReady(true), splashDismissed }}>
+      <SplashContext.Provider value={{ signalScreenReady: () => setScreenReady(true), splashDismissed, splashMinMs: isReturningUser ? 5000 : 3000 }}>
         <DevErrorBoundary>
           <AuthProvider>
             <NotificationProvider>
-              <RootLayoutInner onNavigationReady={() => setNavigationReady(true)} />
+              <RootLayoutInner
+                onNavigationReady={() => setNavigationReady(true)}
+                onReturningUser={setIsReturningUser}
+              />
             </NotificationProvider>
           </AuthProvider>
         </DevErrorBoundary>

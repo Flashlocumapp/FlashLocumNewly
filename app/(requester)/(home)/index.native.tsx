@@ -2694,17 +2694,19 @@ export default function RequesterHomeScreen() {
     }, [])
   );
 
-  // ─── Signal splash screen ready on first focus ───────────────────────────────
+  // ─── Signal splash screen ready — wait for initial session fetch to complete ─
+  // sessionFetched is set in the finally{} block of fetchActiveSession, so it
+  // becomes true whether the fetch succeeded or failed cleanly. This prevents
+  // the splash from hiding on a blank screen, while also preventing an infinite
+  // splash if the network request fails.
   const { signalScreenReady, splashDismissed } = useSplash();
   const splashSignalledRef = useRef(false);
-  useFocusEffect(
-    useCallback(() => {
-      if (!splashSignalledRef.current) {
-        splashSignalledRef.current = true;
-        signalScreenReady();
-      }
-    }, [signalScreenReady])
-  );
+  useEffect(() => {
+    if (splashSignalledRef.current) return;
+    if (!sessionFetched) return;
+    splashSignalledRef.current = true;
+    signalScreenReady();
+  }, [sessionFetched, signalScreenReady]);
 
   // ── One-time notification permission request ──────────────────────────────
   useEffect(() => {
