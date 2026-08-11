@@ -887,12 +887,15 @@ function RequesterPaymentCard({
   const fetchPaymentIntent = useCallback(async () => {
     setLoadingIntent(true);
     const MAX_ATTEMPTS = 15; // 15 × 2s = 30s
-    const paymentInitActionId = logLifecycleStarted('PAYMENT_INITIALIZATION', {
-      active_role: 'requester',
-      screen: 'RequesterHome',
-      session_id: session.id,
-      provider: 'monnify',
-    });
+    let paymentInitActionId: string | null = null;
+    try {
+      paymentInitActionId = logLifecycleStarted('PAYMENT_INITIALIZATION', {
+        active_role: 'requester',
+        screen: 'RequesterHome',
+        session_id: session.id,
+        provider: 'monnify',
+      });
+    } catch { /* logging must never block the action */ }
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       try {
         const { data } = await supabase
@@ -912,7 +915,7 @@ function RequesterPaymentCard({
               startCountdown(data.expiry_at);
             }
             setLoadingIntent(false);
-            logLifecycleCompleted('PAYMENT_INITIALIZATION', paymentInitActionId, {
+            logLifecycleCompleted('PAYMENT_INITIALIZATION', paymentInitActionId ?? '', {
               active_role: 'requester',
               screen: 'RequesterHome',
               session_id: session.id,
@@ -963,14 +966,17 @@ function RequesterPaymentCard({
     if (refreshingRef.current) return;
     refreshingRef.current = true;
     setRefreshing(true);
-    const refreshActionId = logLifecycleStarted('REFRESH_PAYMENT', {
-      active_role: 'requester',
-      screen: 'RequesterHome',
-      session_id: session.id,
-      edge_function: 'refresh-payment',
-      provider: 'monnify',
-    });
+    let refreshActionId: string | null = null;
     try {
+      try {
+        refreshActionId = logLifecycleStarted('REFRESH_PAYMENT', {
+          active_role: 'requester',
+          screen: 'RequesterHome',
+          session_id: session.id,
+          edge_function: 'refresh-payment',
+          provider: 'monnify',
+        });
+      } catch { /* logging must never block the action */ }
       const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/refresh-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1024,7 +1030,7 @@ function RequesterPaymentCard({
         }
         setLoadingIntent(false);
         autoRefreshAttemptedRef.current = false;
-        logLifecycleCompleted('REFRESH_PAYMENT', refreshActionId, {
+        logLifecycleCompleted('REFRESH_PAYMENT', refreshActionId ?? '', {
           active_role: 'requester',
           screen: 'RequesterHome',
           session_id: session.id,
@@ -3754,18 +3760,14 @@ export default function RequesterHomeScreen() {
   const handleStartShift = useCallback(async () => {
     if (!activeSession) return;
     const sid = activeSession.id;
-    const startActionId = logLifecycleStarted('START_SHIFT', {
-      active_role: 'requester',
-      screen: 'RequesterHome',
-      session_id: sid,
-      edge_function: 'start-shift',
-    });
+    let startActionId: string | null = null;
+    try { startActionId = logLifecycleStarted('START_SHIFT', { active_role: 'requester', screen: 'RequesterHome', session_id: sid, edge_function: 'start-shift' }); } catch { /* logging must never block the action */ }
     try {
       console.log('[Requester] handleStartShift for session:', sid);
       const data = await callSessionEdge('start-shift', sid);
       const updated = data?.session as Partial<CoverageSession>;
       if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
-      logLifecycleCompleted('START_SHIFT', startActionId, {
+      logLifecycleCompleted('START_SHIFT', startActionId ?? '', {
         active_role: 'requester',
         screen: 'RequesterHome',
         session_id: sid,
@@ -3800,17 +3802,13 @@ export default function RequesterHomeScreen() {
   const handleResumeShift = useCallback(async () => {
     if (!activeSession) return;
     const sid = activeSession.id;
-    const resumeActionId = logLifecycleStarted('RESUME_SHIFT', {
-      active_role: 'requester',
-      screen: 'RequesterHome',
-      session_id: sid,
-      edge_function: 'resume-shift',
-    });
+    let resumeActionId: string | null = null;
+    try { resumeActionId = logLifecycleStarted('RESUME_SHIFT', { active_role: 'requester', screen: 'RequesterHome', session_id: sid, edge_function: 'resume-shift' }); } catch { /* logging must never block the action */ }
     try {
       const data = await callSessionEdge('resume-shift', sid);
       const updated = data?.session as Partial<CoverageSession>;
       if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
-      logLifecycleCompleted('RESUME_SHIFT', resumeActionId, {
+      logLifecycleCompleted('RESUME_SHIFT', resumeActionId ?? '', {
         active_role: 'requester',
         screen: 'RequesterHome',
         session_id: sid,
@@ -3850,18 +3848,14 @@ export default function RequesterHomeScreen() {
     if (!activeSession) return;
     const sid = activeSession.id;
     setShowPauseShiftModal(false);
-    const pauseActionId = logLifecycleStarted('PAUSE_SHIFT', {
-      active_role: 'requester',
-      screen: 'RequesterHome',
-      session_id: sid,
-      edge_function: 'pause-shift',
-    });
+    let pauseActionId: string | null = null;
+    try { pauseActionId = logLifecycleStarted('PAUSE_SHIFT', { active_role: 'requester', screen: 'RequesterHome', session_id: sid, edge_function: 'pause-shift' }); } catch { /* logging must never block the action */ }
     try {
       console.log('[Requester] handleConfirmPauseShift for session:', sid);
       const data = await callSessionEdge('pause-shift', sid);
       const updated = data?.session as Partial<CoverageSession>;
       if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
-      logLifecycleCompleted('PAUSE_SHIFT', pauseActionId, {
+      logLifecycleCompleted('PAUSE_SHIFT', pauseActionId ?? '', {
         active_role: 'requester',
         screen: 'RequesterHome',
         session_id: sid,
@@ -3911,13 +3905,8 @@ export default function RequesterHomeScreen() {
     _requesterDismissedSessions.delete(sid);
     console.log('[Requester] handleConfirmEndShift: ending shift for session', sid);
     setShowEndShiftModal(false);
-    const endActionId = logLifecycleStarted('END_SHIFT', {
-      active_role: 'requester',
-      screen: 'RequesterHome',
-      session_id: sid,
-      edge_function: 'end-shift',
-      provider: 'monnify',
-    });
+    let endActionId: string | null = null;
+    try { endActionId = logLifecycleStarted('END_SHIFT', { active_role: 'requester', screen: 'RequesterHome', session_id: sid, edge_function: 'end-shift', provider: 'monnify' }); } catch { /* logging must never block the action */ }
     try {
       const data = await callSessionEdge('end-shift', sid);
       console.log('[Requester] end-shift response:', JSON.stringify(data));
@@ -3937,7 +3926,7 @@ export default function RequesterHomeScreen() {
       if (updated?.price != null) {
         console.log('[Requester] end-shift updated price from backend:', updated.price);
       }
-      logLifecycleCompleted('END_SHIFT', endActionId, {
+      logLifecycleCompleted('END_SHIFT', endActionId ?? '', {
         active_role: 'requester',
         screen: 'RequesterHome',
         session_id: sid,

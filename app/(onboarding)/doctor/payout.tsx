@@ -410,12 +410,14 @@ export default function DoctorPayout() {
     setLoading(true);
     setLoadingLabel('Saving details...');
 
-    const doctorOnboardActionId = logLifecycleStarted('DOCTOR_ONBOARDING_COMPLETE', {
-      active_role: 'doctor',
-      screen: 'DoctorOnboarding',
-    });
-
+    let doctorOnboardActionId: string | null = null;
     try {
+      try {
+        doctorOnboardActionId = logLifecycleStarted('DOCTOR_ONBOARDING_COMPLETE', {
+          active_role: 'doctor',
+          screen: 'DoctorOnboarding',
+        });
+      } catch { /* logging must never block the action */ }
       const userId = user!.id;
 
       const isTransientNetworkError = (e: unknown): boolean =>
@@ -450,7 +452,7 @@ export default function DoctorPayout() {
       );
       if (profileError) throw profileError;
 
-      logLifecycleCompleted('DOCTOR_ONBOARDING_COMPLETE', doctorOnboardActionId, {
+      logLifecycleCompleted('DOCTOR_ONBOARDING_COMPLETE', doctorOnboardActionId ?? '', {
         active_role: 'doctor',
         screen: 'DoctorOnboarding',
       });

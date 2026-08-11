@@ -1853,13 +1853,16 @@ export default function DoctorLayout() {
     const req = requestQueue.find(r => r.id === displayedRequestId) ?? requestQueue[0] ?? null;
     if (!req || !user) return;
     setAccepting(true);
-    const acceptActionId = logLifecycleStarted('ACCEPT_REQUEST', {
-      active_role: 'doctor',
-      screen: 'DoctorHome',
-      request_id: req.id,
-      edge_function: 'accept-request',
-    });
+    let acceptActionId: string | null = null;
     try {
+      try {
+        acceptActionId = logLifecycleStarted('ACCEPT_REQUEST', {
+          active_role: 'doctor',
+          screen: 'DoctorHome',
+          request_id: req.id,
+          edge_function: 'accept-request',
+        });
+      } catch { /* logging must never block the action */ }
       const res = await fetchWithAuth(`${EDGE_BASE}/accept-request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1917,7 +1920,7 @@ export default function DoctorLayout() {
         }
       } catch {}
 
-      logLifecycleCompleted('ACCEPT_REQUEST', acceptActionId, {
+      logLifecycleCompleted('ACCEPT_REQUEST', acceptActionId ?? '', {
         active_role: 'doctor',
         screen: 'DoctorHome',
         request_id: req.id,

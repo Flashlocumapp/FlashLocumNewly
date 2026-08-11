@@ -118,12 +118,14 @@ export default function RequesterBasicProfile() {
 
     setLoading(true);
 
-    const requesterOnboardActionId = logLifecycleStarted('REQUESTER_ONBOARDING_COMPLETE', {
-      active_role: 'requester',
-      screen: 'RequesterOnboarding',
-    });
-
+    let requesterOnboardActionId: string | null = null;
     try {
+      try {
+        requesterOnboardActionId = logLifecycleStarted('REQUESTER_ONBOARDING_COMPLETE', {
+          active_role: 'requester',
+          screen: 'RequesterOnboarding',
+        });
+      } catch { /* logging must never block the action */ }
       // Strip any title prefix (Dr., Mr., Mrs., Prof. etc.) before splitting
       const rawFull: string = user?.user_metadata?.full_name ?? '';
       const strippedFull = rawFull.replace(/^(dr|mr|mrs|ms|prof|sir)\.?\s*/i, '').trim();
@@ -176,7 +178,7 @@ export default function RequesterBasicProfile() {
 
       if (completionError) throw completionError;
 
-      logLifecycleCompleted('REQUESTER_ONBOARDING_COMPLETE', requesterOnboardActionId, {
+      logLifecycleCompleted('REQUESTER_ONBOARDING_COMPLETE', requesterOnboardActionId ?? '', {
         active_role: 'requester',
         screen: 'RequesterOnboarding',
       });

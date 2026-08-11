@@ -50,10 +50,13 @@ export default function RequesterAccountSettingsScreen() {
   const handleConfirmDelete = async () => {
     console.log('[Requester Account Settings] Delete Account confirmed, proceeding with deletion');
     setDeleting(true);
-    const deleteActionId = logLifecycleStarted('DELETE_ACCOUNT', {
-      screen: 'AccountSettings',
-    });
+    let deleteActionId: string | null = null;
     try {
+      try {
+        deleteActionId = logLifecycleStarted('DELETE_ACCOUNT', {
+          screen: 'AccountSettings',
+        });
+      } catch { /* logging must never block the action */ }
       // Force a fresh token before deletion — prevents 401 from expired sessions
       await supabase.auth.refreshSession();
       console.log('[Requester Account Settings] Calling delete-account edge function');
@@ -68,7 +71,7 @@ export default function RequesterAccountSettingsScreen() {
       if (!res.ok) {
         throw new Error('Account deletion failed on server. Please try again.');
       }
-      logLifecycleCompleted('DELETE_ACCOUNT', deleteActionId, {
+      logLifecycleCompleted('DELETE_ACCOUNT', deleteActionId ?? '', {
         screen: 'AccountSettings',
       });
       console.log('[Requester Account Settings] Signing out after delete');
