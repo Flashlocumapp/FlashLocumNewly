@@ -580,7 +580,7 @@ export default function DoctorLayout() {
   }, [onNewRequestPush]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Central guard: show rating overlay only if session not already rated/dismissed ──
-  const maybeShowDoctorRating = useCallback(async (sessionId: string, hospitalName: string, amount?: number) => {
+  const maybeShowDoctorRating = useCallback(async (sessionId: string, hospitalName: string, amount?: number, paymentConfirmedAt?: string) => {
     // Gate: if cache is not yet warm, await the warm promise instead of dropping the event
     if (!warmCompleteRef.current) {
       if (_doctorWarmPromise) await _doctorWarmPromise;
@@ -635,29 +635,36 @@ export default function DoctorLayout() {
       // Non-fatal — proceed to show overlay if DB check fails
     }
 
-    // DB guard: only show overlay if session is genuinely in a paid state
+    // 5-minute expiry check — rating opportunity expires 5 minutes after payment
     try {
-      const { data: sessionSnap } = await supabase
-        .from('coverage_sessions')
-        .select('status')
-        .eq('id', resolvedSessionId)
-        .maybeSingle();
-      if (!isMountedRef.current) return;
-      const paidStatuses = ['requester_paid', 'settled'];
-      if (!sessionSnap || !paidStatuses.includes(sessionSnap.status)) {
-        console.log('[Doctor] maybeShowDoctorRating — session not yet paid, suppressing overlay', sessionSnap?.status);
-        return;
+      let confirmedAt: string | null | undefined = paymentConfirmedAt;
+      if (!confirmedAt) {
+        // No timestamp from broadcast — fetch from DB
+        const { data: sessionSnap } = await supabase
+          .from('coverage_sessions')
+          .select('payment_complete_at')
+          .eq('id', resolvedSessionId)
+          .maybeSingle();
+        if (!isMountedRef.current) return;
+        confirmedAt = sessionSnap?.payment_complete_at;
       }
+      if (confirmedAt) {
+        const ageMs = Date.now() - new Date(confirmedAt).getTime();
+        if (ageMs > 5 * 60 * 1000) {
+          console.log('[Doctor] maybeShowDoctorRating — rating window expired (>5 min), suppressing overlay');
+          return;
+        }
+      }
+      // If confirmedAt is still null/undefined (no timestamp available), allow overlay to show
     } catch {
-      // Non-fatal — if DB check fails, suppress overlay to be safe
-      console.log('[Doctor] maybeShowDoctorRating — DB status check failed, suppressing overlay');
+      // DB query failed — fail closed, do not show overlay without verifying eligibility
+      console.log('[Doctor] maybeShowDoctorRating — DB payment_complete_at check failed, suppressing overlay');
       return;
     }
 
-    // DB guard passed — session IS paid. Check in-memory dedup sets again (may have been
-    // populated by the async AsyncStorage check above while we awaited the DB guard).
+    // Post-expiry dedup check — in-memory sets may have been populated while awaiting DB above
     if (_doctorRatedSessions.has(resolvedSessionId) || _doctorDismissedSessions.has(resolvedSessionId)) {
-      setActiveSessionId(null); // session is paid and already handled — stop subscriptions
+      setActiveSessionId(null);
       return;
     }
 
@@ -1225,7 +1232,7 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] PAYMENT_CONFIRMED broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount, payload?.payload?.paid_at).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
           severity: 'warning',
           active_role: 'doctor',
           screen: 'DoctorHome',
@@ -1248,7 +1255,7 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] payment_confirmed broadcast received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount, payload?.payload?.paid_at).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
           severity: 'warning',
           active_role: 'doctor',
           screen: 'DoctorHome',
@@ -1638,7 +1645,7 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] user channel PAYMENT_CONFIRMED received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount, payload?.payload?.paid_at).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
           severity: 'warning',
           active_role: 'doctor',
           screen: 'DoctorHome',
@@ -1661,7 +1668,7 @@ export default function DoctorLayout() {
         const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
         console.log('[Doctor] user channel payment_confirmed received', { sessionId, hospitalName, amount });
         setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
+        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount, payload?.payload?.paid_at).catch((e: unknown) => logLifecycleFailed('DOCTOR_RATING_ERROR', null, {
           severity: 'warning',
           active_role: 'doctor',
           screen: 'DoctorHome',

@@ -1827,7 +1827,7 @@ export default function RequesterHomeScreen() {
         console.log('[Requester] user channel payment_confirmed received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
         invalidate(`requester-coverage-${user?.id ?? 'anon'}`);
-        handlePaymentConfirmedWithFallbackRef.current(sessionId);
+        handlePaymentConfirmedWithFallbackRef.current(sessionId, payload?.payload?.paid_at);
         startRequesterPaymentPollingRef.current();
       })
       .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
@@ -1835,7 +1835,7 @@ export default function RequesterHomeScreen() {
         console.log('[Requester] user channel PAYMENT_CONFIRMED received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
         invalidate(`requester-coverage-${user?.id ?? 'anon'}`);
-        handlePaymentConfirmedWithFallbackRef.current(sessionId);
+        handlePaymentConfirmedWithFallbackRef.current(sessionId, payload?.payload?.paid_at);
         startRequesterPaymentPollingRef.current();
       })
       // From channel 7 (shift cancelled on requester channel)
@@ -2199,7 +2199,7 @@ export default function RequesterHomeScreen() {
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const playAcceptanceChimeRef = useRef<(sessionId: string) => Promise<void>>(async (_sessionId: string) => {});
   // eslint-disable-next-line @typescript-eslint/no-empty-function
-  const handlePaymentConfirmedWithFallbackRef = useRef<(sessionId?: string) => void>(() => {});
+  const handlePaymentConfirmedWithFallbackRef = useRef<(sessionId?: string, paymentConfirmedAt?: string) => void>(() => {});
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const startRequesterPaymentPollingRef = useRef<() => void>(() => {});
   const endShiftInProgressRef = useRef(false);
@@ -2517,14 +2517,14 @@ export default function RequesterHomeScreen() {
         if (!isMountedRef.current) return;
         console.log('[Requester] session channel PAYMENT_CONFIRMED received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
-        handlePaymentConfirmedWithFallbackRef.current(sessionId);
+        handlePaymentConfirmedWithFallbackRef.current(sessionId, payload?.payload?.paid_at);
         startRequesterPaymentPollingRef.current();
       })
       .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
         if (!isMountedRef.current) return;
         console.log('[Requester] session channel payment_confirmed received', payload?.payload);
         const sessionId = payload?.payload?.session_id;
-        handlePaymentConfirmedWithFallbackRef.current(sessionId);
+        handlePaymentConfirmedWithFallbackRef.current(sessionId, payload?.payload?.paid_at);
         startRequesterPaymentPollingRef.current();
       })
       .on('broadcast', { event: 'PAYMENT_COMPLETE' }, (payload) => {
@@ -3534,11 +3534,19 @@ export default function RequesterHomeScreen() {
     }
   }, []);
 
-  const handlePaymentConfirmedWithFallback = useCallback(async (sessionIdFromPayload?: string) => {
+  const handlePaymentConfirmedWithFallback = useCallback(async (sessionIdFromPayload?: string, paymentConfirmedAt?: string) => {
     const currentSession = activeSessionRef.current;
     const sid = sessionIdFromPayload ?? currentSession?.id;
 
     if (currentSession) {
+      // 5-minute expiry check — use paymentConfirmedAt from broadcast payload (authoritative)
+      if (paymentConfirmedAt) {
+        const ageMs = Date.now() - new Date(paymentConfirmedAt).getTime();
+        if (ageMs > 5 * 60 * 1000) {
+          console.log('[Requester] handlePaymentConfirmedWithFallback — rating window expired (>5 min), suppressing overlay');
+          return;
+        }
+      }
       // Happy path — ref is populated, show overlay IMMEDIATELY then dedup in background
       if (sid && !_requesterPaidSessions.has(sid) && !_requesterRatingInFlight.has(sid) && !_requesterDismissedSessions.has(sid)) {
         // Fire-and-forget fetch of authoritative amount — overlay reads settledAmount reactively
@@ -3571,6 +3579,14 @@ export default function RequesterHomeScreen() {
         if (!isMountedRef.current) return;
         const session = data?.session ?? null;
         if (!session) return;
+        // 5-minute expiry check using DB timestamp (no broadcast payload available in this path)
+        if (session.payment_complete_at) {
+          const ageMs = Date.now() - new Date(session.payment_complete_at).getTime();
+          if (ageMs > 5 * 60 * 1000) {
+            console.log('[Requester] handlePaymentConfirmedWithFallback (fallback) — rating window expired (>5 min), suppressing overlay');
+            return;
+          }
+        }
         setActiveSession(session);
         _cachedActiveSession = session;
         _sessionCachePopulated = true;
@@ -3617,6 +3633,14 @@ export default function RequesterHomeScreen() {
           const paidStatuses = ['requester_paid'];
           if (snap && paidStatuses.includes(snap.status)) {
             console.log('[Requester] paymentPoll — paid status confirmed:', snap.status, '— showing overlay');
+            // 5-minute expiry check
+            if (snap.payment_complete_at) {
+              const ageMs = Date.now() - new Date(snap.payment_complete_at).getTime();
+              if (ageMs > 5 * 60 * 1000) {
+                console.log('[Requester] paymentPoll — rating window expired (>5 min), stopping poll');
+                return true; // stop polling — window is closed
+              }
+            }
             if (!_requesterPaidSessions.has(snap.id) && !_requesterDismissedSessions.has(snap.id)) {
               handlePaymentConfirmedWithFallback(snap.id);
             }
