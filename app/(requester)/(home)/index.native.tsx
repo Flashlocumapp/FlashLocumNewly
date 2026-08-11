@@ -4737,7 +4737,7 @@ export default function RequesterHomeScreen() {
                     justifyContent: 'center',
                     alignItems: 'center',
                     gap: 8,
-                    opacity: continueProcessing ? 0.5 : 1,
+                    opacity: continueProcessing ? 0.7 : 1,
                   }}
                 >
                   <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>Continue</Text>
@@ -5517,7 +5517,7 @@ export default function RequesterHomeScreen() {
               <TouchableOpacity
                 onPress={handleConfirmEndShift}
                 disabled={endShiftProcessing}
-                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center', opacity: endShiftProcessing ? 0.5 : 1 }}
+                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center', opacity: endShiftProcessing ? 0.7 : 1 }}
               >
                 <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>End Shift</Text>
               </TouchableOpacity>
