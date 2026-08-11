@@ -29,6 +29,7 @@ import { getCached, setCached, invalidate, isStale, setPrefetchPromise, clearPre
 import PollingManager from '../../utils/pollingManager';
 import { SUPABASE_URL } from '@/constants/api';
 import { logIncident, logLifecycleStarted, logLifecycleCompleted, logLifecycleFailed } from '@/utils/errorLogger';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
@@ -2166,6 +2167,19 @@ export default function DoctorLayout() {
   }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcoming, criticalDataReady, doctorRatingScore, doctorReliabilityScore, displayedRequestId]);
 
   return (
+    <ErrorBoundary
+      fallback={
+        <View style={{ flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <Text style={{ fontSize: 18, fontWeight: '600', color: '#1a1a1a', textAlign: 'center', marginBottom: 12 }}>
+            Something went wrong
+          </Text>
+          <Text style={{ fontSize: 15, color: '#666', textAlign: 'center', marginBottom: 32, lineHeight: 22 }}>
+            Please close and reopen FlashLocum.
+          </Text>
+        </View>
+      }
+      onError={(error, info) => console.error('[DoctorPortal] Render error:', error, info)}
+    >
     <DoctorDispatchContext.Provider value={contextValue}>
       <View style={{ flex: 1 }}>
         <Tabs
@@ -2365,6 +2379,7 @@ export default function DoctorLayout() {
         </Modal>
       </View>
     </DoctorDispatchContext.Provider>
+    </ErrorBoundary>
   );
 }
 

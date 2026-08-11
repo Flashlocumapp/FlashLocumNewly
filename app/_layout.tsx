@@ -1,7 +1,7 @@
 import 'react-native-url-polyfill/auto';
 import 'react-native-reanimated';
 import React, { useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -33,9 +33,26 @@ export const SplashContext = React.createContext<{
 });
 export function useSplash() { return React.useContext(SplashContext); }
 
-const DevErrorBoundary = __DEV__
-  ? ErrorBoundary
-  : ({ children }: { children: React.ReactNode }) => <>{children}</>;
+const DevErrorBoundary = ErrorBoundary;
+
+function PortalErrorFallback({ onRetry }: { onRetry: () => void }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+      <Text style={{ fontSize: 18, fontWeight: '600', color: '#1a1a1a', textAlign: 'center', marginBottom: 12 }}>
+        Something went wrong
+      </Text>
+      <Text style={{ fontSize: 15, color: '#666', textAlign: 'center', marginBottom: 32, lineHeight: 22 }}>
+        An unexpected error occurred. Please try again.
+      </Text>
+      <Pressable
+        onPress={onRetry}
+        style={{ backgroundColor: '#007AFF', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 10 }}
+      >
+        <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>Try Again</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 function NavigationGuard({
   onNavigationReady,

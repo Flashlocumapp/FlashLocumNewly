@@ -52,6 +52,7 @@ import { buildShiftPillText, EnvironmentBadge as SessionEnvBadge } from '@/compo
 import { IconSymbol } from '@/components/IconSymbol';
 import { SUPABASE_URL } from '@/constants/api';
 import { logIncident, logLifecycleStarted, logLifecycleCompleted, logLifecycleFailed } from '@/utils/errorLogger';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
@@ -1256,7 +1257,8 @@ function RequesterPaymentCard({
 
   // ─── Derived display values ───────────────────────────────────────────────
   const amountNaira = paymentIntent?.amount_naira ?? (session as any).booked_price ?? session.price;
-  const amountDisplay = `₦${Number(amountNaira).toLocaleString()}`;
+  const amountResolved = (amountNaira != null && isFinite(Number(amountNaira))) ? Number(amountNaira) : null;
+  const amountDisplay = amountResolved !== null ? `₦${amountResolved.toLocaleString()}` : '—';
   const hasAccountDetails = !!(paymentIntent?.monnify_account_number);
   const accountNumber = paymentIntent?.monnify_account_number ?? '';
   const bankName = paymentIntent?.monnify_bank_name ?? '';
@@ -2398,13 +2400,25 @@ export default function RequesterHomeScreen() {
         });
         setCoverageType((req.shift_type as 'Standard' | 'Home Care') ?? 'Standard');
         if (req.shift_date) setShiftDate(new Date(req.shift_date));
-        if (req.start_time) {
-          const [h, m] = (req.start_time as string).split(':').map(Number);
-          const d = new Date(); d.setHours(h, m, 0, 0); setStartTime(d);
+        if (req.start_time && typeof req.start_time === 'string' && /^\d{1,2}:\d{2}/.test(req.start_time)) {
+          const [h, m] = req.start_time.split(':').map(Number);
+          if (!isNaN(h) && !isNaN(m)) {
+            const d = new Date(); d.setHours(h, m, 0, 0); setStartTime(d);
+          } else {
+            console.warn('[RequesterHome] Malformed start_time value, skipping:', req.start_time);
+          }
+        } else if (req.start_time) {
+          console.warn('[RequesterHome] Invalid start_time format, skipping:', req.start_time);
         }
-        if (req.end_time) {
-          const [h, m] = (req.end_time as string).split(':').map(Number);
-          const d = new Date(); d.setHours(h, m, 0, 0); setEndTime(d);
+        if (req.end_time && typeof req.end_time === 'string' && /^\d{1,2}:\d{2}/.test(req.end_time)) {
+          const [h, m] = req.end_time.split(':').map(Number);
+          if (!isNaN(h) && !isNaN(m)) {
+            const d = new Date(); d.setHours(h, m, 0, 0); setEndTime(d);
+          } else {
+            console.warn('[RequesterHome] Malformed end_time value, skipping:', req.end_time);
+          }
+        } else if (req.end_time) {
+          console.warn('[RequesterHome] Invalid end_time format, skipping:', req.end_time);
         }
         if (req.coverage_length != null) setCoverageLength(req.coverage_length);
         if (req.environment) setEnvironment(req.environment as 'Normal' | 'Busy');
@@ -4273,6 +4287,19 @@ export default function RequesterHomeScreen() {
 
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
+    <ErrorBoundary
+      fallback={
+        <View style={{ flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <Text style={{ fontSize: 18, fontWeight: '600', color: '#1a1a1a', textAlign: 'center', marginBottom: 12 }}>
+            Something went wrong
+          </Text>
+          <Text style={{ fontSize: 15, color: '#666', textAlign: 'center', marginBottom: 32, lineHeight: 22 }}>
+            Please close and reopen FlashLocum.
+          </Text>
+        </View>
+      }
+      onError={(error, info) => console.error('[RequesterPortal] Render error:', error, info)}
+    >
     <View style={{ flex: 1, backgroundColor: '#F9F9F6' }}>
 
       {/* ── FULL-SCREEN MAP (always behind everything) ── */}
@@ -5784,5 +5811,6 @@ export default function RequesterHomeScreen() {
       </Modal>
 
     </View>
+    </ErrorBoundary>
   );
 }
