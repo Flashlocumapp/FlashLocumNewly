@@ -3274,11 +3274,18 @@ export default function RequesterHomeScreen() {
           idempotency_key: _submitIdempotencyKey,
         }),
       });
+      const readJsonWithTimeout = <T = unknown>(r: Response, ms = 10_000): Promise<T> =>
+        Promise.race([
+          r.json() as Promise<T>,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Response body read timed out')), ms)
+          ),
+        ]);
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err = await readJsonWithTimeout(res).catch(() => ({}));
         throw new Error((err as any).error || 'Could not submit request');
       }
-      const data = await res.json();
+      const data = await readJsonWithTimeout<{ request_id?: string; id?: string; booked_price?: number }>(res);
       const reqId = data.request_id || data.id || null;
       const bookedPrice = data.booked_price ?? null;
       console.log('[handleRequestCoverage] Submission successful — request_id:', reqId, 'booked_price:', bookedPrice);
