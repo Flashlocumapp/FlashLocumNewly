@@ -2,7 +2,7 @@ import React, { createContext, useContext, useCallback, useEffect, useState, use
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { useRouter } from 'expo-router';
-import { Platform } from 'react-native';
+import { Platform, AppState, AppStateStatus } from 'react-native';
 // eslint-disable-next-line import/no-unresolved
 import * as Notifications from 'expo-notifications';
 import { supabase } from '@/lib/supabase';
@@ -85,6 +85,7 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
 
   const newRequestPushCallbackRef = useRef<(() => void) | null>(null);
   const soundRef = useRef<import('expo-av').Audio.Sound | null>(null);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   const onNewRequestPush = useCallback((callback: () => void) => {
     newRequestPushCallbackRef.current = callback;
@@ -306,6 +307,23 @@ function NativeNotificationProvider({ children }: NotificationProviderProps) {
         }
       });
     } catch (err) { console.warn('[NotificationContext] playAcceptanceChime error:', err); }
+  }, []);
+
+  // Re-check actual OS notification permission whenever the app returns to foreground.
+  // OneSignal's permissionChange event does not fire for changes made in iOS/Android Settings
+  // while the app is backgrounded — this AppState listener closes that gap.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', async (next: AppStateStatus) => {
+      if (appStateRef.current.match(/inactive|background/) && next === 'active') {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { OneSignal: OS } = require('react-native-onesignal');
+        const granted: boolean = await OS.Notifications.hasPermission();
+        console.log('[OneSignal] AppState foreground re-check — hasPermission=', granted);
+        setHasPermission(granted);
+      }
+      appStateRef.current = next;
+    });
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {
