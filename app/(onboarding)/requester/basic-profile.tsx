@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import * as SecureStore from 'expo-secure-store';
 import {
   View,
   Text,
@@ -182,7 +183,8 @@ export default function RequesterBasicProfile() {
         active_role: 'requester',
         screen: 'RequesterOnboarding',
       });
-      refreshProfile();
+      await refreshProfile();
+      await SecureStore.setItemAsync('flashlocum_last_pathway', 'requester').catch(() => {});
       router.replace('/(requester)/(home)' as any);
     } catch (err: any) {
       setSubmitError(err?.message || 'Something went wrong. Please try again.');

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import * as SecureStore from 'expo-secure-store';
 import {
   View,
   Text,
@@ -457,7 +458,8 @@ export default function DoctorPayout() {
         screen: 'DoctorOnboarding',
       });
       console.log('[Payout] Submit success');
-      refreshProfile();
+      await refreshProfile();
+      await SecureStore.setItemAsync('flashlocum_last_pathway', 'doctor').catch(() => {});
       router.replace('/(doctor)/(home)' as any);
     } catch (err: unknown) {
       const message =
