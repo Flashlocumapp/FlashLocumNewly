@@ -335,6 +335,12 @@ export default function DoctorHomeScreen() {
 
   const mapRef = useRef<MapView>(null);
 
+  // Tracks whether the user has manually panned the map.
+  // When true, suppresses automatic camera re-centering from the recovery effect
+  // and useFocusEffect so a deliberate pan is never overridden.
+  // Reset to false when the doctor goes offline so the next go-online cycle re-centers.
+  const hasUserPannedRef = useRef(false);
+
   // ─── tracksViewChanges fix for stethoscope blank on first toggle ────────────
   const [markerTracksViews, setMarkerTracksViews] = useState(true);
 
@@ -368,6 +374,7 @@ export default function DoctorHomeScreen() {
   useEffect(() => {
     if (!isOnline) {
       sentInitialLocationRef.current = false;
+      hasUserPannedRef.current = false;
     }
   }, [isOnline]);
 
@@ -387,7 +394,7 @@ export default function DoctorHomeScreen() {
           console.log('[DoctorHome] Coordinate recovery: restored from module cache');
           setUserLocation(_cachedDoctorCoords);
           // Move camera to match — same logic as handleToggleStatus
-          if (mapRef.current) {
+          if (mapRef.current && !hasUserPannedRef.current) {
             mapRef.current.animateToRegion({
               latitude: _cachedDoctorCoords.latitude + MAP_LAT_OFFSET,
               longitude: _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
@@ -411,7 +418,7 @@ export default function DoctorHomeScreen() {
               console.log('[DoctorHome] Coordinate recovery: restored from DB', coords);
               setUserLocation(coords);
               // Move camera to match — same logic as handleToggleStatus
-              if (mapRef.current) {
+              if (mapRef.current && !hasUserPannedRef.current) {
                 mapRef.current.animateToRegion({
                   latitude: coords.latitude + MAP_LAT_OFFSET,
                   longitude: coords.longitude + MAP_LNG_OFFSET,
@@ -434,7 +441,7 @@ export default function DoctorHomeScreen() {
             console.log('[DoctorHome] Coordinate recovery: restored from last-known position', coords);
             setUserLocation(coords);
             // Move camera to match — same logic as handleToggleStatus
-            if (mapRef.current) {
+            if (mapRef.current && !hasUserPannedRef.current) {
               mapRef.current.animateToRegion({
                 latitude: coords.latitude + MAP_LAT_OFFSET,
                 longitude: coords.longitude + MAP_LNG_OFFSET,
@@ -453,7 +460,7 @@ export default function DoctorHomeScreen() {
           console.log('[DoctorHome] Coordinate recovery: restored from live GPS', coords);
           setUserLocation(coords);
           // Move camera to match — same logic as handleToggleStatus
-          if (mapRef.current) {
+          if (mapRef.current && !hasUserPannedRef.current) {
             mapRef.current.animateToRegion({
               latitude: coords.latitude + MAP_LAT_OFFSET,
               longitude: coords.longitude + MAP_LNG_OFFSET,
@@ -483,7 +490,7 @@ export default function DoctorHomeScreen() {
   useFocusEffect(
     React.useCallback(() => {
       const doAnimate = () => {
-        if (_cachedDoctorCoords && mapRef.current) {
+        if (_cachedDoctorCoords && mapRef.current && !hasUserPannedRef.current) {
           const targetRegion = {
             latitude: _cachedDoctorCoords.latitude + MAP_LAT_OFFSET,
             longitude: _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
@@ -739,7 +746,10 @@ export default function DoctorHomeScreen() {
         style={StyleSheet.absoluteFillObject}
         provider={PROVIDER_GOOGLE}
         initialRegion={_cachedDoctorRegion ?? LAGOS_REGION}
-        onRegionChangeComplete={(region) => { _cachedDoctorRegion = region; }}
+        onRegionChangeComplete={(region) => {
+          _cachedDoctorRegion = region;
+          hasUserPannedRef.current = true;
+        }}
         onMapReady={() => {}}
         showsMyLocationButton={false}
         customMapStyle={DESATURATED_MAP_STYLE}
