@@ -52,7 +52,6 @@ import PollingManager from '../../../utils/pollingManager';
 import { buildShiftPillText, EnvironmentBadge as SessionEnvBadge } from '@/components/sessionUtils';
 import { IconSymbol } from '@/components/IconSymbol';
 import { SUPABASE_URL } from '@/constants/api';
-import { logIncident, logLifecycleStarted, logLifecycleCompleted, logLifecycleFailed } from '@/utils/errorLogger';
 
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
@@ -907,15 +906,6 @@ function RequesterPaymentCard({
   const fetchPaymentIntent = useCallback(async () => {
     setLoadingIntent(true);
     const MAX_ATTEMPTS = 15; // 15 × 2s = 30s
-    let paymentInitActionId: string | null = null;
-    try {
-      paymentInitActionId = logLifecycleStarted('PAYMENT_INITIALIZATION', {
-        active_role: 'requester',
-        screen: 'RequesterHome',
-        session_id: session.id,
-        provider: 'monnify',
-      });
-    } catch { /* logging must never block the action */ }
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       try {
         const { data } = await supabase
@@ -935,12 +925,6 @@ function RequesterPaymentCard({
               startCountdown(data.expiry_at);
             }
             setLoadingIntent(false);
-            logLifecycleCompleted('PAYMENT_INITIALIZATION', paymentInitActionId ?? '', {
-              active_role: 'requester',
-              screen: 'RequesterHome',
-              session_id: session.id,
-              provider: 'monnify',
-            });
             return;
           } else if (!autoRefreshAttemptedRef.current && data.payment_route !== 'flashlocum_manual') {
             // Row exists but Monnify failed — auto-trigger refresh once
@@ -970,15 +954,6 @@ function RequesterPaymentCard({
     }
     // Exhausted all retries — stop loading, leave paymentIntent null
     setLoadingIntent(false);
-    logLifecycleFailed('PAYMENT_INITIALIZATION', paymentInitActionId, {
-      severity: 'error',
-      active_role: 'requester',
-      screen: 'RequesterHome',
-      session_id: session.id,
-      provider: 'monnify',
-      message: 'Payment initialization exhausted all retries without account details',
-      user_action_completed: false,
-    });
   }, [session.id, startCountdown]);
 
   // ─── Refresh payment via edge function ───────────────────────────────────
@@ -986,34 +961,13 @@ function RequesterPaymentCard({
     if (refreshingRef.current) return;
     refreshingRef.current = true;
     setRefreshing(true);
-    let refreshActionId: string | null = null;
     try {
-      try {
-        refreshActionId = logLifecycleStarted('REFRESH_PAYMENT', {
-          active_role: 'requester',
-          screen: 'RequesterHome',
-          session_id: session.id,
-          edge_function: 'refresh-payment',
-          provider: 'monnify',
-        });
-      } catch { /* logging must never block the action */ }
       const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/refresh-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: session.id }),
       });
       if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        logLifecycleFailed('REFRESH_PAYMENT', refreshActionId, {
-          severity: 'critical',
-          active_role: 'requester',
-          screen: 'RequesterHome',
-          session_id: session.id,
-          edge_function: 'refresh-payment',
-          provider: 'monnify',
-          provider_status: String(res.status),
-          message: errText || `refresh-payment failed with status ${res.status}`,
-        });
         return;
       }
       const data = await res.json();
@@ -1050,24 +1004,8 @@ function RequesterPaymentCard({
         }
         setLoadingIntent(false);
         autoRefreshAttemptedRef.current = false;
-        logLifecycleCompleted('REFRESH_PAYMENT', refreshActionId ?? '', {
-          active_role: 'requester',
-          screen: 'RequesterHome',
-          session_id: session.id,
-          edge_function: 'refresh-payment',
-          provider: 'monnify',
-        });
       }
-    } catch (e: any) {
-      logLifecycleFailed('REFRESH_PAYMENT', refreshActionId, {
-        severity: 'critical',
-        active_role: 'requester',
-        screen: 'RequesterHome',
-        session_id: session.id,
-        edge_function: 'refresh-payment',
-        provider: 'monnify',
-        message: e instanceof Error ? e.message : String(e),
-      });
+    } catch {
     } finally {
       refreshingRef.current = false;
       setRefreshing(false);
@@ -1316,17 +1254,6 @@ function RequesterPaymentCard({
     } catch (e) {
       console.warn('[RequesterPaymentCard] handleClaimPayment exception:', e);
       setClaimed(true); // Still transition — don't leave user stuck
-      logIncident({
-        severity: 'error',
-        event_type: 'MANUAL_PAYMENT_CLAIM',
-        active_role: 'requester',
-        screen: 'RequesterHome',
-        session_id: session.id,
-        edge_function: 'claim-manual-payment',
-        message: e instanceof Error ? e.message : String(e),
-        user_action_completed: false,
-        recovered: false,
-      });
     } finally {
       setClaiming(false);
     }
@@ -3297,9 +3224,6 @@ export default function RequesterHomeScreen() {
     }
   };
 
-  // Module-level action ID so it persists across the auto-retry
-  let _submitActionId: string | null = null;
-
   const handleRequestCoverage = async () => {
     console.log('[handleRequestCoverage] Submit button pressed');
     _submitRetried = false;
@@ -3319,18 +3243,6 @@ export default function RequesterHomeScreen() {
     }
     setSubmitting(true);
     try {
-      // Only log STARTED on the first attempt (not the auto-retry)
-      if (!_submitRetried) {
-        try {
-          _submitActionId = logLifecycleStarted('SUBMIT_REQUEST', {
-            active_role: 'requester',
-            screen: 'RequesterHome',
-            edge_function: 'submit-request',
-          });
-        } catch {
-          // Logging must never block the user action
-        }
-      }
       // Construct ISO datetime strings for start_date and end_date
       const d = shiftDate;
       const shiftDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; // YYYY-MM-DD (local date, not UTC)
@@ -3382,15 +3294,6 @@ export default function RequesterHomeScreen() {
       const reqId = data.request_id || data.id || null;
       const bookedPrice = data.booked_price ?? null;
       console.log('[handleRequestCoverage] Submission successful — request_id:', reqId, 'booked_price:', bookedPrice);
-      try {
-        logLifecycleCompleted('SUBMIT_REQUEST', _submitActionId!, {
-          active_role: 'requester',
-          screen: 'RequesterHome',
-          request_id: reqId,
-          edge_function: 'submit-request',
-        });
-      } catch { /* logging must never block the action */ }
-      _submitActionId = null;
       setActiveRequestId(reqId);
       transitionTo('matching');
       _submitIdempotencyKey = null;
@@ -3424,15 +3327,6 @@ export default function RequesterHomeScreen() {
         return;
       }
       Alert.alert('Error', 'Could not submit request. Please try again.');
-      logLifecycleFailed('SUBMIT_REQUEST', _submitActionId, {
-        severity: 'critical',
-        active_role: 'requester',
-        screen: 'RequesterHome',
-        edge_function: 'submit-request',
-        message: e instanceof Error ? e.message : String(e),
-        failure_stage: 'edge_function',
-      });
-      _submitActionId = null;
     } finally {
       setSubmitting(false);
     }
@@ -3529,19 +3423,6 @@ export default function RequesterHomeScreen() {
               }
             } catch {}
           }
-        } else if (!res.ok) {
-          const errText = await res.text().catch(() => '');
-          logIncident({
-            severity: 'error',
-            event_type: 'WITHDRAW_REQUEST',
-            active_role: 'requester',
-            screen: 'RequesterHome',
-            request_id: activeRequestId,
-            edge_function: 'withdraw-request',
-            provider_status: String(res.status),
-            message: errText || `withdraw-request failed with status ${res.status}`,
-            user_action_completed: false,
-          });
         }
       } catch {}
     }
@@ -3583,19 +3464,6 @@ export default function RequesterHomeScreen() {
           const body = await res.json().catch(() => ({}));
           if (body.error === 'SHIFT_LOCKED') return 'locked';
         }
-        // Other non-ok response
-        const errText = await res.text().catch(() => '');
-        logIncident({
-          severity: 'error',
-          event_type: 'WITHDRAW_REQUEST',
-          active_role: 'requester',
-          screen: 'RequesterHome',
-          request_id: activeRequestId,
-          edge_function: 'withdraw-request',
-          provider_status: String(res.status),
-          message: errText || `withdraw-request failed with status ${res.status}`,
-          user_action_completed: false,
-        });
         return 'error';
       } catch {
         return 'error';
@@ -3827,18 +3695,7 @@ export default function RequesterHomeScreen() {
         // non-fatal
       }
       return false;
-    }, undefined, 180, () => {
-      logIncident({
-        severity: 'error',
-        event_type: 'PAYMENT_POLLING_EXHAUSTED',
-        active_role: 'requester',
-        screen: 'RequesterHome',
-        session_id: activeSessionId ?? undefined,
-        message: 'Payment polling exhausted without confirmation',
-        user_action_completed: false,
-        recovered: false,
-      });
-    });
+    }, undefined, 180);
   }, [handlePaymentConfirmedWithFallback, activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep refs in sync so effects declared before these callbacks can call them without stale closures
@@ -3921,19 +3778,11 @@ export default function RequesterHomeScreen() {
     if (startShiftProcessing) return;
     setStartShiftProcessing(true);
     const sid = activeSession.id;
-    let startActionId: string | null = null;
-    try { startActionId = logLifecycleStarted('START_SHIFT', { active_role: 'requester', screen: 'RequesterHome', session_id: sid, edge_function: 'start-shift' }); } catch { /* logging must never block the action */ }
     try {
       console.log('[Requester] handleStartShift for session:', sid);
       const data = await callSessionEdge('start-shift', sid);
       const updated = data?.session as Partial<CoverageSession>;
       if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
-      logLifecycleCompleted('START_SHIFT', startActionId ?? '', {
-        active_role: 'requester',
-        screen: 'RequesterHome',
-        session_id: sid,
-        edge_function: 'start-shift',
-      });
       console.log('[Requester] Starting start-shift poll for session:', sid);
       PollingManager.start('start-shift', async () => {
         const { data: s } = await supabase
@@ -3955,14 +3804,6 @@ export default function RequesterHomeScreen() {
         return 'Something went wrong. Please try again.';
       })();
       Alert.alert('Start Shift', startMsg);
-      logLifecycleFailed('START_SHIFT', startActionId, {
-        severity: 'error',
-        active_role: 'requester',
-        screen: 'RequesterHome',
-        session_id: sid,
-        edge_function: 'start-shift',
-        message: e instanceof Error ? e.message : String(e),
-      });
     } finally {
       setStartShiftProcessing(false);
     }
@@ -3973,18 +3814,10 @@ export default function RequesterHomeScreen() {
     if (resumeShiftProcessing) return;
     setResumeShiftProcessing(true);
     const sid = activeSession.id;
-    let resumeActionId: string | null = null;
-    try { resumeActionId = logLifecycleStarted('RESUME_SHIFT', { active_role: 'requester', screen: 'RequesterHome', session_id: sid, edge_function: 'resume-shift' }); } catch { /* logging must never block the action */ }
     try {
       const data = await callSessionEdge('resume-shift', sid);
       const updated = data?.session as Partial<CoverageSession>;
       if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
-      logLifecycleCompleted('RESUME_SHIFT', resumeActionId ?? '', {
-        active_role: 'requester',
-        screen: 'RequesterHome',
-        session_id: sid,
-        edge_function: 'resume-shift',
-      });
       PollingManager.start('resume-shift', async () => {
         const { data: s } = await supabase
           .from('coverage_sessions')
@@ -3999,14 +3832,6 @@ export default function RequesterHomeScreen() {
       }, undefined, 6);
     } catch (e: any) {
       Alert.alert('Something went wrong', 'Please try again.');
-      logLifecycleFailed('RESUME_SHIFT', resumeActionId, {
-        severity: 'error',
-        active_role: 'requester',
-        screen: 'RequesterHome',
-        session_id: sid,
-        edge_function: 'resume-shift',
-        message: e instanceof Error ? e.message : String(e),
-      });
     } finally {
       setResumeShiftProcessing(false);
     }
@@ -4023,19 +3848,11 @@ export default function RequesterHomeScreen() {
     setPauseShiftProcessing(true);
     const sid = activeSession.id;
     setShowPauseShiftModal(false);
-    let pauseActionId: string | null = null;
-    try { pauseActionId = logLifecycleStarted('PAUSE_SHIFT', { active_role: 'requester', screen: 'RequesterHome', session_id: sid, edge_function: 'pause-shift' }); } catch { /* logging must never block the action */ }
     try {
       console.log('[Requester] handleConfirmPauseShift for session:', sid);
       const data = await callSessionEdge('pause-shift', sid);
       const updated = data?.session as Partial<CoverageSession>;
       if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
-      logLifecycleCompleted('PAUSE_SHIFT', pauseActionId ?? '', {
-        active_role: 'requester',
-        screen: 'RequesterHome',
-        session_id: sid,
-        edge_function: 'pause-shift',
-      });
       console.log('[Requester] Starting pause-shift poll for session:', sid);
       PollingManager.start('pause-shift', async () => {
         const { data: s } = await supabase
@@ -4057,14 +3874,6 @@ export default function RequesterHomeScreen() {
         return 'Something went wrong. Please try again.';
       })();
       Alert.alert('Pause Shift', pauseMsg);
-      logLifecycleFailed('PAUSE_SHIFT', pauseActionId, {
-        severity: 'error',
-        active_role: 'requester',
-        screen: 'RequesterHome',
-        session_id: sid,
-        edge_function: 'pause-shift',
-        message: e instanceof Error ? e.message : String(e),
-      });
     } finally {
       setPauseShiftProcessing(false);
     }
@@ -4085,8 +3894,6 @@ export default function RequesterHomeScreen() {
     _requesterDismissedSessions.delete(sid);
     console.log('[Requester] handleConfirmEndShift: ending shift for session', sid);
     setShowEndShiftModal(false);
-    let endActionId: string | null = null;
-    try { endActionId = logLifecycleStarted('END_SHIFT', { active_role: 'requester', screen: 'RequesterHome', session_id: sid, edge_function: 'end-shift', provider: 'monnify' }); } catch { /* logging must never block the action */ }
     try {
       const data = await callSessionEdge('end-shift', sid);
       console.log('[Requester] end-shift response:', JSON.stringify(data));
@@ -4119,14 +3926,6 @@ export default function RequesterHomeScreen() {
       if (updated?.price != null) {
         console.log('[Requester] end-shift updated price from backend:', updated.price);
       }
-      logLifecycleCompleted('END_SHIFT', endActionId ?? '', {
-        active_role: 'requester',
-        screen: 'RequesterHome',
-        session_id: sid,
-        edge_function: 'end-shift',
-        provider: 'monnify',
-        payment_intent_id: paymentFromResponse?.id ?? undefined,
-      });
       console.log('[Requester] Starting end-shift poll for session:', sid);
       PollingManager.start('end-shift', async () => {
         const { data: s } = await supabase
@@ -4148,15 +3947,6 @@ export default function RequesterHomeScreen() {
         return 'Something went wrong. Please try again.';
       })();
       Alert.alert('End Shift', endMsg);
-      logLifecycleFailed('END_SHIFT', endActionId, {
-        severity: 'critical',
-        active_role: 'requester',
-        screen: 'RequesterHome',
-        session_id: sid,
-        edge_function: 'end-shift',
-        provider: 'monnify',
-        message: e instanceof Error ? e.message : String(e),
-      });
     } finally {
       setEndShiftProcessing(false);
     }
@@ -4182,14 +3972,12 @@ export default function RequesterHomeScreen() {
     const sessionId = activeSession.id;
     // Clear immediately so the search card appears right away
     setActiveSession(null);
-    let cancelShiftStatus: number | undefined;
     const doCancelRequest = async () => {
       const res = await fetchWithAuth(`${EDGE_BASE}/update-shift-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, status: 'cancelled', cancellation_reason: reason, cancelled_by: 'requester' }),
       });
-      cancelShiftStatus = res.status;
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
         throw new Error(errText || 'Cancel failed');
@@ -4234,38 +4022,12 @@ export default function RequesterHomeScreen() {
         } catch (retryErr: any) {
           Alert.alert('Cancel Shift', 'Something went wrong. Please try again.');
           fetchActiveSession();
-          if (cancelShiftStatus !== 409) {
-            logIncident({
-              severity: 'error',
-              event_type: 'CANCEL_ACTIVE_SHIFT',
-              active_role: 'requester',
-              screen: 'RequesterHome',
-              session_id: sessionId,
-              edge_function: 'update-shift-status',
-              provider_status: String(cancelShiftStatus ?? 'network_error'),
-              message: retryErr instanceof Error ? retryErr.message : String(retryErr),
-              user_action_completed: false,
-            });
-          }
           return;
         }
       }
       Alert.alert('Error', e.message);
       // Re-fetch to restore correct state if the API call failed
       fetchActiveSession();
-      if (cancelShiftStatus !== 409) {
-        logIncident({
-          severity: 'error',
-          event_type: 'CANCEL_ACTIVE_SHIFT',
-          active_role: 'requester',
-          screen: 'RequesterHome',
-          session_id: sessionId,
-          edge_function: 'update-shift-status',
-          provider_status: String(cancelShiftStatus ?? 'unknown'),
-          message: e instanceof Error ? e.message : String(e),
-          user_action_completed: false,
-        });
-      }
     } finally {
       setCancelShiftProcessing(false);
     }

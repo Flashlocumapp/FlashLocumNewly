@@ -1,5 +1,4 @@
 import React, { useState, useRef, useReducer } from 'react';
-import { logIncident } from '@/utils/errorLogger';
 import {
   View,
   Text,
@@ -166,13 +165,7 @@ export default function SignUpScreen() {
           return m.includes('already registered') || m.includes('already exists') || m.includes('email taken');
         };
         if (!isExpectedSignUpError(signUpMsg)) {
-          logIncident({
-            severity: 'error',
-            event_type: 'SIGN_UP',
-            failure_stage: 'auth',
-            message: signUpError.message,
-            user_action_completed: false,
-          });
+          // unexpected sign-up error — no logging
         }
       } else {
         router.push(`/(auth)/verify?email=${encodeURIComponent(form.email.trim())}&role=${role}`);
@@ -197,13 +190,7 @@ export default function SignUpScreen() {
           );
         };
         if (!isExpectedSignInError(signInMsg)) {
-          logIncident({
-            severity: 'error',
-            event_type: 'SIGN_IN',
-            failure_stage: 'auth',
-            message: signInError.message,
-            user_action_completed: false,
-          });
+          // unexpected sign-in error — no logging
         }
       } else {
         // Fetch profile to determine correct destination

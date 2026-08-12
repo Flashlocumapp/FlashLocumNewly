@@ -18,7 +18,6 @@ import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { SUPABASE_URL } from '@/constants/api';
-import { logLifecycleStarted, logLifecycleCompleted, logLifecycleFailed } from '@/utils/errorLogger';
 
 const MONNIFY_BANKS_URL =
   `${SUPABASE_URL}/functions/v1/monnify-verify-account/banks`;
@@ -411,14 +410,7 @@ export default function DoctorPayout() {
     setLoading(true);
     setLoadingLabel('Saving details...');
 
-    let doctorOnboardActionId: string | null = null;
     try {
-      try {
-        doctorOnboardActionId = logLifecycleStarted('DOCTOR_ONBOARDING_COMPLETE', {
-          active_role: 'doctor',
-          screen: 'DoctorOnboarding',
-        });
-      } catch { /* logging must never block the action */ }
       const userId = user!.id;
 
       const isTransientNetworkError = (e: unknown): boolean =>
@@ -453,10 +445,6 @@ export default function DoctorPayout() {
       );
       if (profileError) throw profileError;
 
-      logLifecycleCompleted('DOCTOR_ONBOARDING_COMPLETE', doctorOnboardActionId ?? '', {
-        active_role: 'doctor',
-        screen: 'DoctorOnboarding',
-      });
       console.log('[Payout] Submit success');
       await refreshProfile();
       await SecureStore.setItemAsync('flashlocum_last_pathway', 'doctor').catch(() => {});
@@ -466,12 +454,6 @@ export default function DoctorPayout() {
       console.log(`[Payout] Submit failed: ${rawMessage}`);
       const message = 'Something went wrong. Please try again.';
       setSubmitError(message);
-      logLifecycleFailed('DOCTOR_ONBOARDING_COMPLETE', doctorOnboardActionId, {
-        severity: 'error',
-        active_role: 'doctor',
-        screen: 'DoctorOnboarding',
-        message,
-      });
     } finally {
       setLoading(false);
       setLoadingLabel('Saving...');

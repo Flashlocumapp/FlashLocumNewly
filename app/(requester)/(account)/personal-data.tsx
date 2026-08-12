@@ -15,7 +15,6 @@ import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { SUPABASE_URL } from '@/constants/api';
 import DeleteAccountModal from '@/components/DeleteAccountModal';
-import { logLifecycleStarted, logLifecycleCompleted, logLifecycleFailed } from '@/utils/errorLogger';
 
 function Card({ children }: { children: React.ReactNode }) {
   return <View style={styles.card}>{children}</View>;
@@ -45,11 +44,7 @@ export default function RequesterPersonalDataScreen() {
   const handleConfirmDelete = async () => {
     console.log('[Requester Personal Data] Confirm delete account');
     setDeleting(true);
-    let deleteActionId: string | null = null;
     try {
-      try {
-        deleteActionId = logLifecycleStarted('DELETE_ACCOUNT', { screen: 'PersonalData' });
-      } catch { /* logging must never block the action */ }
       await supabase.auth.refreshSession();
       console.log('[DELETE_ACCOUNT] Sending delete-account request', { role: 'requester' });
       const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/delete-account`, {
@@ -58,7 +53,6 @@ export default function RequesterPersonalDataScreen() {
         body: JSON.stringify({ role: 'requester' }),
       });
       if (!res.ok) throw new Error('Account deletion failed on server. Please try again.');
-      logLifecycleCompleted('DELETE_ACCOUNT', deleteActionId ?? '', { screen: 'PersonalData' });
       await supabase.auth.signOut();
       router.replace('/');
     } catch (err: unknown) {
@@ -73,12 +67,6 @@ export default function RequesterPersonalDataScreen() {
           { text: 'Cancel', style: 'cancel' },
         ]
       );
-      logLifecycleFailed('DELETE_ACCOUNT', deleteActionId, {
-        severity: 'critical',
-        screen: 'PersonalData',
-        failure_stage: 'edge_function',
-        message: err instanceof Error ? err.message : String(err),
-      });
     }
   };
 

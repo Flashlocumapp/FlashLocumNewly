@@ -17,7 +17,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
-import { logLifecycleStarted, logLifecycleCompleted, logLifecycleFailed } from '@/utils/errorLogger';
 
 type Gender = 'male' | 'female' | null;
 
@@ -119,14 +118,7 @@ export default function RequesterBasicProfile() {
 
     setLoading(true);
 
-    let requesterOnboardActionId: string | null = null;
     try {
-      try {
-        requesterOnboardActionId = logLifecycleStarted('REQUESTER_ONBOARDING_COMPLETE', {
-          active_role: 'requester',
-          screen: 'RequesterOnboarding',
-        });
-      } catch { /* logging must never block the action */ }
       // Strip any title prefix (Dr., Mr., Mrs., Prof. etc.) before splitting
       const rawFull: string = user?.user_metadata?.full_name ?? '';
       const strippedFull = rawFull.replace(/^(dr|mr|mrs|ms|prof|sir)\.?\s*/i, '').trim();
@@ -179,21 +171,11 @@ export default function RequesterBasicProfile() {
 
       if (completionError) throw completionError;
 
-      logLifecycleCompleted('REQUESTER_ONBOARDING_COMPLETE', requesterOnboardActionId ?? '', {
-        active_role: 'requester',
-        screen: 'RequesterOnboarding',
-      });
       await refreshProfile();
       await SecureStore.setItemAsync('flashlocum_last_pathway', 'requester').catch(() => {});
       router.replace('/(requester)/(home)' as any);
     } catch (err: any) {
       setSubmitError(err?.message || 'Something went wrong. Please try again.');
-      logLifecycleFailed('REQUESTER_ONBOARDING_COMPLETE', requesterOnboardActionId, {
-        severity: 'error',
-        active_role: 'requester',
-        screen: 'RequesterOnboarding',
-        message: err?.message ?? 'Unknown error',
-      });
     } finally {
       setLoading(false);
     }
