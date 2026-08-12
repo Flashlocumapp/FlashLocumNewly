@@ -601,7 +601,7 @@ function RequesterUpcomingCard({
 
       {/* Shift pill */}
       <View style={{ backgroundColor: '#2C2C2E', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'stretch', marginBottom: 14 }}>
-        <Text style={{ fontSize: 12, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{shiftPillText}</Text>
+        <Text style={{ fontSize: 12, color: '#FFFFFF', fontFamily: 'Inter_400Regular', lineHeight: 18 }} numberOfLines={2}>{shiftPillText}</Text>
       </View>
 
       {/* Action buttons */}
@@ -748,7 +748,7 @@ function RequesterActiveCard({
 
       {/* Shift pill */}
       <View style={{ backgroundColor: '#2C2C2E', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'stretch', marginBottom: 10 }}>
-        <Text style={{ fontSize: 12, color: '#FFFFFF', fontFamily: 'Inter_400Regular' }}>{shiftPillText}</Text>
+        <Text style={{ fontSize: 12, color: '#FFFFFF', fontFamily: 'Inter_400Regular', lineHeight: 18 }} numberOfLines={2}>{shiftPillText}</Text>
       </View>
 
       {/* Timer row */}
