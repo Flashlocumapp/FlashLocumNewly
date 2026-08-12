@@ -2612,8 +2612,7 @@ export default function RequesterHomeScreen() {
   // Mounted once on user.id. Replaces the unstable session-ID-scoped subscription.
   useEffect(() => {
     if (!user?.id) return;
-    const ch = supabase
-      .channel(`session-status-watch-req:${user.id}`)
+    const ch = safeChannel(`session-status-watch-req:${user.id}`)
       .on(
         'postgres_changes',
         {
