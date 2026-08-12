@@ -1025,6 +1025,10 @@ export default function DoctorLayout() {
               }
               return current; // no change to queue itself
             });
+            // Start Layer 4 reconciliation polling for any requests found at go-online time.
+            // Without this, requests that were already pending when the doctor went online
+            // have no 5-second forceSync loop — only Realtime events would remove them.
+            startDispatchActiveRef.current();
           }
         } else {
           if (!res || !res.ok) {
