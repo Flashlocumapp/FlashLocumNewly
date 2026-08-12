@@ -382,3 +382,124 @@ export const setupErrorLogging = () => {
 if (__DEV__) {
   setupErrorLogging();
 }
+
+// ---------------------------------------------------------------------------
+// Supabase incident logging — fire-and-forget helpers
+// ---------------------------------------------------------------------------
+
+import { supabase } from '@/lib/supabase';
+import { SUPABASE_URL } from '@/constants/api';
+
+async function writeErrorEvent(payload: Record<string, unknown>): Promise<void> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return; // not authenticated — skip silently
+    await fetch(`${SUPABASE_URL}/functions/v1/log-incident`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    // fire-and-forget — never surface errors to caller
+  }
+}
+
+export function logIncident(params: {
+  severity: 'critical' | 'error' | 'warning' | 'info';
+  event_type: string;
+  action?: string;
+  failure_stage?: string;
+  active_role?: string;
+  screen?: string;
+  route?: string;
+  request_id?: string;
+  session_id?: string;
+  payment_intent_id?: string;
+  edge_function?: string;
+  provider?: string;
+  provider_status?: string;
+  recovered?: boolean;
+  recovery_action?: string;
+  user_action_completed?: boolean;
+  message?: string;
+  stack?: string;
+  metadata?: Record<string, unknown>;
+}): void {
+  writeErrorEvent({
+    ...params,
+    platform: Platform.OS,
+  }).catch(() => {});
+}
+
+export function logLifecycleStarted(
+  event_type: string,
+  params?: Record<string, unknown>
+): string {
+  const actionId = `${event_type}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  writeErrorEvent({
+    severity: 'info',
+    event_type,
+    action: 'started',
+    platform: Platform.OS,
+    metadata: { action_id: actionId, ...params },
+  }).catch(() => {});
+  return actionId;
+}
+
+export function logLifecycleCompleted(
+  event_type: string,
+  actionId: string,
+  params?: Record<string, unknown>
+): void {
+  writeErrorEvent({
+    severity: 'info',
+    event_type,
+    action: 'completed',
+    user_action_completed: true,
+    platform: Platform.OS,
+    metadata: { action_id: actionId, ...params },
+  }).catch(() => {});
+}
+
+export function logLifecycleFailed(
+  event_type: string,
+  actionId: string | null,
+  params?: {
+    severity?: 'critical' | 'error' | 'warning' | 'info';
+    screen?: string;
+    failure_stage?: string;
+    message?: string;
+    stack?: string;
+    active_role?: string;
+    session_id?: string;
+    request_id?: string;
+    edge_function?: string;
+    provider?: string;
+    provider_status?: string;
+    user_action_completed?: boolean;
+    metadata?: Record<string, unknown>;
+  }
+): void {
+  writeErrorEvent({
+    severity: params?.severity ?? 'error',
+    event_type,
+    action: 'failed',
+    user_action_completed: false,
+    platform: Platform.OS,
+    failure_stage: params?.failure_stage,
+    screen: params?.screen,
+    message: params?.message,
+    stack: params?.stack,
+    active_role: params?.active_role,
+    session_id: params?.session_id,
+    request_id: params?.request_id,
+    edge_function: params?.edge_function,
+    provider: params?.provider,
+    provider_status: params?.provider_status,
+    metadata: { action_id: actionId, ...params?.metadata },
+  }).catch(() => {});
+}
