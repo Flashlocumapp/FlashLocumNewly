@@ -2209,7 +2209,6 @@ export default function RequesterHomeScreen() {
   const handlePaymentConfirmedWithFallbackRef = useRef<(sessionId?: string, paymentConfirmedAt?: string) => void>(() => {});
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const startRequesterPaymentPollingRef = useRef<() => void>(() => {});
-  const endShiftInProgressRef = useRef(false);
   const isMountedRef = useRef(true);
 
 
@@ -3908,13 +3907,8 @@ export default function RequesterHomeScreen() {
   }, [activeSession]);
 
   const handleConfirmEndShift = async () => {
-    if (endShiftInProgressRef.current) {
-      console.log('[Requester] handleConfirmEndShift — already in progress, ignoring double-tap');
-      return;
-    }
     if (!activeSession) return;
     const sid = activeSession.id;
-    endShiftInProgressRef.current = true;
     // Clear from paid/dismissed sets so day 2+ of multi-day shifts can trigger the overlay again
     _requesterPaidSessions.delete(sid);
     _requesterDismissedSessions.delete(sid);
@@ -3973,8 +3967,6 @@ export default function RequesterHomeScreen() {
         provider: 'monnify',
         message: e instanceof Error ? e.message : String(e),
       });
-    } finally {
-      endShiftInProgressRef.current = false;
     }
   };
 
