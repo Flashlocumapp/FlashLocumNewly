@@ -3,8 +3,6 @@
 
 import { Platform } from "react-native";
 import Constants from "expo-constants";
-import * as Device from 'expo-device';
-import { supabase } from '@/lib/supabase';
 
 // Declare __DEV__ global (React Native global for development mode detection)
 declare const __DEV__: boolean;
@@ -44,15 +42,6 @@ const getPlatformName = (): string => {
       return Platform.OS;
   }
 };
-
-// Device info helper for error_events rows
-const getDeviceInfo = () => ({
-  platform: getPlatformName(),
-  app_version: Constants.expoConfig?.version ?? null,
-  build_number: String(Constants.expoConfig?.ios?.buildNumber ?? Constants.expoConfig?.android?.versionCode ?? ''),
-  os_version: String(Platform.Version ?? ''),
-  device_model: (Device as any)?.modelName ?? null,
-});
 
 // Cache the log server URL
 let cachedLogServerUrl: string | null = null;
@@ -392,128 +381,4 @@ export const setupErrorLogging = () => {
 // Only run in development mode - production apps don't need log forwarding
 if (__DEV__) {
   setupErrorLogging();
-}
-
-// ─── Incident / lifecycle logging → error_events table ───────────────────────
-
-export type IncidentPayload = {
-  severity: 'info' | 'warn' | 'warning' | 'error' | 'critical';
-  event_type: string;
-  active_role?: string;
-  screen?: string;
-  route?: string;
-  session_id?: string;
-  request_id?: string;
-  payment_intent_id?: string;
-  edge_function?: string;
-  provider?: string;
-  provider_status?: string;
-  message?: string;
-  stack?: string;
-  failure_stage?: string;
-  user_action_completed?: boolean;
-  recovered?: boolean;
-  recovery_action?: string;
-  metadata?: Record<string, unknown>;
-};
-
-async function writeErrorEvent(
-  payload: IncidentPayload & { action?: string }
-): Promise<void> {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    const device = getDeviceInfo();
-    // Normalise 'warning' → 'warn' for DB enum compatibility
-    const severity = payload.severity === 'warning' ? 'warn' : payload.severity;
-    await supabase.from('error_events').insert({
-      severity,
-      event_type: payload.event_type,
-      action: payload.action ?? null,
-      failure_stage: payload.failure_stage ?? null,
-      user_id: user?.id ?? null,
-      active_role: payload.active_role ?? null,
-      screen: payload.screen ?? null,
-      route: payload.route ?? null,
-      session_id: payload.session_id ?? null,
-      request_id: payload.request_id ?? null,
-      payment_intent_id: payload.payment_intent_id ?? null,
-      edge_function: payload.edge_function ?? null,
-      provider: payload.provider ?? null,
-      provider_status: payload.provider_status ?? null,
-      message: payload.message ?? null,
-      stack: payload.stack ?? null,
-      recovered: payload.recovered ?? false,
-      user_action_completed: payload.user_action_completed ?? false,
-      recovery_action: payload.recovery_action ?? null,
-      metadata: payload.metadata ?? null,
-      platform: device.platform,
-      app_version: device.app_version,
-      build_number: device.build_number,
-      os_version: device.os_version,
-      device_model: device.device_model,
-    });
-  } catch (err) {
-    // Never let logging break the app — swallow silently
-    console.warn('[errorLogger] writeErrorEvent failed silently:', err instanceof Error ? err.message : String(err));
-  }
-}
-
-export function logIncident(payload: IncidentPayload): void {
-  console.warn('[logIncident]', payload.event_type, payload.message ?? '');
-  writeErrorEvent(payload); // fire-and-forget
-}
-
-export function logLifecycleStarted(
-  eventType: string,
-  meta?: Record<string, unknown>
-): string {
-  const actionId = Math.random().toString(36).slice(2) + Date.now().toString(36);
-  console.log('[lifecycle:started]', eventType, actionId, meta ?? {});
-  writeErrorEvent({
-    severity: 'info',
-    event_type: eventType,
-    action: 'started',
-    user_action_completed: false,
-    recovered: false,
-    metadata: { actionId, ...meta },
-  });
-  return actionId;
-}
-
-export function logLifecycleCompleted(
-  eventType: string,
-  actionId: string | null,
-  meta?: Record<string, unknown>
-): void {
-  console.log('[lifecycle:completed]', eventType, actionId ?? 'no-id', meta ?? {});
-  writeErrorEvent({
-    severity: 'info',
-    event_type: eventType,
-    action: 'completed',
-    user_action_completed: true,
-    recovered: false,
-    metadata: { actionId, ...meta },
-  });
-}
-
-export function logLifecycleFailed(
-  eventType: string,
-  actionId: string | null,
-  error: unknown,
-  meta?: Record<string, unknown>
-): void {
-  const message = error instanceof Error ? error.message : String(error);
-  const stack = error instanceof Error ? (error.stack ?? null) : null;
-  console.warn('[lifecycle:failed]', eventType, actionId ?? 'no-id', message, meta ?? {});
-  writeErrorEvent({
-    severity: 'error',
-    event_type: eventType,
-    action: 'failed',
-    failure_stage: 'execution',
-    message,
-    stack: stack ?? undefined,
-    user_action_completed: false,
-    recovered: false,
-    metadata: { actionId, ...meta },
-  });
 }
