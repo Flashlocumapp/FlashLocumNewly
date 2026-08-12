@@ -2171,6 +2171,7 @@ export default function RequesterHomeScreen() {
   const [previewHours, setPreviewHours] = useState<number>(0);
   const [previewLabel, setPreviewLabel] = useState<string>('');
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
+  const [previewPriceError, setPreviewPriceError] = useState<boolean>(false);
   const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
@@ -3120,16 +3121,25 @@ export default function RequesterHomeScreen() {
       if (!isMountedRef.current) return;
       if (!res.ok) {
         console.log('[fetchPreviewPrice] Non-OK response:', res.status);
+        setPreviewPriceError(true);
         return;
       }
       const data = await res.json();
       if (!isMountedRef.current) return;
-      console.log('[fetchPreviewPrice] Price received:', data.price, 'hours:', data.duration_hours);
-      setPreviewPrice(data.price ?? 0);
+      const receivedPrice = data.price;
+      if (receivedPrice == null || !isFinite(Number(receivedPrice)) || Number(receivedPrice) <= 0) {
+        console.log('[fetchPreviewPrice] Invalid price received:', receivedPrice);
+        setPreviewPriceError(true);
+        return;
+      }
+      console.log('[fetchPreviewPrice] Price received:', receivedPrice, 'hours:', data.duration_hours);
+      setPreviewPriceError(false);
+      setPreviewPrice(Number(receivedPrice));
       setPreviewHours(data.duration_hours ?? 0);
       setPreviewLabel(data.label ?? '');
     } catch (e: any) {
       console.log('[fetchPreviewPrice] Error:', e?.message);
+      if (isMountedRef.current) setPreviewPriceError(true);
     } finally {
       if (isMountedRef.current) {
         setPreviewLoading(false);
@@ -3140,6 +3150,7 @@ export default function RequesterHomeScreen() {
   // ─── Debounced live price preview from calculate-price edge function ──────────
   useEffect(() => {
     if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
+    setPreviewPriceError(false); // clear error immediately on input change
     previewDebounceRef.current = setTimeout(() => {
       fetchPreviewPrice();
     }, 300);
@@ -3250,6 +3261,11 @@ export default function RequesterHomeScreen() {
       console.log('[Requester Home] handleGoToSummary pressed — fetching fresh price before showing summary');
       if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
       await fetchPreviewPrice();
+      // Do not proceed to summary if price is invalid
+      if (previewPriceError || previewPrice <= 0) {
+        console.log('[Requester Home] handleGoToSummary blocked — price invalid or error');
+        return;
+      }
       transitionTo('summary');
     } finally {
       setContinueProcessing(false);
@@ -3984,12 +4000,25 @@ export default function RequesterHomeScreen() {
       // If data.session is null (edge case), we still know the API succeeded and the session
       // is now payment_pending. The payment card must render.
       // Store _initialPayment atomically on the session object to avoid timing gaps.
-      setActiveSession((prev) => prev ? {
-        ...prev,
-        ...(updated ?? {}),
-        status: 'payment_pending',
-        _initialPayment: paymentFromResponse?.account_number ? paymentFromResponse : null,
-      } : prev);
+      setActiveSession((prev) => {
+        if (!prev) return prev;
+        // Resolve the final price: prefer the backend-calculated value, fall back to the
+        // frozen booking price. Never allow 0 or null to overwrite a valid booked price.
+        const backendPrice = updated?.price != null && isFinite(Number(updated.price)) && Number(updated.price) > 0
+          ? Number(updated.price)
+          : null;
+        const bookedFallback = prev.booked_price != null && isFinite(Number(prev.booked_price)) && Number(prev.booked_price) > 0
+          ? Number(prev.booked_price)
+          : prev.price > 0 ? prev.price : null;
+        const resolvedPrice = backendPrice ?? bookedFallback ?? prev.price;
+        return {
+          ...prev,
+          ...(updated ?? {}),
+          price: resolvedPrice,
+          status: 'payment_pending',
+          _initialPayment: paymentFromResponse?.account_number ? paymentFromResponse : null,
+        };
+      });
       if (updated?.price != null) {
         console.log('[Requester] end-shift updated price from backend:', updated.price);
       }
@@ -4845,6 +4874,16 @@ export default function RequesterHomeScreen() {
                     Calculating...
                   </Text>
                 </View>
+              ) : previewPriceError ? (
+                <Text style={{
+                  fontSize: 15,
+                  fontWeight: '500',
+                  color: '#FF453A',
+                  lineHeight: 22,
+                  marginBottom: 6,
+                }}>
+                  We couldn't calculate the price. Please check your internet connection and try again.
+                </Text>
               ) : (
                 <Text style={{
                   fontSize: 52,
@@ -4863,11 +4902,11 @@ export default function RequesterHomeScreen() {
                 color: previewLoading ? '#555' : '#8E8E93',
                 marginBottom: 32,
               }}>
-                {previewLoading ? '—' : coverageSubtitle}
+                {previewLoading ? '—' : previewPriceError ? '' : coverageSubtitle}
               </Text>
               <TouchableOpacity
                 onPress={handleRequestCoverage}
-                disabled={submitting}
+                disabled={submitting || previewPriceError || previewPrice <= 0}
                 activeOpacity={0.85}
                 style={{
                   backgroundColor: submitting ? '#555' : '#FFFFFF',
@@ -4875,7 +4914,7 @@ export default function RequesterHomeScreen() {
                   paddingVertical: 18,
                   alignItems: 'center',
                   width: '100%',
-                  opacity: submitting ? 0.70 : 1,
+                  opacity: (submitting || previewPriceError || previewPrice <= 0) ? 0.5 : 1,
                 }}
               >
                 <Text style={{
