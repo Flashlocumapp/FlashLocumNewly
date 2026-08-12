@@ -3329,12 +3329,14 @@ export default function RequesterHomeScreen() {
       const reqId = data.request_id || data.id || null;
       const bookedPrice = data.booked_price ?? null;
       console.log('[handleRequestCoverage] Submission successful — request_id:', reqId, 'booked_price:', bookedPrice);
-      logLifecycleCompleted('SUBMIT_REQUEST', _submitActionId!, {
-        active_role: 'requester',
-        screen: 'RequesterHome',
-        request_id: reqId,
-        edge_function: 'submit-request',
-      });
+      try {
+        logLifecycleCompleted('SUBMIT_REQUEST', _submitActionId!, {
+          active_role: 'requester',
+          screen: 'RequesterHome',
+          request_id: reqId,
+          edge_function: 'submit-request',
+        });
+      } catch { /* logging must never block the action */ }
       _submitActionId = null;
       setActiveRequestId(reqId);
       transitionTo('matching');
