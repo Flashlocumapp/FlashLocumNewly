@@ -1986,7 +1986,7 @@ export default function DoctorLayout() {
         message: e instanceof Error ? e.message : String(e),
         failure_stage: 'network',
       });
-      Alert.alert('Error', e instanceof Error ? e.message : 'Something went wrong. Please try again.');
+      Alert.alert('Accept Failed', 'Something went wrong. Please try again.');
     } finally {
       setAccepting(false);
     }
@@ -2081,7 +2081,12 @@ export default function DoctorLayout() {
       handleDoctorRatingDone();
     } catch (e: any) {
       console.log('[Doctor] Rating submission failed', { error: e.message });
-      setDoctorRatingError(e.message);
+      const ratingMsg = (() => {
+        const m = (e?.message ?? '').toLowerCase();
+        if (m.includes('already') || m.includes('duplicate') || m.includes('23505')) return 'You\'ve already submitted your rating.';
+        return 'Something went wrong. Please try again.';
+      })();
+      setDoctorRatingError(ratingMsg);
       logIncident({
         severity: 'warning',
         event_type: 'SUBMIT_RATING',

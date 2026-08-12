@@ -3823,7 +3823,13 @@ export default function RequesterHomeScreen() {
         return false;
       }, undefined, 6);
     } catch (e: any) {
-      Alert.alert('Something went wrong', e.message || 'Please try again.');
+      const startMsg = (() => {
+        const m = (e?.message ?? '').toLowerCase();
+        if (m.includes('cannot start') || m.includes('not_startable') || m.includes('shift_not_startable')) return 'This shift can\'t be started right now.';
+        if (m.includes('already active') || m.includes('status: active')) return 'You already have an active shift.';
+        return 'Something went wrong. Please try again.';
+      })();
+      Alert.alert('Start Shift', startMsg);
       logLifecycleFailed('START_SHIFT', startActionId, {
         severity: 'error',
         active_role: 'requester',
@@ -3919,7 +3925,13 @@ export default function RequesterHomeScreen() {
         return false;
       }, undefined, 6);
     } catch (e: any) {
-      Alert.alert('Pause Shift Failed', e.message || 'Something went wrong. Please try again.');
+      const pauseMsg = (() => {
+        const m = (e?.message ?? '').toLowerCase();
+        if (m.includes('already paused') || m.includes('status: paused') || m.includes('shift_not_pausable')) return 'This shift is already paused.';
+        if (m.includes('cannot pause') || m.includes('not_pausable')) return 'This shift can\'t be paused right now.';
+        return 'Something went wrong. Please try again.';
+      })();
+      Alert.alert('Pause Shift', pauseMsg);
       logLifecycleFailed('PAUSE_SHIFT', pauseActionId, {
         severity: 'error',
         active_role: 'requester',
@@ -3991,7 +4003,13 @@ export default function RequesterHomeScreen() {
       }, undefined, 6);
     } catch (e: any) {
       console.error('[Requester] end-shift failed:', e.message);
-      Alert.alert('End Shift Failed', e.message || 'Something went wrong. Please try again.');
+      const endMsg = (() => {
+        const m = (e?.message ?? '').toLowerCase();
+        if (m.includes('payment_pending') || m.includes('already ended') || m.includes('shift_not_endable')) return 'This shift has already ended.';
+        if (m.includes('cannot end') || m.includes('not_endable')) return 'This shift can\'t be ended right now.';
+        return 'Something went wrong. Please try again.';
+      })();
+      Alert.alert('End Shift', endMsg);
       logLifecycleFailed('END_SHIFT', endActionId, {
         severity: 'critical',
         active_role: 'requester',
@@ -4076,7 +4094,7 @@ export default function RequesterHomeScreen() {
           }, undefined, 6);
           return;
         } catch (retryErr: any) {
-          Alert.alert('Something went wrong', retryErr.message || 'Please try again.');
+          Alert.alert('Cancel Shift', 'Something went wrong. Please try again.');
           fetchActiveSession();
           if (cancelShiftStatus !== 409) {
             logIncident({

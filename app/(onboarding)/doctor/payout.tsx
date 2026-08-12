@@ -462,9 +462,9 @@ export default function DoctorPayout() {
       await SecureStore.setItemAsync('flashlocum_last_pathway', 'doctor').catch(() => {});
       router.replace('/(doctor)/(home)' as any);
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-      console.log(`[Payout] Submit failed: ${message}`);
+      const rawMessage = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      console.log(`[Payout] Submit failed: ${rawMessage}`);
+      const message = 'Something went wrong. Please try again.';
       setSubmitError(message);
       logLifecycleFailed('DOCTOR_ONBOARDING_COMPLETE', doctorOnboardActionId, {
         severity: 'error',
