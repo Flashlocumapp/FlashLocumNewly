@@ -18,6 +18,7 @@ import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
 import { SUPABASE_URL } from '@/constants/api';
+import { invalidate } from '@/utils/tabCache';
 
 const MONNIFY_BANKS_URL =
   `${SUPABASE_URL}/functions/v1/monnify-verify-account/banks`;
@@ -446,6 +447,7 @@ export default function DoctorPayout() {
       if (profileError) throw profileError;
 
       console.log('[Payout] Submit success');
+      invalidate(`doctor_profile_${user!.id}`);
       await refreshProfile();
       await SecureStore.setItemAsync('flashlocum_last_pathway', 'doctor').catch(() => {});
       router.replace('/(doctor)/(home)' as any);

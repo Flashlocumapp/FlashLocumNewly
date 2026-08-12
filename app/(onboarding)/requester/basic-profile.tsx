@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AnimatedPressable } from '@/components/AnimatedPressable';
+import { invalidate } from '@/utils/tabCache';
 
 type Gender = 'male' | 'female' | null;
 
@@ -171,6 +172,7 @@ export default function RequesterBasicProfile() {
 
       if (completionError) throw completionError;
 
+      invalidate(`requester_profile_${user!.id}`);
       await refreshProfile();
       await SecureStore.setItemAsync('flashlocum_last_pathway', 'requester').catch(() => {});
       router.replace('/(requester)/(home)' as any);
