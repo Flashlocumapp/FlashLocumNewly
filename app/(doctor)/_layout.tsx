@@ -652,10 +652,10 @@ export default function DoctorLayout() {
         }
       }
       // If confirmedAt is still null/undefined (no timestamp available), allow overlay to show
-    } catch {
-      // DB query failed — fail closed, do not show overlay without verifying eligibility
-      console.log('[Doctor] maybeShowDoctorRating — DB payment_complete_at check failed, suppressing overlay');
-      return;
+    } catch (paymentCompleteErr: unknown) {
+      // DB query failed — fail open, the dedup checks above are the primary guard.
+      // Log the actual error so we can diagnose the RLS/network issue separately.
+      console.warn('[Doctor] maybeShowDoctorRating — DB payment_complete_at check failed (non-fatal), proceeding to show overlay. Error:', paymentCompleteErr instanceof Error ? paymentCompleteErr.message : String(paymentCompleteErr));
     }
 
     // Post-expiry dedup check — in-memory sets may have been populated while awaiting DB above
