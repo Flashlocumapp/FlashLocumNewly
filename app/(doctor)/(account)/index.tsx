@@ -547,6 +547,8 @@ export default function DoctorAccountScreen() {
         <Card>
           <ActionRow label="Switch to Request Coverage" onPress={async () => {
             console.log('[Doctor Account] Switch to Request Coverage pressed');
+            // Take doctor offline before switching portals
+            fetchWithAuth(`${SUPABASE_URL}/functions/v1/go-offline`, { method: 'POST' }).catch(() => {});
             if (authProfile?.requester_onboarding_complete) {
               if (switchingPortalRef.current) return;
               switchingPortalRef.current = true;
