@@ -7,6 +7,7 @@ import {
   Alert,
   StyleSheet,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -59,8 +60,17 @@ export default function RequesterPersonalDataScreen() {
       await supabase.auth.signOut();
       router.replace('/');
     } catch (err: unknown) {
+      setShowDeleteModal(false);
       setDeleting(false);
-      Alert.alert('Error', 'Could not delete account. Please contact support.');
+      Alert.alert(
+        'Deletion Failed',
+        'We could not delete your account right now. You can try again or email us at support@flashlocum.com and we will delete it manually within 24 hours.',
+        [
+          { text: 'Try Again', onPress: () => handleConfirmDelete() },
+          { text: 'Email Support', onPress: () => Linking.openURL('mailto:support@flashlocum.com?subject=Account%20Deletion%20Request') },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
       logLifecycleFailed('DELETE_ACCOUNT', deleteActionId, {
         severity: 'critical',
         screen: 'PersonalData',

@@ -377,55 +377,6 @@ export const setupErrorLogging = () => {
   }
 };
 
-// Lifecycle logging stubs — used by onboarding flows for action tracking
-export const logLifecycleStarted = (
-  action: string,
-  _meta?: Record<string, unknown>
-): string => {
-  const id = `${action}_${Date.now()}`;
-  console.log(`[Lifecycle] Started: ${action}`, _meta ?? {});
-  return id;
-};
-
-export const logLifecycleCompleted = (
-  action: string,
-  _actionId: string,
-  _meta?: Record<string, unknown>
-): void => {
-  console.log(`[Lifecycle] Completed: ${action}`, _meta ?? {});
-};
-
-export const logLifecycleFailed = (
-  action: string,
-  _actionId: string | null | undefined,
-  _meta?: Record<string, unknown>
-): void => {
-  console.warn(`[Lifecycle] Failed: ${action}`, _meta ?? {});
-};
-
-export const logIncident = (meta: {
-  severity: 'critical' | 'error' | 'warning' | 'info';
-  event_type: string;
-  message?: string;
-  session_id?: string;
-  request_id?: string;
-  payment_intent_id?: string;
-  edge_function?: string;
-  provider_status?: string;
-  active_role?: string;
-  screen?: string;
-  user_action_completed?: boolean;
-  recovered?: boolean;
-  [key: string]: unknown;
-}): void => {
-  const { severity, event_type, message, ...rest } = meta;
-  if (severity === 'critical' || severity === 'error') {
-    console.error(`[Incident][${severity.toUpperCase()}] ${event_type}:`, message ?? '', rest);
-  } else {
-    console.warn(`[Incident][${severity.toUpperCase()}] ${event_type}:`, message ?? '', rest);
-  }
-};
-
 // Auto-initialize logging when this module is imported
 // Only run in development mode - production apps don't need log forwarding
 if (__DEV__) {
