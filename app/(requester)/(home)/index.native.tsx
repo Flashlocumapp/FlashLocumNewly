@@ -519,6 +519,8 @@ function RequesterUpcomingCard({
   onResumeShift,
   onEndShift,
   bottomPadding,
+  startShiftDisabled,
+  resumeShiftDisabled,
 }: {
   session: CoverageSession;
   onCancel: () => void;
@@ -527,6 +529,8 @@ function RequesterUpcomingCard({
   onResumeShift: () => void;
   onEndShift: () => void;
   bottomPadding: number;
+  startShiftDisabled?: boolean;
+  resumeShiftDisabled?: boolean;
 }) {
   const isPaused = session.status === 'paused';
   const canCancel = session.status === 'upcoming' && session.current_day === 1;
@@ -617,7 +621,8 @@ function RequesterUpcomingCard({
           </TouchableOpacity>
           <TouchableOpacity onPress={() => { onStartShift(); }}
             activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            disabled={startShiftDisabled}
+            style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center', opacity: startShiftDisabled ? 0.70 : 1 }}>
             <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>START SHIFT</Text>
           </TouchableOpacity>
         </View>
@@ -635,7 +640,8 @@ function RequesterUpcomingCard({
           </TouchableOpacity>
           <TouchableOpacity onPress={() => { onResumeShift(); }}
             activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            disabled={resumeShiftDisabled}
+            style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center', opacity: resumeShiftDisabled ? 0.70 : 1 }}>
             <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>RESUME SHIFT</Text>
           </TouchableOpacity>
         </View>
@@ -2164,6 +2170,12 @@ export default function RequesterHomeScreen() {
   // Matching progress
   const matchProgressAnim = useRef(new Animated.Value(0.05)).current;
   const [submitting, setSubmitting] = useState(false);
+  const [continueProcessing, setContinueProcessing] = useState(false);
+  const [startShiftProcessing, setStartShiftProcessing] = useState(false);
+  const [resumeShiftProcessing, setResumeShiftProcessing] = useState(false);
+  const [pauseShiftProcessing, setPauseShiftProcessing] = useState(false);
+  const [endShiftProcessing, setEndShiftProcessing] = useState(false);
+  const [cancelShiftProcessing, setCancelShiftProcessing] = useState(false);
 
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
 
@@ -3220,10 +3232,16 @@ export default function RequesterHomeScreen() {
   }, [handleSearchTap]);
 
   const handleGoToSummary = async () => {
-    console.log('[Requester Home] handleGoToSummary pressed — fetching fresh price before showing summary');
-    if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
-    await fetchPreviewPrice();
-    transitionTo('summary');
+    if (continueProcessing) return;
+    setContinueProcessing(true);
+    try {
+      console.log('[Requester Home] handleGoToSummary pressed — fetching fresh price before showing summary');
+      if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
+      await fetchPreviewPrice();
+      transitionTo('summary');
+    } finally {
+      setContinueProcessing(false);
+    }
   };
 
   // Module-level action ID so it persists across the auto-retry
@@ -3773,6 +3791,8 @@ export default function RequesterHomeScreen() {
 
   const handleStartShift = useCallback(async () => {
     if (!activeSession) return;
+    if (startShiftProcessing) return;
+    setStartShiftProcessing(true);
     const sid = activeSession.id;
     let startActionId: string | null = null;
     try { startActionId = logLifecycleStarted('START_SHIFT', { active_role: 'requester', screen: 'RequesterHome', session_id: sid, edge_function: 'start-shift' }); } catch { /* logging must never block the action */ }
@@ -3810,11 +3830,15 @@ export default function RequesterHomeScreen() {
         edge_function: 'start-shift',
         message: e instanceof Error ? e.message : String(e),
       });
+    } finally {
+      setStartShiftProcessing(false);
     }
-  }, [activeSession, callSessionEdge]);
+  }, [activeSession, callSessionEdge, startShiftProcessing]);
 
   const handleResumeShift = useCallback(async () => {
     if (!activeSession) return;
+    if (resumeShiftProcessing) return;
+    setResumeShiftProcessing(true);
     const sid = activeSession.id;
     let resumeActionId: string | null = null;
     try { resumeActionId = logLifecycleStarted('RESUME_SHIFT', { active_role: 'requester', screen: 'RequesterHome', session_id: sid, edge_function: 'resume-shift' }); } catch { /* logging must never block the action */ }
@@ -3850,8 +3874,10 @@ export default function RequesterHomeScreen() {
         edge_function: 'resume-shift',
         message: e instanceof Error ? e.message : String(e),
       });
+    } finally {
+      setResumeShiftProcessing(false);
     }
-  }, [activeSession, callSessionEdge]);
+  }, [activeSession, callSessionEdge, resumeShiftProcessing]);
 
   const handlePauseShift = useCallback(async () => {
     if (!activeSession) return;
@@ -3860,6 +3886,8 @@ export default function RequesterHomeScreen() {
 
   const handleConfirmPauseShift = async () => {
     if (!activeSession) return;
+    if (pauseShiftProcessing) return;
+    setPauseShiftProcessing(true);
     const sid = activeSession.id;
     setShowPauseShiftModal(false);
     let pauseActionId: string | null = null;
@@ -3898,6 +3926,8 @@ export default function RequesterHomeScreen() {
         edge_function: 'pause-shift',
         message: e instanceof Error ? e.message : String(e),
       });
+    } finally {
+      setPauseShiftProcessing(false);
     }
   };
 
@@ -3908,6 +3938,8 @@ export default function RequesterHomeScreen() {
 
   const handleConfirmEndShift = async () => {
     if (!activeSession) return;
+    if (endShiftProcessing) return;
+    setEndShiftProcessing(true);
     const sid = activeSession.id;
     // Clear from paid/dismissed sets so day 2+ of multi-day shifts can trigger the overlay again
     _requesterPaidSessions.delete(sid);
@@ -3967,6 +3999,8 @@ export default function RequesterHomeScreen() {
         provider: 'monnify',
         message: e instanceof Error ? e.message : String(e),
       });
+    } finally {
+      setEndShiftProcessing(false);
     }
   };
 
@@ -3984,6 +4018,8 @@ export default function RequesterHomeScreen() {
 
   const handleCancelActiveReasonSelected = async (reason: string) => {
     if (!activeSession) return;
+    if (cancelShiftProcessing) return;
+    setCancelShiftProcessing(true);
     setShowCancelActiveReasons(false);
     const sessionId = activeSession.id;
     // Clear immediately so the search card appears right away
@@ -4072,6 +4108,8 @@ export default function RequesterHomeScreen() {
           user_action_completed: false,
         });
       }
+    } finally {
+      setCancelShiftProcessing(false);
     }
   };
 
@@ -4732,6 +4770,8 @@ export default function RequesterHomeScreen() {
               <View style={{ alignItems: 'center', marginTop: 8, marginBottom: 16 }}>
                 <TouchableOpacity
                   onPress={handleGoToSummary}
+                  disabled={continueProcessing}
+                  activeOpacity={0.8}
                   style={{
                     width: 160,
                     height: 52,
@@ -4741,6 +4781,7 @@ export default function RequesterHomeScreen() {
                     justifyContent: 'center',
                     alignItems: 'center',
                     gap: 8,
+                    opacity: continueProcessing ? 0.70 : 1,
                   }}
                 >
                   <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>Continue</Text>
@@ -4802,6 +4843,7 @@ export default function RequesterHomeScreen() {
                   paddingVertical: 18,
                   alignItems: 'center',
                   width: '100%',
+                  opacity: submitting ? 0.70 : 1,
                 }}
               >
                 <Text style={{
@@ -4899,6 +4941,8 @@ export default function RequesterHomeScreen() {
               onResumeShift={handleResumeShift}
               onEndShift={handleEndShift}
               bottomPadding={whiteCardPaddingBottom}
+              startShiftDisabled={startShiftProcessing}
+              resumeShiftDisabled={resumeShiftProcessing}
             />
           )}
 
@@ -5482,7 +5526,9 @@ export default function RequesterHomeScreen() {
               <TouchableOpacity
                 key={reason}
                 onPress={() => handleCancelActiveReasonSelected(reason)}
-                style={{ backgroundColor: '#2C2C2E', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 20, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                disabled={cancelShiftProcessing}
+                activeOpacity={0.8}
+                style={{ backgroundColor: '#2C2C2E', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 20, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', opacity: cancelShiftProcessing ? 0.70 : 1 }}
               >
                 <Text style={{ fontSize: 15, color: '#FFFFFF', fontWeight: '500' }}>{reason}</Text>
                 <Text style={{ fontSize: 18, color: '#8E8E93' }}>›</Text>
@@ -5519,7 +5565,9 @@ export default function RequesterHomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleConfirmEndShift}
-                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center' }}
+                disabled={endShiftProcessing}
+                activeOpacity={0.8}
+                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center', opacity: endShiftProcessing ? 0.70 : 1 }}
               >
                 <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>End Shift</Text>
               </TouchableOpacity>
@@ -5555,7 +5603,9 @@ export default function RequesterHomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleConfirmPauseShift}
-                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center' }}
+                disabled={pauseShiftProcessing}
+                activeOpacity={0.8}
+                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center', opacity: pauseShiftProcessing ? 0.70 : 1 }}
               >
                 <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF9500' }}>Pause Shift</Text>
               </TouchableOpacity>
