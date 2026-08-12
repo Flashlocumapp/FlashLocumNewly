@@ -760,13 +760,6 @@ function RequesterActiveCard({
 
       {/* Action buttons */}
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        {showPauseButton && (
-          <TouchableOpacity onPress={() => { onPauseShift(); }}
-            activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>PAUSE SHIFT</Text>
-          </TouchableOpacity>
-        )}
         <TouchableOpacity onPress={() => { onEndShift(); }}
           activeOpacity={0.8}
           style={{ flex: 1, backgroundColor: '#FF3B30', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
@@ -777,6 +770,13 @@ function RequesterActiveCard({
           style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
           <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
         </TouchableOpacity>
+        {showPauseButton && (
+          <TouchableOpacity onPress={() => { onPauseShift(); }}
+            activeOpacity={0.8}
+            style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>PAUSE SHIFT</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
