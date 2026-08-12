@@ -2201,6 +2201,7 @@ export default function RequesterHomeScreen() {
   const isFirstLoadRef = useRef(true);
   const [sessionLoading, setSessionLoading] = useState(false); // kept for any remaining uses but never set true again after first load
   const [sessionFetched, setSessionFetched] = useState(_sessionCachePopulated);
+  const [mapReady, setMapReady] = useState(false);
   // Stable session ID — only set when a real ID arrives, never cleared when session becomes null.
   // This prevents the session channel from re-subscribing to 'session:undefined' after payment_confirmed.
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -2742,14 +2743,25 @@ export default function RequesterHomeScreen() {
   // becomes true whether the fetch succeeded or failed cleanly. This prevents
   // the splash from hiding on a blank screen, while also preventing an infinite
   // splash if the network request fails.
+  // mapReady gates on onMapReady — with a 3s safety ceiling in case it never fires.
   const { signalScreenReady, splashDismissed } = useSplash();
   const splashSignalledRef = useRef(false);
+  // Safety ceiling: if onMapReady never fires, signal ready after 3s of session being fetched.
+  useEffect(() => {
+    if (!sessionFetched) return;
+    const timeout = setTimeout(() => {
+      if (splashSignalledRef.current) return;
+      splashSignalledRef.current = true;
+      signalScreenReady();
+    }, 3000);
+    return () => clearTimeout(timeout);
+  }, [sessionFetched, signalScreenReady]);
   useEffect(() => {
     if (splashSignalledRef.current) return;
-    if (!sessionFetched) return;
+    if (!sessionFetched || !mapReady) return;
     splashSignalledRef.current = true;
     signalScreenReady();
-  }, [sessionFetched, signalScreenReady]);
+  }, [sessionFetched, mapReady, signalScreenReady]);
 
   // ── One-time notification permission request ──────────────────────────────
   useEffect(() => {
@@ -4309,6 +4321,7 @@ export default function RequesterHomeScreen() {
         maxZoomLevel={18}
         onMapReady={() => {
           console.log('[Map] onMapReady fired');
+          setMapReady(true);
           const region = _cachedRequesterRegion ?? LAGOS_REGION;
           setMapRegion(region);
         }}

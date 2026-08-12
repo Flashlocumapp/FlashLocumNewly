@@ -327,6 +327,7 @@ export default function DoctorHomeScreen() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCancelReasons, setShowCancelReasons] = useState(false);
   const [tooltipVisible, setTooltipVisible] = useState<'rating' | 'reliability' | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
 
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(
@@ -515,16 +516,26 @@ export default function DoctorHomeScreen() {
     }, [])
   );
 
-  // ─── Signal splash screen ready — wait for criticalDataReady + profile ──────
+  // ─── Signal splash screen ready — wait for criticalDataReady + profile + map ─
   const { signalScreenReady, splashDismissed } = useSplash();
   const splashSignalledRef = useRef(false);
+  // Safety ceiling: if onMapReady never fires (API key issue, no Google Play Services),
+  // signal ready after 3s of data being ready so the splash never hangs forever.
+  useEffect(() => {
+    if (!criticalDataReady || !profile) return;
+    const timeout = setTimeout(() => {
+      if (splashSignalledRef.current) return;
+      splashSignalledRef.current = true;
+      signalScreenReady();
+    }, 3000);
+    return () => clearTimeout(timeout);
+  }, [criticalDataReady, profile, signalScreenReady]);
   useEffect(() => {
     if (splashSignalledRef.current) return;
-    if (!criticalDataReady) return; // wait until layout has fetched activeSession + isOnline
-    if (!profile) return; // wait until profile is known
+    if (!criticalDataReady || !profile || !mapReady) return;
     splashSignalledRef.current = true;
     signalScreenReady();
-  }, [criticalDataReady, profile, signalScreenReady]);
+  }, [criticalDataReady, profile, mapReady, signalScreenReady]);
 
   // ── One-time notification permission request ──────────────────────────────
   // The OS permission status is always authoritative. The SecureStore flag is
@@ -750,7 +761,7 @@ export default function DoctorHomeScreen() {
           _cachedDoctorRegion = region;
           hasUserPannedRef.current = true;
         }}
-        onMapReady={() => {}}
+        onMapReady={() => setMapReady(true)}
         showsMyLocationButton={false}
         customMapStyle={DESATURATED_MAP_STYLE}
         minZoomLevel={10}

@@ -94,10 +94,10 @@ function NavigationGuard({
       return;
     }
 
-    // 1. No session
+    // 1. No session → play intro animation, then land on role-select
     if (!session) {
       routedWithNoSession.current = true;
-      router.replace('/(auth)/role-select' as any);
+      router.replace('/(auth)/intro?dest=%2F(auth)%2Frole-select' as any);
       return;
     }
 
@@ -213,8 +213,9 @@ function NavigationGuard({
       hasRouted.current = false;
       // Clear lastPathway so the next cold launch plays the intro animation
       SecureStore.deleteItemAsync(LAST_PATHWAY_KEY).catch(() => {});
-      // Route through intro (not directly to role-select) — same as unauthenticated cold launch
-      router.replace('/(auth)/intro' as any);
+      // Go directly to role-select — no intro on immediate sign-out.
+      // The intro plays on the NEXT cold launch (unauthenticated cold launch path above).
+      router.replace('/(auth)/role-select' as any);
     }
   }, [session, profile, segments]); // eslint-disable-line react-hooks/exhaustive-deps
 
