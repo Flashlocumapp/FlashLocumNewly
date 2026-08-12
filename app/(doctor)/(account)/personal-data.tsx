@@ -51,9 +51,11 @@ export default function DoctorPersonalDataScreen() {
         deleteActionId = logLifecycleStarted('DELETE_ACCOUNT', { screen: 'PersonalData' });
       } catch { /* logging must never block the action */ }
       await supabase.auth.refreshSession();
+      console.log('[DELETE_ACCOUNT] Sending delete-account request', { role: 'doctor' });
       const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/delete-account`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'doctor' }),
       });
       if (!res.ok) throw new Error('Account deletion failed on server. Please try again.');
       logLifecycleCompleted('DELETE_ACCOUNT', deleteActionId ?? '', { screen: 'PersonalData' });
