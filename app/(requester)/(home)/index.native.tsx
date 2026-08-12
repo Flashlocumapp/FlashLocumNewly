@@ -1938,10 +1938,17 @@ export default function RequesterHomeScreen() {
     return () => { supabase.removeChannel(ch); };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const requesterProfilePgRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const sessionStatusWatchReqRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
   // ── postgres_changes — requester_profiles: Layer 3 for Ratings ───────────
   useEffect(() => {
     if (!user?.id) return;
-    const ch = safeChannel(`requester-profile-pg:${user.id}`)
+    if (requesterProfilePgRef.current) {
+      supabase.removeChannel(requesterProfilePgRef.current);
+      requesterProfilePgRef.current = null;
+    }
+    const ch = supabase.channel(`requester-profile-pg:${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -1965,7 +1972,8 @@ export default function RequesterHomeScreen() {
       .subscribe((status) => {
         console.log('[Requester] requester-profile-pg channel:', status);
       });
-    return () => { supabase.removeChannel(ch); };
+    requesterProfilePgRef.current = ch;
+    return () => { supabase.removeChannel(ch); requesterProfilePgRef.current = null; };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mapRef = useRef<MapView>(null);
@@ -2614,7 +2622,11 @@ export default function RequesterHomeScreen() {
   // Mounted once on user.id. Replaces the unstable session-ID-scoped subscription.
   useEffect(() => {
     if (!user?.id) return;
-    const ch = safeChannel(`session-status-watch-req:${user.id}`)
+    if (sessionStatusWatchReqRef.current) {
+      supabase.removeChannel(sessionStatusWatchReqRef.current);
+      sessionStatusWatchReqRef.current = null;
+    }
+    const ch = supabase.channel(`session-status-watch-req:${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -2660,7 +2672,8 @@ export default function RequesterHomeScreen() {
       .subscribe((status) => {
         console.log('[Requester] session-status-watch-req channel:', status);
       });
-    return () => { supabase.removeChannel(ch); };
+    sessionStatusWatchReqRef.current = ch;
+    return () => { supabase.removeChannel(ch); sessionStatusWatchReqRef.current = null; };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Channels 6 and 7 merged into requester-user channel above

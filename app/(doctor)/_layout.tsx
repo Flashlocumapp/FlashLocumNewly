@@ -1466,13 +1466,22 @@ export default function DoctorLayout() {
     };
   }, []);
 
+  const sessionStatusWatchRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const coverageRequestsPgRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const doctorProfilePgRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const sessionPgChangesRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
   // ── Stable postgres_changes subscription — catches status transitions that broadcast channels miss ──
   // This is the architectural fix for Start Shift: the coverage:{id} broadcast channel can be
   // destroyed by a concurrent upcomingSessions state update (background poll race). This subscription
   // is permanent and cannot be torn down by any state change — it is the guaranteed delivery path.
   useEffect(() => {
     if (!user?.id) return;
-    const ch = safeChannel(`session-status-watch:${user.id}`)
+    if (sessionStatusWatchRef.current) {
+      supabase.removeChannel(sessionStatusWatchRef.current);
+      sessionStatusWatchRef.current = null;
+    }
+    const ch = supabase.channel(`session-status-watch:${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -1508,7 +1517,8 @@ export default function DoctorLayout() {
       .subscribe((status) => {
         console.log('[Doctor] session-status-watch channel:', status);
       });
-    return () => { supabase.removeChannel(ch); };
+    sessionStatusWatchRef.current = ch;
+    return () => { supabase.removeChannel(ch); sessionStatusWatchRef.current = null; };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Stable postgres_changes on coverage_requests — layer 3 for dispatch events ──
@@ -1516,7 +1526,11 @@ export default function DoctorLayout() {
   // UPDATE: removes matched/expired/cancelled requests from the queue.
   useEffect(() => {
     if (!user?.id) return;
-    const ch = safeChannel(`coverage-requests-pg:${user.id}`)
+    if (coverageRequestsPgRef.current) {
+      supabase.removeChannel(coverageRequestsPgRef.current);
+      coverageRequestsPgRef.current = null;
+    }
+    const ch = supabase.channel(`coverage-requests-pg:${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -1559,13 +1573,18 @@ export default function DoctorLayout() {
       .subscribe((status) => {
         console.log('[Doctor] coverage-requests-pg channel:', status);
       });
-    return () => { supabase.removeChannel(ch); };
+    coverageRequestsPgRef.current = ch;
+    return () => { supabase.removeChannel(ch); coverageRequestsPgRef.current = null; };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── postgres_changes — doctor_profiles: Layer 3 for Ratings ──────────────
   useEffect(() => {
     if (!user?.id) return;
-    const ch = safeChannel(`doctor-profile-pg:${user.id}`)
+    if (doctorProfilePgRef.current) {
+      supabase.removeChannel(doctorProfilePgRef.current);
+      doctorProfilePgRef.current = null;
+    }
+    const ch = supabase.channel(`doctor-profile-pg:${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -1588,13 +1607,18 @@ export default function DoctorLayout() {
       .subscribe((status) => {
         console.log('[Doctor] doctor-profile-pg channel:', status);
       });
-    return () => { supabase.removeChannel(ch); };
+    doctorProfilePgRef.current = ch;
+    return () => { supabase.removeChannel(ch); doctorProfilePgRef.current = null; };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Postgres Changes fallback: fires when coverage_sessions row status → requester_paid ──
   useEffect(() => {
     if (!activeSessionId) return;
-    const ch = safeChannel(`session-pg-changes:${activeSessionId}`)
+    if (sessionPgChangesRef.current) {
+      supabase.removeChannel(sessionPgChangesRef.current);
+      sessionPgChangesRef.current = null;
+    }
+    const ch = supabase.channel(`session-pg-changes:${activeSessionId}`)
       .on(
         'postgres_changes',
         {
@@ -1633,7 +1657,8 @@ export default function DoctorLayout() {
         }
       )
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    sessionPgChangesRef.current = ch;
+    return () => { supabase.removeChannel(ch); sessionPgChangesRef.current = null; };
   }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Merged doctor-user channel: scores + payment confirmation via user:{user.id} ──
