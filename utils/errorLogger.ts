@@ -377,6 +377,32 @@ export const setupErrorLogging = () => {
   }
 };
 
+// Lifecycle logging stubs — used by onboarding flows for action tracking
+export const logLifecycleStarted = (
+  action: string,
+  _meta?: Record<string, unknown>
+): string => {
+  const id = `${action}_${Date.now()}`;
+  console.log(`[Lifecycle] Started: ${action}`, _meta ?? {});
+  return id;
+};
+
+export const logLifecycleCompleted = (
+  action: string,
+  _actionId: string,
+  _meta?: Record<string, unknown>
+): void => {
+  console.log(`[Lifecycle] Completed: ${action}`, _meta ?? {});
+};
+
+export const logLifecycleFailed = (
+  action: string,
+  _actionId: string | null | undefined,
+  _meta?: Record<string, unknown>
+): void => {
+  console.warn(`[Lifecycle] Failed: ${action}`, _meta ?? {});
+};
+
 // Auto-initialize logging when this module is imported
 // Only run in development mode - production apps don't need log forwarding
 if (__DEV__) {
