@@ -3477,6 +3477,32 @@ export default function RequesterHomeScreen() {
               Alert.alert('Request Already Accepted', 'A doctor just accepted your request. Check your Upcoming Coverage.');
               return;
             }
+            // Transient lock — retry once after 1500ms then proceed regardless
+            console.log('[Requester] handleEditRequest — transient SHIFT_LOCKED, retrying in 1.5s');
+            await new Promise(r => setTimeout(r, 1500));
+            try {
+              const retryRes = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/withdraw-request`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ request_id: activeRequestId }),
+              });
+              if (retryRes.status === 409) {
+                const retryBody = await retryRes.json().catch(() => ({}));
+                if (retryBody.error === 'SHIFT_LOCKED') {
+                  const { data: reqCheck2 } = await supabase
+                    .from('coverage_requests')
+                    .select('status, matched_doctor_id')
+                    .eq('id', activeRequestId)
+                    .maybeSingle();
+                  if (reqCheck2?.status === 'matched' && reqCheck2?.matched_doctor_id) {
+                    await fetchActiveSession();
+                    Alert.alert('Request Already Accepted', 'A doctor just accepted your request. Check your Upcoming Coverage.');
+                    return;
+                  }
+                  // Still locked — proceed to config anyway (Edit's acceptable failure mode)
+                }
+              }
+            } catch {}
           }
         } else if (!res.ok) {
           const errText = await res.text().catch(() => '');
@@ -3517,52 +3543,98 @@ export default function RequesterHomeScreen() {
 
   const handleCancelRequest = useCallback(async () => {
     console.log('[Requester] handleCancelRequest pressed', { activeRequestId });
-    setShowCancelModal(true);
-    // Immediately withdraw in background
-    if (activeRequestId) {
+    if (!activeRequestId) return;
+
+    // Helper: attempt one withdraw-request call. Returns 'success' | 'matched' | 'locked' | 'error'.
+    const attemptWithdraw = async (): Promise<'success' | 'matched' | 'locked' | 'error'> => {
       try {
         const res = await fetchWithAuth(`${SUPABASE_URL}/functions/v1/withdraw-request`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ request_id: activeRequestId }),
         });
+        if (res.ok) return 'success';
         if (res.status === 409) {
           const body = await res.json().catch(() => ({}));
-          if (body.error === 'SHIFT_LOCKED') {
-            console.log('[Requester] handleCancelRequest — SHIFT_LOCKED, verifying DB status');
-            const { data: reqCheck } = await supabase
-              .from('coverage_requests')
-              .select('status, matched_doctor_id')
-              .eq('id', activeRequestId)
-              .maybeSingle();
-            if (reqCheck?.status === 'matched' && reqCheck?.matched_doctor_id) {
-              console.log('[Requester] handleCancelRequest — DB confirms matched, showing alert');
-              setShowCancelModal(false);
-              await fetchActiveSession();
-              Alert.alert('Request Already Accepted', 'A doctor just accepted your request. Check your Upcoming Coverage.');
-              return;
-            }
-            // DB says still pending — transient race condition, continue with cancel
-            console.log('[Requester] handleCancelRequest — SHIFT_LOCKED but DB shows pending, continuing cancel');
-          }
-        } else if (!res.ok) {
-          const errText = await res.text().catch(() => '');
-          logIncident({
-            severity: 'error',
-            event_type: 'WITHDRAW_REQUEST',
-            active_role: 'requester',
-            screen: 'RequesterHome',
-            request_id: activeRequestId,
-            edge_function: 'withdraw-request',
-            provider_status: String(res.status),
-            message: errText || `withdraw-request failed with status ${res.status}`,
-            user_action_completed: false,
-          });
+          if (body.error === 'SHIFT_LOCKED') return 'locked';
         }
-        setCancelWithdrawn(true);
-      } catch (e) {
+        // Other non-ok response
+        const errText = await res.text().catch(() => '');
+        logIncident({
+          severity: 'error',
+          event_type: 'WITHDRAW_REQUEST',
+          active_role: 'requester',
+          screen: 'RequesterHome',
+          request_id: activeRequestId,
+          edge_function: 'withdraw-request',
+          provider_status: String(res.status),
+          message: errText || `withdraw-request failed with status ${res.status}`,
+          user_action_completed: false,
+        });
+        return 'error';
+      } catch {
+        return 'error';
+      }
+    };
+
+    // Helper: check DB status. Returns 'matched' | 'pending' | 'unknown'.
+    const checkDB = async (): Promise<'matched' | 'pending' | 'unknown'> => {
+      try {
+        const { data } = await supabase
+          .from('coverage_requests')
+          .select('status, matched_doctor_id')
+          .eq('id', activeRequestId)
+          .maybeSingle();
+        if (data?.status === 'matched' && data?.matched_doctor_id) return 'matched';
+        if (data?.status === 'pending') return 'pending';
+        return 'unknown';
+      } catch {
+        return 'unknown';
+      }
+    };
+
+    let result = await attemptWithdraw();
+
+    if (result === 'locked') {
+      console.log('[Requester] handleCancelRequest — SHIFT_LOCKED, verifying DB status');
+      const dbStatus = await checkDB();
+      if (dbStatus === 'matched') {
+        console.log('[Requester] handleCancelRequest — DB confirms matched, showing alert');
+        await fetchActiveSession();
+        Alert.alert('Request Already Accepted', 'A doctor just accepted your request. Check your Upcoming Coverage.');
+        return;
+      }
+      // Transient lock (accept-request in flight, DB still pending) — wait and retry once.
+      // accept-request completes in ~1-2s; lock TTL is 10s. 1500ms covers the window.
+      console.log('[Requester] handleCancelRequest — transient SHIFT_LOCKED, retrying in 1.5s');
+      await new Promise(r => setTimeout(r, 1500));
+      result = await attemptWithdraw();
+
+      if (result === 'locked') {
+        // Second attempt also locked — re-check DB
+        const dbStatus2 = await checkDB();
+        if (dbStatus2 === 'matched') {
+          console.log('[Requester] handleCancelRequest — retry: DB confirms matched, showing alert');
+          await fetchActiveSession();
+          Alert.alert('Request Already Accepted', 'A doctor just accepted your request. Check your Upcoming Coverage.');
+          return;
+        }
+        // Still locked after retry — do not show modal, do not set cancelWithdrawn
+        console.log('[Requester] handleCancelRequest — retry: still SHIFT_LOCKED, aborting cancel');
+        return;
       }
     }
+
+    if (result !== 'success') {
+      // withdraw-request failed for a non-lock reason — do not show modal
+      console.log('[Requester] handleCancelRequest — withdrawal failed, aborting cancel');
+      return;
+    }
+
+    // Withdrawal confirmed — now show the modal
+    console.log('[Requester] handleCancelRequest — withdrawal confirmed, showing cancel modal');
+    setCancelWithdrawn(true);
+    setShowCancelModal(true);
   }, [activeRequestId, fetchActiveSession]);
 
   const handleWaitForDoctor = async () => {
