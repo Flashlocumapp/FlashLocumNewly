@@ -3370,7 +3370,7 @@ export default function RequesterHomeScreen() {
         await handleRequestCoverage();
         return;
       }
-      Alert.alert('Error', e.message || 'Could not submit request. Please try again.');
+      Alert.alert('Error', 'Could not submit request. Please try again.');
       logLifecycleFailed('SUBMIT_REQUEST', _submitActionId, {
         severity: 'critical',
         active_role: 'requester',
