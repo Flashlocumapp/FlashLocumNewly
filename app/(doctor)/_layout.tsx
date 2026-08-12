@@ -33,6 +33,20 @@ import { logIncident, logLifecycleStarted, logLifecycleCompleted, logLifecycleFa
 
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
+/**
+ * Purge any stale channel with the same topic from Supabase's registry before
+ * creating a fresh one. This prevents the "cannot add postgres_changes callbacks
+ * after subscribe()" crash that occurs when removeChannel() is async and a new
+ * mount fires before the old channel is fully torn down.
+ */
+function safeChannel(name: string) {
+  const existing = supabase.getChannels().find(ch => ch.topic === `realtime:${name}`);
+  if (existing) {
+    supabase.removeChannel(existing);
+  }
+  return supabase.channel(name);
+}
+
 // ─── Background tab prefetch ──────────────────────────────────────────────────
 async function prefetchTabData(userId: string) {
   const coverageUpcomingKey = `doctor-coverage-upcoming-${userId}`;
@@ -903,8 +917,7 @@ export default function DoctorLayout() {
   // ── Realtime: live is_online sync (catches 2AM daily reset while app is open) ──
   useEffect(() => {
     if (!user) return;
-    const channel = supabase
-      .channel(`doctor-online-status:${user.id}`)
+    const channel = safeChannel(`doctor-online-status:${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -1447,8 +1460,7 @@ export default function DoctorLayout() {
   // is permanent and cannot be torn down by any state change — it is the guaranteed delivery path.
   useEffect(() => {
     if (!user?.id) return;
-    const ch = supabase
-      .channel(`session-status-watch:${user.id}`)
+    const ch = safeChannel(`session-status-watch:${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -1492,8 +1504,7 @@ export default function DoctorLayout() {
   // UPDATE: removes matched/expired/cancelled requests from the queue.
   useEffect(() => {
     if (!user?.id) return;
-    const ch = supabase
-      .channel(`coverage-requests-pg:${user.id}`)
+    const ch = safeChannel(`coverage-requests-pg:${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -1542,8 +1553,7 @@ export default function DoctorLayout() {
   // ── postgres_changes — doctor_profiles: Layer 3 for Ratings ──────────────
   useEffect(() => {
     if (!user?.id) return;
-    const ch = supabase
-      .channel(`doctor-profile-pg:${user.id}`)
+    const ch = safeChannel(`doctor-profile-pg:${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -1572,8 +1582,7 @@ export default function DoctorLayout() {
   // ── Postgres Changes fallback: fires when coverage_sessions row status → requester_paid ──
   useEffect(() => {
     if (!activeSessionId) return;
-    const ch = supabase
-      .channel(`session-pg-changes:${activeSessionId}`)
+    const ch = safeChannel(`session-pg-changes:${activeSessionId}`)
       .on(
         'postgres_changes',
         {
@@ -1621,7 +1630,7 @@ export default function DoctorLayout() {
   // Dependency on activeSessionId ensures the handler captures the latest session ID in its closure.
   useEffect(() => {
     if (!user) return;
-    const ch = supabase.channel(`doctor:${user.id}`)
+    const ch = safeChannel(`doctor:${user.id}`)
       .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
         if (!isMountedRef.current) return;
         if (payload?.payload?.reviewer_role === 'requester') {
