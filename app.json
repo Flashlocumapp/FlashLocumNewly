@@ -18,8 +18,8 @@
         "NSCameraUsageDescription": "FlashLocum uses your camera during profile setup to take your profile photo and when uploading verification documents such as your medical licence and NYSC certificate.",
         "NSPhotoLibraryUsageDescription": "FlashLocum uses your photo library to let you select and upload profile photos and verification documents.",
         "NSLocationWhenInUseUsageDescription": "Your location is used to show nearby coverage requests on the map and help requesters find available doctors in your area.",
-        "NSUserNotificationUsageDescription": "FlashLocum delivers time-sensitive alerts — including new coverage requests, shift updates, and payment confirmations — in the background so doctors and requesters are notified immediately even when the app is not open.",
-        "NSPushNotificationUsageDescription": "FlashLocum delivers time-sensitive alerts — including new coverage requests, shift updates, and payment confirmations — in the background so doctors and requesters are notified immediately even when the app is not open."
+        "NSUserNotificationUsageDescription": "FlashLocum delivers time-sensitive alerts \u2014 including new coverage requests, shift updates, and payment confirmations \u2014 in the background so doctors and requesters are notified immediately even when the app is not open.",
+        "NSPushNotificationUsageDescription": "FlashLocum delivers time-sensitive alerts \u2014 including new coverage requests, shift updates, and payment confirmations \u2014 in the background so doctors and requesters are notified immediately even when the app is not open."
       },
       "config": {
         "googleMapsApiKey": "AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk"
