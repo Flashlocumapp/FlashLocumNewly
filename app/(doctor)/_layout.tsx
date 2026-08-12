@@ -915,9 +915,19 @@ export default function DoctorLayout() {
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Realtime: live is_online sync (catches 2AM daily reset while app is open) ──
+  // Uses a stable ref instead of safeChannel() to avoid the async removeChannel race:
+  // safeChannel calls removeChannel() synchronously then immediately creates a new channel,
+  // but removeChannel() is async — the old channel can still be SUBSCRIBED in the registry
+  // when the new one calls .subscribe(), causing "cannot add postgres_changes callbacks after subscribe()".
+  const onlineStatusChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   useEffect(() => {
     if (!user) return;
-    const channel = safeChannel(`doctor-online-status:${user.id}`)
+    // Tear down any existing channel first — ref guarantees we hold the right instance
+    if (onlineStatusChannelRef.current) {
+      supabase.removeChannel(onlineStatusChannelRef.current);
+      onlineStatusChannelRef.current = null;
+    }
+    const channel = supabase.channel(`doctor-online-status:${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -938,10 +948,12 @@ export default function DoctorLayout() {
         }
       )
       .subscribe();
+    onlineStatusChannelRef.current = channel;
     return () => {
       supabase.removeChannel(channel);
+      onlineStatusChannelRef.current = null;
     };
-  }, [user]);
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Register reset callback so AuthContext can clear dispatch state on sign-out
   useEffect(() => {
