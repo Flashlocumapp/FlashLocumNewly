@@ -97,7 +97,7 @@ function NavigationGuard({
     // 1. No session
     if (!session) {
       routedWithNoSession.current = true;
-      router.replace('/(auth)/intro' as any);
+      router.replace('/(auth)/role-select' as any);
       return;
     }
 
