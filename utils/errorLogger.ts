@@ -377,6 +377,36 @@ export const setupErrorLogging = () => {
   }
 };
 
+export const logLifecycleStarted = (
+  action: string,
+  _meta?: Record<string, unknown>
+): string => {
+  console.log(`[Lifecycle] Started: ${action}`, _meta ?? {});
+  return `${action}_${Date.now()}`;
+};
+
+export const logLifecycleCompleted = (
+  action: string,
+  _actionId: string | null,
+  _meta?: Record<string, unknown>
+): void => {
+  console.log(`[Lifecycle] Completed: ${action}`, _meta ?? {});
+};
+
+export const logLifecycleFailed = (
+  action: string,
+  _actionId: string | null,
+  _meta?: Record<string, unknown>
+): void => {
+  console.warn(`[Lifecycle] Failed: ${action}`, _meta ?? {});
+};
+
+export const logIncident = (
+  _meta?: Record<string, unknown>
+): void => {
+  console.warn('[Incident]', _meta ?? {});
+};
+
 // Auto-initialize logging when this module is imported
 // Only run in development mode - production apps don't need log forwarding
 if (__DEV__) {
