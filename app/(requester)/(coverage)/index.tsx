@@ -216,7 +216,6 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const [stars, setStars] = useState(0);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const submitRatingRef = useRef(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -269,8 +268,6 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
 
   const handleSubmit = async () => {
     if (stars === 0) { setError('Please select a star rating.'); return; }
-    if (submitRatingRef.current) return; // synchronous guard
-    submitRatingRef.current = true;
     setSubmitting(true); setError('');
     try {
       const res = await fetchWithAuth(`${EDGE_BASE}/submit-review`, {
@@ -284,7 +281,6 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
     } catch (e: any) {
       setError(e.message);
     } finally {
-      submitRatingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -412,10 +408,10 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
                         }}
                         disabled={submitting}
                         activeOpacity={0.85}
-                        style={{ backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 14, alignItems: 'center', opacity: submitting ? 0.65 : 1 }}
+                        style={{ backgroundColor: submitting ? '#8E8E93' : '#FFFFFF', borderRadius: 999, paddingVertical: 14, alignItems: 'center' }}
                       >
                         <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>
-                          Submit rating
+                          {submitting ? 'Submitting...' : 'Submit rating'}
                         </Text>
                       </TouchableOpacity>
                     </View>

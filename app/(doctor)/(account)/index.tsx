@@ -503,11 +503,10 @@ export default function DoctorAccountScreen() {
                       onPress={handleRetrySubaccount}
                       disabled={retryingSubaccount}
                       style={{
-                        backgroundColor: '#1C1C1E',
+                        backgroundColor: retryingSubaccount ? '#C7C7CC' : '#1C1C1E',
                         borderRadius: 10,
                         paddingVertical: 12,
                         alignItems: 'center',
-                        opacity: retryingSubaccount ? 0.65 : 1,
                       }}
                     >
                       {retryingSubaccount ? (
@@ -553,7 +552,6 @@ export default function DoctorAccountScreen() {
               switchingPortalRef.current = true;
               await SecureStore.setItemAsync('flashlocum_last_pathway', 'requester').catch(() => {});
               router.replace('/(requester)/(home)' as any);
-              // ref intentionally not reset — navigation away means this component unmounts
             } else {
               router.push({ pathname: '/(onboarding)/requester/basic-profile', params: { from: 'doctor-account' } } as any);
             }
@@ -586,7 +584,7 @@ export default function DoctorAccountScreen() {
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setPhoneModalVisible(false)}>
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalSaveBtn, { opacity: savingPhone ? 0.65 : 1 }]} onPress={handleSavePhone} disabled={savingPhone}>
+              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSavePhone} disabled={savingPhone}>
                 {savingPhone ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.modalSaveText}>Save</Text>}
               </TouchableOpacity>
             </View>
@@ -600,11 +598,11 @@ export default function DoctorAccountScreen() {
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setGenderModalVisible(false)}>
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>Edit Gender</Text>
-            <TouchableOpacity style={[styles.genderOption, { opacity: savingGender ? 0.65 : 1 }]} onPress={() => handleSaveGender('male')} disabled={savingGender}>
+            <TouchableOpacity style={styles.genderOption} onPress={() => handleSaveGender('male')} disabled={savingGender}>
               <Text style={[styles.genderOptionText, profile?.gender === 'male' && styles.genderOptionSelected]}>Male</Text>
             </TouchableOpacity>
             <View style={styles.modalDivider} />
-            <TouchableOpacity style={[styles.genderOption, { opacity: savingGender ? 0.65 : 1 }]} onPress={() => handleSaveGender('female')} disabled={savingGender}>
+            <TouchableOpacity style={styles.genderOption} onPress={() => handleSaveGender('female')} disabled={savingGender}>
               <Text style={[styles.genderOptionText, profile?.gender === 'female' && styles.genderOptionSelected]}>Female</Text>
             </TouchableOpacity>
             {savingGender && <ActivityIndicator style={{ marginTop: 12 }} color="#1C1C1E" />}

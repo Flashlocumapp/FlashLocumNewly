@@ -324,9 +324,6 @@ export default function DoctorHomeScreen() {
 
   const { isOnline, setIsOnline, goOnline, activeSession, setActiveSession, activeJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcomingSessions, criticalDataReady, doctorRatingScore, doctorReliabilityScore } = useDoctorDispatch();
 
-  const toggleStatusRef = useRef(false);
-  const [toggleStatusProcessing, setToggleStatusProcessing] = useState(false);
-
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCancelReasons, setShowCancelReasons] = useState(false);
   const [tooltipVisible, setTooltipVisible] = useState<'rating' | 'reliability' | null>(null);
@@ -560,71 +557,61 @@ export default function DoctorHomeScreen() {
   // ─── Toggle online/offline ───────────────────────────────────────────────────
   const handleToggleStatus = async () => {
     console.log('[DoctorHome] handleToggleStatus pressed — verificationStatus:', verificationStatus, 'isOnline:', isOnline);
-    if (toggleStatusRef.current) return; // synchronous guard
     if (!isVerified) return; // verification gate
     if (isJobCapReached) return;
-    toggleStatusRef.current = true;
-    setToggleStatusProcessing(true);
-    try {
-      const next = !isOnline;
-      if (next) {
-        // ── Location permission gate ──────────────────────────────────────────────
-        const { status, canAskAgain } = await Location.getForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          if (!canAskAgain) {
-            // Permanently denied — send to Settings
-            Alert.alert(
-              'Location Required',
-              'FlashLocum needs your location to show you to nearby requesters. Please enable it in Settings.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Open Settings', onPress: () => Linking.openSettings() },
-              ]
-            );
-            return;
-          }
-          // Ask natively
-          const result = await Location.requestForegroundPermissionsAsync();
-          if (result.status !== 'granted') {
-            Alert.alert(
-              'Location Required',
-              'Location access is needed to go Online. You can enable it in Settings.',
-              [{ text: 'OK' }]
-            );
-            return;
-          }
+    const next = !isOnline;
+    if (next) {
+      // ── Location permission gate ──────────────────────────────────────────────
+      const { status, canAskAgain } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        if (!canAskAgain) {
+          // Permanently denied — send to Settings
+          Alert.alert(
+            'Location Required',
+            'FlashLocum needs your location to show you to nearby requesters. Please enable it in Settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            ]
+          );
+          return;
         }
-        // Location granted — fetch coords and go online
-        try {
-          let pos = await Location.getLastKnownPositionAsync({ maxAge: 30000, requiredAccuracy: 500 });
-          console.log('[handleToggleStatus] getLastKnownPositionAsync result:', pos ? `lat=${pos.coords.latitude}, lon=${pos.coords.longitude}` : 'null — falling back to getCurrentPositionAsync');
-          if (!pos) {
-            console.log('[handleToggleStatus] Requesting fresh location via getCurrentPositionAsync');
-            pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          }
-          const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-          _cachedDoctorCoords = coords;
-          setUserLocation(coords);
-          if (mapRef.current) {
-            mapRef.current.animateToRegion({
-              latitude: coords.latitude + MAP_LAT_OFFSET,
-              longitude: coords.longitude + MAP_LNG_OFFSET,
-              latitudeDelta: 0.12,
-              longitudeDelta: 0.12,
-            }, 800);
-          }
-          goOnline({ lat: coords.latitude, lng: coords.longitude });
-        } catch {
-          goOnline(undefined);
+        // Ask natively
+        const result = await Location.requestForegroundPermissionsAsync();
+        if (result.status !== 'granted') {
+          Alert.alert(
+            'Location Required',
+            'Location access is needed to go Online. You can enable it in Settings.',
+            [{ text: 'OK' }]
+          );
+          return;
         }
-      } else {
-        setIsOnline(false);
       }
-    } catch (e: any) {
-      console.error('[handleToggleStatus] error:', e);
-    } finally {
-      toggleStatusRef.current = false;
-      setToggleStatusProcessing(false);
+      // Location granted — fetch coords and go online
+      try {
+        let pos = await Location.getLastKnownPositionAsync({ maxAge: 30000, requiredAccuracy: 500 });
+        console.log('[handleToggleStatus] getLastKnownPositionAsync result:', pos ? `lat=${pos.coords.latitude}, lon=${pos.coords.longitude}` : 'null — falling back to getCurrentPositionAsync');
+        if (!pos) {
+          console.log('[handleToggleStatus] Requesting fresh location via getCurrentPositionAsync');
+          pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        }
+        const coords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        _cachedDoctorCoords = coords;
+        setUserLocation(coords);
+        if (mapRef.current) {
+          mapRef.current.animateToRegion({
+            latitude: coords.latitude + MAP_LAT_OFFSET,
+            longitude: coords.longitude + MAP_LNG_OFFSET,
+            latitudeDelta: 0.12,
+            longitudeDelta: 0.12,
+          }, 800);
+        }
+        goOnline({ lat: coords.latitude, lng: coords.longitude });
+      } catch {
+        goOnline(undefined);
+      }
+    } else {
+      setIsOnline(false);
     }
   };
 
@@ -642,13 +629,9 @@ export default function DoctorHomeScreen() {
     setShowCancelReasons(true);
   };
 
-  const cancelShiftDoctorRef = useRef(false);
-  const [cancelShiftDoctorProcessing, setCancelShiftDoctorProcessing] = useState(false);
-
   const handleCancelReasonSelected = async (reason: string) => {
     const sessionToCancel = pendingCancelSession;
     if (!sessionToCancel) return;
-    if (cancelShiftDoctorRef.current) return; // synchronous guard
     const sessionId = sessionToCancel.id;
     setShowCancelReasons(false);
     setPendingCancelSession(null);
@@ -685,26 +668,32 @@ export default function DoctorHomeScreen() {
       }, undefined, 6);
     };
 
-    cancelShiftDoctorRef.current = true;
-    setCancelShiftDoctorProcessing(true);
     try {
       await doCancelRequest();
       // Server confirmed — reconcile to ensure consistency
       reconcileUpcomingSessions();
       startCancelPoll();
     } catch (e: any) {
-      const msg = e?.message ?? '';
-      if (msg.includes('ALREADY_CANCELLED')) {
-        // idempotent — already cancelled, treat as success
-        reconcileUpcomingSessions();
-      } else {
-        // Revert optimistic removal on failure
-        reconcileUpcomingSessions();
-        Alert.alert('Error', 'Something went wrong. Please try again.');
+      const isNetworkErr = e instanceof TypeError &&
+        (e.message?.includes('Network request failed') || e.message?.includes('network'));
+      if (isNetworkErr) {
+        console.log('[Doctor] Network error on cancel — retrying in 1s');
+        await new Promise(r => setTimeout(r, 1000));
+        try {
+          await doCancelRequest();
+          reconcileUpcomingSessions();
+          startCancelPoll();
+          return;
+        } catch (retryErr: any) {
+          // Revert optimistic removal on failure
+          reconcileUpcomingSessions();
+          Alert.alert('Something went wrong', retryErr.message || 'Please try again.');
+          return;
+        }
       }
-    } finally {
-      cancelShiftDoctorRef.current = false;
-      setCancelShiftDoctorProcessing(false);
+      // Revert optimistic removal on failure
+      reconcileUpcomingSessions();
+      Alert.alert('Error', e.message);
     }
   };
 
@@ -828,8 +817,8 @@ export default function DoctorHomeScreen() {
         <TouchableOpacity
           onPress={handleToggleStatus}
           activeOpacity={isJobCapReached ? 1 : 0.85}
-          style={[styles.pill, { top: pillTop, backgroundColor: pillBg, flexDirection: showCapSubtext ? 'column' : 'row', alignItems: 'center', gap: showCapSubtext ? 2 : 8, opacity: toggleStatusProcessing ? 0.65 : 1 }]}
-          disabled={isJobCapReached || toggleStatusProcessing}
+          style={[styles.pill, { top: pillTop, backgroundColor: pillBg, flexDirection: showCapSubtext ? 'column' : 'row', alignItems: 'center', gap: showCapSubtext ? 2 : 8 }]}
+          disabled={isJobCapReached}
         >
           {showCapSubtext ? (
             <>
@@ -988,8 +977,7 @@ export default function DoctorHomeScreen() {
               <TouchableOpacity
                 key={reason}
                 onPress={() => handleCancelReasonSelected(reason)}
-                disabled={cancelShiftDoctorProcessing}
-                style={{ backgroundColor: '#2C2C2E', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 20, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', opacity: cancelShiftDoctorProcessing ? 0.65 : 1 }}
+                style={{ backgroundColor: '#2C2C2E', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 20, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
               >
                 <Text style={{ fontSize: 15, color: '#FFFFFF', fontWeight: '500' }}>{reason}</Text>
                 <Text style={{ fontSize: 18, color: '#8E8E93' }}>›</Text>

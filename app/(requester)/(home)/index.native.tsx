@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import useSupercluster from 'use-supercluster';
 import { useFocusEffect } from '@react-navigation/native';
 import { IS_EXPO_GO } from '@/utils/expoGoGuard';
@@ -52,7 +53,6 @@ import { buildShiftPillText, EnvironmentBadge as SessionEnvBadge } from '@/compo
 import { IconSymbol } from '@/components/IconSymbol';
 import { SUPABASE_URL } from '@/constants/api';
 import { logIncident, logLifecycleStarted, logLifecycleCompleted, logLifecycleFailed } from '@/utils/errorLogger';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
@@ -519,8 +519,6 @@ function RequesterUpcomingCard({
   onResumeShift,
   onEndShift,
   bottomPadding,
-  startShiftProcessing,
-  resumeShiftProcessing,
 }: {
   session: CoverageSession;
   onCancel: () => void;
@@ -529,8 +527,6 @@ function RequesterUpcomingCard({
   onResumeShift: () => void;
   onEndShift: () => void;
   bottomPadding: number;
-  startShiftProcessing?: boolean;
-  resumeShiftProcessing?: boolean;
 }) {
   const isPaused = session.status === 'paused';
   const canCancel = session.status === 'upcoming' && session.current_day === 1;
@@ -621,8 +617,7 @@ function RequesterUpcomingCard({
           </TouchableOpacity>
           <TouchableOpacity onPress={() => { onStartShift(); }}
             activeOpacity={0.8}
-            disabled={startShiftProcessing}
-            style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center', opacity: startShiftProcessing ? 0.65 : 1 }}>
+            style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>START SHIFT</Text>
           </TouchableOpacity>
         </View>
@@ -640,8 +635,7 @@ function RequesterUpcomingCard({
           </TouchableOpacity>
           <TouchableOpacity onPress={() => { onResumeShift(); }}
             activeOpacity={0.8}
-            disabled={resumeShiftProcessing}
-            style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center', opacity: resumeShiftProcessing ? 0.65 : 1 }}>
+            style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>RESUME SHIFT</Text>
           </TouchableOpacity>
         </View>
@@ -819,8 +813,7 @@ function RequesterPaymentCard({
   const refreshingRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
-  // Manual payment claim state — dual ref+state guard
-  const claimPaymentRef = useRef(false);
+  // Manual payment claim state
   const [claiming, setClaiming] = useState(false);
   const [claimed, setClaimed] = useState(false);
   // paymentConfirmed is now driven entirely by the parent via onPaymentConfirmed
@@ -1276,8 +1269,7 @@ function RequesterPaymentCard({
   };
 
   const handleClaimPayment = async () => {
-    if (claimPaymentRef.current || claimed) return;
-    claimPaymentRef.current = true;
+    if (claiming || claimed) return;
     console.log('[RequesterPaymentCard] handleClaimPayment: user pressed I Have Made Payment');
     setClaiming(true);
     try {
@@ -1298,20 +1290,12 @@ function RequesterPaymentCard({
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         console.warn('[RequesterPaymentCard] claim-manual-payment error:', err);
-        Alert.alert('Error', 'Something went wrong. Please try again.');
-        return;
       }
-      const data = await res.json().catch(() => ({}));
-      console.log('[RequesterPaymentCard] claim-manual-payment response:', data);
-      // already_claimed: true → idempotent success
-      if ((data as any).already_claimed) {
-        console.log('[RequesterPaymentCard] Payment already claimed — treating as success');
-      }
-      // Transition to awaiting confirmation
+      // Transition to awaiting confirmation regardless — optimistic
       setClaimed(true);
     } catch (e) {
       console.warn('[RequesterPaymentCard] handleClaimPayment exception:', e);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      setClaimed(true); // Still transition — don't leave user stuck
       logIncident({
         severity: 'error',
         event_type: 'MANUAL_PAYMENT_CLAIM',
@@ -1324,7 +1308,6 @@ function RequesterPaymentCard({
         recovered: false,
       });
     } finally {
-      claimPaymentRef.current = false;
       setClaiming(false);
     }
   };
@@ -2169,35 +2152,7 @@ export default function RequesterHomeScreen() {
   const [previewHours, setPreviewHours] = useState<number>(0);
   const [previewLabel, setPreviewLabel] = useState<string>('');
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
-  const [continueProcessing, setContinueProcessing] = useState(false);
   const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ─── Mutation guards ──────────────────────────────────────────────────────────
-  // A. Start Shift
-  const startShiftRef = useRef(false);
-  const [startShiftProcessing, setStartShiftProcessing] = useState(false);
-  // B. Pause Shift
-  const pauseShiftRef = useRef(false);
-  const [pauseShiftProcessing, setPauseShiftProcessing] = useState(false);
-  // C. Resume Shift
-  const resumeShiftRef = useRef(false);
-  const [resumeShiftProcessing, setResumeShiftProcessing] = useState(false);
-  // D. Submit Request
-  const submitRequestRef = useRef(false);
-  const [submitRequestProcessing, setSubmitRequestProcessing] = useState(false);
-  const bookingIdempotencyKeyRef = useRef<string | null>(null);
-  // E. Cancel Request (withdraw)
-  const cancelRequestRef = useRef(false);
-  const [cancelRequestProcessing, setCancelRequestProcessing] = useState(false);
-  // F. Cancel Shift (confirm)
-  const cancelShiftRef = useRef(false);
-  const [cancelShiftProcessing, setCancelShiftProcessing] = useState(false);
-  // G. Claim Payment
-  const claimPaymentRef = useRef(false);
-  const [claimPaymentProcessing, setClaimPaymentProcessing] = useState(false);
-  // H. Submit Rating
-  const submitRatingRef = useRef(false);
-  const [submitRatingProcessing, setSubmitRatingProcessing] = useState(false);
 
 
 
@@ -2914,9 +2869,6 @@ export default function RequesterHomeScreen() {
           setRecentPlace(place);
         });
       }
-      // Generate a fresh idempotency key for this new booking flow
-      bookingIdempotencyKeyRef.current = `${user?.id ?? 'anon'}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      console.log('[RequesterHome] New booking idempotency key generated:', bookingIdempotencyKeyRef.current);
       transitionTo('config');
     } catch (e: any) {
       Alert.alert('Error', 'Could not load place details. Please try again.');
@@ -2933,11 +2885,8 @@ export default function RequesterHomeScreen() {
     if (recentPlaceKey) {
       SecureStore.setItemAsync(recentPlaceKey, JSON.stringify(recentPlace));
     }
-    // Generate a fresh idempotency key for this new booking flow
-    bookingIdempotencyKeyRef.current = `${user?.id ?? 'anon'}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    console.log('[RequesterHome] New booking idempotency key generated (recent place):', bookingIdempotencyKeyRef.current);
     transitionTo('config');
-  }, [recentPlace, recentPlaceKey, transitionTo, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [recentPlace, recentPlaceKey, transitionTo]);
 
   // ─── Matching progress animation ─────────────────────────────────────────────
   useEffect(() => {
@@ -3272,20 +3221,10 @@ export default function RequesterHomeScreen() {
   }, [handleSearchTap]);
 
   const handleGoToSummary = async () => {
-    if (continueProcessing) return;
-    setContinueProcessing(true);
     console.log('[Requester Home] handleGoToSummary pressed — fetching fresh price before showing summary');
     if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
-    try {
-      await fetchPreviewPrice();
-      transitionTo('summary');
-    } catch {
-      setContinueProcessing(false);
-    } finally {
-      // Reset after transition so if user comes back the button is re-enabled
-      // Use a short delay to avoid flicker during navigation
-      setTimeout(() => setContinueProcessing(false), 800);
-    }
+    await fetchPreviewPrice();
+    transitionTo('summary');
   };
 
   // Module-level action ID so it persists across the auto-retry
@@ -3293,16 +3232,12 @@ export default function RequesterHomeScreen() {
 
   const handleRequestCoverage = async () => {
     console.log('[handleRequestCoverage] Submit button pressed');
-    if (submitRequestRef.current) return;
     _submitRetried = false;
     if (!selectedPlace) return;
-    // Use ref-based idempotency key (generated at booking flow entry); fall back to module-level
-    if (!bookingIdempotencyKeyRef.current) {
-      bookingIdempotencyKeyRef.current = `${user?.id ?? 'anon'}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    if (!_submitIdempotencyKey) {
+      _submitIdempotencyKey = Math.random().toString(36).slice(2) + Date.now().toString(36);
     }
-    // Keep module-level key in sync for the auto-retry path
-    _submitIdempotencyKey = bookingIdempotencyKeyRef.current;
-    console.log('[handleRequestCoverage] idempotency_key:', bookingIdempotencyKeyRef.current);
+    console.log('[handleRequestCoverage] idempotency_key:', _submitIdempotencyKey);
     // Guard: ensure the selected start time is still in the future
     const startDateObj = new Date(shiftDate);
     startDateObj.setHours(startTime.getHours(), startTime.getMinutes(), 0, 0);
@@ -3312,8 +3247,6 @@ export default function RequesterHomeScreen() {
       setShowEarlyStartModal(true);
       return;
     }
-    submitRequestRef.current = true;
-    setSubmitRequestProcessing(true);
     setSubmitting(true);
     try {
       // Only log STARTED on the first attempt (not the auto-retry)
@@ -3361,7 +3294,7 @@ export default function RequesterHomeScreen() {
           coverage_length: coverageLength,
           environment,
           note: note || null,
-          idempotency_key: bookingIdempotencyKeyRef.current,
+          idempotency_key: _submitIdempotencyKey,
         }),
       });
       const readJsonWithTimeout = <T = unknown>(r: Response, ms = 10_000): Promise<T> =>
@@ -3388,13 +3321,8 @@ export default function RequesterHomeScreen() {
       _submitActionId = null;
       setActiveRequestId(reqId);
       transitionTo('matching');
-      // Clear idempotency key on confirmed success
-      bookingIdempotencyKeyRef.current = null;
       _submitIdempotencyKey = null;
       console.log('[handleRequestCoverage] Idempotency key cleared');
-      // Reset ref+state (booking flow transitions to waiting state)
-      submitRequestRef.current = false;
-      setSubmitRequestProcessing(false);
       if (reqId) {
         console.log('[Requester] Starting match poll for request:', reqId);
         PollingManager.start('match', async () => {
@@ -3419,18 +3347,11 @@ export default function RequesterHomeScreen() {
       if (isNetworkErr && !_submitRetried) {
         _submitRetried = true;
         console.log('[Requester] Network error on submit — retrying in 1.5s');
-        // Reset guards before retry so the recursive call can proceed
-        submitRequestRef.current = false;
-        setSubmitRequestProcessing(false);
-        setSubmitting(false);
         await new Promise(r => setTimeout(r, 1500));
         await handleRequestCoverage();
         return;
       }
-      console.error('[handleRequestCoverage] failed:', e.message);
-      submitRequestRef.current = false;
-      setSubmitRequestProcessing(false);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      Alert.alert('Error', e.message || 'Could not submit request. Please try again.');
       logLifecycleFailed('SUBMIT_REQUEST', _submitActionId, {
         severity: 'critical',
         active_role: 'requester',
@@ -3543,16 +3464,12 @@ export default function RequesterHomeScreen() {
   const [showCancelActiveModal, setShowCancelActiveModal] = useState(false);
   const [showCancelActiveReasons, setShowCancelActiveReasons] = useState(false);
   const [showEndShiftModal, setShowEndShiftModal] = useState(false);
-  const [endShiftProcessing, setEndShiftProcessing] = useState(false);
   const [showPauseShiftModal, setShowPauseShiftModal] = useState(false);
   const [settledAmount, setSettledAmount] = useState<number | null>(null);
 
 
   const handleCancelRequest = useCallback(async () => {
     console.log('[Requester] handleCancelRequest pressed', { activeRequestId });
-    if (cancelRequestRef.current) return;
-    cancelRequestRef.current = true;
-    setCancelRequestProcessing(true);
     setShowCancelModal(true);
     // Immediately withdraw in background
     if (activeRequestId) {
@@ -3574,8 +3491,6 @@ export default function RequesterHomeScreen() {
             if (reqCheck?.status === 'matched' && reqCheck?.matched_doctor_id) {
               console.log('[Requester] handleCancelRequest — DB confirms matched, showing alert');
               setShowCancelModal(false);
-              cancelRequestRef.current = false;
-              setCancelRequestProcessing(false);
               await fetchActiveSession();
               Alert.alert('Request Already Accepted', 'A doctor just accepted your request. Check your Upcoming Coverage.');
               return;
@@ -3599,20 +3514,9 @@ export default function RequesterHomeScreen() {
         }
         setCancelWithdrawn(true);
       } catch (e) {
-        // treat as success (already withdrawn or network error) — don't block user
-        const errMsg = e instanceof Error ? e.message : String(e);
-        if (errMsg.includes('Request is no longer pending')) {
-          // Already withdrawn — treat as success silently
-        }
-      } finally {
-        cancelRequestRef.current = false;
-        setCancelRequestProcessing(false);
       }
-    } else {
-      cancelRequestRef.current = false;
-      setCancelRequestProcessing(false);
     }
-  }, [activeRequestId, fetchActiveSession]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeRequestId, fetchActiveSession]);
 
   const handleWaitForDoctor = async () => {
     setShowCancelModal(false);
@@ -3870,9 +3774,6 @@ export default function RequesterHomeScreen() {
 
   const handleStartShift = useCallback(async () => {
     if (!activeSession) return;
-    if (startShiftRef.current) return;
-    startShiftRef.current = true;
-    setStartShiftProcessing(true);
     const sid = activeSession.id;
     let startActionId: string | null = null;
     try { startActionId = logLifecycleStarted('START_SHIFT', { active_role: 'requester', screen: 'RequesterHome', session_id: sid, edge_function: 'start-shift' }); } catch { /* logging must never block the action */ }
@@ -3900,17 +3801,8 @@ export default function RequesterHomeScreen() {
         }
         return false;
       }, undefined, 6);
-      // On success: navigation/state change handles cleanup
     } catch (e: any) {
-      console.error('[Requester] handleStartShift failed:', e.message);
-      startShiftRef.current = false;
-      setStartShiftProcessing(false);
-      const msg = e?.message ?? '';
-      if (msg.includes('SHIFT_NOT_STARTABLE') || msg.includes('Cannot start')) {
-        Alert.alert('Shift Unavailable', 'This shift can no longer be started.');
-      } else {
-        Alert.alert('Error', 'Something went wrong. Please try again.');
-      }
+      Alert.alert('Something went wrong', e.message || 'Please try again.');
       logLifecycleFailed('START_SHIFT', startActionId, {
         severity: 'error',
         active_role: 'requester',
@@ -3920,18 +3812,14 @@ export default function RequesterHomeScreen() {
         message: e instanceof Error ? e.message : String(e),
       });
     }
-  }, [activeSession, callSessionEdge]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeSession, callSessionEdge]);
 
   const handleResumeShift = useCallback(async () => {
     if (!activeSession) return;
-    if (resumeShiftRef.current) return;
-    resumeShiftRef.current = true;
-    setResumeShiftProcessing(true);
     const sid = activeSession.id;
     let resumeActionId: string | null = null;
     try { resumeActionId = logLifecycleStarted('RESUME_SHIFT', { active_role: 'requester', screen: 'RequesterHome', session_id: sid, edge_function: 'resume-shift' }); } catch { /* logging must never block the action */ }
     try {
-      console.log('[Requester] handleResumeShift for session:', sid);
       const data = await callSessionEdge('resume-shift', sid);
       const updated = data?.session as Partial<CoverageSession>;
       if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
@@ -3954,13 +3842,7 @@ export default function RequesterHomeScreen() {
         return false;
       }, undefined, 6);
     } catch (e: any) {
-      console.error('[Requester] handleResumeShift failed:', e.message);
-      const msg = e?.message ?? '';
-      if (msg.includes('SHIFT_NOT_RESUMABLE') || msg.includes('Cannot resume')) {
-        Alert.alert('Shift Unavailable', 'This shift can no longer be resumed.');
-      } else {
-        Alert.alert('Error', 'Something went wrong. Please try again.');
-      }
+      Alert.alert('Something went wrong', 'Please try again.');
       logLifecycleFailed('RESUME_SHIFT', resumeActionId, {
         severity: 'error',
         active_role: 'requester',
@@ -3969,11 +3851,8 @@ export default function RequesterHomeScreen() {
         edge_function: 'resume-shift',
         message: e instanceof Error ? e.message : String(e),
       });
-    } finally {
-      resumeShiftRef.current = false;
-      setResumeShiftProcessing(false);
     }
-  }, [activeSession, callSessionEdge]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeSession, callSessionEdge]);
 
   const handlePauseShift = useCallback(async () => {
     if (!activeSession) return;
@@ -3982,9 +3861,6 @@ export default function RequesterHomeScreen() {
 
   const handleConfirmPauseShift = async () => {
     if (!activeSession) return;
-    if (pauseShiftRef.current) return;
-    pauseShiftRef.current = true;
-    setPauseShiftProcessing(true);
     const sid = activeSession.id;
     setShowPauseShiftModal(false);
     let pauseActionId: string | null = null;
@@ -4014,13 +3890,7 @@ export default function RequesterHomeScreen() {
         return false;
       }, undefined, 6);
     } catch (e: any) {
-      console.error('[Requester] handleConfirmPauseShift failed:', e.message);
-      const msg = e?.message ?? '';
-      if (msg.includes('SHIFT_NOT_PAUSABLE') || msg.includes('Cannot pause')) {
-        Alert.alert('Shift Unavailable', 'This shift can no longer be paused.');
-      } else {
-        Alert.alert('Error', 'Something went wrong. Please try again.');
-      }
+      Alert.alert('Pause Shift Failed', e.message || 'Something went wrong. Please try again.');
       logLifecycleFailed('PAUSE_SHIFT', pauseActionId, {
         severity: 'error',
         active_role: 'requester',
@@ -4029,9 +3899,6 @@ export default function RequesterHomeScreen() {
         edge_function: 'pause-shift',
         message: e instanceof Error ? e.message : String(e),
       });
-    } finally {
-      pauseShiftRef.current = false;
-      setPauseShiftProcessing(false);
     }
   };
 
@@ -4048,7 +3915,6 @@ export default function RequesterHomeScreen() {
     if (!activeSession) return;
     const sid = activeSession.id;
     endShiftInProgressRef.current = true;
-    setEndShiftProcessing(true);
     // Clear from paid/dismissed sets so day 2+ of multi-day shifts can trigger the overlay again
     _requesterPaidSessions.delete(sid);
     _requesterDismissedSessions.delete(sid);
@@ -4109,7 +3975,6 @@ export default function RequesterHomeScreen() {
       });
     } finally {
       endShiftInProgressRef.current = false;
-      setEndShiftProcessing(false);
     }
   };
 
@@ -4127,9 +3992,6 @@ export default function RequesterHomeScreen() {
 
   const handleCancelActiveReasonSelected = async (reason: string) => {
     if (!activeSession) return;
-    if (cancelShiftRef.current) return;
-    cancelShiftRef.current = true;
-    setCancelShiftProcessing(true);
     setShowCancelActiveReasons(false);
     const sessionId = activeSession.id;
     // Clear immediately so the search card appears right away
@@ -4146,16 +4008,9 @@ export default function RequesterHomeScreen() {
         const errText = await res.text().catch(() => '');
         throw new Error(errText || 'Cancel failed');
       }
-      return res;
     };
     try {
-      const res = await doCancelRequest();
-      // Check for ALREADY_CANCELLED with same party — treat as success
-      let body: any = {};
-      try { body = await res.json(); } catch {}
-      if (body?.already_cancelled && body?.cancelled_by === 'requester') {
-        // Same party already cancelled — idempotent success, no alert
-      }
+      await doCancelRequest();
       console.log('[Requester] Starting cancel poll for session:', sessionId);
       PollingManager.start('cancel', async () => {
         const { data: s } = await supabase
@@ -4170,10 +4025,8 @@ export default function RequesterHomeScreen() {
         return false;
       }, undefined, 6);
     } catch (e: any) {
-      console.error('[Requester] handleCancelActiveReasonSelected failed:', e.message);
-      const msg = e?.message ?? '';
       const isNetworkErr = e instanceof TypeError &&
-        (msg.includes('Network request failed') || msg.includes('network'));
+        (e.message?.includes('Network request failed') || e.message?.includes('network'));
       if (isNetworkErr) {
         console.log('[Requester] Network error on cancel — retrying in 1s');
         await new Promise(r => setTimeout(r, 1000));
@@ -4193,18 +4046,7 @@ export default function RequesterHomeScreen() {
           }, undefined, 6);
           return;
         } catch (retryErr: any) {
-          const retryMsg = retryErr?.message ?? '';
-          if (retryMsg.includes('ALREADY_CANCELLED')) {
-            if (retryMsg.includes('requester')) {
-              // Same party — silent success
-            } else {
-              Alert.alert('Shift Cancelled', 'This shift was already cancelled.');
-            }
-          } else if (retryMsg.includes('SHIFT_NOT_CANCELLABLE')) {
-            Alert.alert('Shift Unavailable', 'This shift can no longer be cancelled.');
-          } else {
-            Alert.alert('Error', 'Something went wrong. Please try again.');
-          }
+          Alert.alert('Something went wrong', retryErr.message || 'Please try again.');
           fetchActiveSession();
           if (cancelShiftStatus !== 409) {
             logIncident({
@@ -4222,17 +4064,7 @@ export default function RequesterHomeScreen() {
           return;
         }
       }
-      if (msg.includes('ALREADY_CANCELLED')) {
-        if (msg.includes('requester')) {
-          // Same party — silent success
-        } else {
-          Alert.alert('Shift Cancelled', 'This shift was already cancelled.');
-        }
-      } else if (msg.includes('SHIFT_NOT_CANCELLABLE')) {
-        Alert.alert('Shift Unavailable', 'This shift can no longer be cancelled.');
-      } else {
-        Alert.alert('Error', 'Something went wrong. Please try again.');
-      }
+      Alert.alert('Error', e.message);
       // Re-fetch to restore correct state if the API call failed
       fetchActiveSession();
       if (cancelShiftStatus !== 409) {
@@ -4248,9 +4080,6 @@ export default function RequesterHomeScreen() {
           user_action_completed: false,
         });
       }
-    } finally {
-      cancelShiftRef.current = false;
-      setCancelShiftProcessing(false);
     }
   };
 
@@ -4911,7 +4740,6 @@ export default function RequesterHomeScreen() {
               <View style={{ alignItems: 'center', marginTop: 8, marginBottom: 16 }}>
                 <TouchableOpacity
                   onPress={handleGoToSummary}
-                  disabled={continueProcessing}
                   style={{
                     width: 160,
                     height: 52,
@@ -4921,7 +4749,6 @@ export default function RequesterHomeScreen() {
                     justifyContent: 'center',
                     alignItems: 'center',
                     gap: 8,
-                    opacity: continueProcessing ? 0.65 : 1,
                   }}
                 >
                   <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>Continue</Text>
@@ -4975,15 +4802,14 @@ export default function RequesterHomeScreen() {
               </Text>
               <TouchableOpacity
                 onPress={handleRequestCoverage}
-                disabled={submitRequestProcessing || submitting}
+                disabled={submitting}
                 activeOpacity={0.85}
                 style={{
-                  backgroundColor: (submitRequestProcessing || submitting) ? '#555' : '#FFFFFF',
+                  backgroundColor: submitting ? '#555' : '#FFFFFF',
                   borderRadius: 28,
                   paddingVertical: 18,
                   alignItems: 'center',
                   width: '100%',
-                  opacity: (submitRequestProcessing || submitting) ? 0.65 : 1,
                 }}
               >
                 <Text style={{
@@ -4992,7 +4818,7 @@ export default function RequesterHomeScreen() {
                   color: '#1C1C1E',
                   letterSpacing: 0.2,
                 }}>
-                  {(submitRequestProcessing || submitting) ? 'Submitting...' : 'Request Coverage'}
+                  {submitting ? 'Submitting...' : 'Request Coverage'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -5081,8 +4907,6 @@ export default function RequesterHomeScreen() {
               onResumeShift={handleResumeShift}
               onEndShift={handleEndShift}
               bottomPadding={whiteCardPaddingBottom}
-              startShiftProcessing={startShiftProcessing}
-              resumeShiftProcessing={resumeShiftProcessing}
             />
           )}
 
@@ -5216,11 +5040,8 @@ export default function RequesterHomeScreen() {
             return;
           }
           if (!confirmedSession) return;
-          if (submitRatingRef.current) return;
-          submitRatingRef.current = true;
           console.log('[Requester] Submitting rating', { sessionId: confirmedSession.id, stars: ratingStars });
           setSubmittingRating(true);
-          setSubmitRatingProcessing(true);
           setRatingError('');
           try {
             const res = await fetchWithAuth(`${EDGE_BASE}/submit-review`, {
@@ -5230,13 +5051,7 @@ export default function RequesterHomeScreen() {
             });
             if (!res.ok) {
               const errBody = await res.json().catch(() => ({}));
-              const errMsg = (errBody as any).error || '';
-              // already submitted / duplicate key → treat as success
-              if (errMsg.includes('already submitted') || errMsg.includes('23505') || res.status === 409) {
-                console.log('[Requester] Rating already submitted — treating as success');
-              } else {
-                throw new Error(errMsg || 'Failed to submit review');
-              }
+              throw new Error((errBody as any).error || 'Failed to submit review');
             }
             console.log('[Requester] Rating submitted successfully', { sessionId: confirmedSession.id });
             if (confirmedSession?.id) markRequesterSessionPaid(confirmedSession.id);
@@ -5248,26 +5063,10 @@ export default function RequesterHomeScreen() {
             setRatingComment('');
             setRatingError('');
           } catch (e: any) {
-            console.error('[Requester] Rating submission failed', { error: e.message });
-            const errMsg = e?.message ?? '';
-            if (errMsg.includes('already submitted') || errMsg.includes('23505')) {
-              // Already rated — treat as success silently
-              if (confirmedSession?.id) markRequesterSessionPaid(confirmedSession.id);
-              setShowPaymentSuccess(false);
-              setConfirmedSession(null);
-              setSettledAmount(null);
-              setActiveSession(null);
-              setRatingStars(0);
-              setRatingComment('');
-              setRatingError('');
-            } else {
-              Alert.alert('Error', 'Something went wrong. Please try again.');
-              setRatingError('Something went wrong. Please try again.');
-            }
+            console.log('[Requester] Rating submission failed', { error: e.message });
+            setRatingError(e.message || 'Failed to submit review');
           } finally {
-            submitRatingRef.current = false;
             setSubmittingRating(false);
-            setSubmitRatingProcessing(false);
           }
         }}
       />
@@ -5521,13 +5320,11 @@ export default function RequesterHomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleConfirmCancel}
-                disabled={cancelRequestProcessing}
                 style={{
                   backgroundColor: '#2C2C2E',
                   borderRadius: 999,
                   paddingVertical: 16,
                   alignItems: 'center',
-                  opacity: cancelRequestProcessing ? 0.65 : 1,
                 }}
               >
                 <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>Cancel Request</Text>
@@ -5662,8 +5459,7 @@ export default function RequesterHomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleConfirmCancelActive}
-                disabled={cancelShiftProcessing}
-                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center', opacity: cancelShiftProcessing ? 0.65 : 1 }}
+                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center' }}
               >
                 <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>Cancel Shift</Text>
               </TouchableOpacity>
@@ -5731,8 +5527,7 @@ export default function RequesterHomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleConfirmEndShift}
-                disabled={endShiftProcessing}
-                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center', opacity: endShiftProcessing ? 0.65 : 1 }}
+                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center' }}
               >
                 <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>End Shift</Text>
               </TouchableOpacity>
@@ -5768,8 +5563,7 @@ export default function RequesterHomeScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleConfirmPauseShift}
-                disabled={pauseShiftProcessing}
-                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center', opacity: pauseShiftProcessing ? 0.65 : 1 }}
+                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center' }}
               >
                 <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF9500' }}>Pause Shift</Text>
               </TouchableOpacity>

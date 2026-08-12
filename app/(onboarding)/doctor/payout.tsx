@@ -115,7 +115,6 @@ export default function DoctorPayout() {
   const [accountNameError, setAccountNameError] = useState('');
 
   const [loading, setLoading] = useState(false);
-  const loadingRef = useRef(false);
   const [loadingLabel, setLoadingLabel] = useState('Saving...');
   const [submitError, setSubmitError] = useState('');
   const [profileLoading, setProfileLoading] = useState(true);
@@ -385,7 +384,7 @@ export default function DoctorPayout() {
   };
 
   const handleSubmit = async () => {
-    if (loadingRef.current) return;
+    if (loading) return;
 
     let valid = true;
     setBankError('');
@@ -409,7 +408,6 @@ export default function DoctorPayout() {
     if (!valid) return;
 
     console.log('[Payout] Submit started');
-    loadingRef.current = true;
     setLoading(true);
     setLoadingLabel('Saving details...');
 
@@ -464,18 +462,19 @@ export default function DoctorPayout() {
       await SecureStore.setItemAsync('flashlocum_last_pathway', 'doctor').catch(() => {});
       router.replace('/(doctor)/(home)' as any);
     } catch (err: unknown) {
-      const rawMessage = err instanceof Error ? err.message : String(err);
-      console.error(`[Payout] Submit failed: ${rawMessage}`);
-      setSubmitError('Something went wrong. Please try again.');
-      loadingRef.current = false;
-      setLoading(false);
-      setLoadingLabel('Saving...');
+      const message =
+        err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      console.log(`[Payout] Submit failed: ${message}`);
+      setSubmitError(message);
       logLifecycleFailed('DOCTOR_ONBOARDING_COMPLETE', doctorOnboardActionId, {
         severity: 'error',
         active_role: 'doctor',
         screen: 'DoctorOnboarding',
-        message: rawMessage,
+        message,
       });
+    } finally {
+      setLoading(false);
+      setLoadingLabel('Saving...');
     }
   };
 
@@ -585,7 +584,7 @@ export default function DoctorPayout() {
           onPress={handleSubmit}
           disabled={loading || profileLoading}
           scaleValue={0.97}
-          style={[styles.submitButton, { opacity: (loading || profileLoading) ? 0.65 : 1 }]}
+          style={[styles.submitButton, (loading || profileLoading) && styles.submitButtonDisabled]}
         >
           {loading ? (
             <View style={styles.loadingRow}>

@@ -42,7 +42,6 @@ export default function RequesterBasicProfile() {
   const [gender, setGender] = useState<Gender>(null);
   const [genderModalVisible, setGenderModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
-  const loadingRef = useRef(false);
   const [phoneError, setPhoneError] = useState('');
   const [genderError, setGenderError] = useState('');
   const [submitError, setSubmitError] = useState('');
@@ -100,7 +99,7 @@ export default function RequesterBasicProfile() {
   };
 
   const handleSubmit = async () => {
-    if (loadingRef.current) return;
+    if (loading) return;
 
     let valid = true;
     setPhoneError('');
@@ -118,7 +117,6 @@ export default function RequesterBasicProfile() {
     }
     if (!valid) return;
 
-    loadingRef.current = true;
     setLoading(true);
 
     let requesterOnboardActionId: string | null = null;
@@ -189,16 +187,15 @@ export default function RequesterBasicProfile() {
       await SecureStore.setItemAsync('flashlocum_last_pathway', 'requester').catch(() => {});
       router.replace('/(requester)/(home)' as any);
     } catch (err: any) {
-      console.error('[RequesterOnboarding] Submit error:', err?.message ?? err);
-      setSubmitError('Something went wrong. Please try again.');
-      loadingRef.current = false;
-      setLoading(false);
+      setSubmitError(err?.message || 'Something went wrong. Please try again.');
       logLifecycleFailed('REQUESTER_ONBOARDING_COMPLETE', requesterOnboardActionId, {
         severity: 'error',
         active_role: 'requester',
         screen: 'RequesterOnboarding',
         message: err?.message ?? 'Unknown error',
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -278,7 +275,7 @@ export default function RequesterBasicProfile() {
           onPress={handleSubmit}
           disabled={loading}
           scaleValue={0.95}
-          style={[styles.submitButton, { opacity: loading ? 0.65 : 1 }]}
+          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
         >
           {loading ? (
             <ActivityIndicator color="#FFFFFF" />
