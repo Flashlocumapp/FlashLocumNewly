@@ -151,12 +151,6 @@ export default function DoctorAccountScreen() {
   const [genderModalVisible, setGenderModalVisible] = useState(false);
   const [savingGender, setSavingGender] = useState(false);
 
-  // Retry subaccount
-  const [retryingSubaccount, setRetryingSubaccount] = useState(false);
-  const [retryError, setRetryError] = useState('');
-  const [retrySuccess, setRetrySuccess] = useState(false);
-  const [subaccountFailed, setSubaccountFailed] = useState(false);
-
   const [showSignOutModal, setShowSignOutModal] = useState(false);
 
   useFocusEffect(
@@ -200,16 +194,6 @@ export default function DoctorAccountScreen() {
             selfie_url: doctorProfileRes.data?.selfie_url ?? null,
             subaccount_code: doctorProfileRes.data?.subaccount_code ?? null,
           };
-
-          const { data: failedSessionRows } = await supabase
-            .from('coverage_sessions')
-            .select('id')
-            .eq('doctor_id', user.id)
-            .eq('manual_settlement_required', true)
-            .is('session_subaccount_code', null)
-            .limit(1);
-
-          setSubaccountFailed((failedSessionRows ?? []).length > 0);
 
           setProfile(prev => {
             if (prev && JSON.stringify(prev) === JSON.stringify(mergedProfile)) return prev;
@@ -343,81 +327,6 @@ export default function DoctorAccountScreen() {
     }
   };
 
-  const handleRetrySubaccount = async () => {
-    console.log('[Doctor Account] Retry Payout Setup pressed');
-    if (!profile?.bank_code || !profile?.account_number || !profile?.account_name || !profile?.bank_name) {
-      setRetryError('Bank details are incomplete. Please contact support.');
-      return;
-    }
-    setRetryingSubaccount(true);
-    setRetryError('');
-    setRetrySuccess(false);
-    try {
-      // Step 1: Verify bank account before attempting sub-account creation
-      console.log('[Doctor Account] Verifying bank account', { accountNumber: profile.account_number, bankCode: profile.bank_code });
-      const verifyRes = await fetch(
-        `${SUPABASE_URL}/functions/v1/monnify-verify-account`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            accountNumber: profile.account_number,
-            bankCode: profile.bank_code,
-          }),
-        }
-      );
-      const verifyResult = await verifyRes.json();
-      console.log('[Doctor Account] monnify-verify-account response', { status: verifyRes.status, verifyResult });
-
-      if (!verifyRes.ok || verifyResult.error) {
-        setRetryError(verifyResult.message || 'Could not verify your bank account. Please try again.');
-        return;
-      }
-
-      // Step 2: Proceed to sub-account creation
-      console.log('[Doctor Account] Calling create-subaccount edge function', { doctor_id: user!.id });
-      const res = await fetchWithAuth(
-        `${SUPABASE_URL}/functions/v1/create-subaccount`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            doctor_id: user!.id,
-            bank_code: profile.bank_code,
-            account_number: profile.account_number,
-            account_name: profile.account_name,
-            bank_name: profile.bank_name,
-          }),
-        }
-      );
-      const result = await res.json();
-      console.log('[Doctor Account] create-subaccount response', { status: res.status, result });
-
-      // SUBACCOUNT_EXISTS means setup is already complete — treat as success
-      const isSuccess = (res.ok && !result.error) || result.error === 'SUBACCOUNT_EXISTS';
-
-      if (!isSuccess) {
-        throw new Error(result.message || result.error || 'Payout setup failed. Please try again.');
-      }
-
-      // Re-fetch the profile from DB to get the real subaccount_code
-      const { data: refreshed } = await supabase
-        .from('doctor_profiles')
-        .select('subaccount_code')
-        .eq('id', user!.id)
-        .single();
-
-      console.log('[Doctor Account] Refreshed subaccount_code from DB', refreshed?.subaccount_code);
-      setProfile(prev => prev ? { ...prev, subaccount_code: refreshed?.subaccount_code ?? result.subaccount_code ?? 'set' } : prev);
-      setRetrySuccess(true);
-    } catch (err: unknown) {
-      console.log('[Doctor Account] Retry payout setup error', err instanceof Error ? err.message : err);
-      setRetryError(err instanceof Error ? err.message : 'Something went wrong.');
-    } finally {
-      setRetryingSubaccount(false);
-    }
-  };
-
   // If we have absolutely no profile data yet (no authProfile seed), show a minimal spinner
   if (loading && profile === null) {
     return (
@@ -490,46 +399,6 @@ export default function DoctorAccountScreen() {
               <ReadOnlyRow label="Account Number" value={accountNumber} />
               <CardDivider />
               <ReadOnlyRow label="Account Name" value={accountName} />
-              {!profile?.subaccount_code && subaccountFailed && !retrySuccess && (
-                <>
-                  <CardDivider />
-                  <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
-                    {retryError ? (
-                      <Text style={{ color: '#E63946', fontSize: 13, marginBottom: 8, textAlign: 'center' }}>
-                        {retryError}
-                      </Text>
-                    ) : null}
-                    <TouchableOpacity
-                      onPress={handleRetrySubaccount}
-                      disabled={retryingSubaccount}
-                      style={{
-                        backgroundColor: retryingSubaccount ? '#C7C7CC' : '#1C1C1E',
-                        borderRadius: 10,
-                        paddingVertical: 12,
-                        alignItems: 'center',
-                      }}
-                    >
-                      {retryingSubaccount ? (
-                        <ActivityIndicator color="#FFFFFF" size="small" />
-                      ) : (
-                        <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>
-                          Retry Payout Setup
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-              {retrySuccess && (
-                <>
-                  <CardDivider />
-                  <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
-                    <Text style={{ color: '#34C759', fontSize: 13, textAlign: 'center', fontWeight: '600' }}>
-                      ✓ Payout account set up successfully
-                    </Text>
-                  </View>
-                </>
-              )}
             </>
           )}
         </Card>
