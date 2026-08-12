@@ -313,6 +313,7 @@ export default function DoctorAccountScreen() {
     console.log('[Doctor Account] Sign Out confirmed');
     setShowSignOutModal(false);
     try {
+      await SecureStore.deleteItemAsync('flashlocum_last_pathway').catch(() => {});
       await supabase.auth.signOut();
       router.replace('/(auth)/role-select' as any);
     } catch (err: unknown) {

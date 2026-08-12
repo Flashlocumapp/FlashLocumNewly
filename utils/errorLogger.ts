@@ -382,3 +382,109 @@ export const setupErrorLogging = () => {
 if (__DEV__) {
   setupErrorLogging();
 }
+
+// ─── Operational incident logger ─────────────────────────────────────────────
+// These functions write to the error_events table via the log-incident Edge Function.
+// All calls are fire-and-forget — they never throw and never block the caller.
+
+import { supabase } from '@/lib/supabase';
+
+const LOG_INCIDENT_URL = 'https://juilousufwlsiqdcgllu.supabase.co/functions/v1/log-incident';
+
+function generateActionId(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+async function postIncident(payload: Record<string, unknown>): Promise<void> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+    await fetch(LOG_INCIDENT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    // Silently swallow — logging must never crash the app
+  }
+}
+
+export interface IncidentPayload {
+  severity: 'critical' | 'error' | 'warning' | 'info';
+  event_type: string;
+  action?: string;
+  failure_stage?: string;
+  active_role?: 'doctor' | 'requester';
+  screen?: string;
+  route?: string;
+  request_id?: string;
+  session_id?: string;
+  payment_intent_id?: string;
+  edge_function?: string;
+  provider?: string;
+  provider_status?: string;
+  recovered?: boolean;
+  recovery_action?: string;
+  user_action_completed?: boolean;
+  message?: string;
+  stack?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/** Log a one-off operational incident (no lifecycle). Fire-and-forget. */
+export function logIncident(payload: IncidentPayload): void {
+  void postIncident({ ...payload, action: payload.action ?? 'failed' });
+}
+
+/** Log the START of a lifecycle-tracked action. Returns a new action_id. Fire-and-forget. */
+export function logLifecycleStarted(
+  event_type: string,
+  context: Omit<IncidentPayload, 'severity' | 'event_type' | 'action' | 'metadata'> & { metadata?: Record<string, unknown> }
+): string {
+  const action_id = generateActionId();
+  void postIncident({
+    severity: 'info',
+    event_type,
+    action: 'started',
+    ...context,
+    metadata: { ...context.metadata, action_id },
+  });
+  return action_id;
+}
+
+/** Log successful COMPLETION of a lifecycle-tracked action. Fire-and-forget. */
+export function logLifecycleCompleted(
+  event_type: string,
+  action_id: string,
+  context: Omit<IncidentPayload, 'severity' | 'event_type' | 'action' | 'metadata'> & { metadata?: Record<string, unknown> }
+): void {
+  void postIncident({
+    severity: 'info',
+    event_type,
+    action: 'completed',
+    user_action_completed: true,
+    ...context,
+    metadata: { ...context.metadata, action_id },
+  });
+}
+
+/** Log FAILURE of a lifecycle-tracked action. Fire-and-forget. */
+export function logLifecycleFailed(
+  event_type: string,
+  action_id: string | null,
+  context: Omit<IncidentPayload, 'event_type' | 'action' | 'metadata'> & { metadata?: Record<string, unknown> }
+): void {
+  void postIncident({
+    event_type,
+    action: 'failed',
+    user_action_completed: false,
+    ...context,
+    metadata: { ...context.metadata, ...(action_id ? { action_id } : {}) },
+  });
+}

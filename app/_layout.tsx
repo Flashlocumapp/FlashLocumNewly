@@ -67,7 +67,6 @@ function NavigationGuard({
   const [lastPathway, setLastPathway] = useState<'doctor' | 'requester' | null | undefined>(undefined);
   const [retryCount, setRetryCount] = useState(0);
   const hasRouted = useRef(false);
-  const skipIntroRef = useRef(false);
   const routedWithNoSession = useRef(false);
 
   // Load last pathway from AsyncStorage once on mount
@@ -97,15 +96,8 @@ function NavigationGuard({
 
     // 1. No session
     if (!session) {
-      if (skipIntroRef.current) {
-        // Sign-out path — go directly to role-select, no animation
-        skipIntroRef.current = false;
-        router.replace('/(auth)/role-select' as any);
-      } else {
-        // First launch / fresh sign-in — play the animation
-        routedWithNoSession.current = true;
-        router.replace('/(auth)/intro' as any);
-      }
+      routedWithNoSession.current = true;
+      router.replace('/(auth)/intro' as any);
       return;
     }
 
@@ -219,8 +211,10 @@ function NavigationGuard({
       if (segments[0] === '') return;          // router not committed yet — don't interrupt cold launch
       if (segments[0] === 'index') return;     // still on index screen — don't interrupt cold launch
       hasRouted.current = false;
-      skipIntroRef.current = true;
-      router.replace('/(auth)/role-select' as any);
+      // Clear lastPathway so the next cold launch plays the intro animation
+      SecureStore.deleteItemAsync(LAST_PATHWAY_KEY).catch(() => {});
+      // Route through intro (not directly to role-select) — same as unauthenticated cold launch
+      router.replace('/(auth)/intro' as any);
     }
   }, [session, profile, segments]); // eslint-disable-line react-hooks/exhaustive-deps
 
