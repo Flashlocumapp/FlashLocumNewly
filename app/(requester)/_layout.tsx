@@ -70,7 +70,7 @@ export default function RequesterLayout() {
             try {
               console.log('[RequesterLayout] Prefetching coverage sessions, key:', key);
               const res = await fetchWithAuth(
-                `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=requester&status=completed,cancelled,requester_paid`,
+                `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=requester&status=completed,cancelled,requester_paid,settled`,
                 { headers: { 'Content-Type': 'application/json' } }
               );
               if (!res.ok) return;

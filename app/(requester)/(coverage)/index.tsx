@@ -151,9 +151,9 @@ function HistoryCard({ session, onPress }: {
 
   const statusLabel = session.status === 'cancelled'
     ? (session.cancelled_by === 'requester' ? 'YOU CANCELLED' : 'CANCELLED')
-    : session.status === 'requester_paid' ? 'PAID' : 'COMPLETED';
+    : (session.status === 'requester_paid' || session.status === 'settled') ? 'PAID' : 'COMPLETED';
   const statusColor = session.status === 'cancelled' ? '#EF4444' :
-    session.status === 'requester_paid' ? '#34C759' : '#8E8E93';
+    (session.status === 'requester_paid' || session.status === 'settled') ? '#34C759' : '#8E8E93';
 
   return (
     <TouchableOpacity
@@ -428,7 +428,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-const HISTORY_STATUSES = ['completed', 'cancelled', 'requester_paid'];
+const HISTORY_STATUSES = ['completed', 'cancelled', 'requester_paid', 'settled'];
 
 export default function RequesterCoverageScreen() {
   const insets = useSafeAreaInsets();
@@ -455,7 +455,7 @@ export default function RequesterCoverageScreen() {
     if (!isBackground) setLoading(true);
     try {
       const res = await fetchWithAuth(
-        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=requester&status=completed,cancelled,requester_paid`,
+        `${SUPABASE_URL}/functions/v1/get-coverage-sessions?role=requester&status=completed,cancelled,requester_paid,settled`,
         { headers: { 'Content-Type': 'application/json' } },
       );
       if (!res.ok) {
@@ -468,7 +468,7 @@ export default function RequesterCoverageScreen() {
       console.log('[RequesterCoverage] fetched', newSessions.length, 'sessions');
 
       // Check which requester_paid sessions have already been reviewed
-      const paidIds = newSessions.filter((s) => s.status === 'requester_paid').map((s) => s.id);
+      const paidIds = newSessions.filter((s) => s.status === 'requester_paid' || s.status === 'settled').map((s) => s.id);
       if (paidIds.length > 0) {
         const { data: reviews, error: reviewErr } = await supabase
           .from('shift_reviews')
