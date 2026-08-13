@@ -9,7 +9,6 @@ import {
   Modal,
   TouchableOpacity,
   StyleSheet,
-  unstable_batchedUpdates,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter } from 'expo-router';
@@ -142,8 +141,7 @@ export default function DoctorPayout() {
           return;
         }
 
-        unstable_batchedUpdates(() => {
-          if (data.account_number) {
+        if (data.account_number) {
             console.log('[Payout] Pre-filling account number from saved profile');
             setAccountNumber(String(data.account_number));
           }
@@ -162,7 +160,6 @@ export default function DoctorPayout() {
             console.log('[Payout] Pre-filling account name from saved profile');
             setAccountName(String(data.account_name));
           }
-        });
       } catch (err) {
         console.log('[Payout] Error loading saved bank details:', err);
       } finally {
@@ -204,9 +201,7 @@ export default function DoctorPayout() {
                 MONNIFY_SPLIT_PAYMENT_WHITELIST.has(b.code)
             );
           if (normalised.length > 0) {
-            unstable_batchedUpdates(() => {
-              setBanks(normalised);
-            });
+            setBanks(normalised);
             console.log(`[Payout] Banks loaded: ${normalised.length} banks`);
           } else {
             console.log('[Payout] Bank list load failed (no whitelisted banks), using fallback');

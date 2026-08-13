@@ -8,7 +8,6 @@ import {
   Modal,
   TouchableOpacity,
   StyleSheet,
-  unstable_batchedUpdates,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -57,8 +56,7 @@ export default function RequesterBasicProfile() {
           .eq('id', user.id)
           .single();
         if (!data) return;
-        unstable_batchedUpdates(() => {
-          if (data.phone) {
+        if (data.phone) {
             console.log('[RequesterBasicProfile] Pre-filling phone from profile');
             setPhone(data.phone);
           }
@@ -66,7 +64,6 @@ export default function RequesterBasicProfile() {
             console.log('[RequesterBasicProfile] Pre-filling gender from profile:', data.gender);
             setGender(data.gender);
           }
-        });
       } catch {
         // silently ignore
       }

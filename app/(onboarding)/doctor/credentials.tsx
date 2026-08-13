@@ -7,7 +7,6 @@ import {
   Image,
   StyleSheet,
   ImageSourcePropType,
-  unstable_batchedUpdates,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import Svg, { Path, Circle } from 'react-native-svg';
@@ -117,8 +116,7 @@ export default function DoctorCredentials() {
           .eq('id', user.id)
           .single();
         if (!data) return;
-        unstable_batchedUpdates(() => {
-          if (data.mdcn_number) {
+        if (data.mdcn_number) {
             console.log('[Credentials] Pre-filling MDCN number from profile');
             setMdcnNumber(data.mdcn_number);
           }
@@ -134,7 +132,6 @@ export default function DoctorCredentials() {
             console.log('[Credentials] Selfie previously uploaded');
             setSelfieAlreadyUploaded(true);
           }
-        });
       } catch {
         // silently ignore
       }
