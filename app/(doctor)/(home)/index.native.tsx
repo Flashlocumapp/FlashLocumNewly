@@ -100,7 +100,7 @@ function HomePaymentPendingContent({ session }: { session: CoverageSession }) {
 
       {/* Shift pill */}
       <View style={styles.shiftPill}>
-        <Text style={styles.shiftPillText} numberOfLines={1}>{shiftPillText}</Text>
+        <Text style={styles.shiftPillText}>{shiftPillText}</Text>
       </View>
 
       {/* Amber waiting banner — identical to DoctorUpcomingCoverageCard */}
@@ -157,7 +157,7 @@ function HomeUpcomingContent({
 
       {/* Shift pill */}
       <View style={styles.shiftPill}>
-        <Text style={styles.shiftPillText} numberOfLines={1}>{shiftPillText}</Text>
+        <Text style={styles.shiftPillText}>{shiftPillText}</Text>
       </View>
 
       {/* Note */}
@@ -252,7 +252,7 @@ function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCal
 
       {/* Shift pill */}
       <View style={styles.shiftPill}>
-        <Text style={styles.shiftPillText} numberOfLines={1}>{shiftPillText}</Text>
+        <Text style={styles.shiftPillText}>{shiftPillText}</Text>
       </View>
 
       {/* Note */}
