@@ -909,36 +909,41 @@ export default function DoctorLayout() {
   const onlineStatusChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   useEffect(() => {
     if (!user) return;
-    // Tear down any existing channel first — ref guarantees we hold the right instance
-    if (onlineStatusChannelRef.current) {
-      supabase.removeChannel(onlineStatusChannelRef.current);
-      onlineStatusChannelRef.current = null;
-    }
-    const channel = supabase.channel(`doctor-online-status:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'doctor_profiles',
-          filter: `id=eq.${user.id}`,
-        },
-        (payload) => {
-          if (!isMountedRef.current) return;
-          const newRow = payload.new as { is_online?: boolean };
-          if (typeof newRow.is_online !== 'boolean') return;
-          // If a toggle is in flight, only apply if the incoming value matches the intent
-          // (i.e. the DB confirmed what we already set). Discard contradicting events.
-          if (_toggleIntent !== null && newRow.is_online !== _toggleIntent) return;
-          setIsOnline(newRow.is_online);
-          if (user?.id) setCached(`doctor_is_online:${user.id}`, newRow.is_online);
-        }
-      )
-      .subscribe();
-    onlineStatusChannelRef.current = channel;
+    let cancelled = false;
+    (async () => {
+      const name = `doctor-online-status:${user.id}`;
+      const existing = supabase.getChannels().find(c => c.topic === `realtime:${name}`);
+      if (existing) await supabase.removeChannel(existing);
+      if (cancelled) return;
+      const channel = supabase.channel(name)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'doctor_profiles',
+            filter: `id=eq.${user.id}`,
+          },
+          (payload) => {
+            if (!isMountedRef.current) return;
+            const newRow = payload.new as { is_online?: boolean };
+            if (typeof newRow.is_online !== 'boolean') return;
+            // If a toggle is in flight, only apply if the incoming value matches the intent
+            // (i.e. the DB confirmed what we already set). Discard contradicting events.
+            if (_toggleIntent !== null && newRow.is_online !== _toggleIntent) return;
+            setIsOnline(newRow.is_online);
+            if (user?.id) setCached(`doctor_is_online:${user.id}`, newRow.is_online);
+          }
+        )
+        .subscribe();
+      onlineStatusChannelRef.current = channel;
+    })();
     return () => {
-      supabase.removeChannel(channel);
-      onlineStatusChannelRef.current = null;
+      cancelled = true;
+      if (onlineStatusChannelRef.current) {
+        supabase.removeChannel(onlineStatusChannelRef.current);
+        onlineStatusChannelRef.current = null;
+      }
     };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1422,6 +1427,7 @@ export default function DoctorLayout() {
   const sessionStatusWatchRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const coverageRequestsPgRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const doctorProfilePgRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const doctorChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const sessionPgChangesRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // ── Stable postgres_changes subscription — catches status transitions that broadcast channels miss ──
@@ -1430,48 +1436,57 @@ export default function DoctorLayout() {
   // is permanent and cannot be torn down by any state change — it is the guaranteed delivery path.
   useEffect(() => {
     if (!user?.id) return;
-    if (sessionStatusWatchRef.current) {
-      supabase.removeChannel(sessionStatusWatchRef.current);
-      sessionStatusWatchRef.current = null;
-    }
-    const ch = supabase.channel(`session-status-watch:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'coverage_sessions',
-          filter: `doctor_id=eq.${user.id}`,
-        },
-        (payload) => {
-          if (!isMountedRef.current) return;
-          const newRow = payload.new as any;
-          const oldRow = payload.old as any;
-          // Only act when status actually changed
-          if (!newRow?.status || newRow.status === oldRow?.status) return;
-          const newStatus = newRow.status as string;
-          console.log('[Doctor] postgres_changes session status:', oldRow?.status, '→', newStatus, 'session:', newRow.id);
-          if (newStatus === 'active') {
-            // This is the Start Shift transition. Call fetchActiveSession() immediately —
-            // same as what happens on app restart. This is the guaranteed fallback path.
-            fetchActiveSession();
-          } else if (newStatus === 'paused') {
-            fetchActiveSession();
-          } else if (newStatus === 'cancelled') {
-            // Reconcile upcoming to remove the cancelled session
-            reconcileUpcomingRef.current();
-          } else if (newStatus === 'payment_pending') {
-            // Fetch active session immediately so the proactive payment poll useEffect can start
-            fetchActiveSession();
+    let cancelled = false;
+    (async () => {
+      const name = `session-status-watch:${user.id}`;
+      const existing = supabase.getChannels().find(c => c.topic === `realtime:${name}`);
+      if (existing) await supabase.removeChannel(existing);
+      if (cancelled) return;
+      const ch = supabase.channel(name)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'coverage_sessions',
+            filter: `doctor_id=eq.${user.id}`,
+          },
+          (payload) => {
+            if (!isMountedRef.current) return;
+            const newRow = payload.new as any;
+            const oldRow = payload.old as any;
+            // Only act when status actually changed
+            if (!newRow?.status || newRow.status === oldRow?.status) return;
+            const newStatus = newRow.status as string;
+            console.log('[Doctor] postgres_changes session status:', oldRow?.status, '→', newStatus, 'session:', newRow.id);
+            if (newStatus === 'active') {
+              // This is the Start Shift transition. Call fetchActiveSession() immediately —
+              // same as what happens on app restart. This is the guaranteed fallback path.
+              fetchActiveSession();
+            } else if (newStatus === 'paused') {
+              fetchActiveSession();
+            } else if (newStatus === 'cancelled') {
+              // Reconcile upcoming to remove the cancelled session
+              reconcileUpcomingRef.current();
+            } else if (newStatus === 'payment_pending') {
+              // Fetch active session immediately so the proactive payment poll useEffect can start
+              fetchActiveSession();
+            }
+            // settled, requester_paid are handled by existing payment polling
           }
-          // settled, requester_paid are handled by existing payment polling
-        }
-      )
-      .subscribe((status) => {
-        console.log('[Doctor] session-status-watch channel:', status);
-      });
-    sessionStatusWatchRef.current = ch;
-    return () => { supabase.removeChannel(ch); sessionStatusWatchRef.current = null; };
+        )
+        .subscribe((status) => {
+          console.log('[Doctor] session-status-watch channel:', status);
+        });
+      sessionStatusWatchRef.current = ch;
+    })();
+    return () => {
+      cancelled = true;
+      if (sessionStatusWatchRef.current) {
+        supabase.removeChannel(sessionStatusWatchRef.current);
+        sessionStatusWatchRef.current = null;
+      }
+    };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Stable postgres_changes on coverage_requests — layer 3 for dispatch events ──
@@ -1479,89 +1494,107 @@ export default function DoctorLayout() {
   // UPDATE: removes matched/expired/cancelled requests from the queue.
   useEffect(() => {
     if (!user?.id) return;
-    if (coverageRequestsPgRef.current) {
-      supabase.removeChannel(coverageRequestsPgRef.current);
-      coverageRequestsPgRef.current = null;
-    }
-    const ch = supabase.channel(`coverage-requests-pg:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'coverage_requests',
-        },
-        (payload) => {
-          const row = payload.new as any;
-          if (row?.status !== 'pending') return;
-          if (row?.expiry_at && new Date(row.expiry_at) <= new Date()) return;
-          if (!isOnlineRef.current) return;
-          console.log('[Doctor] coverage_requests INSERT via postgres_changes — triggering forceSync for eligibility check:', row.id);
-          forceSyncRef.current().then(() => startDispatchActiveRef.current());
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'coverage_requests',
-        },
-        (payload) => {
-          const row = payload.new as any;
-          const evictStatuses = ['matched', 'expired', 'cancelled', 'withdrawn'];
-          if (evictStatuses.includes(row?.status)) {
-            console.log('[Doctor] coverage_requests UPDATE via postgres_changes — evicting from queue:', row.id, 'status:', row.status);
-            setRequestQueue((prev) => {
-              const next = prev.filter((r) => r.id !== row.id);
-              if (next.length === 0) {
-                PollingManager.stop('dispatch-active');
-                dispatchActiveStartedRef.current = false;
-              }
-              return next;
-            });
+    let cancelled = false;
+    (async () => {
+      const name = `coverage-requests-pg:${user.id}`;
+      const existing = supabase.getChannels().find(c => c.topic === `realtime:${name}`);
+      if (existing) await supabase.removeChannel(existing);
+      if (cancelled) return;
+      const ch = supabase.channel(name)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'coverage_requests',
+          },
+          (payload) => {
+            const row = payload.new as any;
+            if (row?.status !== 'pending') return;
+            if (row?.expiry_at && new Date(row.expiry_at) <= new Date()) return;
+            if (!isOnlineRef.current) return;
+            console.log('[Doctor] coverage_requests INSERT via postgres_changes — triggering forceSync for eligibility check:', row.id);
+            forceSyncRef.current().then(() => startDispatchActiveRef.current());
           }
-        }
-      )
-      .subscribe((status) => {
-        console.log('[Doctor] coverage-requests-pg channel:', status);
-      });
-    coverageRequestsPgRef.current = ch;
-    return () => { supabase.removeChannel(ch); coverageRequestsPgRef.current = null; };
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'coverage_requests',
+          },
+          (payload) => {
+            const row = payload.new as any;
+            const evictStatuses = ['matched', 'expired', 'cancelled', 'withdrawn'];
+            if (evictStatuses.includes(row?.status)) {
+              console.log('[Doctor] coverage_requests UPDATE via postgres_changes — evicting from queue:', row.id, 'status:', row.status);
+              setRequestQueue((prev) => {
+                const next = prev.filter((r) => r.id !== row.id);
+                if (next.length === 0) {
+                  PollingManager.stop('dispatch-active');
+                  dispatchActiveStartedRef.current = false;
+                }
+                return next;
+              });
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log('[Doctor] coverage-requests-pg channel:', status);
+        });
+      coverageRequestsPgRef.current = ch;
+    })();
+    return () => {
+      cancelled = true;
+      if (coverageRequestsPgRef.current) {
+        supabase.removeChannel(coverageRequestsPgRef.current);
+        coverageRequestsPgRef.current = null;
+      }
+    };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── postgres_changes — doctor_profiles: Layer 3 for Ratings ──────────────
   useEffect(() => {
     if (!user?.id) return;
-    if (doctorProfilePgRef.current) {
-      supabase.removeChannel(doctorProfilePgRef.current);
-      doctorProfilePgRef.current = null;
-    }
-    const ch = supabase.channel(`doctor-profile-pg:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'doctor_profiles',
-          filter: `id=eq.${user.id}`,
-        },
-        (payload) => {
-          const row = payload.new as any;
-          console.log('[Doctor] doctor_profiles UPDATE via postgres_changes — rating:', row.rating, 'reliability:', row.reliability);
-          if (row.rating !== undefined && row.rating !== null) {
-            setDoctorRatingScore(Number(row.rating));
+    let cancelled = false;
+    (async () => {
+      const name = `doctor-profile-pg:${user.id}`;
+      const existing = supabase.getChannels().find(c => c.topic === `realtime:${name}`);
+      if (existing) await supabase.removeChannel(existing);
+      if (cancelled) return;
+      const ch = supabase.channel(name)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'doctor_profiles',
+            filter: `id=eq.${user.id}`,
+          },
+          (payload) => {
+            const row = payload.new as any;
+            console.log('[Doctor] doctor_profiles UPDATE via postgres_changes — rating:', row.rating, 'reliability:', row.reliability);
+            if (row.rating !== undefined && row.rating !== null) {
+              setDoctorRatingScore(Number(row.rating));
+            }
+            if (row.reliability !== undefined && row.reliability !== null) {
+              setDoctorReliabilityScore(Number(row.reliability));
+            }
           }
-          if (row.reliability !== undefined && row.reliability !== null) {
-            setDoctorReliabilityScore(Number(row.reliability));
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('[Doctor] doctor-profile-pg channel:', status);
-      });
-    doctorProfilePgRef.current = ch;
-    return () => { supabase.removeChannel(ch); doctorProfilePgRef.current = null; };
+        )
+        .subscribe((status) => {
+          console.log('[Doctor] doctor-profile-pg channel:', status);
+        });
+      doctorProfilePgRef.current = ch;
+    })();
+    return () => {
+      cancelled = true;
+      if (doctorProfilePgRef.current) {
+        supabase.removeChannel(doctorProfilePgRef.current);
+        doctorProfilePgRef.current = null;
+      }
+    };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Postgres Changes fallback: fires when coverage_sessions row status → requester_paid ──
@@ -1614,124 +1647,138 @@ export default function DoctorLayout() {
   // Dependency on activeSessionId ensures the handler captures the latest session ID in its closure.
   useEffect(() => {
     if (!user) return;
-    const ch = safeChannel(`doctor:${user.id}`)
-      .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
-        if (!isMountedRef.current) return;
-        if (payload?.payload?.reviewer_role === 'requester') {
-          const newRating = payload?.payload?.new_rating;
-          if (newRating !== undefined) {
-            setDoctorRatingScore(Number(newRating));
+    let cancelled = false;
+    (async () => {
+      const name = `doctor:${user.id}`;
+      const existing = supabase.getChannels().find(c => c.topic === `realtime:${name}`);
+      if (existing) await supabase.removeChannel(existing);
+      if (cancelled) return;
+      const ch = supabase.channel(name)
+        .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
+          if (!isMountedRef.current) return;
+          if (payload?.payload?.reviewer_role === 'requester') {
+            const newRating = payload?.payload?.new_rating;
+            if (newRating !== undefined) {
+              setDoctorRatingScore(Number(newRating));
+            }
           }
-        }
-      })
-      .on('broadcast', { event: 'RELIABILITY_UPDATED' }, (payload) => {
-        if (!isMountedRef.current) return;
-        const newReliability = payload?.payload?.new_reliability;
-        if (newReliability !== undefined) {
-          setDoctorReliabilityScore(Number(newReliability));
-        }
-      })
-      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        if (!isMountedRef.current) return;
-        const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
-        const hospitalName = payload?.payload?.hospital_name ?? '';
-        const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
-        console.log('[Doctor] user channel PAYMENT_CONFIRMED received', { sessionId, hospitalName, amount });
-        setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount, payload?.payload?.paid_at);
-        const sid = sessionId ?? '';
-        if (sid && paymentPollingStartedRef.current !== sid) {
-          paymentPollingStartedRef.current = sid;
-          startPaymentPollingRef.current(sid, hospitalName, amount);
-        }
-        invalidate(`doctor-coverage-history-${user.id}`);
-        invalidate(`doctor-coverage-upcoming-${user.id}`);
-        invalidate(`doctor_earnings:${user.id}`);
-      })
-      .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
-        if (!isMountedRef.current) return;
-        const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
-        const hospitalName = payload?.payload?.hospital_name ?? '';
-        const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
-        console.log('[Doctor] user channel payment_confirmed received', { sessionId, hospitalName, amount });
-        setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
-        maybeShowDoctorRating(sessionId ?? '', hospitalName, amount, payload?.payload?.paid_at);
-        const sid = sessionId ?? '';
-        if (sid && paymentPollingStartedRef.current !== sid) {
-          paymentPollingStartedRef.current = sid;
-          startPaymentPollingRef.current(sid, hospitalName, amount);
-        }
-        invalidate(`doctor-coverage-history-${user.id}`);
-        invalidate(`doctor-coverage-upcoming-${user.id}`);
-        invalidate(`doctor_earnings:${user.id}`);
-      })
-      .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
-        console.log('[Doctor] user channel SHIFT_STARTED received');
-        startShiftInProgressRef.current = true;
-        setActiveSession((prev) => prev ? { ...prev, status: 'active' } : prev);
-        fetchActiveSession().finally(() => { startShiftInProgressRef.current = false; });
-        const startSessionId = activeSessionIdRef.current ?? '';
-        if (startSessionId) {
-          PollingManager.start(`start-confirm-${startSessionId}`, async () => {
-            const { data: s } = await supabase
-              .from('coverage_sessions')
-              .select('status')
-              .eq('id', startSessionId)
-              .maybeSingle();
-            if (s?.status === 'active') {
-              fetchActiveSessionRef.current();
-              return true;
-            }
-            return false;
-          }, 5000, 6);
-        }
-      })
-      .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
-        if (!isMountedRef.current) return;
-        const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
-        console.log('[Doctor] user channel SHIFT_ENDED received', { sessionId: (updated as any)?.id ?? activeSessionIdRef.current });
-        if (updated) {
-          setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
-        }
-        const sid = (updated as any)?.id ?? activeSessionIdRef.current ?? '';
-        const hospital = (updated as any)?.hospital_name ?? '';
-        const amt = (updated as any)?.total_cost ?? (updated as any)?.price ?? 0;
-        if (sid && paymentPollingStartedRef.current !== sid) {
-          paymentPollingStartedRef.current = sid;
-          startPaymentPollingRef.current(sid, hospital, amt);
-        }
-      })
-      .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
-        if (!isMountedRef.current) return;
-        const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
-        console.log('[Doctor] user channel SHIFT_CANCELLED received', { sessionId });
-        if (activeSession?.id) clearChimeForSession(activeSession.id);
-        setActiveSession(null);
-        paymentPollingStartedRef.current = null;
-        setActiveJobCount((prev) => Math.max(0, prev - 1));
-        if (sessionId) {
-          setUpcomingSessions((prev) => prev.filter((s) => s.id !== sessionId));
-        }
-        reconcileUpcomingRef.current();
-        if (sessionId) {
-          PollingManager.start(`cancel-confirm-${sessionId}`, async () => {
-            const { data: s } = await supabase
-              .from('coverage_sessions')
-              .select('status')
-              .eq('id', sessionId)
-              .maybeSingle();
-            if (!s || s.status === 'cancelled') {
-              reconcileUpcomingRef.current();
-              return true;
-            }
-            return false;
-          }, 5000, 6);
-        }
-      })
-      .subscribe((status) => {
-        // subscription status — no logging needed
-      });
-    return () => { supabase.removeChannel(ch); };
+        })
+        .on('broadcast', { event: 'RELIABILITY_UPDATED' }, (payload) => {
+          if (!isMountedRef.current) return;
+          const newReliability = payload?.payload?.new_reliability;
+          if (newReliability !== undefined) {
+            setDoctorReliabilityScore(Number(newReliability));
+          }
+        })
+        .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+          if (!isMountedRef.current) return;
+          const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
+          const hospitalName = payload?.payload?.hospital_name ?? '';
+          const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
+          console.log('[Doctor] user channel PAYMENT_CONFIRMED received', { sessionId, hospitalName, amount });
+          setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
+          maybeShowDoctorRating(sessionId ?? '', hospitalName, amount, payload?.payload?.paid_at);
+          const sid = sessionId ?? '';
+          if (sid && paymentPollingStartedRef.current !== sid) {
+            paymentPollingStartedRef.current = sid;
+            startPaymentPollingRef.current(sid, hospitalName, amount);
+          }
+          invalidate(`doctor-coverage-history-${user.id}`);
+          invalidate(`doctor-coverage-upcoming-${user.id}`);
+          invalidate(`doctor_earnings:${user.id}`);
+        })
+        .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+          if (!isMountedRef.current) return;
+          const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
+          const hospitalName = payload?.payload?.hospital_name ?? '';
+          const amount = payload?.payload?.amount_naira ?? payload?.payload?.total_naira ?? payload?.payload?.price ?? 0;
+          console.log('[Doctor] user channel payment_confirmed received', { sessionId, hospitalName, amount });
+          setActiveSession((prev) => prev ? { ...prev, status: 'requester_paid' } : prev);
+          maybeShowDoctorRating(sessionId ?? '', hospitalName, amount, payload?.payload?.paid_at);
+          const sid = sessionId ?? '';
+          if (sid && paymentPollingStartedRef.current !== sid) {
+            paymentPollingStartedRef.current = sid;
+            startPaymentPollingRef.current(sid, hospitalName, amount);
+          }
+          invalidate(`doctor-coverage-history-${user.id}`);
+          invalidate(`doctor-coverage-upcoming-${user.id}`);
+          invalidate(`doctor_earnings:${user.id}`);
+        })
+        .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
+          console.log('[Doctor] user channel SHIFT_STARTED received');
+          startShiftInProgressRef.current = true;
+          setActiveSession((prev) => prev ? { ...prev, status: 'active' } : prev);
+          fetchActiveSession().finally(() => { startShiftInProgressRef.current = false; });
+          const startSessionId = activeSessionIdRef.current ?? '';
+          if (startSessionId) {
+            PollingManager.start(`start-confirm-${startSessionId}`, async () => {
+              const { data: s } = await supabase
+                .from('coverage_sessions')
+                .select('status')
+                .eq('id', startSessionId)
+                .maybeSingle();
+              if (s?.status === 'active') {
+                fetchActiveSessionRef.current();
+                return true;
+              }
+              return false;
+            }, 5000, 6);
+          }
+        })
+        .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
+          if (!isMountedRef.current) return;
+          const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
+          console.log('[Doctor] user channel SHIFT_ENDED received', { sessionId: (updated as any)?.id ?? activeSessionIdRef.current });
+          if (updated) {
+            setActiveSession((prev) => ({ ...(prev ?? {}), ...updated } as CoverageSession));
+          }
+          const sid = (updated as any)?.id ?? activeSessionIdRef.current ?? '';
+          const hospital = (updated as any)?.hospital_name ?? '';
+          const amt = (updated as any)?.total_cost ?? (updated as any)?.price ?? 0;
+          if (sid && paymentPollingStartedRef.current !== sid) {
+            paymentPollingStartedRef.current = sid;
+            startPaymentPollingRef.current(sid, hospital, amt);
+          }
+        })
+        .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+          if (!isMountedRef.current) return;
+          const sessionId = payload?.payload?.session_id ?? activeSessionIdRef.current;
+          console.log('[Doctor] user channel SHIFT_CANCELLED received', { sessionId });
+          if (activeSession?.id) clearChimeForSession(activeSession.id);
+          setActiveSession(null);
+          paymentPollingStartedRef.current = null;
+          setActiveJobCount((prev) => Math.max(0, prev - 1));
+          if (sessionId) {
+            setUpcomingSessions((prev) => prev.filter((s) => s.id !== sessionId));
+          }
+          reconcileUpcomingRef.current();
+          if (sessionId) {
+            PollingManager.start(`cancel-confirm-${sessionId}`, async () => {
+              const { data: s } = await supabase
+                .from('coverage_sessions')
+                .select('status')
+                .eq('id', sessionId)
+                .maybeSingle();
+              if (!s || s.status === 'cancelled') {
+                reconcileUpcomingRef.current();
+                return true;
+              }
+              return false;
+            }, 5000, 6);
+          }
+        })
+        .subscribe((status) => {
+          // subscription status — no logging needed
+        });
+      doctorChannelRef.current = ch;
+    })();
+    return () => {
+      cancelled = true;
+      if (doctorChannelRef.current) {
+        supabase.removeChannel(doctorChannelRef.current);
+        doctorChannelRef.current = null;
+      }
+    };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Queue → state sync ──

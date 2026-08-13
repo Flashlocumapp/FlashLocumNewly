@@ -1753,116 +1753,140 @@ export default function RequesterHomeScreen() {
   // Consolidates former channels: requester-scores, requester-home-user, requester
   useEffect(() => {
     if (!user) return;
-    const ch = safeChannel(`requester-user:${user.id}`)
-      // From channel 3 (scores)
-      .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
-        if (!isMountedRef.current) return;
-        if (payload?.payload?.reviewer_role === 'doctor') {
-          const newRating = payload?.payload?.new_rating;
-          if (newRating !== undefined) {
-            setRequesterRating(newRating);
+    let cancelled = false;
+    const chRef = { current: null as ReturnType<typeof supabase.channel> | null };
+    (async () => {
+      const name = `requester-user:${user.id}`;
+      const existing = supabase.getChannels().find(c => c.topic === `realtime:${name}`);
+      if (existing) await supabase.removeChannel(existing);
+      if (cancelled) return;
+      const ch = supabase.channel(name)
+        // From channel 3 (scores)
+        .on('broadcast', { event: 'RATING_UPDATED' }, (payload) => {
+          if (!isMountedRef.current) return;
+          if (payload?.payload?.reviewer_role === 'doctor') {
+            const newRating = payload?.payload?.new_rating;
+            if (newRating !== undefined) {
+              setRequesterRating(newRating);
+              const prev = getCached<{ rating: number; reliability: number }>('requester_scores');
+              setCached('requester_scores', { rating: newRating, reliability: prev?.reliability ?? 100 });
+            }
+          }
+        })
+        .on('broadcast', { event: 'RELIABILITY_UPDATED' }, (payload) => {
+          if (!isMountedRef.current) return;
+          const newReliability = payload?.payload?.new_reliability;
+          if (newReliability !== undefined) {
+            setRequesterReliability(newReliability);
             const prev = getCached<{ rating: number; reliability: number }>('requester_scores');
-            setCached('requester_scores', { rating: newRating, reliability: prev?.reliability ?? 100 });
+            setCached('requester_scores', { rating: prev?.rating ?? 5.0, reliability: newReliability });
           }
-        }
-      })
-      .on('broadcast', { event: 'RELIABILITY_UPDATED' }, (payload) => {
-        if (!isMountedRef.current) return;
-        const newReliability = payload?.payload?.new_reliability;
-        if (newReliability !== undefined) {
-          setRequesterReliability(newReliability);
-          const prev = getCached<{ rating: number; reliability: number }>('requester_scores');
-          setCached('requester_scores', { rating: prev?.rating ?? 5.0, reliability: newReliability });
-        }
-      })
-      // From channel 6 (payment confirmed on user channel)
-      .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
-        if (!isMountedRef.current) return;
-        console.log('[Requester] user channel payment_confirmed received', payload?.payload);
-        const sessionId = payload?.payload?.session_id;
-        invalidate(`requester-coverage-${user?.id ?? 'anon'}`);
-        handlePaymentConfirmedWithFallbackRef.current(sessionId, payload?.payload?.paid_at);
-        startRequesterPaymentPollingRef.current();
-      })
-      .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
-        if (!isMountedRef.current) return;
-        console.log('[Requester] user channel PAYMENT_CONFIRMED received', payload?.payload);
-        const sessionId = payload?.payload?.session_id;
-        invalidate(`requester-coverage-${user?.id ?? 'anon'}`);
-        handlePaymentConfirmedWithFallbackRef.current(sessionId, payload?.payload?.paid_at);
-        startRequesterPaymentPollingRef.current();
-      })
-      // From channel 7 (shift cancelled on requester channel)
-      .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
-        if (!isMountedRef.current) return;
-        console.log('[Requester] requester-user channel SHIFT_CANCELLED received');
-        PollingManager.stop('cancel');
-        if (activeSessionRef.current?.id) clearChimeForSession(activeSessionRef.current.id);
-        setActiveSession(null);
-        PollingManager.start('cancel-confirm', async () => {
-          const sid = activeSessionRef.current?.id ?? '';
-          if (!sid) return true;
-          const { data: s } = await supabase
-            .from('coverage_sessions')
-            .select('status')
-            .eq('id', sid)
-            .maybeSingle();
-          if (!s || s.status === 'cancelled') {
-            return true;
+        })
+        // From channel 6 (payment confirmed on user channel)
+        .on('broadcast', { event: 'payment_confirmed' }, (payload) => {
+          if (!isMountedRef.current) return;
+          console.log('[Requester] user channel payment_confirmed received', payload?.payload);
+          const sessionId = payload?.payload?.session_id;
+          invalidate(`requester-coverage-${user?.id ?? 'anon'}`);
+          handlePaymentConfirmedWithFallbackRef.current(sessionId, payload?.payload?.paid_at);
+          startRequesterPaymentPollingRef.current();
+        })
+        .on('broadcast', { event: 'PAYMENT_CONFIRMED' }, (payload) => {
+          if (!isMountedRef.current) return;
+          console.log('[Requester] user channel PAYMENT_CONFIRMED received', payload?.payload);
+          const sessionId = payload?.payload?.session_id;
+          invalidate(`requester-coverage-${user?.id ?? 'anon'}`);
+          handlePaymentConfirmedWithFallbackRef.current(sessionId, payload?.payload?.paid_at);
+          startRequesterPaymentPollingRef.current();
+        })
+        // From channel 7 (shift cancelled on requester channel)
+        .on('broadcast', { event: 'SHIFT_CANCELLED' }, (payload) => {
+          if (!isMountedRef.current) return;
+          console.log('[Requester] requester-user channel SHIFT_CANCELLED received');
+          PollingManager.stop('cancel');
+          if (activeSessionRef.current?.id) clearChimeForSession(activeSessionRef.current.id);
+          setActiveSession(null);
+          PollingManager.start('cancel-confirm', async () => {
+            const sid = activeSessionRef.current?.id ?? '';
+            if (!sid) return true;
+            const { data: s } = await supabase
+              .from('coverage_sessions')
+              .select('status')
+              .eq('id', sid)
+              .maybeSingle();
+            if (!s || s.status === 'cancelled') {
+              return true;
+            }
+            return false;
+          }, undefined, 6);
+        })
+        .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
+          if (!isMountedRef.current) return;
+          // A session was created — if we're in matching state, confirm the match
+          PollingManager.stop('match');
+          if (shouldPollRef.current) {
+            shouldPollRef.current = false;
+            if (pollIntervalRef.current) {
+              clearTimeout(pollIntervalRef.current);
+              pollIntervalRef.current = null;
+            }
+            if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
           }
-          return false;
-        }, undefined, 6);
-      })
-      .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
-        if (!isMountedRef.current) return;
-        // A session was created — if we're in matching state, confirm the match
-        PollingManager.stop('match');
-        if (shouldPollRef.current) {
-          shouldPollRef.current = false;
-          if (pollIntervalRef.current) {
-            clearTimeout(pollIntervalRef.current);
-            pollIntervalRef.current = null;
+          fetchActiveSessionRef.current();
+          if (AppState.currentState === 'active') {
+            const sid = (payload?.payload as { session_id?: string } | undefined)?.session_id;
+            if (sid) playAcceptanceChime(sid);
           }
-          if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
-        }
-        fetchActiveSessionRef.current();
-        if (AppState.currentState === 'active') {
-          const sid = (payload?.payload as { session_id?: string } | undefined)?.session_id;
-          if (sid) playAcceptanceChime(sid);
-        }
-        transitionToRef.current('idle');
-      })
-      .subscribe((status) => {
-      });
-    return () => { supabase.removeChannel(ch); };
+          transitionToRef.current('idle');
+        })
+        .subscribe((status) => {
+        });
+      chRef.current = ch;
+    })();
+    return () => {
+      cancelled = true;
+      if (chRef.current) { supabase.removeChannel(chRef.current); chRef.current = null; }
+    };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Realtime: requester:{user.id} channel — catches doctor-initiated cancellations ─
   useEffect(() => {
     if (!user) return;
-    const ch = safeChannel(`requester:${user.id}`)
-      .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
-        if (!isMountedRef.current) return;
-        console.log('[Requester] requester channel SHIFT_CANCELLED received — doctor cancelled');
-        PollingManager.stop('cancel');
-        if (activeSessionRef.current?.id) clearChimeForSession(activeSessionRef.current.id);
-        setActiveSession(null);
-        PollingManager.start('cancel-confirm', async () => {
-          const sid = activeSessionRef.current?.id ?? '';
-          if (!sid) return true;
-          const { data: s } = await supabase
-            .from('coverage_sessions')
-            .select('status')
-            .eq('id', sid)
-            .maybeSingle();
-          if (!s || s.status === 'cancelled') {
-            return true;
-          }
-          return false;
-        }, undefined, 6);
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    let cancelled = false;
+    const chRef = { current: null as ReturnType<typeof supabase.channel> | null };
+    (async () => {
+      const name = `requester:${user.id}`;
+      const existing = supabase.getChannels().find(c => c.topic === `realtime:${name}`);
+      if (existing) await supabase.removeChannel(existing);
+      if (cancelled) return;
+      const ch = supabase.channel(name)
+        .on('broadcast', { event: 'SHIFT_CANCELLED' }, () => {
+          if (!isMountedRef.current) return;
+          console.log('[Requester] requester channel SHIFT_CANCELLED received — doctor cancelled');
+          PollingManager.stop('cancel');
+          if (activeSessionRef.current?.id) clearChimeForSession(activeSessionRef.current.id);
+          setActiveSession(null);
+          PollingManager.start('cancel-confirm', async () => {
+            const sid = activeSessionRef.current?.id ?? '';
+            if (!sid) return true;
+            const { data: s } = await supabase
+              .from('coverage_sessions')
+              .select('status')
+              .eq('id', sid)
+              .maybeSingle();
+            if (!s || s.status === 'cancelled') {
+              return true;
+            }
+            return false;
+          }, undefined, 6);
+        })
+        .subscribe();
+      chRef.current = ch;
+    })();
+    return () => {
+      cancelled = true;
+      if (chRef.current) { supabase.removeChannel(chRef.current); chRef.current = null; }
+    };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const requesterProfilePgRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -1871,36 +1895,44 @@ export default function RequesterHomeScreen() {
   // ── postgres_changes — requester_profiles: Layer 3 for Ratings ───────────
   useEffect(() => {
     if (!user?.id) return;
-    if (requesterProfilePgRef.current) {
-      supabase.removeChannel(requesterProfilePgRef.current);
-      requesterProfilePgRef.current = null;
-    }
-    const ch = supabase.channel(`requester-profile-pg:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'requester_profiles',
-          filter: `id=eq.${user.id}`,
-        },
-        (payload) => {
-          if (!isMountedRef.current) return;
-          const row = payload.new as any;
-          console.log('[Requester] requester_profiles UPDATE via postgres_changes — rating:', row.rating, 'reliability:', row.reliability);
-          if (row.rating !== undefined && row.rating !== null) {
-            setRequesterRating(Number(row.rating));
+    let cancelled = false;
+    (async () => {
+      const name = `requester-profile-pg:${user.id}`;
+      if (requesterProfilePgRef.current) {
+        await supabase.removeChannel(requesterProfilePgRef.current);
+        requesterProfilePgRef.current = null;
+      }
+      if (cancelled) return;
+      const ch = supabase.channel(name)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'requester_profiles',
+            filter: `id=eq.${user.id}`,
+          },
+          (payload) => {
+            if (!isMountedRef.current) return;
+            const row = payload.new as any;
+            console.log('[Requester] requester_profiles UPDATE via postgres_changes — rating:', row.rating, 'reliability:', row.reliability);
+            if (row.rating !== undefined && row.rating !== null) {
+              setRequesterRating(Number(row.rating));
+            }
+            if (row.reliability !== undefined && row.reliability !== null) {
+              setRequesterReliability(Number(row.reliability));
+            }
           }
-          if (row.reliability !== undefined && row.reliability !== null) {
-            setRequesterReliability(Number(row.reliability));
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('[Requester] requester-profile-pg channel:', status);
-      });
-    requesterProfilePgRef.current = ch;
-    return () => { supabase.removeChannel(ch); requesterProfilePgRef.current = null; };
+        )
+        .subscribe((status) => {
+          console.log('[Requester] requester-profile-pg channel:', status);
+        });
+      requesterProfilePgRef.current = ch;
+    })();
+    return () => {
+      cancelled = true;
+      if (requesterProfilePgRef.current) { supabase.removeChannel(requesterProfilePgRef.current); requesterProfilePgRef.current = null; }
+    };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mapRef = useRef<MapView>(null);
@@ -2549,58 +2581,66 @@ export default function RequesterHomeScreen() {
   // Mounted once on user.id. Replaces the unstable session-ID-scoped subscription.
   useEffect(() => {
     if (!user?.id) return;
-    if (sessionStatusWatchReqRef.current) {
-      supabase.removeChannel(sessionStatusWatchReqRef.current);
-      sessionStatusWatchReqRef.current = null;
-    }
-    const ch = supabase.channel(`session-status-watch-req:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'coverage_sessions',
-          filter: `requester_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const newRow = payload.new as Partial<CoverageSession>;
-          const status = newRow?.status;
-          console.log('[Requester] coverage_sessions INSERT via postgres_changes — status:', status, 'id:', newRow.id);
-          if (status === 'upcoming' || status === 'active' || status === 'paused' || status === 'payment_pending') {
-            fetchActiveSessionRef.current();
-          } else if (status === 'requester_paid' || status === 'settled') {
-            handlePaymentConfirmedWithFallbackRef.current(newRow.id);
-          } else if (status === 'cancelled') {
-            setActiveSession(null);
+    let cancelled = false;
+    (async () => {
+      const name = `session-status-watch-req:${user.id}`;
+      if (sessionStatusWatchReqRef.current) {
+        await supabase.removeChannel(sessionStatusWatchReqRef.current);
+        sessionStatusWatchReqRef.current = null;
+      }
+      if (cancelled) return;
+      const ch = supabase.channel(name)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'coverage_sessions',
+            filter: `requester_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const newRow = payload.new as Partial<CoverageSession>;
+            const status = newRow?.status;
+            console.log('[Requester] coverage_sessions INSERT via postgres_changes — status:', status, 'id:', newRow.id);
+            if (status === 'upcoming' || status === 'active' || status === 'paused' || status === 'payment_pending') {
+              fetchActiveSessionRef.current();
+            } else if (status === 'requester_paid' || status === 'settled') {
+              handlePaymentConfirmedWithFallbackRef.current(newRow.id);
+            } else if (status === 'cancelled') {
+              setActiveSession(null);
+            }
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'coverage_sessions',
-          filter: `requester_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const newRow = payload.new as Partial<CoverageSession>;
-          const status = newRow?.status;
-          console.log('[Requester] coverage_sessions UPDATE via postgres_changes — status:', status, 'id:', newRow.id);
-          if (status === 'upcoming' || status === 'active' || status === 'paused' || status === 'payment_pending') {
-            fetchActiveSessionRef.current();
-          } else if (status === 'requester_paid' || status === 'settled') {
-            handlePaymentConfirmedWithFallbackRef.current(newRow.id);
-          } else if (status === 'cancelled') {
-            setActiveSession(null);
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'coverage_sessions',
+            filter: `requester_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const newRow = payload.new as Partial<CoverageSession>;
+            const status = newRow?.status;
+            console.log('[Requester] coverage_sessions UPDATE via postgres_changes — status:', status, 'id:', newRow.id);
+            if (status === 'upcoming' || status === 'active' || status === 'paused' || status === 'payment_pending') {
+              fetchActiveSessionRef.current();
+            } else if (status === 'requester_paid' || status === 'settled') {
+              handlePaymentConfirmedWithFallbackRef.current(newRow.id);
+            } else if (status === 'cancelled') {
+              setActiveSession(null);
+            }
           }
-        }
-      )
-      .subscribe((status) => {
-        console.log('[Requester] session-status-watch-req channel:', status);
-      });
-    sessionStatusWatchReqRef.current = ch;
-    return () => { supabase.removeChannel(ch); sessionStatusWatchReqRef.current = null; };
+        )
+        .subscribe((status) => {
+          console.log('[Requester] session-status-watch-req channel:', status);
+        });
+      sessionStatusWatchReqRef.current = ch;
+    })();
+    return () => {
+      cancelled = true;
+      if (sessionStatusWatchReqRef.current) { supabase.removeChannel(sessionStatusWatchReqRef.current); sessionStatusWatchReqRef.current = null; }
+    };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Channels 6 and 7 merged into requester-user channel above
