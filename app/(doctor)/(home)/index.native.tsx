@@ -504,6 +504,11 @@ export default function DoctorHomeScreen() {
   // region. Uses _cachedDoctorRegion (written by onRegionChangeComplete on every
   // camera movement) compared against the desired centre+zoom. Does nothing if the
   // camera is already correct — prevents unnecessary flicker on tab return.
+  // ─── Re-focus map on tab return ──────────────────────────────────────────────
+  // Only animates if the current camera is meaningfully different from the desired
+  // region. Uses _cachedDoctorRegion (written by onRegionChangeComplete on every
+  // camera movement) compared against the desired centre+zoom. Does nothing if the
+  // camera is already correct — prevents unnecessary flicker on tab return.
   useFocusEffect(
     React.useCallback(() => {
       if (!_cachedDoctorCoords || !mapRef.current) return;
@@ -513,9 +518,20 @@ export default function DoctorHomeScreen() {
         latitudeDelta:  0.12,
         longitudeDelta: 0.12,
       };
-      // If no region recorded yet, or camera is meaningfully off — refocus once
+      // If no region recorded yet, or camera is meaningfully off — refocus
       if (_cachedDoctorRegion && !isCameraSignificantlyDifferent(_cachedDoctorRegion, desired)) return;
-      try { mapRef.current.animateToRegion(desired, 600); } catch { /* map not ready */ }
+      const doAnimate = () => {
+        if (!_cachedDoctorCoords || !mapRef.current) return;
+        try { mapRef.current.animateToRegion(desired, 600); } catch { /* map not ready */ }
+      };
+      const t1 = setTimeout(doAnimate, 300);
+      const t2 = setTimeout(doAnimate, 800);
+      const t3 = setTimeout(doAnimate, 1500);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
     }, [])
   );
 
