@@ -136,7 +136,7 @@ function TransactionCard({
   const detailRows: { label: string; value: string; green?: boolean }[] = [
     { label: 'Transaction Ref', value: txRef },
     { label: 'Amount Charged', value: totalChargedDisplay },
-    { label: 'Platform Fee (15%)', value: platformFeeDisplay },
+    { label: 'FlashLocum Fee', value: platformFeeDisplay },
     { label: 'Net Payout', value: netPayoutDisplay, green: true },
     { label: 'Payment Date', value: paymentDateDisplay },
     { label: 'Settled Date', value: settledDateDisplay },
@@ -457,7 +457,7 @@ export default function DoctorEarningsScreen() {
       >
         {/* Header */}
         <Text style={styles.screenTitle}>Earnings</Text>
-        <Text style={styles.screenSubtitle}>Net payouts after the 15% service fee</Text>
+        <Text style={styles.screenSubtitle}>Net payouts after the FlashLocum service fee</Text>
 
         {/* Period pill selector */}
         <ScrollView

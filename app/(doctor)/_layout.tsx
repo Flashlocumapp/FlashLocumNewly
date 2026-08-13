@@ -2187,7 +2187,7 @@ export default function DoctorLayout() {
             <View style={styles.feeCard}>
               <FeeRow label="Amount" value={feeAmountDisplay} />
               <View style={styles.divider} />
-              <FeeRow label="FlashLocum fee - 15%" value={feeCutDisplay} valueColor="#FF453A" />
+              <FeeRow label="FlashLocum Fee" value={feeCutDisplay} valueColor="#FF453A" />
               <View style={styles.divider} />
               <FeeRow label="You receive" value={feeYouReceiveDisplay} valueColor="#34C759" />
             </View>
