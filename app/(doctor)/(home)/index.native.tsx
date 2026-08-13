@@ -307,6 +307,18 @@ function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCal
   );
 }
 
+function isCameraSignificantlyDifferent(
+  current: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number },
+  desired: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number },
+): boolean {
+  return (
+    Math.abs(current.latitude  - desired.latitude)  > 0.008 ||
+    Math.abs(current.longitude - desired.longitude) > 0.008 ||
+    Math.abs(current.latitudeDelta  - desired.latitudeDelta)  > 0.04 ||
+    Math.abs(current.longitudeDelta - desired.longitudeDelta) > 0.04
+  );
+}
+
 export default function DoctorHomeScreen() {
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
@@ -488,31 +500,22 @@ export default function DoctorHomeScreen() {
   }, [showMarker]);
 
   // ─── Re-focus map on tab return ──────────────────────────────────────────────
+  // Only animates if the current camera is meaningfully different from the desired
+  // region. Uses _cachedDoctorRegion (written by onRegionChangeComplete on every
+  // camera movement) compared against the desired centre+zoom. Does nothing if the
+  // camera is already correct — prevents unnecessary flicker on tab return.
   useFocusEffect(
     React.useCallback(() => {
-      const doAnimate = () => {
-        if (_cachedDoctorCoords && mapRef.current && !hasUserPannedRef.current) {
-          const targetRegion = {
-            latitude: _cachedDoctorCoords.latitude + MAP_LAT_OFFSET,
-            longitude: _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
-            latitudeDelta: 0.12,
-            longitudeDelta: 0.12,
-          };
-          try {
-            mapRef.current.animateToRegion(targetRegion, 600);
-          } catch {
-            // map not ready
-          }
-        }
+      if (!_cachedDoctorCoords || !mapRef.current) return;
+      const desired = {
+        latitude:      _cachedDoctorCoords.latitude  + MAP_LAT_OFFSET,
+        longitude:     _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
+        latitudeDelta:  0.12,
+        longitudeDelta: 0.12,
       };
-      const t1 = setTimeout(doAnimate, 300);
-      const t2 = setTimeout(doAnimate, 800);
-      const t3 = setTimeout(doAnimate, 1500);
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-        clearTimeout(t3);
-      };
+      // If no region recorded yet, or camera is meaningfully off — refocus once
+      if (_cachedDoctorRegion && !isCameraSignificantlyDifferent(_cachedDoctorRegion, desired)) return;
+      try { mapRef.current.animateToRegion(desired, 600); } catch { /* map not ready */ }
     }, [])
   );
 
