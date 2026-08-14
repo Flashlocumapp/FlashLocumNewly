@@ -74,7 +74,7 @@
           "android": {
             "backgroundColor": "#111315",
             "image": "./assets/images/splash-icon.png",
-            "imageWidth": 350,
+            "imageWidth": 480,
             "resizeMode": "contain"
           }
         }
