@@ -1,22 +1,5 @@
 import appJson from './app.json';
 import { ExpoConfig } from 'expo/config';
-import { withAndroidManifest } from '@expo/config-plugins';
-
-function withRemovedMediaPermissions(config: ExpoConfig): ExpoConfig {
-  return withAndroidManifest(config, (mod) => {
-    const manifest = mod.modResults;
-    const permissions = manifest.manifest['uses-permission'] ?? [];
-    const toRemove = new Set([
-      'android.permission.READ_EXTERNAL_STORAGE',
-      'android.permission.WRITE_EXTERNAL_STORAGE',
-    ]);
-    manifest.manifest['uses-permission'] = permissions.filter(
-      (p: any) => !toRemove.has(p.$['android:name'])
-    );
-    return mod;
-  });
-}
-
 
 const isExpoGo = false;
 
@@ -36,4 +19,4 @@ const config: ExpoConfig = {
     : (appJson.expo.plugins as any[]),
 };
 
-export default withRemovedMediaPermissions(config);
+export default config;
