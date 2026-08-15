@@ -2821,8 +2821,8 @@ export default function RequesterHomeScreen() {
           input,
           locationRestriction: {
             rectangle: {
-              low: { latitude: 6.35, longitude: 2.68 },
-              high: { latitude: 6.70, longitude: 3.75 },
+              low: { latitude: 6.33, longitude: 2.67 },
+              high: { latitude: 6.72, longitude: 4.02 },
             },
           },
           includedRegionCodes: ['ng'],
