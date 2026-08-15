@@ -2930,21 +2930,29 @@ export default function RequesterHomeScreen() {
 
       const channelName = `requester:${activeRequestId}`;
       realtimeChannelRef.current = supabase.channel(channelName)
-        .on('broadcast', { event: 'MATCH_CONFIRMED' }, (payload) => {
+        .on('broadcast', { event: 'MATCH_CONFIRMED' }, async (payload) => {
           console.log('[Requester] MATCH_CONFIRMED broadcast received', payload?.payload);
-          PollingManager.stop('match');
-          shouldPollRef.current = false;
-          if (pollIntervalRef.current) {
-            clearTimeout(pollIntervalRef.current);
-            pollIntervalRef.current = null;
-          }
           if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
           const matchedSid = (payload?.payload as { session_id?: string } | undefined)?.session_id;
           if (matchedSid && AppState.currentState === 'active') {
             console.log('[Requester] MATCH_CONFIRMED — playing acceptance chime for session:', matchedSid);
             playAcceptanceChimeRef.current(matchedSid);
           }
-          fetchActiveSessionRef.current();
+          // Fetch session first — stop polls only after session is confirmed present
+          await fetchActiveSessionRef.current();
+          if (!activeSessionRef.current) {
+            // Session not yet visible to edge function (DB propagation race) — retry once after 1.5s
+            console.log('[Requester] MATCH_CONFIRMED — session null after first fetch, retrying in 1.5s');
+            await new Promise(r => setTimeout(r, 1500));
+            await fetchActiveSessionRef.current();
+          }
+          // Now safe to stop polls — session is present or retry exhausted
+          PollingManager.stop('match');
+          shouldPollRef.current = false;
+          if (pollIntervalRef.current) {
+            clearTimeout(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
           transitionToRef.current('idle');
         })
         .on('broadcast', { event: 'REQUEST_EXPIRED' }, () => {
