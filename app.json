@@ -86,7 +86,12 @@
         }
       ],
       "expo-font",
-      ["expo-image-picker", { "microphonePermission": false }],
+      [
+        "expo-image-picker",
+        {
+          "microphonePermission": false
+        }
+      ],
       "expo-router",
       "expo-web-browser",
       "expo-secure-store",
