@@ -63,3 +63,10 @@ __pycache__/
 .coverage
 htmlcov/
 .python-version
+
+.next/
+.turbo/
+.vercel/
+.cache/
+build/
+next-env.d.ts
