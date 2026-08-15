@@ -131,6 +131,17 @@ export default function DoctorHelpCenterScreen() {
             <Text style={styles.bodyText}>{'• '}</Text>
             <Text style={styles.bodyText}>Payment is sent by 10:15PM on the same day the shift ends</Text>
           </View>
+
+          <Text style={[styles.subHeading, { marginTop: 14 }]}>Your earnings</Text>
+          <Text style={styles.bodyText}>
+            FlashLocum charges a 15% platform fee on each completed shift. You receive 85% of the total shift amount.
+          </Text>
+          <Text style={[styles.bodyText, { marginTop: 8 }]}>
+            For example, if a completed shift is worth ₦20,000, the platform fee is ₦3,000 and your earnings are ₦17,000.
+          </Text>
+          <Text style={[styles.bodyText, { marginTop: 8 }]}>
+            The earnings amount displayed in the app reflects the amount payable to you after the platform fee has been deducted.
+          </Text>
         </View>
       ),
     },

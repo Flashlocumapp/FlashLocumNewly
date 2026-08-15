@@ -2120,7 +2120,7 @@ export default function DoctorLayout() {
     criticalDataReady,
     doctorRatingScore,
     doctorReliabilityScore,
-  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcoming, criticalDataReady, doctorRatingScore, doctorReliabilityScore, displayedRequestId]);
+  }), [isOnline, setIsOnline, goOnline, doctorScreenState, currentRequest, confirmedRequest, accepting, handleAccept, handleDecline, activeSession, setActiveSession, activeJobCount, setActiveJobCount, isJobCapReached, upcomingSessions, setUpcomingSessions, reconcileUpcoming, criticalDataReady, doctorRatingScore, doctorReliabilityScore]);
 
   return (
     <ErrorBoundary
