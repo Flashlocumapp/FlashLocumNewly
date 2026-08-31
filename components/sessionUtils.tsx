@@ -24,12 +24,22 @@ function formatTime(iso: string) {
   });
 }
 
+// Derive per-day hours from shift_start/shift_end time strings ("HH:MM") when per_day_hours is absent
+function deriveHoursFromTimes(start: string, end: string): number {
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return 24;
+  let h = (eh * 60 + em - (sh * 60 + sm)) / 60;
+  if (h <= 0) h += 24; // overnight shift
+  return h;
+}
+
 export function buildShiftPillText(session: SessionLike): string {
-  const shiftMs = new Date(session.shift_end).getTime() - new Date(session.shift_start).getTime();
-  const msHours = shiftMs / (1000 * 60 * 60);
+  console.log('[buildShiftPillText] session shift_start:', session.shift_start, 'shift_end:', session.shift_end, 'per_day_hours:', session.per_day_hours);
   const shiftHours = (session.per_day_hours && Number(session.per_day_hours) > 0)
     ? Number(session.per_day_hours)
-    : (msHours > 0 ? msHours : 24);
+    : deriveHoursFromTimes(session.shift_start, session.shift_end);
+  console.log('[buildShiftPillText] computed shiftHours:', shiftHours);
   const isStraight = session.coverage_type?.toLowerCase().includes('straight') ?? false;
   const coverageLength = session.coverage_length ?? 1;
   const totalHours = isStraight ? shiftHours : shiftHours * coverageLength;
