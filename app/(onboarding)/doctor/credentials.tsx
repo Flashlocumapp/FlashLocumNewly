@@ -211,8 +211,6 @@ export default function DoctorCredentials() {
       }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: 'images' as ImagePicker.MediaTypeOptions,
-        allowsEditing: true,
-        aspect: [1, 1],
         quality: 0.8,
         cameraType: ImagePicker.CameraType.front,
       });
