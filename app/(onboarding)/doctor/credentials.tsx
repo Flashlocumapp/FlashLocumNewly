@@ -153,10 +153,13 @@ export default function DoctorCredentials() {
   }, []);
 
   const handleBack = () => {
-    if (profile?.doctor_onboarding_complete) {
+    if (router.canGoBack()) {
+      router.back();
+    } else if (profile?.doctor_onboarding_complete) {
       router.replace('/(doctor)/(home)' as any);
     } else {
-      router.replace('/(auth)/role-select');
+      // Cold-resumed here by NavigationGuard (no stack) — go back to Step 1
+      router.replace('/(onboarding)/doctor/basic-profile' as any);
     }
   };
 

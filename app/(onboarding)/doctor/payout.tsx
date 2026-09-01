@@ -383,10 +383,13 @@ export default function DoctorPayout() {
   }, [selectedBank, accountNumber]);
 
   const handleBack = () => {
-    if (profile?.onboarding_complete) {
+    if (router.canGoBack()) {
+      router.back();
+    } else if (profile?.doctor_onboarding_complete) {
       router.replace('/(doctor)/(home)' as any);
     } else {
-      router.replace('/(auth)/role-select');
+      // Cold-resumed here by NavigationGuard (no stack) — go back to Step 2
+      router.replace('/(onboarding)/doctor/credentials' as any);
     }
   };
 

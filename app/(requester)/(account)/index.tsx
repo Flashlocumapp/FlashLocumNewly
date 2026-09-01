@@ -105,6 +105,9 @@ export default function RequesterAccountScreen() {
 
   const [showSignOutModal, setShowSignOutModal] = useState(false);
 
+  const [coverEarnLoading, setCoverEarnLoading] = useState(false);
+  const [coverEarnError, setCoverEarnError] = useState<string | null>(null);
+
   useFocusEffect(
     useCallback(() => {
       if (!user?.id) return;
@@ -291,15 +294,60 @@ export default function RequesterAccountScreen() {
         <Card>
           <ActionRow label="Switch to Cover & Earn" onPress={async () => {
             console.log('[Requester Account] Switch to Cover & Earn pressed');
+            // Clear any previous error
+            setCoverEarnError(null);
+
+            // Case 1: Doctor onboarding fully complete → go to doctor portal
             if (authProfile?.doctor_onboarding_complete) {
               if (switchingPortalRef.current) return;
               switchingPortalRef.current = true;
               await SecureStore.setItemAsync('flashlocum_last_pathway', 'doctor').catch(() => {});
               router.replace('/(doctor)/(home)' as any);
-            } else {
+              return;
+            }
+
+            // Case 2: Step 1 not yet started → go to Step 1
+            if (!authProfile?.doctor_basic_profile_complete) {
               router.push({ pathname: '/(onboarding)/doctor/basic-profile', params: { from: 'requester-account' } } as any);
+              return;
+            }
+
+            // Case 3: Step 1 complete but Step 2/3 status unknown — query DB to find correct resume step
+            if (coverEarnLoading) return;
+            setCoverEarnLoading(true);
+            try {
+              const { data, error } = await supabase
+                .from('doctor_profiles')
+                .select('mdcn_number')
+                .eq('id', authProfile.id)
+                .maybeSingle();
+
+              if (error) throw error;
+
+              if (!data?.mdcn_number) {
+                // Step 2 incomplete
+                router.push('/(onboarding)/doctor/credentials' as any);
+              } else {
+                // Steps 1+2 complete, Step 3 incomplete
+                router.push('/(onboarding)/doctor/payout' as any);
+              }
+            } catch (err) {
+              console.error('[Requester Account] Cover & Earn progress lookup failed:', err);
+              setCoverEarnError('Unable to load your progress. Please try again.');
+            } finally {
+              setCoverEarnLoading(false);
             }
           }} />
+          {coverEarnLoading && (
+            <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
+              <ActivityIndicator size="small" color="#8E8E93" />
+            </View>
+          )}
+          {coverEarnError && (
+            <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
+              <Text style={{ color: '#E63946', fontSize: 13, lineHeight: 18 }}>{coverEarnError}</Text>
+            </View>
+          )}
           <CardDivider />
           <ActionRow label="Account Settings" onPress={() => { console.log('[Requester Account] Account Settings pressed'); router.push('/(requester)/(account)/account-settings' as any); }} />
           <CardDivider />
