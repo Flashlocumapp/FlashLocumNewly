@@ -879,9 +879,9 @@ export default function DoctorHomeScreen() {
           {!homeCardSession && (
             <View style={styles.subCard}>
               <Text style={styles.subCardLabel}>COVERAGE</Text>
-              <Text style={styles.subCardHeading}>No coverage yet</Text>
+              <Text style={styles.subCardHeading}>No locum requests yet</Text>
               <Text style={styles.subCardBody}>
-                Stay online to start receiving dispatch requests.
+                Stay online. We'll notify you when a locum request comes in.
               </Text>
             </View>
           )}
