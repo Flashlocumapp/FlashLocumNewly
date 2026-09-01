@@ -78,7 +78,7 @@ export function DoctorUpcomingCoverageCard({ session, onCall, onCancel, variant 
 
       {/* Hospital name + rating row */}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-        <Text style={{ fontSize: 20, fontFamily: 'Inter_700Bold', color: primaryText, flexShrink: 1 }} numberOfLines={1}>
+        <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: primaryText, flexShrink: 1 }} numberOfLines={1}>
           {session.hospital_name}
         </Text>
         <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 6 }}>{'|'}</Text>
