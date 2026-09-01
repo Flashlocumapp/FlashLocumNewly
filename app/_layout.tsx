@@ -86,28 +86,32 @@ function NavigationGuard({
     const onIntro = segments[1] === 'intro'; // segments[0] = '(auth)', segments[1] = 'intro'
     if (onIntro) return;
 
-    hasRouted.current = true;
-    onNavigationReady();
-
     const alreadyInOnboarding = segments[0] === '(onboarding)';
     if (alreadyInOnboarding) {
+      // Already on an onboarding screen — signal navigation ready and stop
+      hasRouted.current = true;
+      onNavigationReady();
       return;
     }
 
     // 1. No session → play intro animation, then land on role-select
     if (!session) {
+      hasRouted.current = true;
       routedWithNoSession.current = true;
       router.replace('/(auth)/intro?dest=%2F(auth)%2Frole-select' as any);
+      onNavigationReady();
       return;
     }
 
     // 2. Session but no profile
     if (!profile) {
+      hasRouted.current = true;
       const metaRole = user?.user_metadata?.role;
       const route = metaRole === 'requester'
         ? '/(onboarding)/requester/basic-profile'
         : '/(onboarding)/doctor/basic-profile';
       router.replace(route as any);
+      onNavigationReady();
       return;
     }
 
@@ -116,35 +120,39 @@ function NavigationGuard({
 
     // 3. Neither onboarding complete
     if (!doctorComplete && !requesterComplete) {
+      hasRouted.current = true;
       if (profile.role === 'doctor') {
-        // Resume doctor at the correct step
         if (!profile.doctor_basic_profile_complete) {
-          // Never completed Step 1
           console.log('[NavigationGuard] Doctor resuming at Step 1 (basic-profile)');
           router.replace('/(onboarding)/doctor/basic-profile' as any);
+          onNavigationReady();
         } else {
-          // Step 1 done — check if Step 2 (credentials) is done
-          // by querying doctor_profiles for mdcn_number
           console.log('[NavigationGuard] Doctor Step 1 complete, querying doctor_profiles for Step 2 status');
-          supabase
-            .from('doctor_profiles')
-            .select('mdcn_number')
-            .eq('id', profile.id)
-            .single()
-            .then(({ data }) => {
-              if (!data?.mdcn_number) {
-                // Step 2 not done
-                console.log('[NavigationGuard] Doctor resuming at Step 2 (credentials)');
-                router.replace('/(onboarding)/doctor/credentials' as any);
-              } else {
-                // Step 2 done, Step 3 not done
-                console.log('[NavigationGuard] Doctor resuming at Step 3 (payout)');
-                router.replace('/(onboarding)/doctor/payout' as any);
-              }
-            });
+          Promise.resolve(
+            supabase
+              .from('doctor_profiles')
+              .select('mdcn_number')
+              .eq('id', profile.id)
+              .single()
+          ).then(({ data }) => {
+            if (!data?.mdcn_number) {
+              console.log('[NavigationGuard] Doctor resuming at Step 2 (credentials)');
+              router.replace('/(onboarding)/doctor/credentials' as any);
+            } else {
+              console.log('[NavigationGuard] Doctor resuming at Step 3 (payout)');
+              router.replace('/(onboarding)/doctor/payout' as any);
+            }
+            onNavigationReady(); // called AFTER router.replace, inside the async callback
+          }).catch(() => {
+            // Query failed — fall back to Step 1 safely
+            console.log('[NavigationGuard] doctor_profiles query failed — falling back to Step 1');
+            router.replace('/(onboarding)/doctor/basic-profile' as any);
+            onNavigationReady();
+          });
         }
       } else {
         router.replace('/(onboarding)/requester/basic-profile' as any);
+        onNavigationReady();
       }
       return;
     }
@@ -155,6 +163,8 @@ function NavigationGuard({
     const isReturningUser = !!session && !!lastPathway;
     onReturningUser(isReturningUser);
 
+    hasRouted.current = true;
+
     // 4. Doctor only complete
     if (doctorComplete && !requesterComplete) {
       if (isReturningUser) {
@@ -162,6 +172,7 @@ function NavigationGuard({
       } else {
         router.replace(`/(auth)/intro?dest=${encodeURIComponent('/(doctor)/(home)')}` as any);
       }
+      onNavigationReady();
       return;
     }
 
@@ -172,6 +183,7 @@ function NavigationGuard({
       } else {
         router.replace(`/(auth)/intro?dest=${encodeURIComponent('/(requester)/(home)')}` as any);
       }
+      onNavigationReady();
       return;
     }
 
@@ -184,6 +196,7 @@ function NavigationGuard({
     } else {
       router.replace(`/(auth)/intro?dest=${encodeURIComponent(dest)}` as any);
     }
+    onNavigationReady();
   }, [isReady, lastPathway, session, profile, profileLoading, segments, retryCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Session-arrival watcher — if we routed with no session and session later arrives, re-run routing

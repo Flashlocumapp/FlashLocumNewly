@@ -11,7 +11,8 @@ import {
   StyleSheet,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useSplash } from '@/app/_layout';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase, fetchWithAuth } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -100,6 +101,17 @@ export default function DoctorPayout() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, profile, refreshProfile } = useAuth();
+  const { signalScreenReady } = useSplash();
+  const splashSignalledRef = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!splashSignalledRef.current) {
+        splashSignalledRef.current = true;
+        signalScreenReady();
+      }
+    }, [signalScreenReady])
+  );
 
   const [banks, setBanks] = useState<Bank[]>(FALLBACK_BANKS);
   const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
