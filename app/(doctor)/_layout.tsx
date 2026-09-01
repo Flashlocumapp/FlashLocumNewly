@@ -1427,6 +1427,7 @@ export default function DoctorLayout() {
   const sessionStatusWatchRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const coverageRequestsPgRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const doctorProfilePgRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const doctorVerificationPgRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const doctorChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const sessionPgChangesRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -1471,8 +1472,11 @@ export default function DoctorLayout() {
             } else if (newStatus === 'payment_pending') {
               // Fetch active session immediately so the proactive payment poll useEffect can start
               fetchActiveSession();
+            } else if (newStatus === 'settled') {
+              // PAYMENT_COMPLETE broadcast is the primary path; this is the guaranteed fallback
+              // if that broadcast is missed while the app is open
+              setActiveSession((prev) => prev ? { ...prev, status: 'settled' } : prev);
             }
-            // settled, requester_paid are handled by existing payment polling
           }
         )
         .subscribe((status) => {
@@ -1593,6 +1597,59 @@ export default function DoctorLayout() {
       if (doctorProfilePgRef.current) {
         supabase.removeChannel(doctorProfilePgRef.current);
         doctorProfilePgRef.current = null;
+      }
+    };
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── postgres_changes — profiles: live verification_status watch ──────────────
+  // The reactive guard (line ~410) depends on profile?.verification_status from AuthContext,
+  // which only updates when refreshProfile() is called. This subscription ensures a
+  // server-side verification status change is detected immediately while the app is open.
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const name = `doctor-profile-verification:${user.id}`;
+      const existing = supabase.getChannels().find(c => c.topic === `realtime:${name}`);
+      if (existing) await supabase.removeChannel(existing);
+      if (cancelled) return;
+      const ch = supabase.channel(name)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'profiles',
+            filter: `id=eq.${user.id}`,
+          },
+          (payload) => {
+            if (!isMountedRef.current) return;
+            const row = payload.new as any;
+            const newVerificationStatus: string | undefined = row?.verification_status;
+            if (!newVerificationStatus) return;
+            console.log('[Doctor] profiles UPDATE via postgres_changes — verification_status:', newVerificationStatus);
+            // If verification is revoked while the doctor is online, force them offline immediately
+            if (newVerificationStatus !== 'verified' && isOnlineRef.current) {
+              console.log('[Doctor] verification_status changed to', newVerificationStatus, '— forcing offline via postgres_changes');
+              setIsOnline(false);
+              fetchWithAuth(`${EDGE_BASE}/go-offline`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}),
+              }).catch(() => {});
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log('[Doctor] doctor-profile-verification channel:', status);
+        });
+      doctorVerificationPgRef.current = ch;
+    })();
+    return () => {
+      cancelled = true;
+      if (doctorVerificationPgRef.current) {
+        supabase.removeChannel(doctorVerificationPgRef.current);
+        doctorVerificationPgRef.current = null;
       }
     };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1937,7 +1994,20 @@ export default function DoctorLayout() {
           return true;
         }
         return false;
-      }, undefined, 6);
+      }, undefined, 6, async () => {
+        // Poll exhausted after 30s — do one final reconciliation fetch
+        console.warn('[Doctor] accept poll exhausted — attempting final reconciliation fetch for request:', acceptedReqId);
+        if (!isMountedRef.current) return;
+        const { data: finalCheck } = await supabase
+          .from('coverage_sessions')
+          .select('id, status')
+          .eq('request_id', acceptedReqId)
+          .maybeSingle();
+        if (finalCheck?.id && isMountedRef.current) {
+          console.log('[Doctor] accept poll exhausted reconciliation — session found, fetching active session');
+          await fetchActiveSession();
+        }
+      });
 
       // Auto-go-offline after accepting the 3rd shift
       if (activeJobCount + 1 >= 3) {

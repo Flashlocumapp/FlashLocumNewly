@@ -1820,24 +1820,30 @@ export default function RequesterHomeScreen() {
             return false;
           }, undefined, 6);
         })
-        .on('broadcast', { event: 'SESSION_CREATED' }, (payload) => {
+        .on('broadcast', { event: 'SESSION_CREATED' }, async (payload) => {
           if (!isMountedRef.current) return;
-          // A session was created — if we're in matching state, confirm the match
-          PollingManager.stop('match');
-          if (shouldPollRef.current) {
-            shouldPollRef.current = false;
-            if (pollIntervalRef.current) {
-              clearTimeout(pollIntervalRef.current);
-              pollIntervalRef.current = null;
+          // A session was created — confirm it before stopping recovery
+          const sid = (payload?.payload as { session_id?: string } | undefined)?.session_id;
+          if (sid && AppState.currentState === 'active') {
+            playAcceptanceChime(sid);
+          }
+          // Fetch first — only stop recovery mechanisms once session is positively confirmed
+          const session = await fetchActiveSessionRef.current();
+          if (!isMountedRef.current) return;
+          if (session) {
+            // Session confirmed — safe to stop all recovery
+            PollingManager.stop('match');
+            if (shouldPollRef.current) {
+              shouldPollRef.current = false;
+              if (pollIntervalRef.current) {
+                clearTimeout(pollIntervalRef.current);
+                pollIntervalRef.current = null;
+              }
             }
             if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+            transitionToRef.current('idle');
           }
-          fetchActiveSessionRef.current();
-          if (AppState.currentState === 'active') {
-            const sid = (payload?.payload as { session_id?: string } | undefined)?.session_id;
-            if (sid) playAcceptanceChime(sid);
-          }
-          transitionToRef.current('idle');
+          // If session is null: leave all recovery running — doPoll and MATCH_CONFIRMED will catch it
         })
         .subscribe((status) => {
         });
@@ -2194,7 +2200,7 @@ export default function RequesterHomeScreen() {
   const shouldPollRef = useRef(false);
   const activeRequestIdRef = useRef<string | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-empty-function
-  const fetchActiveSessionRef = useRef<() => void>(() => {});
+  const fetchActiveSessionRef = useRef<() => Promise<CoverageSession | null>>(async () => null);
   // eslint-disable-next-line @typescript-eslint/no-empty-function
   const transitionToRef = useRef<(state: SheetState) => void>(() => {});
   // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -2223,16 +2229,16 @@ export default function RequesterHomeScreen() {
   }, [recentPlaceKey, user?.id]);
 
   // ─── Fetch active session helper ──────────────────────────────────────────────
-  const fetchActiveSession = useCallback(async () => {
+  const fetchActiveSession = useCallback(async (): Promise<CoverageSession | null> => {
     try {
       const res = await fetchWithAuth(`${EDGE_BASE}/get-active-session?role=requester`, {});
-      if (!isMountedRef.current) return;
+      if (!isMountedRef.current) return null;
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
-        return;
+        return null;
       }
       const data = await res.json();
-      if (!isMountedRef.current) return;
+      if (!isMountedRef.current) return null;
       const session: CoverageSession | null = data?.session ?? null;
       setActiveSession(session);
       if (session) {
@@ -2248,7 +2254,7 @@ export default function RequesterHomeScreen() {
           _requesterRatingInFlight.add(session.id);
           // Check AsyncStorage first
           const alreadyHandled = await isRequesterSessionPaid(session.id);
-          if (!isMountedRef.current) return;
+          if (!isMountedRef.current) return null;
           if (alreadyHandled) {
             _requesterRatingInFlight.delete(session.id);
           } else {
@@ -2258,7 +2264,7 @@ export default function RequesterHomeScreen() {
                 supabase.from('shift_reviews').select('id').eq('session_id', session.id).eq('reviewer_role', 'requester').maybeSingle(),
                 supabase.from('rating_dismissals').select('id').eq('session_id', session.id).eq('user_id', user?.id ?? '').eq('reviewer_role', 'requester').maybeSingle(),
               ]);
-              if (!isMountedRef.current) return;
+              if (!isMountedRef.current) return null;
               if (existingReview.data || existingDismissal.data) {
                 markRequesterSessionPaid(session.id);
                 _requesterRatingInFlight.delete(session.id);
@@ -2286,7 +2292,9 @@ export default function RequesterHomeScreen() {
           }
         }
       }
+      return session;
     } catch (e: any) {
+      return null;
     } finally {
       if (isMountedRef.current) {
         isFirstLoadRef.current = false;
@@ -2477,23 +2485,32 @@ export default function RequesterHomeScreen() {
     }
 
     const ch = supabase.channel(channelName)
-      .on('broadcast', { event: 'SHIFT_STARTED' }, (payload) => {
-        PollingManager.stop('start-shift');
+      .on('broadcast', { event: 'SHIFT_STARTED' }, async (payload) => {
+        if (!isMountedRef.current) return;
         console.log('[Requester] broadcast SHIFT_STARTED received');
-        const updated = payload?.payload?.session as Partial<CoverageSession>;
-        setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
+        const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
+        if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
+        await fetchActiveSessionRef.current();
+        if (!isMountedRef.current) return;
+        PollingManager.stop('start-shift');
       })
-      .on('broadcast', { event: 'SHIFT_PAUSED' }, (payload) => {
-        PollingManager.stop('pause-shift');
+      .on('broadcast', { event: 'SHIFT_PAUSED' }, async (payload) => {
+        if (!isMountedRef.current) return;
         console.log('[Requester] broadcast SHIFT_PAUSED received');
-        const updated = payload?.payload?.session as Partial<CoverageSession>;
-        setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
+        const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
+        if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
+        await fetchActiveSessionRef.current();
+        if (!isMountedRef.current) return;
+        PollingManager.stop('pause-shift');
       })
-      .on('broadcast', { event: 'SHIFT_RESUMED' }, (payload) => {
-        PollingManager.stop('resume-shift');
+      .on('broadcast', { event: 'SHIFT_RESUMED' }, async (payload) => {
+        if (!isMountedRef.current) return;
         console.log('[Requester] broadcast SHIFT_RESUMED received');
-        const updated = payload?.payload?.session as Partial<CoverageSession>;
-        setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
+        const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
+        if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
+        await fetchActiveSessionRef.current();
+        if (!isMountedRef.current) return;
+        PollingManager.stop('resume-shift');
       })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
         PollingManager.stop('end-shift');
@@ -2938,22 +2955,27 @@ export default function RequesterHomeScreen() {
             console.log('[Requester] MATCH_CONFIRMED — playing acceptance chime for session:', matchedSid);
             playAcceptanceChimeRef.current(matchedSid);
           }
-          // Fetch session first — stop polls only after session is confirmed present
-          await fetchActiveSessionRef.current();
-          if (!activeSessionRef.current) {
-            // Session not yet visible to edge function (DB propagation race) — retry once after 1.5s
+          // Use return value directly — do NOT read activeSessionRef.current after await (stale ref)
+          let session = await fetchActiveSessionRef.current();
+          if (!session) {
+            // Session not yet visible — retry once after 1.5s
             console.log('[Requester] MATCH_CONFIRMED — session null after first fetch, retrying in 1.5s');
             await new Promise(r => setTimeout(r, 1500));
-            await fetchActiveSessionRef.current();
+            if (!isMountedRef.current) return;
+            session = await fetchActiveSessionRef.current();
           }
-          // Now safe to stop polls — session is present or retry exhausted
-          PollingManager.stop('match');
-          shouldPollRef.current = false;
-          if (pollIntervalRef.current) {
-            clearTimeout(pollIntervalRef.current);
-            pollIntervalRef.current = null;
+          if (!isMountedRef.current) return;
+          if (session) {
+            // Positively confirmed — stop all recovery
+            PollingManager.stop('match');
+            shouldPollRef.current = false;
+            if (pollIntervalRef.current) {
+              clearTimeout(pollIntervalRef.current);
+              pollIntervalRef.current = null;
+            }
+            transitionToRef.current('idle');
           }
-          transitionToRef.current('idle');
+          // If still null after retry: leave doPoll running — it has no cap and will keep trying
         })
         .on('broadcast', { event: 'REQUEST_EXPIRED' }, () => {
           console.log('[Requester] REQUEST_EXPIRED broadcast received');
@@ -3362,7 +3384,20 @@ export default function RequesterHomeScreen() {
             return true; // confirmed
           }
           return false;
-        }, undefined, 6);
+        }, undefined, 6, async () => {
+          // Poll exhausted after 30s — doPoll (no cap) is still running.
+          // Do one final direct fetch as a reconciliation attempt.
+          console.warn('[Requester] match PollingManager exhausted — attempting final reconciliation fetch');
+          if (!isMountedRef.current) return;
+          const session = await fetchActiveSessionRef.current();
+          if (session && isMountedRef.current) {
+            shouldPollRef.current = false;
+            if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+            if (pollIntervalRef.current) { clearTimeout(pollIntervalRef.current); pollIntervalRef.current = null; }
+            transitionToRef.current('idle');
+          }
+          // If still null: doPoll continues running — it will catch it when the session becomes visible
+        });
       }
     } catch (e: any) {
       const isNetworkErr = e instanceof TypeError &&
