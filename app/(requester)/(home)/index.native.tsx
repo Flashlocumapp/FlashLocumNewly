@@ -2884,6 +2884,7 @@ export default function RequesterHomeScreen() {
       const address = data.formattedAddress || mainText;
       // Client-side Lagos safety check
       if (!address.toLowerCase().includes('lagos')) {
+        Alert.alert('Not available yet', 'FlashLocum isn\'t available in this area yet.');
         return;
       }
       const place: SelectedPlace = {
