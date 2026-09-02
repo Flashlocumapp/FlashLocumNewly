@@ -31,6 +31,7 @@ import { useTabData } from '@/hooks/useTabData';
 import { invalidate } from '@/utils/tabCache';
 import PollingManager from '@/utils/pollingManager';
 import { DoctorUpcomingCoverageCard, buildShiftPillText } from '@/components/DoctorUpcomingCoverageCard';
+import { calcBookedHours } from '@/components/sessionUtils';
 import { SUPABASE_URL } from '@/constants/api';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -171,7 +172,7 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const shiftStart = new Date(session.shift_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   const shiftEnd = new Date(session.shift_end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   const dayLabel = session.shift_date ? new Date(session.shift_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }) : '';
-  const totalHours = (new Date(session.shift_end).getTime() - new Date(session.shift_start).getTime()) / 3_600_000;
+  const totalHours = calcBookedHours(session.shift_start, session.shift_end, session.coverage_length ?? 1);
   const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
   const shiftSummaryLine = `${session.coverage_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd} · ${hoursDisplay} · ₦${Number(session.booked_price ?? session.price ?? 0).toLocaleString()}`;
 

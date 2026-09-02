@@ -27,6 +27,7 @@ import { useNotifications } from '@/contexts/NotificationContext';
 import DoctorTabBar, { DoctorTabItem } from '@/components/DoctorTabBar';
 import { DoctorDispatchContext, CoverageSession, registerResetCallback } from '@/contexts/DoctorDispatchContext';
 import { getCached, setCached, invalidate, isStale, setPrefetchPromise, clearPrefetchPromise } from '@/utils/tabCache';
+import { calcBookedHours } from '@/components/sessionUtils';
 import PollingManager from '../../utils/pollingManager';
 import { SUPABASE_URL } from '@/constants/api';
 
@@ -288,11 +289,7 @@ function formatShiftSummary(req: DispatchRequest): string {
   const coverageLength = Math.max(1, req.coverage_length ?? 1);
   const startDate = new Date(req.shift_date + 'T12:00:00');
 
-  const [sh, sm] = req.start_time.split(':').map(Number);
-  const [eh, em] = req.end_time.split(':').map(Number);
-  let perDayHours = (eh * 60 + em - (sh * 60 + sm)) / 60;
-  if (perDayHours <= 0) perDayHours += 24;
-  const totalHours = perDayHours * coverageLength;
+  const totalHours = calcBookedHours(req.start_time, req.end_time, coverageLength);
   const hoursLabel = totalHours % 1 === 0 ? `${totalHours} hrs` : `${totalHours.toFixed(1)} hrs`;
 
   const startFormatted = formatHHMM(req.start_time);
@@ -318,11 +315,7 @@ function ShiftDetails({ request, note }: { request: DispatchRequest | null; note
   if (!request) return null;
 
   const coverageLength = Math.max(1, request.coverage_length ?? 1);
-  const [sh, sm] = request.start_time.split(':').map(Number);
-  const [eh, em] = request.end_time.split(':').map(Number);
-  let perDayHours = (eh * 60 + em - (sh * 60 + sm)) / 60;
-  if (perDayHours <= 0) perDayHours += 24;
-  const totalHours = perDayHours * coverageLength;
+  const totalHours = calcBookedHours(request.start_time, request.end_time, coverageLength);
   const hoursLabel = totalHours % 1 === 0 ? `${totalHours} hrs` : `${totalHours.toFixed(1)} hrs`;
 
   const startDate = new Date(request.shift_date + 'T12:00:00');
