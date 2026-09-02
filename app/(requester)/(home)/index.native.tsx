@@ -1830,8 +1830,8 @@ export default function RequesterHomeScreen() {
           // Fetch first — only stop recovery mechanisms once session is positively confirmed
           const session = await fetchActiveSessionRef.current();
           if (!isMountedRef.current) return;
-          if (session) {
-            // Session confirmed — safe to stop all recovery
+          if (session && session.request_id === activeRequestIdRef.current) {
+            // Session confirmed and matches the active request — safe to stop all recovery
             PollingManager.stop('match');
             if (shouldPollRef.current) {
               shouldPollRef.current = false;
@@ -3370,7 +3370,14 @@ export default function RequesterHomeScreen() {
       _submitIdempotencyKey = null;
       console.log('[handleRequestCoverage] Idempotency key cleared');
       if (reqId) {
-        console.log('[Requester] Starting match poll for request:', reqId);
+        // Matching window = 180s. Technical grace = 30s. Total polling lifetime = 210s.
+        // interval = 5000ms → 210_000 / 5000 = 42 attempts.
+        const MATCHING_WINDOW_MS = 180_000;
+        const GRACE_MS = 30_000;
+        const POLL_INTERVAL_MS = 5_000;
+        const matchPollMaxAttempts = Math.ceil((MATCHING_WINDOW_MS + GRACE_MS) / POLL_INTERVAL_MS); // 42
+
+        console.log('[Requester] Starting match poll for request:', reqId, '— max attempts:', matchPollMaxAttempts);
         PollingManager.start('match', async () => {
           const { data: req } = await supabase
             .from('coverage_requests')
@@ -3382,22 +3389,38 @@ export default function RequesterHomeScreen() {
             if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
             fetchActiveSessionRef.current();
             transitionToRef.current('idle');
-            return true; // confirmed
+            return true; // confirmed — stop polling
           }
-          return false;
-        }, undefined, 6, async () => {
-          // Poll exhausted after 30s — doPoll (no cap) is still running.
-          // Do one final direct fetch as a reconciliation attempt.
-          console.warn('[Requester] match PollingManager exhausted — attempting final reconciliation fetch');
+          return false; // keep polling
+        }, POLL_INTERVAL_MS, matchPollMaxAttempts, async () => {
+          // Polling exhausted at ~3:30 — do a final authoritative reconciliation
+          // against coverage_requests.status (NOT fetchActiveSession) before deciding UI state.
+          console.warn('[Requester] match PollingManager exhausted at ~3:30 — final reconciliation');
           if (!isMountedRef.current) return;
-          const session = await fetchActiveSessionRef.current();
-          if (session && isMountedRef.current) {
-            shouldPollRef.current = false;
-            if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
-            if (pollIntervalRef.current) { clearTimeout(pollIntervalRef.current); pollIntervalRef.current = null; }
-            transitionToRef.current('idle');
+          try {
+            const { data: req } = await supabase
+              .from('coverage_requests')
+              .select('status, matched_doctor_id')
+              .eq('id', reqId)
+              .maybeSingle();
+            if (!isMountedRef.current) return;
+            if (req?.status === 'matched' && req?.matched_doctor_id) {
+              // Doctor accepted — fetch session and transition
+              shouldPollRef.current = false;
+              if (matchTimerRef.current) clearTimeout(matchTimerRef.current);
+              if (pollIntervalRef.current) { clearTimeout(pollIntervalRef.current); pollIntervalRef.current = null; }
+              fetchActiveSessionRef.current();
+              transitionToRef.current('idle');
+            } else if (req?.status === 'expired' || req?.status === 'cancelled' || req?.status === 'withdrawn') {
+              // Terminal state — doPoll or matchTimer will handle the correct UI transition
+              // (handleExpiredRef for expired, shouldPollRef=false for cancelled/withdrawn)
+              // Do NOT call transitionTo('idle') here — let the existing handlers fire
+              console.log('[Requester] match PollingManager exhausted — request already terminal:', req?.status);
+            }
+            // If still 'pending': the request is still live — do nothing. doPoll continues.
+          } catch (e) {
+            console.warn('[Requester] match PollingManager exhausted — reconciliation fetch failed', e);
           }
-          // If still null: doPoll continues running — it will catch it when the session becomes visible
         });
       }
     } catch (e: any) {
