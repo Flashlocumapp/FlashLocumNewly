@@ -61,7 +61,7 @@ function NavigationGuard({
   onNavigationReady: () => void;
   onReturningUser: (val: boolean) => void;
 }) {
-  const { session, user, profile, isReady, profileLoading } = useAuth();
+  const { session, user, profile, isReady, profileLoading, profileError } = useAuth();
   const router = useRouter();
   const segments = useSegments();
   const [lastPathway, setLastPathway] = useState<'doctor' | 'requester' | null | undefined>(undefined);
@@ -106,11 +106,20 @@ function NavigationGuard({
     // 2. Session but no profile
     if (!profile) {
       hasRouted.current = true;
-      const metaRole = user?.user_metadata?.role;
-      const route = metaRole === 'requester'
-        ? '/(onboarding)/requester/basic-profile'
-        : '/(onboarding)/doctor/basic-profile';
-      router.replace(route as any);
+      if (profileError) {
+        // Profile fetch failed after all retries — we cannot determine role or onboarding state.
+        // Route to role-select. Do NOT infer onboarding state from a failed query.
+        console.log('[NavigationGuard] Profile fetch failed — routing to role-select');
+        router.replace('/(auth)/role-select' as any);
+      } else {
+        // No profile row exists — genuinely new user. Route to onboarding based on metadata role.
+        const metaRole = user?.user_metadata?.role;
+        const route = metaRole === 'requester'
+          ? '/(onboarding)/requester/basic-profile'
+          : '/(onboarding)/doctor/basic-profile';
+        console.log('[NavigationGuard] No profile row — new user, routing to', route);
+        router.replace(route as any);
+      }
       onNavigationReady();
       return;
     }
@@ -144,9 +153,12 @@ function NavigationGuard({
             }
             onNavigationReady(); // called AFTER router.replace, inside the async callback
           }).catch(() => {
-            // Query failed — fall back to Step 1 safely
-            console.log('[NavigationGuard] doctor_profiles query failed — falling back to Step 1');
-            router.replace('/(onboarding)/doctor/basic-profile' as any);
+            // doctor_profiles query failed. We already know doctor_basic_profile_complete === true
+            // from the successfully fetched main profile. A query failure is not evidence that
+            // Step 1 is incomplete. Route to role-select so the user can re-enter their pathway
+            // and the step detection will re-run with fresh data.
+            console.log('[NavigationGuard] doctor_profiles query failed — routing to role-select (not basic-profile)');
+            router.replace('/(auth)/role-select' as any);
             onNavigationReady();
           });
         }

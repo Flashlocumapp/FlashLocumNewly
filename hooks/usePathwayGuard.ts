@@ -17,38 +17,70 @@ export function usePathwayGuard() {
     if (!canAccessDoctor) {
       // Async step detection — navigate to the correct incomplete step
       const detectStep = async () => {
+        const userId = user?.id;
+        if (!userId) {
+          // No authenticated user — cannot determine onboarding state.
+          // Route to role-select, not Basic Profile.
+          console.log('[usePathwayGuard] enterDoctor: no user id — routing to role-select');
+          router.push('/(auth)/role-select' as any);
+          return;
+        }
+
         try {
-          const userId = user?.id;
-          if (!userId) {
-            console.log('[usePathwayGuard] enterDoctor: no user id, routing to basic-profile');
-            router.push('/(onboarding)/doctor/basic-profile' as any);
+          const [profileResult, doctorProfileResult] = await Promise.all([
+            supabase
+              .from('profiles')
+              .select('doctor_basic_profile_complete')
+              .eq('id', userId)
+              .single(),
+            supabase
+              .from('doctor_profiles')
+              // account_number is the authoritative Step 3 signal for navigation.
+              // subaccount_code is a payment-infrastructure field and must NOT be used here.
+              .select('mdcn_number, account_number')
+              .eq('id', userId)
+              .single(),
+          ]);
+
+          // Any query error → unknown state → role-select.
+          // Do NOT infer that Basic Profile is incomplete from a failed query.
+          if (profileResult.error || doctorProfileResult.error) {
+            console.log('[usePathwayGuard] enterDoctor: query error — routing to role-select', {
+              profileError: profileResult.error?.message,
+              doctorProfileError: doctorProfileResult.error?.message,
+            });
+            router.push('/(auth)/role-select' as any);
             return;
           }
-
-          const [profileResult, doctorProfileResult] = await Promise.all([
-            supabase.from('profiles').select('doctor_basic_profile_complete').eq('id', userId).single(),
-            supabase.from('doctor_profiles').select('mdcn_number, subaccount_code').eq('id', userId).single(),
-          ]);
 
           const profileData = profileResult.data;
           const doctorData = doctorProfileResult.data;
 
           if (!profileData || profileData.doctor_basic_profile_complete !== true) {
+            // Step 1 positively not complete
             console.log('[usePathwayGuard] enterDoctor: routing to basic-profile (step 1)');
             router.push('/(onboarding)/doctor/basic-profile' as any);
           } else if (!doctorData?.mdcn_number) {
+            // Step 1 complete, Step 2 not complete
             console.log('[usePathwayGuard] enterDoctor: routing to credentials (step 2)');
             router.push('/(onboarding)/doctor/credentials' as any);
-          } else if (!doctorData?.subaccount_code) {
+          } else if (!doctorData?.account_number) {
+            // Steps 1+2 complete, Step 3 not complete
             console.log('[usePathwayGuard] enterDoctor: routing to payout (step 3)');
             router.push('/(onboarding)/doctor/payout' as any);
           } else {
-            console.log('[usePathwayGuard] enterDoctor: fallback to basic-profile');
-            router.push('/(onboarding)/doctor/basic-profile' as any);
+            // All three step-fields are set but doctor_onboarding_complete is still false.
+            // This is an interrupted-payout state (crash between writing account_number and
+            // writing doctor_onboarding_complete). Resume at payout to complete the flag write.
+            // Do NOT send back to Basic Profile — Step 1 is positively confirmed complete.
+            console.log('[usePathwayGuard] enterDoctor: all fields set, flag not written — resuming at payout');
+            router.push('/(onboarding)/doctor/payout' as any);
           }
         } catch (err) {
-          console.log('[usePathwayGuard] enterDoctor: step detection error, routing to basic-profile', err);
-          router.push('/(onboarding)/doctor/basic-profile' as any);
+          // Unexpected error during step detection — cannot determine onboarding state.
+          // Route to role-select. Do NOT infer that Basic Profile is incomplete from an error.
+          console.log('[usePathwayGuard] enterDoctor: unexpected error — routing to role-select', err);
+          router.push('/(auth)/role-select' as any);
         }
       };
       detectStep();

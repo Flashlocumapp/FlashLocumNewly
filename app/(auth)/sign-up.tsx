@@ -259,12 +259,17 @@ export default function SignUpScreen() {
               console.log('[sign-up] Routing to doctor payout (step 3)');
               router.replace('/(onboarding)/doctor/payout' as any);
             } else {
-              console.log('[sign-up] Fallback routing to doctor basic-profile');
-              router.replace('/(onboarding)/doctor/basic-profile' as any);
+              // All three step-fields are set but doctor_onboarding_complete was not written.
+              // This is an interrupted-payout state. Resume at payout so the flag gets written.
+              // Do NOT send back to Basic Profile — Step 1 is positively confirmed complete.
+              console.log('[sign-up] All step fields set, flag not written — resuming at payout');
+              router.replace('/(onboarding)/doctor/payout' as any);
             }
           } catch (err) {
-            console.log('[sign-up] Step detection error, routing to doctor basic-profile', err);
-            router.replace('/(onboarding)/doctor/basic-profile' as any);
+            // Step detection query failed — we cannot determine onboarding state.
+            // Route to role-select. Do NOT infer that Basic Profile is incomplete from a failed query.
+            console.log('[sign-up] Step detection query failed — routing to role-select', err);
+            router.replace('/(auth)/role-select' as any);
           }
         }
       }
