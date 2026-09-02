@@ -136,7 +136,16 @@ function NavigationGuard({
           router.replace('/(onboarding)/doctor/basic-profile' as any);
           onNavigationReady();
         } else {
-          console.log('[NavigationGuard] Doctor Step 1 complete, querying doctor_profiles for Step 2 status');
+          // Step 1 confirmed complete. Provisional destination: Credentials.
+          // Call router.replace and onNavigationReady synchronously — same guarantee
+          // as every other NavigationGuard branch. The async query below is a
+          // best-effort correction only; splash dismissal does not depend on it.
+          console.log('[NavigationGuard] Doctor Step 1 complete — provisional route: credentials');
+          router.replace('/(onboarding)/doctor/credentials' as any);
+          onNavigationReady();
+
+          // Best-effort: if mdcn_number is already set, correct to payout.
+          // Failure or timeout here is safe — user is already on a valid screen.
           Promise.resolve(
             supabase
               .from('doctor_profiles')
@@ -144,22 +153,14 @@ function NavigationGuard({
               .eq('id', profile.id)
               .single()
           ).then(({ data }) => {
-            if (!data?.mdcn_number) {
-              console.log('[NavigationGuard] Doctor resuming at Step 2 (credentials)');
-              router.replace('/(onboarding)/doctor/credentials' as any);
-            } else {
-              console.log('[NavigationGuard] Doctor resuming at Step 3 (payout)');
+            if (data?.mdcn_number) {
+              console.log('[NavigationGuard] mdcn_number found — correcting to payout');
               router.replace('/(onboarding)/doctor/payout' as any);
             }
-            onNavigationReady(); // called AFTER router.replace, inside the async callback
+            // else: credentials was correct, nothing to do
           }).catch(() => {
-            // doctor_profiles query failed. We already know doctor_basic_profile_complete === true
-            // from the successfully fetched main profile. A query failure is not evidence that
-            // Step 1 is incomplete. Route to role-select so the user can re-enter their pathway
-            // and the step detection will re-run with fresh data.
-            console.log('[NavigationGuard] doctor_profiles query failed — routing to role-select (not basic-profile)');
-            router.replace('/(auth)/role-select' as any);
-            onNavigationReady();
+            // Query failed. User is already on credentials — safe, no action needed.
+            console.log('[NavigationGuard] doctor_profiles correction query failed — staying on credentials');
           });
         }
       } else {
