@@ -57,6 +57,7 @@ type CoverageSession = {
   booked_price?: number | null;
   total_cost?: number;
   coverage_length?: number | null;
+  duration_hours?: number | null;
   final_doctor_rating?: number | null;
   final_doctor_reliability?: number | null;
   final_requester_rating?: number | null;
@@ -137,7 +138,17 @@ function HistoryCard({ session, onPress }: {
   const dayLabel = session.shift_date
     ? new Date(session.shift_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' })
     : '';
-  const totalHours = calcBookedHours(session.shift_start, session.shift_end, session.coverage_length ?? 1);
+  const coverageLength = session.coverage_length ?? 1;
+  let totalHours: number;
+  if (session.duration_hours && Number(session.duration_hours) > 0) {
+    totalHours = Number(session.duration_hours);
+  } else {
+    const d1 = new Date(session.shift_start);
+    const d2 = new Date(session.shift_end);
+    const startHHMM = `${String(d1.getUTCHours()).padStart(2, '0')}:${String(d1.getUTCMinutes()).padStart(2, '0')}`;
+    const endHHMM = `${String(d2.getUTCHours()).padStart(2, '0')}:${String(d2.getUTCMinutes()).padStart(2, '0')}`;
+    totalHours = calcBookedHours(startHHMM, endHHMM, coverageLength);
+  }
   const bookedHours = session.shift_start && session.shift_end ? (totalHours % 1 === 0 ? `${totalHours} hrs` : `${totalHours.toFixed(1)} hrs`) : null;
   const bookedAmt = (session.booked_price ?? session.price)
     ? `₦${Number(session.booked_price ?? session.price).toLocaleString()}`

@@ -172,7 +172,17 @@ function HistoryDetailSheet({ session, visible, onClose, alreadyReviewed, onRevi
   const shiftStart = new Date(session.shift_start).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   const shiftEnd = new Date(session.shift_end).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   const dayLabel = session.shift_date ? new Date(session.shift_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }) : '';
-  const totalHours = calcBookedHours(session.shift_start, session.shift_end, session.coverage_length ?? 1);
+  const coverageLength = session.coverage_length ?? 1;
+  let totalHours: number;
+  if (session.duration_hours && Number(session.duration_hours) > 0) {
+    totalHours = Number(session.duration_hours);
+  } else {
+    const d1 = new Date(session.shift_start);
+    const d2 = new Date(session.shift_end);
+    const startHHMM = `${String(d1.getUTCHours()).padStart(2, '0')}:${String(d1.getUTCMinutes()).padStart(2, '0')}`;
+    const endHHMM = `${String(d2.getUTCHours()).padStart(2, '0')}:${String(d2.getUTCMinutes()).padStart(2, '0')}`;
+    totalHours = calcBookedHours(startHHMM, endHHMM, coverageLength);
+  }
   const hoursDisplay = totalHours % 1 === 0 ? `${totalHours}hr` : `${totalHours.toFixed(1)}hr`;
   const shiftSummaryLine = `${session.coverage_type} · ${dayLabel} · ${shiftStart} - ${shiftEnd} · ${hoursDisplay} · ₦${Number(session.booked_price ?? session.price ?? 0).toLocaleString()}`;
 

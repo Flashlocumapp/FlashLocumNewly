@@ -46,6 +46,7 @@ export type CoverageSession = {
   coverage_type: string;
   coverage_length: number;
   per_day_hours: number | null;
+  duration_hours?: number | null;
   environment: string;
   price: number;
   booked_price?: number | null;

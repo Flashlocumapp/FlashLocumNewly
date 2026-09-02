@@ -9,6 +9,7 @@ export type SessionLike = {
   coverage_type: string;
   coverage_length: number;
   per_day_hours?: number | null;
+  duration_hours?: number | null;
   booked_price?: number | null;
   price?: number | null;
   status?: string;
@@ -34,7 +35,16 @@ function formatTime(iso: string) {
 
 export function buildShiftPillText(session: SessionLike): string {
   const coverageLength = session.coverage_length ?? 1;
-  const totalHours = calcBookedHours(session.shift_start, session.shift_end, coverageLength);
+  let totalHours: number;
+  if (session.duration_hours && Number(session.duration_hours) > 0) {
+    totalHours = Number(session.duration_hours);
+  } else {
+    const d1 = new Date(session.shift_start);
+    const d2 = new Date(session.shift_end);
+    const startHHMM = `${String(d1.getUTCHours()).padStart(2, '0')}:${String(d1.getUTCMinutes()).padStart(2, '0')}`;
+    const endHHMM = `${String(d2.getUTCHours()).padStart(2, '0')}:${String(d2.getUTCMinutes()).padStart(2, '0')}`;
+    totalHours = calcBookedHours(startHHMM, endHHMM, coverageLength);
+  }
   const hoursDisplay = totalHours % 1 === 0 ? `${totalHours} hrs` : `${totalHours.toFixed(1)} hrs`;
   const priceDisplay = `₦${Number(session.booked_price ?? session.price ?? 0).toLocaleString()}`;
   const shiftStart = formatTime(session.shift_start);
