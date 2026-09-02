@@ -136,7 +136,8 @@ function HistoryCard({ session, onPress }: {
   const dayLabel = session.shift_date
     ? new Date(session.shift_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' })
     : '';
-  const bookedHours = session.coverage_length ? `${session.coverage_length}h` : null;
+  const totalHours = (new Date(session.shift_end).getTime() - new Date(session.shift_start).getTime()) / 3_600_000;
+  const bookedHours = session.shift_start && session.shift_end ? (totalHours % 1 === 0 ? `${totalHours} hrs` : `${totalHours.toFixed(1)} hrs`) : null;
   const bookedAmt = (session.booked_price ?? session.price)
     ? `₦${Number(session.booked_price ?? session.price).toLocaleString()}`
     : null;
