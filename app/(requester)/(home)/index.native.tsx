@@ -2067,8 +2067,7 @@ export default function RequesterHomeScreen() {
 
     console.log('[OnlineDoctors] Subscribing to doctor-profiles-presence Postgres Changes channel');
 
-    const pgCh = supabase
-      .channel('doctor-profiles-presence')
+    const pgCh = safeChannel('doctor-profiles-presence')
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'doctor_profiles' },
