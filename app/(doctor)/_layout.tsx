@@ -1065,7 +1065,7 @@ export default function DoctorLayout() {
   // ── Realtime subscription — dispatch channel ──
   useEffect(() => {
     if (!user) return;
-    const channel = supabase.channel('dispatch:lagos')
+    const channel = safeChannel('dispatch:lagos')
       .on('broadcast', { event: 'NEW_REQUEST' }, (payload) => {
         if (!isOnlineRef.current) return;
         const req = payload.payload as DispatchRequest;

@@ -2026,8 +2026,7 @@ export default function RequesterHomeScreen() {
     console.log('[OnlineDoctors] Subscribing to doctor-status broadcast channel');
     fetchOnlineDoctors();
 
-    const ch = supabase
-      .channel('doctor-status')
+    const ch = safeChannel('doctor-status')
       .on('broadcast', { event: 'doctor_status_changed' }, (msg) => {
         const raw = (msg.payload as any);
         console.log('[doctor_status_changed] raw payload received:', JSON.stringify(raw));

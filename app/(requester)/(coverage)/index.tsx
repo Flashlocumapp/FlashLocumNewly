@@ -27,6 +27,20 @@ import { calcBookedHours } from '@/components/sessionUtils';
 
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
+/**
+ * Purge any stale channel with the same topic from Supabase's registry before
+ * creating a fresh one. This prevents the "cannot add postgres_changes callbacks
+ * after subscribe()" crash that occurs when removeChannel() is async and a new
+ * mount fires before the old channel is fully torn down.
+ */
+function safeChannel(name: string) {
+  const existing = supabase.getChannels().find(ch => ch.topic === `realtime:${name}`);
+  if (existing) {
+    supabase.removeChannel(existing);
+  }
+  return supabase.channel(name);
+}
+
 const COVERAGE_CACHE_STALE_MS = 60_000;
 
 type CoverageSession = {
@@ -578,8 +592,7 @@ export default function RequesterCoverageScreen() {
   // Realtime: surgical in-place merge — no network call, no loading state
   useEffect(() => {
     if (!user?.id) return;
-    const ch = supabase
-      .channel(`coverage-history-requester:${user.id}`)
+    const ch = safeChannel(`coverage-history-requester:${user.id}`)
       .on(
         'postgres_changes',
         {

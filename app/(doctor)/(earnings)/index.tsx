@@ -20,6 +20,20 @@ import { getCached, setCached } from '@/utils/tabCache';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { BodyScrollView } from '@/components/BodyScrollView';
 
+/**
+ * Purge any stale channel with the same topic from Supabase's registry before
+ * creating a fresh one. This prevents the "cannot add postgres_changes callbacks
+ * after subscribe()" crash that occurs when removeChannel() is async and a new
+ * mount fires before the old channel is fully torn down.
+ */
+function safeChannel(name: string) {
+  const existing = supabase.getChannels().find(ch => ch.topic === `realtime:${name}`);
+  if (existing) {
+    supabase.removeChannel(existing);
+  }
+  return supabase.channel(name);
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Period = 'this_week' | 'last_week' | 'last_month' | 'last_3_months';
@@ -366,8 +380,7 @@ export default function DoctorEarningsScreen() {
   // ── Realtime: coverage_sessions changes for this doctor ──────────────────────
   useEffect(() => {
     if (!user?.id) return;
-    const ch = supabase
-      .channel(`earnings-sessions:${user.id}`)
+    const ch = safeChannel(`earnings-sessions:${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -385,8 +398,7 @@ export default function DoctorEarningsScreen() {
   // ── Realtime: payment_intents changes (refetch on any update) ────────────────
   useEffect(() => {
     if (!user?.id) return;
-    const ch = supabase
-      .channel(`earnings-payments:${user.id}`)
+    const ch = safeChannel(`earnings-payments:${user.id}`)
       .on(
         'postgres_changes',
         {

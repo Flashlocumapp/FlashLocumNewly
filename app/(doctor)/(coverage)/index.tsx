@@ -38,6 +38,20 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+/**
+ * Purge any stale channel with the same topic from Supabase's registry before
+ * creating a fresh one. This prevents the "cannot add postgres_changes callbacks
+ * after subscribe()" crash that occurs when removeChannel() is async and a new
+ * mount fires before the old channel is fully torn down.
+ */
+function safeChannel(name: string) {
+  const existing = supabase.getChannels().find(ch => ch.topic === `realtime:${name}`);
+  if (existing) {
+    supabase.removeChannel(existing);
+  }
+  return supabase.channel(name);
+}
+
 const COVERAGE_CACHE_STALE_MS = 60_000; // 60 seconds
 
 const TABS = ['Upcoming', 'History'] as const;
@@ -436,8 +450,7 @@ export default function DoctorCoverageScreen() {
   useEffect(() => {
     if (!user?.id) return;
     const HISTORY_STATUSES = ['completed', 'cancelled', 'requester_paid'];
-    const ch = supabase
-      .channel(`coverage-history-doctor:${user.id}`)
+    const ch = safeChannel(`coverage-history-doctor:${user.id}`)
       .on(
         'postgres_changes',
         {
