@@ -2,13 +2,14 @@
   "expo": {
     "name": "FlashLocum",
     "slug": "flashlocum",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.flashlocum.app",
+      "buildNumber": "2",
       "newArchEnabled": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
