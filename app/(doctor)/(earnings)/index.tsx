@@ -20,20 +20,6 @@ import { getCached, setCached } from '@/utils/tabCache';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS } from '@/constants/Theme';
 import { BodyScrollView } from '@/components/BodyScrollView';
 
-/**
- * Purge any stale channel with the same topic from Supabase's registry before
- * creating a fresh one. This prevents the "cannot add postgres_changes callbacks
- * after subscribe()" crash that occurs when removeChannel() is async and a new
- * mount fires before the old channel is fully torn down.
- */
-function safeChannel(name: string) {
-  const existing = supabase.getChannels().find(ch => ch.topic === `realtime:${name}`);
-  if (existing) {
-    supabase.removeChannel(existing);
-  }
-  return supabase.channel(name);
-}
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Period = 'this_week' | 'last_week' | 'last_month' | 'last_3_months';
@@ -380,36 +366,72 @@ export default function DoctorEarningsScreen() {
   // ── Realtime: coverage_sessions changes for this doctor ──────────────────────
   useEffect(() => {
     if (!user?.id) return;
-    const ch = safeChannel(`earnings-sessions:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'coverage_sessions',
-          filter: `doctor_id=eq.${user.id}`,
-        },
-        () => { fetchEarnings(); }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    let cancelled = false;
+
+    const setup = async () => {
+      const existing = supabase.getChannels().find(ch => ch.topic === `realtime:earnings-sessions:${user.id}`);
+      if (existing) await supabase.removeChannel(existing);
+      if (cancelled) return;
+
+      const ch = supabase
+        .channel(`earnings-sessions:${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'coverage_sessions',
+            filter: `doctor_id=eq.${user.id}`,
+          },
+          () => { fetchEarnings(); }
+        )
+        .subscribe();
+
+      return () => { ch.unsubscribe(); };
+    };
+
+    let cleanup: (() => void) | undefined;
+    setup().then(fn => { cleanup = fn; });
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
   }, [user?.id, fetchEarnings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Realtime: payment_intents changes (refetch on any update) ────────────────
   useEffect(() => {
     if (!user?.id) return;
-    const ch = safeChannel(`earnings-payments:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'payment_intents',
-        },
-        () => { fetchEarnings(); }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    let cancelled = false;
+
+    const setup = async () => {
+      const existing = supabase.getChannels().find(ch => ch.topic === `realtime:earnings-payments:${user.id}`);
+      if (existing) await supabase.removeChannel(existing);
+      if (cancelled) return;
+
+      const ch = supabase
+        .channel(`earnings-payments:${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'payment_intents',
+          },
+          () => { fetchEarnings(); }
+        )
+        .subscribe();
+
+      return () => { ch.unsubscribe(); };
+    };
+
+    let cleanup: (() => void) | undefined;
+    setup().then(fn => { cleanup = fn; });
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
   }, [user?.id, fetchEarnings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Pull-to-refresh ─────────────────────────────────────────────────────────

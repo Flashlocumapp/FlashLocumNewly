@@ -38,20 +38,6 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-/**
- * Purge any stale channel with the same topic from Supabase's registry before
- * creating a fresh one. This prevents the "cannot add postgres_changes callbacks
- * after subscribe()" crash that occurs when removeChannel() is async and a new
- * mount fires before the old channel is fully torn down.
- */
-function safeChannel(name: string) {
-  const existing = supabase.getChannels().find(ch => ch.topic === `realtime:${name}`);
-  if (existing) {
-    supabase.removeChannel(existing);
-  }
-  return supabase.channel(name);
-}
-
 const COVERAGE_CACHE_STALE_MS = 60_000; // 60 seconds
 
 const TABS = ['Upcoming', 'History'] as const;
@@ -450,33 +436,51 @@ export default function DoctorCoverageScreen() {
   useEffect(() => {
     if (!user?.id) return;
     const HISTORY_STATUSES = ['completed', 'cancelled', 'requester_paid'];
-    const ch = safeChannel(`coverage-history-doctor:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'coverage_sessions',
-          filter: `doctor_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const row = payload.new as CoverageSession | undefined;
-          if (!row || !HISTORY_STATUSES.includes(row.status)) return;
-          // Surgical merge — update existing row or prepend if new
-          setHistorySessions(prev => {
-            const idx = prev.findIndex(s => s.id === row.id);
-            if (idx !== -1) {
-              const next = [...prev];
-              next[idx] = { ...prev[idx], ...row };
-              return next;
-            }
-            return [row, ...prev];
-          });
-          lastFetchedAtRef.current = Date.now(); // treat merge as a fresh sync
-        }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    let cancelled = false;
+
+    const setup = async () => {
+      const existing = supabase.getChannels().find(ch => ch.topic === `realtime:coverage-history-doctor:${user.id}`);
+      if (existing) await supabase.removeChannel(existing);
+      if (cancelled) return;
+
+      const ch = supabase
+        .channel(`coverage-history-doctor:${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'coverage_sessions',
+            filter: `doctor_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const row = payload.new as CoverageSession | undefined;
+            if (!row || !HISTORY_STATUSES.includes(row.status)) return;
+            // Surgical merge — update existing row or prepend if new
+            setHistorySessions(prev => {
+              const idx = prev.findIndex(s => s.id === row.id);
+              if (idx !== -1) {
+                const next = [...prev];
+                next[idx] = { ...prev[idx], ...row };
+                return next;
+              }
+              return [row, ...prev];
+            });
+            lastFetchedAtRef.current = Date.now(); // treat merge as a fresh sync
+          }
+        )
+        .subscribe();
+
+      return () => { ch.unsubscribe(); };
+    };
+
+    let cleanup: (() => void) | undefined;
+    setup().then(fn => { cleanup = fn; });
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateSessionStatus = useCallback(async (sessionId: string, status: string, extraFields?: Record<string, string>) => {

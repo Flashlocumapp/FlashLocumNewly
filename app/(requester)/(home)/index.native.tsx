@@ -55,20 +55,6 @@ import { SUPABASE_URL } from '@/constants/api';
 
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
-/**
- * Purge any stale channel with the same topic from Supabase's registry before
- * creating a fresh one. This prevents the "cannot add postgres_changes callbacks
- * after subscribe()" crash that occurs when removeChannel() is async and a new
- * mount fires before the old channel is fully torn down.
- */
-function safeChannel(name: string) {
-  const existing = supabase.getChannels().find(ch => ch.topic === `realtime:${name}`);
-  if (existing) {
-    supabase.removeChannel(existing);
-  }
-  return supabase.channel(name);
-}
-
 // ─── Module-level retry flag for handleRequestCoverage ───────────────────────
 let _submitRetried = false;
 // ─── Module-level idempotency key for submit-request (server-side dedup) ─────
@@ -2022,80 +2008,112 @@ export default function RequesterHomeScreen() {
 
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
 
     console.log('[OnlineDoctors] Subscribing to doctor-status broadcast channel');
     fetchOnlineDoctors();
 
-    const ch = safeChannel('doctor-status')
-      .on('broadcast', { event: 'doctor_status_changed' }, (msg) => {
-        const raw = (msg.payload as any);
-        console.log('[doctor_status_changed] raw payload received:', JSON.stringify(raw));
-        const data = (raw?.id != null ? raw : raw?.payload) as { id?: string; lat?: number; lng?: number; is_online?: boolean } | null;
-        console.log('[OnlineDoctors] Received doctor_status_changed broadcast', data);
-        if (!data?.id) return;
-        if (data.is_online && data.lat != null && data.lng != null) {
-          setOnlineDoctors((prev) => {
-            const filtered = prev.filter((d) => d.id !== data.id);
-            return [...filtered, { id: data.id!, lat: data.lat!, lng: data.lng! }];
-          });
-        } else {
-          setOnlineDoctors((prev) => prev.filter((d) => d.id !== data.id));
-        }
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          if (!isMountedRef.current) return;
-          // Always re-fetch on every SUBSCRIBED confirmation — closes the race window
-          // between the initial DB fetch and the moment the WebSocket is actually live.
-          // Any doctor who went online in that gap will be picked up here.
-          console.log('[OnlineDoctors] Broadcast channel SUBSCRIBED, re-fetching online doctors');
-          fetchOnlineDoctors();
-          wasSubscribed.current = true;
-        }
-      });
+    const setup = async () => {
+      const existing = supabase.getChannels().find(ch => ch.topic === 'realtime:doctor-status');
+      if (existing) await supabase.removeChannel(existing);
+      if (cancelled) return;
+
+      const ch = supabase
+        .channel('doctor-status')
+        .on('broadcast', { event: 'doctor_status_changed' }, (msg) => {
+          const raw = (msg.payload as any);
+          console.log('[doctor_status_changed] raw payload received:', JSON.stringify(raw));
+          const data = (raw?.id != null ? raw : raw?.payload) as { id?: string; lat?: number; lng?: number; is_online?: boolean } | null;
+          console.log('[OnlineDoctors] Received doctor_status_changed broadcast', data);
+          if (!data?.id) return;
+          if (data.is_online && data.lat != null && data.lng != null) {
+            setOnlineDoctors((prev) => {
+              const filtered = prev.filter((d) => d.id !== data.id);
+              return [...filtered, { id: data.id!, lat: data.lat!, lng: data.lng! }];
+            });
+          } else {
+            setOnlineDoctors((prev) => prev.filter((d) => d.id !== data.id));
+          }
+        })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            if (!isMountedRef.current) return;
+            // Always re-fetch on every SUBSCRIBED confirmation — closes the race window
+            // between the initial DB fetch and the moment the WebSocket is actually live.
+            // Any doctor who went online in that gap will be picked up here.
+            console.log('[OnlineDoctors] Broadcast channel SUBSCRIBED, re-fetching online doctors');
+            fetchOnlineDoctors();
+            wasSubscribed.current = true;
+          }
+        });
+
+      return () => {
+        console.log('[OnlineDoctors] Unsubscribing from doctor-status broadcast channel');
+        ch.unsubscribe();
+      };
+    };
+
+    let cleanup: (() => void) | undefined;
+    setup().then(fn => { cleanup = fn; });
 
     return () => {
-      console.log('[OnlineDoctors] Unsubscribing from doctor-status broadcast channel');
-      supabase.removeChannel(ch);
+      cancelled = true;
+      cleanup?.();
     };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Online doctors Postgres Changes fallback (independent delivery path) ──
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
 
     console.log('[OnlineDoctors] Subscribing to doctor-profiles-presence Postgres Changes channel');
 
-    const pgCh = safeChannel('doctor-profiles-presence')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'doctor_profiles' },
-        (payload) => {
-          const row = payload.new as { id?: string; lat?: number | null; lng?: number | null; is_online?: boolean };
-          console.log('[OnlineDoctors] Postgres Changes UPDATE received', row);
-          if (!row?.id) return;
-          if (row.is_online === true && row.lat != null && row.lng != null) {
-            setOnlineDoctors((prev) => {
-              const filtered = prev.filter((d) => d.id !== row.id);
-              return [...filtered, { id: row.id!, lat: row.lat!, lng: row.lng! }];
-            });
-          } else {
-            setOnlineDoctors((prev) => prev.filter((d) => d.id !== row.id));
+    const setup = async () => {
+      const existing = supabase.getChannels().find(ch => ch.topic === 'realtime:doctor-profiles-presence');
+      if (existing) await supabase.removeChannel(existing);
+      if (cancelled) return;
+
+      const pgCh = supabase
+        .channel('doctor-profiles-presence')
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'doctor_profiles' },
+          (payload) => {
+            const row = payload.new as { id?: string; lat?: number | null; lng?: number | null; is_online?: boolean };
+            console.log('[OnlineDoctors] Postgres Changes UPDATE received', row);
+            if (!row?.id) return;
+            if (row.is_online === true && row.lat != null && row.lng != null) {
+              setOnlineDoctors((prev) => {
+                const filtered = prev.filter((d) => d.id !== row.id);
+                return [...filtered, { id: row.id!, lat: row.lat!, lng: row.lng! }];
+              });
+            } else {
+              setOnlineDoctors((prev) => prev.filter((d) => d.id !== row.id));
+            }
           }
-        }
-      )
-      .subscribe((status) => {
-        console.log('[OnlineDoctors] Postgres Changes channel status:', status);
-        if (status === 'SUBSCRIBED') {
-          if (!isMountedRef.current) return;
-          console.log('[OnlineDoctors] Postgres Changes channel SUBSCRIBED, re-fetching online doctors');
-          fetchOnlineDoctors();
-        }
-      });
+        )
+        .subscribe((status) => {
+          console.log('[OnlineDoctors] Postgres Changes channel status:', status);
+          if (status === 'SUBSCRIBED') {
+            if (!isMountedRef.current) return;
+            console.log('[OnlineDoctors] Postgres Changes channel SUBSCRIBED, re-fetching online doctors');
+            fetchOnlineDoctors();
+          }
+        });
+
+      return () => {
+        console.log('[OnlineDoctors] Unsubscribing from doctor-profiles-presence Postgres Changes channel');
+        pgCh.unsubscribe();
+      };
+    };
+
+    let cleanup: (() => void) | undefined;
+    setup().then(fn => { cleanup = fn; });
 
     return () => {
-      console.log('[OnlineDoctors] Unsubscribing from doctor-profiles-presence Postgres Changes channel');
-      supabase.removeChannel(pgCh);
+      cancelled = true;
+      cleanup?.();
     };
   }, [user, fetchOnlineDoctors]); // eslint-disable-line react-hooks/exhaustive-deps
 

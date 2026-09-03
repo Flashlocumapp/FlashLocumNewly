@@ -320,6 +320,7 @@ export default function RootLayout() {
   const [screenReady, setScreenReady] = useState(false);
   const [splashDismissed, setSplashDismissed] = useState(false);
   const [isReturningUser, setIsReturningUser] = useState(false);
+  const [errorBoundaryKey, setErrorBoundaryKey] = useState(0);
 
   // APP_START is stamped at module evaluation time — the earliest JS anchor available.
   // This gives MAX(3s from launch, readiness) semantics:
@@ -351,7 +352,14 @@ export default function RootLayout() {
   return (
     <KeyboardProvider>
       <SplashContext.Provider value={{ signalScreenReady: () => setScreenReady(true), splashDismissed, splashMinMs: isReturningUser ? 5000 : 3000 }}>
-        <DevErrorBoundary>
+        <DevErrorBoundary
+          key={errorBoundaryKey}
+          fallback={
+            !__DEV__ ? (
+              <PortalErrorFallback onRetry={() => setErrorBoundaryKey(k => k + 1)} />
+            ) : undefined
+          }
+        >
           <AuthProvider>
             <NotificationProvider>
               <RootLayoutInner

@@ -33,20 +33,6 @@ import { SUPABASE_URL } from '@/constants/api';
 
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
-/**
- * Purge any stale channel with the same topic from Supabase's registry before
- * creating a fresh one. This prevents the "cannot add postgres_changes callbacks
- * after subscribe()" crash that occurs when removeChannel() is async and a new
- * mount fires before the old channel is fully torn down.
- */
-function safeChannel(name: string) {
-  const existing = supabase.getChannels().find(ch => ch.topic === `realtime:${name}`);
-  if (existing) {
-    supabase.removeChannel(existing);
-  }
-  return supabase.channel(name);
-}
-
 // ─── Background tab prefetch ──────────────────────────────────────────────────
 async function prefetchTabData(userId: string) {
   const coverageUpcomingKey = `doctor-coverage-upcoming-${userId}`;
@@ -895,9 +881,9 @@ export default function DoctorLayout() {
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Realtime: live is_online sync (catches 2AM daily reset while app is open) ──
-  // Uses a stable ref instead of safeChannel() to avoid the async removeChannel race:
-  // safeChannel calls removeChannel() synchronously then immediately creates a new channel,
-  // but removeChannel() is async — the old channel can still be SUBSCRIBED in the registry
+  // Uses a stable ref with the async await-removeChannel pattern to avoid the race:
+  // calling removeChannel() synchronously then immediately creating a new channel is unsafe —
+  // removeChannel() is async and the old channel can still be SUBSCRIBED in the registry
   // when the new one calls .subscribe(), causing "cannot add postgres_changes callbacks after subscribe()".
   const onlineStatusChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   useEffect(() => {
@@ -1065,74 +1051,92 @@ export default function DoctorLayout() {
   // ── Realtime subscription — dispatch channel ──
   useEffect(() => {
     if (!user) return;
-    const channel = safeChannel('dispatch:lagos')
-      .on('broadcast', { event: 'NEW_REQUEST' }, (payload) => {
-        if (!isOnlineRef.current) return;
-        const req = payload.payload as DispatchRequest;
-        const now = new Date();
-        if (req.expiry_at && new Date(req.expiry_at) <= now) {
-          return;
-        }
-        setRequestQueue((prev) => {
-          if (prev.some((r) => r.id === req.id)) return prev;
-          return [...prev, req];
-        });
-        startDispatchActiveRef.current();
-        // Do NOT check isOnlineRef here — it can be stale.
-        // The Queue → state sync effect will transition to 'incoming' when isOnline is true.
-      })
-      .on('broadcast', { event: 'EVICT_REQUEST' }, (payload) => {
-        // Layer 2 — another doctor accepted this request; remove it instantly
-        const { request_id } = payload.payload as { request_id: string };
-        if (!request_id) return;
-        console.log('[Doctor] EVICT_REQUEST received — removing from queue:', request_id);
-        setRequestQueue((prev) => {
-          const next = prev.filter((r) => r.id !== request_id);
-          if (next.length === 0) {
-            PollingManager.stop('dispatch-active');
-            dispatchActiveStartedRef.current = false;
+    let cancelled = false;
+
+    const setup = async () => {
+      const existing = supabase.getChannels().find(ch => ch.topic === 'realtime:dispatch:lagos');
+      if (existing) await supabase.removeChannel(existing);
+      if (cancelled) return;
+
+      const channel = supabase
+        .channel('dispatch:lagos')
+        .on('broadcast', { event: 'NEW_REQUEST' }, (payload) => {
+          if (!isOnlineRef.current) return;
+          const req = payload.payload as DispatchRequest;
+          const now = new Date();
+          if (req.expiry_at && new Date(req.expiry_at) <= now) {
+            return;
           }
-          return next;
-        });
-      })
-      .on('broadcast', { event: 'WITHDRAW_REQUEST' }, (payload) => {
-        // Layer 2 — requester withdrew/edited this request; remove it instantly
-        const { request_id } = payload.payload as { request_id: string };
-        if (!request_id) return;
-        console.log('[Doctor] WITHDRAW_REQUEST received — removing from queue:', request_id);
-        setRequestQueue((prev) => {
-          const next = prev.filter((r) => r.id !== request_id);
-          if (next.length === 0) {
-            PollingManager.stop('dispatch-active');
-            dispatchActiveStartedRef.current = false;
+          setRequestQueue((prev) => {
+            if (prev.some((r) => r.id === req.id)) return prev;
+            return [...prev, req];
+          });
+          startDispatchActiveRef.current();
+          // Do NOT check isOnlineRef here — it can be stale.
+          // The Queue → state sync effect will transition to 'incoming' when isOnline is true.
+        })
+        .on('broadcast', { event: 'EVICT_REQUEST' }, (payload) => {
+          // Layer 2 — another doctor accepted this request; remove it instantly
+          const { request_id } = payload.payload as { request_id: string };
+          if (!request_id) return;
+          console.log('[Doctor] EVICT_REQUEST received — removing from queue:', request_id);
+          setRequestQueue((prev) => {
+            const next = prev.filter((r) => r.id !== request_id);
+            if (next.length === 0) {
+              PollingManager.stop('dispatch-active');
+              dispatchActiveStartedRef.current = false;
+            }
+            return next;
+          });
+        })
+        .on('broadcast', { event: 'WITHDRAW_REQUEST' }, (payload) => {
+          // Layer 2 — requester withdrew/edited this request; remove it instantly
+          const { request_id } = payload.payload as { request_id: string };
+          if (!request_id) return;
+          console.log('[Doctor] WITHDRAW_REQUEST received — removing from queue:', request_id);
+          setRequestQueue((prev) => {
+            const next = prev.filter((r) => r.id !== request_id);
+            if (next.length === 0) {
+              PollingManager.stop('dispatch-active');
+              dispatchActiveStartedRef.current = false;
+            }
+            return next;
+          });
+        })
+        .on('broadcast', { event: 'EXPIRE_REQUEST' }, (payload) => {
+          // Layer 2 — request expired; remove it instantly from queue
+          const { request_id } = payload.payload as { request_id: string };
+          if (!request_id) return;
+          console.log('[Doctor] EXPIRE_REQUEST received — removing from queue:', request_id);
+          setRequestQueue((prev) => {
+            const next = prev.filter((r) => r.id !== request_id);
+            if (next.length === 0) {
+              PollingManager.stop('dispatch-active');
+              dispatchActiveStartedRef.current = false;
+            }
+            return next;
+          });
+        })
+        .subscribe((status) => {
+          console.log('[Doctor] dispatch channel subscribe status:', status);
+          if (status === 'SUBSCRIBED' && isOnlineRef.current && user) {
+            forceSyncRef.current();
           }
-          return next;
         });
-      })
-      .on('broadcast', { event: 'EXPIRE_REQUEST' }, (payload) => {
-        // Layer 2 — request expired; remove it instantly from queue
-        const { request_id } = payload.payload as { request_id: string };
-        if (!request_id) return;
-        console.log('[Doctor] EXPIRE_REQUEST received — removing from queue:', request_id);
-        setRequestQueue((prev) => {
-          const next = prev.filter((r) => r.id !== request_id);
-          if (next.length === 0) {
-            PollingManager.stop('dispatch-active');
-            dispatchActiveStartedRef.current = false;
-          }
-          return next;
-        });
-      })
-      .subscribe((status) => {
-        console.log('[Doctor] dispatch channel subscribe status:', status);
-        if (status === 'SUBSCRIBED' && isOnlineRef.current && user) {
-          forceSyncRef.current();
-        }
-      });
-    channelRef.current = channel;
+      channelRef.current = channel;
+
+      return () => {
+        supabase.removeChannel(channel);
+        channelRef.current = null;
+      };
+    };
+
+    let cleanup: (() => void) | undefined;
+    setup().then(fn => { cleanup = fn; });
+
     return () => {
-      supabase.removeChannel(channel);
-      channelRef.current = null;
+      cancelled = true;
+      cleanup?.();
     };
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 

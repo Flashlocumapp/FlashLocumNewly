@@ -27,20 +27,6 @@ import { calcBookedHours } from '@/components/sessionUtils';
 
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
-/**
- * Purge any stale channel with the same topic from Supabase's registry before
- * creating a fresh one. This prevents the "cannot add postgres_changes callbacks
- * after subscribe()" crash that occurs when removeChannel() is async and a new
- * mount fires before the old channel is fully torn down.
- */
-function safeChannel(name: string) {
-  const existing = supabase.getChannels().find(ch => ch.topic === `realtime:${name}`);
-  if (existing) {
-    supabase.removeChannel(existing);
-  }
-  return supabase.channel(name);
-}
-
 const COVERAGE_CACHE_STALE_MS = 60_000;
 
 type CoverageSession = {
@@ -592,36 +578,54 @@ export default function RequesterCoverageScreen() {
   // Realtime: surgical in-place merge — no network call, no loading state
   useEffect(() => {
     if (!user?.id) return;
-    const ch = safeChannel(`coverage-history-requester:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'coverage_sessions',
-          filter: `requester_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const row = payload.new as CoverageSession | undefined;
-          if (!row || !HISTORY_STATUSES.includes(row.status)) return;
-          console.log('[RequesterCoverage] realtime update for session', row.id, 'status=', row.status);
-          setSessions(prev => {
-            const idx = prev.findIndex(s => s.id === row.id);
-            if (idx !== -1) {
-              const next = [...prev];
-              next[idx] = { ...prev[idx], ...row };
+    let cancelled = false;
+
+    const setup = async () => {
+      const existing = supabase.getChannels().find(ch => ch.topic === `realtime:coverage-history-requester:${user.id}`);
+      if (existing) await supabase.removeChannel(existing);
+      if (cancelled) return;
+
+      const ch = supabase
+        .channel(`coverage-history-requester:${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'coverage_sessions',
+            filter: `requester_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const row = payload.new as CoverageSession | undefined;
+            if (!row || !HISTORY_STATUSES.includes(row.status)) return;
+            console.log('[RequesterCoverage] realtime update for session', row.id, 'status=', row.status);
+            setSessions(prev => {
+              const idx = prev.findIndex(s => s.id === row.id);
+              if (idx !== -1) {
+                const next = [...prev];
+                next[idx] = { ...prev[idx], ...row };
+                setCached(cacheKey, next);
+                return next;
+              }
+              const next = [row, ...prev];
               setCached(cacheKey, next);
               return next;
-            }
-            const next = [row, ...prev];
-            setCached(cacheKey, next);
-            return next;
-          });
-          lastFetchedAtRef.current = Date.now();
-        }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+            });
+            lastFetchedAtRef.current = Date.now();
+          }
+        )
+        .subscribe();
+
+      return () => { ch.unsubscribe(); };
+    };
+
+    let cleanup: (() => void) | undefined;
+    setup().then(fn => { cleanup = fn; });
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
   }, [user?.id, cacheKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   type DateRange = 'this_month' | 'last_month' | 'last_3_months';
