@@ -622,20 +622,20 @@ function RequesterCoverageCard({
             {canCancel && (
               <TouchableOpacity onPress={() => { console.log('[Requester] CANCEL SHIFT pressed'); onCancel(); }}
                 activeOpacity={0.8}
-                style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-                <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>CANCEL SHIFT</Text>
+                style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E', textAlign: 'center' }}>CANCEL SHIFT</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity onPress={() => { console.log('[Requester] CALL pressed (upcoming card)'); onCall(); }}
               activeOpacity={0.8}
-              style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
+              style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', textAlign: 'center' }}>CALL</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => { console.log('[Requester] CONFIRM ARRIVAL pressed'); onStartShift(); }}
               activeOpacity={0.8}
               disabled={startShiftDisabled}
-              style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center', opacity: startShiftDisabled ? 0.70 : 1 }}>
-              <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>CONFIRM ARRIVAL</Text>
+              style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center', justifyContent: 'center', opacity: startShiftDisabled ? 0.70 : 1 }}>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E', textAlign: 'center' }}>CONFIRM ARRIVAL</Text>
             </TouchableOpacity>
           </>
         ) : (

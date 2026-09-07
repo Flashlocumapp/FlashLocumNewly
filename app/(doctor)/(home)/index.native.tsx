@@ -210,24 +210,11 @@ function HomeUpcomingContent({
 }
 
 function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCall: () => void }) {
-  const [elapsed, setElapsed] = useState('00:00:00');
   // Frozen session snapshot — never re-fetches, never blinks
   const requesterRatingDisplay = session.requester_rating != null ? Number(session.requester_rating).toFixed(2) : '5.00';
   const reliabilityDisplay = session.requester_reliability != null ? `${Math.round(Number(session.requester_reliability))}` : '100';
 
-  const currentDayLog = session.day_logs?.[session.current_day - 1];
-  const startedAt = currentDayLog?.started_at ?? session.started_at;
-
-  useEffect(() => {
-    if (!startedAt) return;
-    const tick = () => setElapsed(formatElapsed(startedAt));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [startedAt]);
   const shiftPillText = buildShiftPillText(session);
-  const showDayPill = session.coverage_length > 1;
-  const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;
 
   return (
     <View style={styles.subCard}>
@@ -280,19 +267,6 @@ function DoctorActiveCard({ session, onCall }: { session: CoverageSession; onCal
           }}>{session.note}</Text>
         </View>
       )}
-
-      {/* Timer row */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>⏱</Text>
-          <Text style={{ fontSize: 22, color: '#FFFFFF', fontFamily: 'Inter_700Bold', letterSpacing: 1 }}>{elapsed}</Text>
-        </View>
-        {showDayPill && (
-          <View style={{ backgroundColor: '#1A3A2A', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
-            <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{dayPillText}</Text>
-          </View>
-        )}
-      </View>
 
       {/* Call button */}
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
