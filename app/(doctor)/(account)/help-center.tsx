@@ -312,7 +312,7 @@ export default function DoctorHelpCenterScreen() {
           </Text>
           <View style={styles.bulletRow}>
             <Text style={styles.bodyText}>{'• '}</Text>
-            <Text style={styles.bodyText}>One assignment can last multiple days (max 14 days)</Text>
+            <Text style={styles.bodyText}>One assignment can last multiple days (max 30 days)</Text>
           </View>
           <View style={styles.bulletRow}>
             <Text style={styles.bodyText}>{'• '}</Text>

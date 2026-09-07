@@ -3957,9 +3957,9 @@ export default function RequesterHomeScreen() {
   const whiteCardPaddingBottom = TAB_BAR_HEIGHT + insets.bottom + 16;
 
   // Max date = today + 15 days
-  const maxDate = new Date(new Date().getTime() + 15 * 24 * 60 * 60 * 1000);
+  const maxDate = new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000);
 
-  const isPlusDisabled = coverageLength >= 15;
+  const isPlusDisabled = coverageLength >= 30;
 
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -4470,7 +4470,7 @@ export default function RequesterHomeScreen() {
                     <TouchableOpacity
                       onPress={() => {
                         if (isPlusDisabled) return;
-                        const next = Math.min(15, coverageLength + 1);
+                        const next = Math.min(30, coverageLength + 1);
                         setCoverageLength(next);
                       }}
                       style={{
