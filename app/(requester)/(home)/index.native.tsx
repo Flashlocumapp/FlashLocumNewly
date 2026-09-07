@@ -510,7 +510,8 @@ function getSessionInitials(name: string): string {
 // buildShiftPillText and SessionEnvBadge are imported from shared sessionUtils below
 
 // ─── Requester Upcoming Coverage Card ────────────────────────────────────────
-function RequesterUpcomingCard({
+// ─── Unified Requester Coverage Card (upcoming + active) ─────────────────────
+function RequesterCoverageCard({
   session,
   onCancel,
   onCall,
@@ -518,6 +519,7 @@ function RequesterUpcomingCard({
   onEndShift,
   bottomPadding,
   startShiftDisabled,
+  endShiftDisabled,
 }: {
   session: CoverageSession;
   onCancel: () => void;
@@ -526,8 +528,11 @@ function RequesterUpcomingCard({
   onEndShift: () => void;
   bottomPadding: number;
   startShiftDisabled?: boolean;
+  endShiftDisabled?: boolean;
 }) {
-  const canCancel = session.status === 'upcoming' && session.current_day === 1;
+  const isUpcoming = session.status === 'upcoming';
+  const isActive = session.status === 'active';
+  const canCancel = isUpcoming && session.current_day === 1;
   const shiftPillText = buildShiftPillText(session);
   const rawDoctorName = session.doctor_name || '';
   // Strip any existing Dr. prefix then re-apply exactly once
@@ -538,6 +543,9 @@ function RequesterUpcomingCard({
   // Frozen session snapshot — never re-fetches, never blinks
   const ratingDisplay = session.doctor_rating != null ? Number(session.doctor_rating).toFixed(2) : '5.00';
   const reliabilityDisplay = session.doctor_reliability != null ? `${Math.round(Number(session.doctor_reliability))}` : '100';
+  const showDayPill = isActive && session.coverage_length > 1;
+  const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;
+  const headerLabel = isUpcoming ? 'UPCOMING COVERAGE' : 'ACTIVE COVERAGE';
 
   return (
     <View style={{
@@ -557,7 +565,7 @@ function RequesterUpcomingCard({
       {/* Header */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold' }}>
-          UPCOMING COVERAGE
+          {headerLabel}
         </Text>
         <SessionEnvBadge environment={session.environment} />
       </View>
@@ -598,116 +606,7 @@ function RequesterUpcomingCard({
         <Text style={{ fontSize: 12, color: '#FFFFFF', fontFamily: 'Inter_400Regular', lineHeight: 18 }}>{shiftPillText}</Text>
       </View>
 
-      {/* Action buttons */}
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        {canCancel && (
-          <TouchableOpacity onPress={() => { console.log('[Requester] CANCEL SHIFT pressed'); onCancel(); }}
-            activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>CANCEL SHIFT</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity onPress={() => { console.log('[Requester] CALL pressed (upcoming card)'); onCall(); }}
-          activeOpacity={0.8}
-          style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => { console.log('[Requester] CONFIRM ARRIVAL pressed'); onStartShift(); }}
-          activeOpacity={0.8}
-          disabled={startShiftDisabled}
-          style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center', opacity: startShiftDisabled ? 0.70 : 1 }}>
-          <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>CONFIRM ARRIVAL</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-// ─── Requester Active Coverage Card ──────────────────────────────────────────
-function RequesterActiveCard({
-  session,
-  onCall,
-  onEndShift,
-  bottomPadding,
-}: {
-  session: CoverageSession;
-  onCall: () => void;
-  onEndShift: () => void;
-  bottomPadding: number;
-}) {
-  const rawDoctorName = session.doctor_name || '';
-  // Strip any existing Dr. prefix then re-apply exactly once
-  const cleanName = rawDoctorName.replace(/^dr\.?\s*/i, '').trim();
-  const doctorName = cleanName && !cleanName.includes('@') ? `Dr. ${cleanName}` : 'Doctor';
-  const initials = cleanName ? getSessionInitials(cleanName) : 'DR';
-
-  // Frozen session snapshot — never re-fetches, never blinks
-  const ratingDisplay = session.doctor_rating != null ? Number(session.doctor_rating).toFixed(2) : '5.00';
-  const reliabilityDisplay = session.doctor_reliability != null ? `${Math.round(Number(session.doctor_reliability))}` : '100';
-  const shiftPillText = buildShiftPillText(session);
-  const showDayPill = session.coverage_length > 1;
-  const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;
-
-  return (
-    <View style={{
-      position: 'absolute', bottom: 0, left: 0, right: 0,
-      backgroundColor: '#1C1C1E',
-      borderTopLeftRadius: 24, borderTopRightRadius: 24,
-      paddingTop: 16, paddingHorizontal: 16,
-      paddingBottom: bottomPadding,
-      shadowColor: '#000', shadowOffset: { width: 0, height: -3 },
-      shadowOpacity: 0.08, shadowRadius: 10, elevation: 10,
-    }}>
-      {/* Drag handle */}
-      <View style={{ alignItems: 'center', marginBottom: 16 }}>
-        <View style={{ width: 40, height: 5, borderRadius: 99, backgroundColor: '#3A3A3C' }} />
-      </View>
-
-      {/* Header */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <Text style={{ fontSize: 11, letterSpacing: 1.2, color: '#8E8E93', fontFamily: 'Inter_600SemiBold' }}>
-          ACTIVE COVERAGE
-        </Text>
-        <SessionEnvBadge environment={session.environment} />
-      </View>
-
-      {/* Doctor row */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-        <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: '#2C2C2E', alignItems: 'center', justifyContent: 'center', marginRight: 12, overflow: 'hidden' }}>
-          {session.doctor_avatar ? (
-            <Image source={{ uri: session.doctor_avatar }} style={{ width: 52, height: 52, borderRadius: 26 }} />
-          ) : (
-            <Text style={{ fontSize: 18, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>{initials}</Text>
-          )}
-        </View>
-        <View style={{ flex: 1 }}>
-          {/* Name + rating on same line */}
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ fontSize: 16, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF', flexShrink: 1 }} numberOfLines={1}>
-              {doctorName}
-            </Text>
-            <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginHorizontal: 5 }}>{'|'}</Text>
-            <Text style={{ fontSize: 12, color: '#F4A261' }}>{'★ '}</Text>
-            <Text style={{ fontSize: 12, color: '#F4A261', fontFamily: 'Inter_600SemiBold' }}>{ratingDisplay}</Text>
-            <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: '#34C759', marginHorizontal: 5 }} />
-            <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>
-              {reliabilityDisplay}
-            </Text>
-            <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{'%'}</Text>
-          </View>
-          {/* MDCN below */}
-          <Text style={{ fontSize: 12, color: '#8E8E93', fontFamily: 'Inter_400Regular', marginTop: 2 }}>
-            {session.doctor_mdcn || 'MDCN/R/—'}
-          </Text>
-        </View>
-      </View>
-
-      {/* Shift pill */}
-      <View style={{ backgroundColor: '#2C2C2E', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, width: '100%', marginBottom: 10 }}>
-        <Text style={{ fontSize: 12, color: '#FFFFFF', fontFamily: 'Inter_400Regular', lineHeight: 18 }}>{shiftPillText}</Text>
-      </View>
-
-      {/* Day pill (informational only for multi-day) */}
+      {/* Day pill (informational only for multi-day active shifts) */}
       {showDayPill && (
         <View style={{ alignItems: 'flex-end', marginBottom: 14 }}>
           <View style={{ backgroundColor: '#1A3A2A', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
@@ -718,16 +617,42 @@ function RequesterActiveCard({
 
       {/* Action buttons */}
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TouchableOpacity onPress={() => { console.log('[Requester] CONFIRM COMPLETION pressed'); onEndShift(); }}
-          activeOpacity={0.8}
-          style={{ flex: 1, backgroundColor: '#FF3B30', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>CONFIRM COMPLETION</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => { console.log('[Requester] CALL pressed (active card)'); onCall(); }}
-          activeOpacity={0.8}
-          style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
-        </TouchableOpacity>
+        {isUpcoming ? (
+          <>
+            {canCancel && (
+              <TouchableOpacity onPress={() => { console.log('[Requester] CANCEL SHIFT pressed'); onCancel(); }}
+                activeOpacity={0.8}
+                style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+                <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>CANCEL SHIFT</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={() => { console.log('[Requester] CALL pressed (upcoming card)'); onCall(); }}
+              activeOpacity={0.8}
+              style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { console.log('[Requester] CONFIRM ARRIVAL pressed'); onStartShift(); }}
+              activeOpacity={0.8}
+              disabled={startShiftDisabled}
+              style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center', opacity: startShiftDisabled ? 0.70 : 1 }}>
+              <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>CONFIRM ARRIVAL</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity onPress={() => { console.log('[Requester] CONFIRM COMPLETION pressed'); onEndShift(); }}
+              activeOpacity={0.8}
+              disabled={endShiftDisabled}
+              style={{ flex: 1, backgroundColor: '#FF3B30', borderRadius: 999, paddingVertical: 12, alignItems: 'center', opacity: endShiftDisabled ? 0.70 : 1 }}>
+              <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>CONFIRM COMPLETION</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { console.log('[Requester] CALL pressed (active card)'); onCall(); }}
+              activeOpacity={0.8}
+              style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </View>
   );
@@ -3491,7 +3416,7 @@ export default function RequesterHomeScreen() {
   const [cancelWithdrawn, setCancelWithdrawn] = useState(false);
   const [showCancelActiveModal, setShowCancelActiveModal] = useState(false);
   const [showCancelActiveReasons, setShowCancelActiveReasons] = useState(false);
-  const [showEndShiftModal, setShowEndShiftModal] = useState(false);
+
   const [settledAmount, setSettledAmount] = useState<number | null>(null);
 
 
@@ -3857,12 +3782,7 @@ export default function RequesterHomeScreen() {
     }
   }, [activeSession, callSessionEdge, startShiftProcessing]);
 
-  const handleEndShift = useCallback(async () => {
-    if (!activeSession) return;
-    setShowEndShiftModal(true);
-  }, [activeSession]);
-
-  const handleConfirmEndShift = async () => {
+  const handleEndShift = async () => {
     if (!activeSession) return;
     if (endShiftProcessing) return;
     setEndShiftProcessing(true);
@@ -3870,8 +3790,7 @@ export default function RequesterHomeScreen() {
     // Clear from paid/dismissed sets so day 2+ of multi-day shifts can trigger the overlay again
     _requesterPaidSessions.delete(sid);
     _requesterDismissedSessions.delete(sid);
-    console.log('[Requester] handleConfirmEndShift: ending shift for session', sid);
-    setShowEndShiftModal(false);
+    console.log('[Requester] handleEndShift: ending shift for session', sid);
     try {
       const data = await callSessionEdge('end-shift', sid);
       console.log('[Requester] end-shift response:', JSON.stringify(data));
@@ -4839,9 +4758,10 @@ export default function RequesterHomeScreen() {
       {/* ── IDLE BOTTOM CONTAINER (white card only — tab bar is in layout) ── */}
       {sheetState === 'idle' && (
         <>
-          {/* Active session — upcoming */}
-          {activeSession !== null && activeSession.status === 'upcoming' && (
-            <RequesterUpcomingCard
+          {/* Active session — upcoming or active */}
+          {activeSession !== null &&
+            (activeSession.status === 'upcoming' || activeSession.status === 'active') && (
+            <RequesterCoverageCard
               session={activeSession}
               onCancel={handleCancelActiveShift}
               onCall={handleCallDoctor}
@@ -4849,16 +4769,7 @@ export default function RequesterHomeScreen() {
               onEndShift={handleEndShift}
               bottomPadding={whiteCardPaddingBottom}
               startShiftDisabled={startShiftProcessing}
-            />
-          )}
-
-          {/* Active session — active */}
-          {activeSession !== null && activeSession.status === 'active' && (
-            <RequesterActiveCard
-              session={activeSession}
-              onCall={handleCallDoctor}
-              onEndShift={handleEndShift}
-              bottomPadding={whiteCardPaddingBottom}
+              endShiftDisabled={endShiftProcessing}
             />
           )}
 
@@ -5440,44 +5351,6 @@ export default function RequesterHomeScreen() {
             ))}
           </View>
         </View>
-      </Modal>
-
-      {/* ── CONFIRM COMPLETION MODAL ── */}
-      <Modal
-        visible={showEndShiftModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowEndShiftModal(false)}
-      >
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}
-          onPress={() => setShowEndShiftModal(false)}
-        >
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <View style={{ backgroundColor: '#1C1C1E', borderRadius: 24, padding: 28, width: '100%' }}>
-              <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
-                Confirm Completion?
-              </Text>
-              <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
-                This confirms the Medical Officer has completed the booked service. Payment will be processed for the original booked amount.
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowEndShiftModal(false)}
-                style={{ backgroundColor: '#F9F9F6', borderRadius: 999, paddingVertical: 16, alignItems: 'center', marginBottom: 12 }}
-              >
-                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Not Yet</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleConfirmEndShift}
-                disabled={endShiftProcessing}
-                activeOpacity={0.8}
-                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center', opacity: endShiftProcessing ? 0.70 : 1 }}
-              >
-                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>Confirm Completion</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
       </Modal>
 
       {/* ── TOOLTIP MODAL ── */}
