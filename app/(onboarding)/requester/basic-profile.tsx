@@ -57,12 +57,10 @@ export default function RequesterBasicProfile() {
           .single();
         if (!data) return;
         if (data.phone) {
-            console.log('[RequesterBasicProfile] Pre-filling phone from profile');
-            setPhone(data.phone);
+            setPhone(prev => prev === '' ? data.phone : prev);
           }
           if (data.gender === 'male' || data.gender === 'female') {
-            console.log('[RequesterBasicProfile] Pre-filling gender from profile:', data.gender);
-            setGender(data.gender);
+            setGender(prev => prev === null ? data.gender : prev);
           }
       } catch {
         // silently ignore

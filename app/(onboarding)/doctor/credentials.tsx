@@ -129,19 +129,15 @@ export default function DoctorCredentials() {
           .single();
         if (!data) return;
         if (data.mdcn_number) {
-            console.log('[Credentials] Pre-filling MDCN number from profile');
-            setMdcnNumber(data.mdcn_number);
+            setMdcnNumber(prev => prev === '' ? (data.mdcn_number ?? '') : prev);
           }
           if (data.nysc_cert_url) {
-            console.log('[Credentials] NYSC cert previously uploaded');
             setNyscAlreadyUploaded(true);
           }
           if (data.medical_licence_url) {
-            console.log('[Credentials] Medical licence previously uploaded');
             setLicenceAlreadyUploaded(true);
           }
           if (data.selfie_url) {
-            console.log('[Credentials] Selfie previously uploaded');
             setSelfieAlreadyUploaded(true);
           }
       } catch {

@@ -141,7 +141,6 @@ export default function DoctorPayout() {
         return;
       }
       try {
-        console.log('[Payout] Loading saved bank details from profile');
         const { data, error } = await supabase
           .from('doctor_profiles')
           .select('bank_code, bank_name, account_number, account_name')
@@ -149,31 +148,27 @@ export default function DoctorPayout() {
           .single();
 
         if (error || !data) {
-          console.log('[Payout] No saved bank details found');
           return;
         }
 
         if (data.account_number) {
-            console.log('[Payout] Pre-filling account number from saved profile');
-            setAccountNumber(String(data.account_number));
+            setAccountNumber(prev => prev === '' ? String(data.account_number) : prev);
           }
 
           if (data.bank_code && data.bank_name) {
             const match = FALLBACK_BANKS.find(b => b.code === data.bank_code);
             const bankToSet: Bank = match ?? { name: String(data.bank_name), code: String(data.bank_code) };
-            console.log(`[Payout] Pre-filling bank from saved profile: ${bankToSet.name}`);
-            setSelectedBank(bankToSet);
+            setSelectedBank(prev => prev === null ? bankToSet : prev);
           }
 
           // Set account name directly — skip re-lookup since it was already verified.
           // The useEffect on [selectedBank, accountNumber] will fire and trigger a
           // fresh lookup anyway (correct behaviour per spec).
           if (data.account_name) {
-            console.log('[Payout] Pre-filling account name from saved profile');
-            setAccountName(String(data.account_name));
+            setAccountName(prev => prev === '' ? String(data.account_name) : prev);
           }
-      } catch (err) {
-        console.log('[Payout] Error loading saved bank details:', err);
+      } catch {
+        // silently ignore
       } finally {
         setProfileLoading(false);
       }
