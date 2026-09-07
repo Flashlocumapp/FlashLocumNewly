@@ -515,23 +515,18 @@ function RequesterUpcomingCard({
   onCancel,
   onCall,
   onStartShift,
-  onResumeShift,
   onEndShift,
   bottomPadding,
   startShiftDisabled,
-  resumeShiftDisabled,
 }: {
   session: CoverageSession;
   onCancel: () => void;
   onCall: () => void;
   onStartShift: () => void;
-  onResumeShift: () => void;
   onEndShift: () => void;
   bottomPadding: number;
   startShiftDisabled?: boolean;
-  resumeShiftDisabled?: boolean;
 }) {
-  const isPaused = session.status === 'paused';
   const canCancel = session.status === 'upcoming' && session.current_day === 1;
   const shiftPillText = buildShiftPillText(session);
   const rawDoctorName = session.doctor_name || '';
@@ -604,47 +599,26 @@ function RequesterUpcomingCard({
       </View>
 
       {/* Action buttons */}
-      {!isPaused ? (
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {canCancel && (
-            <TouchableOpacity onPress={() => { onCancel(); }}
-              activeOpacity={0.8}
-              style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>CANCEL SHIFT</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity onPress={() => { onCall(); }}
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        {canCancel && (
+          <TouchableOpacity onPress={() => { console.log('[Requester] CANCEL SHIFT pressed'); onCancel(); }}
             activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
+            style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>CANCEL SHIFT</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { onStartShift(); }}
-            activeOpacity={0.8}
-            disabled={startShiftDisabled}
-            style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center', opacity: startShiftDisabled ? 0.70 : 1 }}>
-            <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>START SHIFT</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity onPress={() => { onEndShift(); }}
-            activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#FF3B30', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>END SHIFT</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => { onCall(); }}
-            activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => { onResumeShift(); }}
-            activeOpacity={0.8}
-            disabled={resumeShiftDisabled}
-            style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center', opacity: resumeShiftDisabled ? 0.70 : 1 }}>
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>RESUME SHIFT</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+        )}
+        <TouchableOpacity onPress={() => { console.log('[Requester] CALL pressed (upcoming card)'); onCall(); }}
+          activeOpacity={0.8}
+          style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
+          <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => { console.log('[Requester] CONFIRM ARRIVAL pressed'); onStartShift(); }}
+          activeOpacity={0.8}
+          disabled={startShiftDisabled}
+          style={{ flex: 1, backgroundColor: '#34C759', borderRadius: 999, paddingVertical: 12, alignItems: 'center', opacity: startShiftDisabled ? 0.70 : 1 }}>
+          <Text style={{ fontSize: 14, fontFamily: 'Inter_700Bold', color: '#1C1C1E' }}>CONFIRM ARRIVAL</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -653,29 +627,14 @@ function RequesterUpcomingCard({
 function RequesterActiveCard({
   session,
   onCall,
-  onPauseShift,
   onEndShift,
   bottomPadding,
 }: {
   session: CoverageSession;
   onCall: () => void;
-  onPauseShift: () => void;
   onEndShift: () => void;
   bottomPadding: number;
 }) {
-  const [elapsed, setElapsed] = useState('00:00:00');
-
-  const currentDayLog = session.day_logs?.[session.current_day - 1];
-  const startedAt = currentDayLog?.started_at ?? session.started_at;
-
-  useEffect(() => {
-    if (!startedAt) return;
-    const tick = () => setElapsed(formatElapsedSession(startedAt));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [startedAt]);
-
   const rawDoctorName = session.doctor_name || '';
   // Strip any existing Dr. prefix then re-apply exactly once
   const cleanName = rawDoctorName.replace(/^dr\.?\s*/i, '').trim();
@@ -688,8 +647,6 @@ function RequesterActiveCard({
   const shiftPillText = buildShiftPillText(session);
   const showDayPill = session.coverage_length > 1;
   const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;
-  const isLastDay = session.current_day >= session.coverage_length;
-  const showPauseButton = session.coverage_length > 1 && !isLastDay;
 
   return (
     <View style={{
@@ -750,38 +707,27 @@ function RequesterActiveCard({
         <Text style={{ fontSize: 12, color: '#FFFFFF', fontFamily: 'Inter_400Regular', lineHeight: 18 }}>{shiftPillText}</Text>
       </View>
 
-      {/* Timer row */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={{ fontSize: 13, color: '#8E8E93' }}>⏱</Text>
-          <Text style={{ fontSize: 22, color: '#FFFFFF', fontFamily: 'Inter_700Bold', letterSpacing: 1 }}>{elapsed}</Text>
-        </View>
-        {showDayPill && (
+      {/* Day pill (informational only for multi-day) */}
+      {showDayPill && (
+        <View style={{ alignItems: 'flex-end', marginBottom: 14 }}>
           <View style={{ backgroundColor: '#1A3A2A', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
             <Text style={{ fontSize: 12, color: '#34C759', fontFamily: 'Inter_600SemiBold' }}>{dayPillText}</Text>
           </View>
-        )}
-      </View>
+        </View>
+      )}
 
       {/* Action buttons */}
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TouchableOpacity onPress={() => { onEndShift(); }}
+        <TouchableOpacity onPress={() => { console.log('[Requester] CONFIRM COMPLETION pressed'); onEndShift(); }}
           activeOpacity={0.8}
           style={{ flex: 1, backgroundColor: '#FF3B30', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>END SHIFT</Text>
+          <Text style={{ fontSize: 13, fontFamily: 'Inter_700Bold', color: '#FFFFFF' }}>CONFIRM COMPLETION</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => { onCall(); }}
+        <TouchableOpacity onPress={() => { console.log('[Requester] CALL pressed (active card)'); onCall(); }}
           activeOpacity={0.8}
           style={{ flex: 1, backgroundColor: '#0A0A0A', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
           <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' }}>CALL</Text>
         </TouchableOpacity>
-        {showPauseButton && (
-          <TouchableOpacity onPress={() => { onPauseShift(); }}
-            activeOpacity={0.8}
-            style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 12, alignItems: 'center' }}>
-            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#1C1C1E' }}>PAUSE SHIFT</Text>
-          </TouchableOpacity>
-        )}
       </View>
     </View>
   );
@@ -2175,8 +2121,6 @@ export default function RequesterHomeScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [continueProcessing, setContinueProcessing] = useState(false);
   const [startShiftProcessing, setStartShiftProcessing] = useState(false);
-  const [resumeShiftProcessing, setResumeShiftProcessing] = useState(false);
-  const [pauseShiftProcessing, setPauseShiftProcessing] = useState(false);
   const [endShiftProcessing, setEndShiftProcessing] = useState(false);
   const [cancelShiftProcessing, setCancelShiftProcessing] = useState(false);
 
@@ -2510,24 +2454,6 @@ export default function RequesterHomeScreen() {
         if (!isMountedRef.current) return;
         PollingManager.stop('start-shift');
       })
-      .on('broadcast', { event: 'SHIFT_PAUSED' }, async (payload) => {
-        if (!isMountedRef.current) return;
-        console.log('[Requester] broadcast SHIFT_PAUSED received');
-        const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
-        if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
-        await fetchActiveSessionRef.current();
-        if (!isMountedRef.current) return;
-        PollingManager.stop('pause-shift');
-      })
-      .on('broadcast', { event: 'SHIFT_RESUMED' }, async (payload) => {
-        if (!isMountedRef.current) return;
-        console.log('[Requester] broadcast SHIFT_RESUMED received');
-        const updated = payload?.payload?.session as Partial<CoverageSession> | undefined;
-        if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
-        await fetchActiveSessionRef.current();
-        if (!isMountedRef.current) return;
-        PollingManager.stop('resume-shift');
-      })
       .on('broadcast', { event: 'SHIFT_ENDED' }, (payload) => {
         PollingManager.stop('end-shift');
         console.log('[Requester] broadcast SHIFT_ENDED received');
@@ -2635,7 +2561,7 @@ export default function RequesterHomeScreen() {
             const newRow = payload.new as Partial<CoverageSession>;
             const status = newRow?.status;
             console.log('[Requester] coverage_sessions INSERT via postgres_changes — status:', status, 'id:', newRow.id);
-            if (status === 'upcoming' || status === 'active' || status === 'paused' || status === 'payment_pending') {
+            if (status === 'upcoming' || status === 'active' || status === 'payment_pending') {
               fetchActiveSessionRef.current();
             } else if (status === 'requester_paid' || status === 'settled') {
               handlePaymentConfirmedWithFallbackRef.current(newRow.id);
@@ -2656,7 +2582,7 @@ export default function RequesterHomeScreen() {
             const newRow = payload.new as Partial<CoverageSession>;
             const status = newRow?.status;
             console.log('[Requester] coverage_sessions UPDATE via postgres_changes — status:', status, 'id:', newRow.id);
-            if (status === 'upcoming' || status === 'active' || status === 'paused' || status === 'payment_pending') {
+            if (status === 'upcoming' || status === 'active' || status === 'payment_pending') {
               fetchActiveSessionRef.current();
             } else if (status === 'requester_paid' || status === 'settled') {
               handlePaymentConfirmedWithFallbackRef.current(newRow.id);
@@ -3566,7 +3492,6 @@ export default function RequesterHomeScreen() {
   const [showCancelActiveModal, setShowCancelActiveModal] = useState(false);
   const [showCancelActiveReasons, setShowCancelActiveReasons] = useState(false);
   const [showEndShiftModal, setShowEndShiftModal] = useState(false);
-  const [showPauseShiftModal, setShowPauseShiftModal] = useState(false);
   const [settledAmount, setSettledAmount] = useState<number | null>(null);
 
 
@@ -3922,85 +3847,15 @@ export default function RequesterHomeScreen() {
     } catch (e: any) {
       const startMsg = (() => {
         const m = (e?.message ?? '').toLowerCase();
-        if (m.includes('cannot start') || m.includes('not_startable') || m.includes('shift_not_startable')) return 'This shift can\'t be started right now.';
+        if (m.includes('cannot start') || m.includes('not_startable') || m.includes('shift_not_startable')) return 'This shift can\'t be confirmed right now.';
         if (m.includes('already active') || m.includes('status: active')) return 'You already have an active shift.';
         return 'Something went wrong. Please try again.';
       })();
-      Alert.alert('Start Shift', startMsg);
+      Alert.alert('Confirm Arrival', startMsg);
     } finally {
       setStartShiftProcessing(false);
     }
   }, [activeSession, callSessionEdge, startShiftProcessing]);
-
-  const handleResumeShift = useCallback(async () => {
-    if (!activeSession) return;
-    if (resumeShiftProcessing) return;
-    setResumeShiftProcessing(true);
-    const sid = activeSession.id;
-    try {
-      const data = await callSessionEdge('resume-shift', sid);
-      const updated = data?.session as Partial<CoverageSession>;
-      if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
-      PollingManager.start('resume-shift', async () => {
-        const { data: s } = await supabase
-          .from('coverage_sessions')
-          .select('status')
-          .eq('id', sid)
-          .maybeSingle();
-        if (s?.status === 'active') {
-          fetchActiveSessionRef.current();
-          return true;
-        }
-        return false;
-      }, undefined, 6);
-    } catch (e: any) {
-      Alert.alert('Something went wrong', 'Please try again.');
-    } finally {
-      setResumeShiftProcessing(false);
-    }
-  }, [activeSession, callSessionEdge, resumeShiftProcessing]);
-
-  const handlePauseShift = useCallback(async () => {
-    if (!activeSession) return;
-    setShowPauseShiftModal(true);
-  }, [activeSession]);
-
-  const handleConfirmPauseShift = async () => {
-    if (!activeSession) return;
-    if (pauseShiftProcessing) return;
-    setPauseShiftProcessing(true);
-    const sid = activeSession.id;
-    setShowPauseShiftModal(false);
-    try {
-      console.log('[Requester] handleConfirmPauseShift for session:', sid);
-      const data = await callSessionEdge('pause-shift', sid);
-      const updated = data?.session as Partial<CoverageSession>;
-      if (updated) setActiveSession((prev) => prev ? mergeSession(prev, updated) : prev);
-      console.log('[Requester] Starting pause-shift poll for session:', sid);
-      PollingManager.start('pause-shift', async () => {
-        const { data: s } = await supabase
-          .from('coverage_sessions')
-          .select('status')
-          .eq('id', sid)
-          .maybeSingle();
-        if (s?.status === 'paused' || s?.status === 'upcoming') {
-          fetchActiveSessionRef.current();
-          return true;
-        }
-        return false;
-      }, undefined, 6);
-    } catch (e: any) {
-      const pauseMsg = (() => {
-        const m = (e?.message ?? '').toLowerCase();
-        if (m.includes('already paused') || m.includes('status: paused') || m.includes('shift_not_pausable')) return 'This shift is already paused.';
-        if (m.includes('cannot pause') || m.includes('not_pausable')) return 'This shift can\'t be paused right now.';
-        return 'Something went wrong. Please try again.';
-      })();
-      Alert.alert('Pause Shift', pauseMsg);
-    } finally {
-      setPauseShiftProcessing(false);
-    }
-  };
 
   const handleEndShift = useCallback(async () => {
     if (!activeSession) return;
@@ -4069,7 +3924,7 @@ export default function RequesterHomeScreen() {
         if (m.includes('cannot end') || m.includes('not_endable')) return 'This shift can\'t be ended right now.';
         return 'Something went wrong. Please try again.';
       })();
-      Alert.alert('End Shift', endMsg);
+      Alert.alert('Confirm Completion', endMsg);
     } finally {
       setEndShiftProcessing(false);
     }
@@ -4984,19 +4839,16 @@ export default function RequesterHomeScreen() {
       {/* ── IDLE BOTTOM CONTAINER (white card only — tab bar is in layout) ── */}
       {sheetState === 'idle' && (
         <>
-          {/* Active session — upcoming or paused */}
-          {activeSession !== null &&
-            (activeSession.status === 'upcoming' || activeSession.status === 'paused') && (
+          {/* Active session — upcoming */}
+          {activeSession !== null && activeSession.status === 'upcoming' && (
             <RequesterUpcomingCard
               session={activeSession}
               onCancel={handleCancelActiveShift}
               onCall={handleCallDoctor}
               onStartShift={handleStartShift}
-              onResumeShift={handleResumeShift}
               onEndShift={handleEndShift}
               bottomPadding={whiteCardPaddingBottom}
               startShiftDisabled={startShiftProcessing}
-              resumeShiftDisabled={resumeShiftProcessing}
             />
           )}
 
@@ -5005,7 +4857,6 @@ export default function RequesterHomeScreen() {
             <RequesterActiveCard
               session={activeSession}
               onCall={handleCallDoctor}
-              onPauseShift={handlePauseShift}
               onEndShift={handleEndShift}
               bottomPadding={whiteCardPaddingBottom}
             />
@@ -5028,7 +4879,6 @@ export default function RequesterHomeScreen() {
             activeSession.status === 'requester_paid' ||
             activeSession.status === 'settled' ||
             (activeSession.status !== 'upcoming' &&
-             activeSession.status !== 'paused' &&
              activeSession.status !== 'active' &&
              activeSession.status !== 'payment_pending')) && (
             <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
@@ -5592,7 +5442,7 @@ export default function RequesterHomeScreen() {
         </View>
       </Modal>
 
-      {/* ── END SHIFT CONFIRMATION MODAL ── */}
+      {/* ── CONFIRM COMPLETION MODAL ── */}
       <Modal
         visible={showEndShiftModal}
         transparent
@@ -5606,16 +5456,16 @@ export default function RequesterHomeScreen() {
           <Pressable onPress={(e) => e.stopPropagation()}>
             <View style={{ backgroundColor: '#1C1C1E', borderRadius: 24, padding: 28, width: '100%' }}>
               <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
-                End Shift?
+                Confirm Completion?
               </Text>
               <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
-                This will close the entire booking and trigger the payment process.
+                This confirms the Medical Officer has completed the booked service. Payment will be processed for the original booked amount.
               </Text>
               <TouchableOpacity
                 onPress={() => setShowEndShiftModal(false)}
                 style={{ backgroundColor: '#F9F9F6', borderRadius: 999, paddingVertical: 16, alignItems: 'center', marginBottom: 12 }}
               >
-                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Continue Shift</Text>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Not Yet</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleConfirmEndShift}
@@ -5623,45 +5473,7 @@ export default function RequesterHomeScreen() {
                 activeOpacity={0.8}
                 style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center', opacity: endShiftProcessing ? 0.70 : 1 }}
               >
-                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>End Shift</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* ── PAUSE SHIFT CONFIRMATION MODAL ── */}
-      <Modal
-        visible={showPauseShiftModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowPauseShiftModal(false)}
-      >
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}
-          onPress={() => setShowPauseShiftModal(false)}
-        >
-          <Pressable onPress={(e) => e.stopPropagation()}>
-            <View style={{ backgroundColor: '#1C1C1E', borderRadius: 24, padding: 28, width: '100%' }}>
-              <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF', marginBottom: 8, textAlign: 'center' }}>
-                Pause Shift?
-              </Text>
-              <Text style={{ fontSize: 14, color: '#8E8E93', textAlign: 'center', lineHeight: 20, marginBottom: 28 }}>
-                This marks the daily session as complete. You can resume it at any time.
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowPauseShiftModal(false)}
-                style={{ backgroundColor: '#F9F9F6', borderRadius: 999, paddingVertical: 16, alignItems: 'center', marginBottom: 12 }}
-              >
-                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1C1C1E' }}>Keep Going</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleConfirmPauseShift}
-                disabled={pauseShiftProcessing}
-                activeOpacity={0.8}
-                style={{ backgroundColor: '#2C2C2E', borderRadius: 999, paddingVertical: 16, alignItems: 'center', opacity: pauseShiftProcessing ? 0.70 : 1 }}
-              >
-                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF9500' }}>Pause Shift</Text>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#FF3B30' }}>Confirm Completion</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
