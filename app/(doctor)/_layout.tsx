@@ -2149,7 +2149,7 @@ export default function DoctorLayout() {
 
   // Fee breakdown
   const feeAmount = currentRequest?.price ?? 0;
-  const feeCut = Math.round(feeAmount * 0.15);
+  const feeCut = Math.round(feeAmount * 0.10);
   const feeYouReceive = feeAmount - feeCut;
   const feeAmountDisplay = `₦${feeAmount.toLocaleString()}`;
   const feeCutDisplay = `-₦${feeCut.toLocaleString()}`;
