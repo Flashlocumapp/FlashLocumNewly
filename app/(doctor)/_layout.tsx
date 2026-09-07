@@ -103,7 +103,7 @@ async function prefetchTabData(userId: string) {
         const rows = (data ?? []).map((cs: any) => {
           const pi = Array.isArray(cs.payment_intents) ? cs.payment_intents[0] : cs.payment_intents;
           const totalCost = Number(cs.total_cost ?? 0);
-          const platformFee = pi?.platform_commission_naira != null ? Number(pi.platform_commission_naira) : Math.round(totalCost * 0.15 / 10) * 10;
+          const platformFee = pi?.platform_commission_naira != null ? Number(pi.platform_commission_naira) : Math.round(totalCost * 0.10 / 10) * 10;
           const netPayout = pi?.doctor_payout_naira != null ? Number(pi.doctor_payout_naira) : totalCost - platformFee;
           return {
             session_id: cs.id, doctor_id: cs.doctor_id, requester_id: cs.requester_id,

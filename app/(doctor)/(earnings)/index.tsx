@@ -268,7 +268,7 @@ export default function DoctorEarningsScreen() {
           ? Number(pi.platform_commission_naira)
           : isSettled
             ? null
-            : Math.round(totalCost * 0.15 / 10) * 10;
+            : Math.round(totalCost * 0.10 / 10) * 10;
 
         const netPayout: number | null = pi?.doctor_payout_naira != null
           ? Number(pi.doctor_payout_naira)
