@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useFocusEffect } from '@react-navigation/native';
 import { IS_EXPO_GO } from '@/utils/expoGoGuard';
 import { useNotifications } from '@/contexts/NotificationContext';
@@ -407,13 +408,15 @@ export default function DoctorHomeScreen() {
           console.log('[DoctorHome] Coordinate recovery: restored from module cache');
           setUserLocation(_cachedDoctorCoords);
           // Move camera to match — same logic as handleToggleStatus
-          if (mapRef.current && !hasUserPannedRef.current) {
-            mapRef.current.animateToRegion({
-              latitude: _cachedDoctorCoords.latitude + MAP_LAT_OFFSET,
-              longitude: _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
-              latitudeDelta: 0.12,
-              longitudeDelta: 0.12,
-            }, 800);
+          if (mapRef.current && !hasUserPannedRef.current && mapReady) {
+            try {
+              mapRef.current.animateToRegion({
+                latitude: _cachedDoctorCoords.latitude + MAP_LAT_OFFSET,
+                longitude: _cachedDoctorCoords.longitude + MAP_LNG_OFFSET,
+                latitudeDelta: 0.12,
+                longitudeDelta: 0.12,
+              }, 800);
+            } catch { /* map not ready */ }
           }
           return;
         }
@@ -431,13 +434,15 @@ export default function DoctorHomeScreen() {
               console.log('[DoctorHome] Coordinate recovery: restored from DB', coords);
               setUserLocation(coords);
               // Move camera to match — same logic as handleToggleStatus
-              if (mapRef.current && !hasUserPannedRef.current) {
-                mapRef.current.animateToRegion({
-                  latitude: coords.latitude + MAP_LAT_OFFSET,
-                  longitude: coords.longitude + MAP_LNG_OFFSET,
-                  latitudeDelta: 0.12,
-                  longitudeDelta: 0.12,
-                }, 800);
+              if (mapRef.current && !hasUserPannedRef.current && mapReady) {
+                try {
+                  mapRef.current.animateToRegion({
+                    latitude: coords.latitude + MAP_LAT_OFFSET,
+                    longitude: coords.longitude + MAP_LNG_OFFSET,
+                    latitudeDelta: 0.12,
+                    longitudeDelta: 0.12,
+                  }, 800);
+                } catch { /* map not ready */ }
               }
               return;
             }
@@ -454,13 +459,15 @@ export default function DoctorHomeScreen() {
             console.log('[DoctorHome] Coordinate recovery: restored from last-known position', coords);
             setUserLocation(coords);
             // Move camera to match — same logic as handleToggleStatus
-            if (mapRef.current && !hasUserPannedRef.current) {
-              mapRef.current.animateToRegion({
-                latitude: coords.latitude + MAP_LAT_OFFSET,
-                longitude: coords.longitude + MAP_LNG_OFFSET,
-                latitudeDelta: 0.12,
-                longitudeDelta: 0.12,
-              }, 800);
+            if (mapRef.current && !hasUserPannedRef.current && mapReady) {
+              try {
+                mapRef.current.animateToRegion({
+                  latitude: coords.latitude + MAP_LAT_OFFSET,
+                  longitude: coords.longitude + MAP_LNG_OFFSET,
+                  latitudeDelta: 0.12,
+                  longitudeDelta: 0.12,
+                }, 800);
+              } catch { /* map not ready */ }
             }
             return;
           }
@@ -473,20 +480,22 @@ export default function DoctorHomeScreen() {
           console.log('[DoctorHome] Coordinate recovery: restored from live GPS', coords);
           setUserLocation(coords);
           // Move camera to match — same logic as handleToggleStatus
-          if (mapRef.current && !hasUserPannedRef.current) {
-            mapRef.current.animateToRegion({
-              latitude: coords.latitude + MAP_LAT_OFFSET,
-              longitude: coords.longitude + MAP_LNG_OFFSET,
-              latitudeDelta: 0.12,
-              longitudeDelta: 0.12,
-            }, 800);
+          if (mapRef.current && !hasUserPannedRef.current && mapReady) {
+            try {
+              mapRef.current.animateToRegion({
+                latitude: coords.latitude + MAP_LAT_OFFSET,
+                longitude: coords.longitude + MAP_LNG_OFFSET,
+                latitudeDelta: 0.12,
+                longitudeDelta: 0.12,
+              }, 800);
+            } catch { /* map not ready */ }
           }
         } catch { /* non-fatal */ }
       } finally {
         coordRecoveryInFlightRef.current = false;
       }
     })();
-  }, [isOnline, userLocation, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOnline, userLocation, user?.id, mapReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── tracksViewChanges: keep true permanently on both platforms ──────────────
   // iOS snapshot-invalidation bugs (resume, tab-switch, first render) are
@@ -769,6 +778,19 @@ export default function DoctorHomeScreen() {
   const showUpcomingOrPaused = homeCardStatus === 'upcoming' || homeCardStatus === 'paused';
 
   return (
+    <ErrorBoundary
+      fallback={
+        <View style={{ flex: 1, backgroundColor: '#F9F9F6', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <Text style={{ fontSize: 18, fontWeight: '600', color: '#1a1a1a', textAlign: 'center', marginBottom: 12 }}>
+            Something went wrong
+          </Text>
+          <Text style={{ fontSize: 15, color: '#666', textAlign: 'center', lineHeight: 22 }}>
+            Please close and reopen FlashLocum.
+          </Text>
+        </View>
+      }
+      onError={(error, info) => console.error('[DoctorHome] Render error:', error, info)}
+    >
     <View style={styles.container}>
       {/* Full-screen map */}
       <MapView
@@ -1050,6 +1072,7 @@ export default function DoctorHomeScreen() {
       </Modal>
 
     </View>
+    </ErrorBoundary>
   );
 }
 
