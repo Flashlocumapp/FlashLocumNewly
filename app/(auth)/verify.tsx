@@ -73,12 +73,12 @@ export default function VerifyScreen() {
     if (verifyError) {
       setError(verifyError.message || 'Invalid code. Please try again.');
     } else {
-      // verifyOtp succeeded — SIGNED_IN will fire, AuthContext will update session,
-      // and NavigationGuard will route to the correct onboarding screen.
-      // Do NOT call router.replace here — a second concurrent replace races with
-      // the NavigationGuard and can leave the router in an inconsistent state.
-      console.log('[verify] OTP verified successfully, waiting for NavigationGuard to route');
+      console.log('[verify] OTP verified successfully — navigating to onboarding');
       setVerified(true);
+      const dest = role === 'doctor'
+        ? '/(onboarding)/doctor/basic-profile'
+        : '/(onboarding)/requester/basic-profile';
+      router.replace(dest as any);
     }
   };
 
