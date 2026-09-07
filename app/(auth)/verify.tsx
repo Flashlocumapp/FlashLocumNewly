@@ -25,6 +25,7 @@ export default function VerifyScreen() {
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [verified, setVerified] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -72,10 +73,12 @@ export default function VerifyScreen() {
     if (verifyError) {
       setError(verifyError.message || 'Invalid code. Please try again.');
     } else {
-      const dest = role === 'doctor'
-        ? '/(onboarding)/doctor/basic-profile'
-        : '/(onboarding)/requester/basic-profile';
-      router.replace(dest as any);
+      // verifyOtp succeeded — SIGNED_IN will fire, AuthContext will update session,
+      // and NavigationGuard will route to the correct onboarding screen.
+      // Do NOT call router.replace here — a second concurrent replace races with
+      // the NavigationGuard and can leave the router in an inconsistent state.
+      console.log('[verify] OTP verified successfully, waiting for NavigationGuard to route');
+      setVerified(true);
     }
   };
 
@@ -147,12 +150,14 @@ export default function VerifyScreen() {
         {/* Verify button */}
         <AnimatedPressable
           onPress={handleVerify}
-          disabled={loading}
+          disabled={loading || verified}
           scaleValue={0.97}
-          style={[styles.verifyButton, loading && styles.buttonDisabled]}
+          style={[styles.verifyButton, (loading || verified) && styles.buttonDisabled]}
         >
           {loading ? (
             <ActivityIndicator color="#FFFFFF" />
+          ) : verified ? (
+            <Text style={styles.verifyLabel}>Verified ✓</Text>
           ) : (
             <Text style={styles.verifyLabel}>Verify & continue</Text>
           )}
