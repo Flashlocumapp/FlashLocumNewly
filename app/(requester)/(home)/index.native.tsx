@@ -543,7 +543,7 @@ function RequesterCoverageCard({
   // Frozen session snapshot — never re-fetches, never blinks
   const ratingDisplay = session.doctor_rating != null ? Number(session.doctor_rating).toFixed(2) : '5.00';
   const reliabilityDisplay = session.doctor_reliability != null ? `${Math.round(Number(session.doctor_reliability))}` : '100';
-  const showDayPill = isActive && session.coverage_length > 1;
+  const showDayPill = false;
   const dayPillText = `Day ${session.current_day} of ${session.coverage_length}`;
   const headerLabel = isUpcoming ? 'UPCOMING COVERAGE' : 'ACTIVE COVERAGE';
 
