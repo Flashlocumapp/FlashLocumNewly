@@ -445,7 +445,7 @@ export default function DoctorCredentials() {
 
         {/* NYSC Certificate */}
         <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>NYSC Certificate/NIN or Passport Data Page Upload</Text>
+          <Text style={styles.fieldLabel}>NYSC Certificate/NIN/Int'l Passport</Text>
           <AnimatedPressable
             onPress={handlePickNysc}
             scaleValue={0.98}
