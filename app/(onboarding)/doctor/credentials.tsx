@@ -412,7 +412,7 @@ export default function DoctorCredentials() {
 
         {/* Medical Licence */}
         <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Medical licence / Receipt upload</Text>
+          <Text style={styles.fieldLabel}>Annual Practising License/Receipt Upload</Text>
           <AnimatedPressable
             onPress={handlePickLicence}
             scaleValue={0.98}
@@ -445,7 +445,7 @@ export default function DoctorCredentials() {
 
         {/* NYSC Certificate */}
         <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>NYSC certificate upload</Text>
+          <Text style={styles.fieldLabel}>NYSC Certificate/NIN or Passport Data Page Upload</Text>
           <AnimatedPressable
             onPress={handlePickNysc}
             scaleValue={0.98}
