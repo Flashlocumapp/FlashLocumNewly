@@ -2322,7 +2322,7 @@ export default function DoctorLayout() {
                           {'₦'}{doctorRatingAmount.toLocaleString()}
                         </Text>
                         <Text style={{ fontSize: 13, color: '#8E8E93', fontFamily: 'Inter_400Regular' }}>
-                          {'₦'}{Math.round(doctorRatingAmount * 0.85).toLocaleString()} to be remitted to your account by 10:15PM today.
+                          {'₦'}{Math.round(doctorRatingAmount * 0.90).toLocaleString()} to be remitted to your account by 10:15PM today.
                         </Text>
                       </>
                     )}
