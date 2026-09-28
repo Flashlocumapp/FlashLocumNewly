@@ -172,6 +172,17 @@ let _layoutCachedCoords: { lat: number; lng: number } | null = null;
 // null = no toggle in flight. true/false = user tapped and backend is processing.
 let _toggleIntent: boolean | null = null;
 
+const DOCTOR_POLL_KEYS = [
+  'dispatch-active',
+  'payment-confirm',
+  'accept',
+  'pause-confirm',
+  'resume-confirm',
+  'cancel',
+  'cancel-confirm',
+  'start-confirm',
+];
+
 // ─── Persistent deduplication for doctor rating overlay ──────────────────────
 const DOCTOR_RATED_SESSIONS_KEY = 'doctor_rated_sessions_v1';
 const DOCTOR_DISMISSED_SESSIONS_KEY = 'doctor_dismissed_sessions_v1';
@@ -952,7 +963,7 @@ export default function DoctorLayout() {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;  // gate first — blocks all post-unmount state setters
-      PollingManager.stopAll();
+      PollingManager.stopByKeys(DOCTOR_POLL_KEYS);
       _doctorWarmPromise = null;
       _toggleIntent = null;
     };

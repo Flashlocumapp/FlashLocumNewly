@@ -132,8 +132,17 @@ let _cachedRequesterCoords: { latitude: number; longitude: number } | null = nul
 // Module-level region cache — preserves zoom/pan across tab switches on Android
 let _cachedRequesterRegion: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number } | null = null;
 // Module-level session cache — survives tab switches / screen remounts
-let _cachedActiveSession: CoverageSession | null = undefined as any; // undefined = never fetched, null = fetched but no session
+let _cachedActiveSession: CoverageSession | null = null; // null = not yet fetched OR no active session
 let _sessionCachePopulated = false;
+
+const REQUESTER_POLL_KEYS = [
+  'match',
+  'cancel',
+  'cancel-confirm',
+  'start-shift',
+  'end-shift',
+  'payment-confirm',
+];
 
 const ANDROID_KEY = 'AIzaSyACeTm0j_ajj-rRObPbkDBJvW6GVBt6SMU';
 const IOS_KEY = 'AIzaSyBFC2FPkzjooOJhFwkMsM_o3qQiTOn0rZk';
@@ -2281,28 +2290,30 @@ export default function RequesterHomeScreen() {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;  // gate first
-      PollingManager.stopAll();
+      _cachedActiveSession = null;
+      _sessionCachePopulated = false;
+      PollingManager.stopByKeys(REQUESTER_POLL_KEYS);
       _requesterRatingInFlight.clear();
     };
   }, []);
 
-  // ─── Re-fetch on SIGNED_IN (handles login after logout) ──────────────────────
+  // ─── Re-fetch when user identity changes (replaces onAuthStateChange SIGNED_IN) ─
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') {
-        console.log('[RequesterHome] SIGNED_IN — re-fetching active session');
-        warmRequesterPaidCache().then(() => fetchActiveSession());
-      } else if (event === 'SIGNED_OUT') {
-        console.log('[RequesterHome] SIGNED_OUT — clearing activeSessionId and session cache');
-        setActiveSessionId(null);
-        setActiveSession(null);
-        setSessionFetched(false);
-        _cachedActiveSession = null;
-        _sessionCachePopulated = false;
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [fetchActiveSession]);
+    if (!user?.id) return;
+    console.log('[RequesterHome] user?.id changed — re-fetching active session');
+    warmRequesterPaidCache().then(() => fetchActiveSession());
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Clear session state on sign-out (replaces onAuthStateChange SIGNED_OUT) ──
+  useEffect(() => {
+    if (user) return; // user is present — nothing to clear
+    console.log('[RequesterHome] user cleared — resetting session state');
+    setActiveSessionId(null);
+    setActiveSession(null);
+    setSessionFetched(false);
+    _cachedActiveSession = null;
+    _sessionCachePopulated = false;
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── AppState reconnection safety net ────────────────────────────────────────
   useEffect(() => {

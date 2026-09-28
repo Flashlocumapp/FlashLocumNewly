@@ -101,9 +101,18 @@ export function stopAll(): void {
   }
 }
 
+export function stopByKeys(keys: string[]): void {
+  console.log('[PollingManager] stopByKeys — checking', sessions.size, 'sessions against', keys.length, 'keys');
+  for (const key of sessions.keys()) {
+    if (keys.some((k) => key === k || key.startsWith(k))) {
+      stop(key);
+    }
+  }
+}
+
 export function isRunning(key: string): boolean {
   return sessions.has(key) && (sessions.get(key)?.active ?? false);
 }
 
-const PollingManager = { start, stop, stopAll, isRunning };
+const PollingManager = { start, stop, stopAll, stopByKeys, isRunning };
 export default PollingManager;
